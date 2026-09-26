@@ -136,7 +136,7 @@ const LIST_METHOD = "retailedge.professional_selling.get_professional_selling_li
 const REQUIRED_COMPONENTS = ["EdgeInput", "EdgeDropdown", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge"];
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 

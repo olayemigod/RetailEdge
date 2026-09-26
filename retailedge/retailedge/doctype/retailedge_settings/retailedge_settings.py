@@ -5,14 +5,37 @@ from frappe.model.document import Document
 from retailedge.utils.settings import clear_retailedge_settings_cache
 
 
+SELLING_PRICE_LIST_DEFAULT = (
+	"party_default",
+	"pos_profile",
+	"branch_default",
+	"user_default",
+	"user_permission",
+	"erpnext_default",
+	"standard_price_list",
+)
+BUYING_PRICE_LIST_DEFAULT = (
+	"party_default",
+	"branch_default",
+	"user_default",
+	"user_permission",
+	"erpnext_default",
+	"standard_price_list",
+)
+SELLING_PRICE_LIST_SOURCES = set(SELLING_PRICE_LIST_DEFAULT)
+BUYING_PRICE_LIST_SOURCES = set(BUYING_PRICE_LIST_DEFAULT)
+
+
 class RetailEdgeSettings(Document):
 	def validate(self):
 		self._sync_cashier_expense_posting_policy()
+		self._validate_price_list_governance()
 		self._set_bank_auto_match_guidance()
 		self._validate_business_expense_posting_workflow_state()
 
 	def on_update(self):
 		clear_retailedge_settings_cache()
+
 
 	def _sync_cashier_expense_posting_policy(self):
 		mode = str(getattr(self, "cashier_expense_posting_mode", None) or "Controlled Posting").strip()
@@ -30,6 +53,40 @@ class RetailEdgeSettings(Document):
 			frappe.throw(
 				_("Enable Accounting Posting for Cashier Expenses before selecting Direct Posting.")
 			)
+
+	def _validate_price_list_governance(self):
+		if not int(getattr(self, "enable_price_list_governance", 1) or 0):
+			return
+		self.selling_price_list_precedence = self._normalise_price_list_precedence(
+			getattr(self, "selling_price_list_precedence", None)
+			or "\n".join(SELLING_PRICE_LIST_DEFAULT),
+			allowed=SELLING_PRICE_LIST_SOURCES,
+			label=_("Selling Price List Precedence"),
+		)
+		self.buying_price_list_precedence = self._normalise_price_list_precedence(
+			getattr(self, "buying_price_list_precedence", None)
+			or "\n".join(BUYING_PRICE_LIST_DEFAULT),
+			allowed=BUYING_PRICE_LIST_SOURCES,
+			label=_("Buying Price List Precedence"),
+		)
+
+	@staticmethod
+	def _normalise_price_list_precedence(value, *, allowed: set[str], label: str) -> str:
+		raw = str(value or "").replace(">", "\n").replace(",", "\n")
+		keys = [line.strip() for line in raw.splitlines() if line.strip()]
+		if not keys:
+			frappe.throw(_("{0} must contain at least one Price List source.").format(label))
+		unknown = [key for key in keys if key not in allowed]
+		if unknown:
+			frappe.throw(
+				_("{0} contains unsupported source keys: {1}.").format(
+					label,
+					", ".join(unknown),
+				)
+			)
+		if len(keys) != len(set(keys)):
+			frappe.throw(_("{0} cannot contain duplicate source keys.").format(label))
+		return "\n".join(keys)
 
 	def _validate_business_expense_posting_workflow_state(self):
 		state = str(

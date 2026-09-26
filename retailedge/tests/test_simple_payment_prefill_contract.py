@@ -21,7 +21,10 @@ class TestSimplePaymentPrefillContract(TestCase):
 		)
 		self.assertIn("const details = await callMethod(REFERENCE_METHOD", component)
 		self.assertIn("details.outstanding_amount", component)
-		self.assertIn("reference_name: referenceName", component)
+		self.assertIn("const requestedReferenceNames =", component)
+		self.assertIn("const referenceNames = requestedReferenceNames.slice(0, maxReferences)", component)
+		self.assertIn("for (const name of referenceNames)", component)
+		self.assertIn("reference_name: name", component)
 		self.assertIn("party: this.values.party", component)
 		self.assertNotIn("initial.outstanding_amount", component)
 		self.assertNotIn("initial.allocated_amount", component)
@@ -31,9 +34,35 @@ class TestSimplePaymentPrefillContract(TestCase):
 			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
 		).read_text()
 		self.assertIn('["receive-customer-payment", "receive-sales-order-payment"].includes(this.intent)', component)
-		self.assertIn("reference_name: referenceName", component)
-		self.assertIn("selected reference", component)
+		self.assertIn("const referenceName = cleanPrefill(initial.reference_name)", component)
+		self.assertIn("referenceName ? [referenceName, ...initialReferences] : initialReferences", component)
+		self.assertIn("reference_name: name", component)
 		self.assertIn("one Sales Order advance", component)
+
+	def test_quick_payment_caps_one_reference_while_supplier_payables_can_use_managed_multi_reference(self):
+		component = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
+		).read_text()
+
+		self.assertIn("Number(this.formContext.limits?.max_references || 1)", component)
+		self.assertIn("Quick Payment supports one invoice or order reference.", component)
+		self.assertIn("validateStandardCustomerDraft()", component)
+		self.assertIn("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference.", component)
+		self.assertIn("managed: this.allowMultiReferenceSupplierPayment ? 1 : 0", component)
+
+	def test_supplier_payables_can_prefill_multiple_revalidated_references_without_trusting_report_amounts(self):
+		component = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
+		).read_text()
+
+		self.assertIn("allowMultiReferenceSupplierPayment", component)
+		self.assertIn("Array.isArray(initial.references)", component)
+		self.assertIn("for (const name of referenceNames)", component)
+		self.assertIn("details.outstanding_amount", component)
+		self.assertIn("resolved.reduce", component)
+		self.assertIn("Supplier settlement must contain between 1 and", component)
+		self.assertNotIn("initial.outstanding_amount", component)
+		self.assertNotIn("initial.allocated_amount", component)
 
 	def test_prefill_preserves_existing_draft_payment_service_and_stale_value_clearing(self):
 		component = (

@@ -68,6 +68,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.guided_cash_transfer.get_simple_cash_transfer_context";
 const SEARCH_METHOD = "retailedge.guided_cash_transfer.search_simple_cash_transfer_options";
 const CREATE_METHOD = "retailedge.guided_cash_transfer.create_simple_cash_transfer_draft";
@@ -87,21 +88,22 @@ export default {
 	components: { EdgeModal: runtimeComponents.EdgeModal, EdgeLinkField: runtimeComponents.EdgeLinkField, EdgeLoadingState: runtimeComponents.EdgeLoadingState, EdgeErrorState: runtimeComponents.EdgeErrorState },
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
-	data() { return { loading: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues() }; },
+	data() { return { loading: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialValuesSnapshot: "" }; },
 	computed: {
 		branchEnabled() { return Boolean(this.formContext?.capabilities?.branch_enabled); },
 		searchContext() { return { ...this.values }; },
+		hasUnsavedChanges() { return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot); },
 	},
 	watch: { open(value) { if (value) this.loadContext(); else this.reset(); } },
 	mounted() { if (this.open) this.loadContext(); },
 	methods: {
-		reset() { this.loading = false; this.saving = false; this.loadError = ""; this.saveError = ""; this.formContext = {}; this.values = emptyValues(); },
+		reset() { this.loading = false; this.saving = false; this.loadError = ""; this.saveError = ""; this.formContext = {}; this.values = emptyValues(); this.initialValuesSnapshot = ""; },
 		async loadContext() {
 			this.loading = true; this.loadError = ""; this.saveError = "";
-			try { const result = await callMethod(CONTEXT_METHOD); this.formContext = result || {}; this.values = { ...emptyValues(), ...(result?.defaults || {}) }; }
+			try { const result = await callMethod(CONTEXT_METHOD); this.formContext = result || {}; this.values = { ...emptyValues(), ...(result?.defaults || {}) }; this.initialValuesSnapshot = JSON.stringify(this.values); }
 			catch (error) { this.loadError = errorMessage(error, "Unable to prepare Cash / Bank Transfer."); }
 			finally { this.loading = false; }
 		},
@@ -115,8 +117,17 @@ export default {
 		setBranch(option) { this.values.branch = optionValue(option); },
 		setFromAccount(option) { this.values.from_account = optionValue(option); if (this.values.to_account === this.values.from_account) this.values.to_account = ""; },
 		setToAccount(option) { this.values.to_account = optionValue(option); if (this.values.from_account === this.values.to_account) this.values.from_account = ""; },
-		requestClose() { if (!this.saving) this.$emit("close"); },
-		openFullForm() { if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry"); },
+		requestClose() {
+			if (this.saving) return;
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			confirmAboveEdgeModal("Discard the unsaved Cash / Bank Transfer changes?", () => this.$emit("close"));
+		},
+		openFullForm() {
+			if (this.saving || !this.nativeFallbackEnabled) return;
+			const openNative = () => this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
+			if (!this.hasUnsavedChanges) { openNative(); return; }
+			confirmAboveEdgeModal("Discard the unsaved Cash / Bank Transfer changes and open the full ERPNext form?", openNative);
+		},
 		async saveDraft() {
 			if (this.saving || this.loading) return;
 			if (!this.values.company || !this.values.from_account || !this.values.to_account || Number(this.values.amount || 0) <= 0) { this.saveError = "Company, From Account, To Account and a positive Amount are required."; return; }

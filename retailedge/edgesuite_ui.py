@@ -181,7 +181,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "expenses", "label": "Expenses", "icon": "file-text", "items": (
 			{"label": "Business Expenses", "target_type": "Page", "target": "business-expenses", "icon": "file-text"},
 			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
-			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
+			{"label": "Cashier Expenses", "target_type": "Page", "target": "cashier-expenses", "icon": "file-text"},
 			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
 		),
 	},
@@ -232,7 +232,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "Page", "target": "daily-sales-audit", "icon": "shield"},
-			{"label": "Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
+			{"label": "Cashier Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
 			{"label": "Cash Shift Verification", "target_type": "Page", "target": "cash-shift-verification", "icon": "report"},
 			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit", "icon": "report"},
 			{"label": "POS Closing Variance & Expenses", "target_type": "Page", "target": "pos-closing-variance", "icon": "report"},
@@ -270,13 +270,13 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "new-sales-invoice", "label": "New Sales Invoice", "description": "Create a formal cash, credit, wholesale, or account-customer invoice.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
+		"key": "new-sales-invoice", "label": "Quick Sale", "description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
+		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record one customer invoice/order receipt or an unallocated advance. Use Payment Management for advance and single-invoice settlement.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+		"key": "pay-supplier", "label": "Pay Supplier", "description": "Pay one Purchase Invoice quickly. Use Supplier Payables for multi-invoice settlement.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
@@ -288,16 +288,16 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+		"key": "record-purchase", "label": "Quick Purchase", "description": "Create a short Purchase Invoice quickly. Use Record Purchase for larger or multi-item purchases.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
 	},
 	{
-		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted stock locations using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
+		"key": "transfer-stock", "label": "Quick Transfer", "description": "Move a small number of stock lines quickly. Use Transfer Stock for larger movements.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "adjust-stock", "label": "Stock Adjustment", "description": "Record a physical stock count using a native Stock Reconciliation draft.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
+		"key": "adjust-stock", "label": "Quick Adjustment", "description": "Record a short physical count quickly. Use Stock Adjustment for larger counts.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
 	},
 )
 

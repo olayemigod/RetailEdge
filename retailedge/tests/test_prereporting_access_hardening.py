@@ -74,7 +74,7 @@ class RetailEdgePreReportingAccessHardeningTests(unittest.TestCase):
 		for name in DIALOG_NAMES:
 			with self.subTest(name=name):
 				source = (APP_ROOT / f"public/js/retailedge_business_hub/{name}.vue").read_text()
-				self.assertIn("nativeFallbackEnabled: { type: Boolean, default: true }", source)
+				self.assertIn("nativeFallbackEnabled: { type: Boolean, default: false }", source)
 				self.assertIn('v-if="nativeFallbackEnabled"', source)
 
 

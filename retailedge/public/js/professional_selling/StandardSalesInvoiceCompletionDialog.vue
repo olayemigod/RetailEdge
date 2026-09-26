@@ -24,7 +24,7 @@
 					<div class="invoice-editor-heading">
 						<div>
 							<strong>Edit draft before completion</strong>
-							<p>Update permitted draft fields here. Customer, Company, Branch, item identity and source links remain protected; Stock Location can change while the invoice is still a draft.</p>
+							<p>Update permitted draft fields here. Customer, Company, Branch, item identity and source links remain protected; Stock Location stays branch-governed.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
 							{{ busy ? "Saving..." : "Save Draft Changes" }}
@@ -35,21 +35,21 @@
 						<EdgeInput id="invoice-due-date" v-model="draftDueDate" label="Due Date" type="date" :min="draftPostingDate || undefined" :disabled="busy" required />
 						<EdgeInput id="invoice-po-number" v-model="draftPoNo" label="Customer PO / Reference" type="text" :disabled="busy" />
 						<EdgeInput id="invoice-remarks" v-model="draftRemarks" label="Remarks" type="text" :disabled="busy" />
-					</div>
 					<label v-if="preview.can_edit_update_stock" class="guided-check-field">
 						<input v-model="draftUpdateStock" type="checkbox" :true-value="1" :false-value="0" :disabled="busy" />
-						<span><strong>Update Stock</strong><small>Enable this only when the invoice itself should post the stock movement. ERPNext and Branch/Stock Location validation run again on Save Changes.</small></span>
+						<span><strong>Update Stock</strong><small>ERPNext and Branch/Stock Location validation run again when draft changes are saved.</small></span>
 					</label>
+					</div>
 					<div class="invoice-edit-items">
-						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span><span></span></div>
+						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span><span>Action</span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || `new-${index}`" class="invoice-edit-item">
-							<strong v-if="row.name">{{ row.item_code || row.item_name || "Item" }}</strong>
+							<span v-if="row.name" class="invoice-edit-item-label"><strong>{{ row.item_code || row.item_name || "Item" }}</strong><small v-if="row.source_locked">Source-linked</small></span>
 							<EdgeLinkField v-else :modelValue="row.item_code || ''" label="Item" placeholder="Search item" :searcher="searchItem" :disabled="busy" @update:modelValue="setDraftItemCode(index, $event)" />
 							<EdgeInput :modelValue="row.qty" :id="`invoice-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" @update:modelValue="setDraftItemQty(index, $event)" />
 							<EdgeInput :modelValue="row.rate" :id="`invoice-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy || !canOverrideRate" @update:modelValue="setDraftItemRate(index, $event)" />
 							<EdgeLinkField :modelValue="row.warehouse || ''" label="Stock Location" placeholder="Choose Stock Location" :searcher="searchWarehouse" :disabled="busy" @update:modelValue="setDraftItemWarehouse(index, $event)" />
 							<span>{{ preview.currency || "" }} {{ lineAmount(row) }}</span>
-							<button type="button" class="edge-button edge-button--secondary invoice-remove-item" :disabled="busy || row.source_locked" :title="row.source_locked ? 'Source-linked items cannot be removed here.' : 'Remove item'" @click="removeDraftItem(index)">Remove</button>
+							<button type="button" class="edge-button edge-button--secondary invoice-remove-item" :disabled="busy || !canRemoveDraftItem(index)" :title="row.source_locked ? 'Source-linked items cannot be removed here.' : 'Remove item'" @click="removeDraftItem(index)">Remove</button>
 						</div>
 						<div class="invoice-item-actions">
 							<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="addDraftItem">Add Item</button>
@@ -97,8 +97,8 @@
 
 				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
-						<strong>Sales Invoice submitted</strong>
-						<p>Choose the next permitted workflow. The invoice stays open until you choose an action or close it.</p>
+						<strong>{{ completedResult.is_return ? "Return / Credit Note submitted" : "Sales Invoice submitted" }}</strong>
+						<p>{{ completedResult.is_return ? "ERPNext has posted the governed return. Use output actions or close this review." : "Choose the next permitted workflow. The invoice stays open until you choose an action or close it." }}</p>
 					</div>
 					<div class="invoice-next-buttons">
 						<button
@@ -132,19 +132,10 @@
 							v-if="preview?.can_edit && draftDirty"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !draftValid"
-							@click="saveDraftChanges"
-						>
-							{{ busy ? "Saving..." : "Save Changes" }}
-						</button>
-						<button
-							v-if="preview?.can_submit && !draftDirty"
-							type="button"
-							class="edge-button edge-button--primary"
-							:disabled="busy"
+							:disabled="busy || draftDirty"
 							@click="submitDocument"
 						>
-							{{ busy ? "Submitting..." : "Submit Sales Invoice" }}
+							{{ busy ? "Submitting..." : (preview?.is_return ? "Submit Return / Credit Note" : "Submit Sales Invoice") }}
 						</button>
 						<button
 							v-for="action in workflowActions"
@@ -166,16 +157,16 @@
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
-const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
+const PRICING_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_item_pricing";
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
@@ -200,6 +191,7 @@ export default {
 	props: {
 		open: { type: Boolean, default: false },
 		document: { type: Object, default: null },
+		sourceMode: { type: String, default: "standard" },
 		canUseNativeDesk: { type: Boolean, default: false },
 		showNextActions: { type: Boolean, default: false },
 	},
@@ -276,6 +268,15 @@ export default {
 		},
 	},
 	methods: {
+		canRemoveDraftItem(index) {
+			const row = this.draftItems[index];
+			return Boolean(row && !row.source_locked && this.draftItems.length > 1);
+		},
+		removeDraftItem(index) {
+			if (this.busy || !this.canRemoveDraftItem(index)) return;
+			this.draftItems = this.draftItems.filter((_row, rowIndex) => rowIndex !== index);
+			this.pricingTokens = {};
+		},
 		applyPreview(preview) {
 			this.preview = preview || null;
 			this.draftPostingDate = preview?.posting_date || "";
@@ -292,7 +293,7 @@ export default {
 			this.error = "";
 			this.actionError = "";
 			try {
-				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name }));
+				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name, source_mode: this.sourceMode || "standard" }));
 				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
 			} catch (error) {
 				this.applyPreview(null);
@@ -313,11 +314,11 @@ export default {
 				},
 			}).then((rows) => Array.isArray(rows) ? rows : []);
 		},
-		searchWarehouse(query) {
-			return this.searchOptions("warehouse", query);
-		},
 		searchItem(query) {
 			return this.searchOptions("item_code", query);
+		},
+		searchWarehouse(query) {
+			return this.searchOptions("warehouse", query);
 		},
 		lineAmount(row) {
 			return (Number(row?.qty || 0) * Number(row?.rate || 0)).toFixed(2);
@@ -333,12 +334,6 @@ export default {
 				warehouse: this.preview?.default_warehouse || "",
 				source_locked: false,
 			}];
-		},
-		removeDraftItem(index) {
-			const row = this.draftItems[index];
-			if (!row || row.source_locked) return;
-			this.draftItems = this.draftItems.filter((_item, rowIndex) => rowIndex !== index);
-			delete this.pricingTokens[index];
 		},
 		setDraftItemCode(index, value) {
 			const row = this.draftItems[index];
@@ -376,32 +371,27 @@ export default {
 			const token = (this.pricingTokens[index] || 0) + 1;
 			this.pricingTokens[index] = token;
 			try {
-				const pricing = await callMethod(PRICING_METHOD, {
+				const result = await callMethod(PRICING_METHOD, {
+					name: this.preview.name,
 					item_code: row.item_code,
-					values: {
-						company: this.preview.company || "",
-						branch: this.preview.branch || "",
-						warehouse: row.warehouse || this.preview.default_warehouse || "",
-						customer: this.preview.customer || "",
-						posting_date: this.draftPostingDate || this.preview.posting_date || "",
-						qty: Number(row.qty || 1),
-						price_list: "",
-					},
+					qty: Number(row.qty || 1),
+					warehouse: row.warehouse || this.preview.default_warehouse || "",
+					posting_date: this.draftPostingDate || this.preview.posting_date || "",
 				});
 				if (this.pricingTokens[index] !== token || this.draftItems[index]?.item_code !== row.item_code) return;
 				this.draftItems[index] = {
 					...this.draftItems[index],
-					rate: pricing?.rate ?? "",
+					rate: result?.rate ?? "",
 					warehouse: this.draftItems[index]?.warehouse || this.preview?.default_warehouse || "",
 				};
 				this.preview = {
 					...this.preview,
-					selling_price_list: pricing?.price_list || this.preview?.selling_price_list || "",
+					selling_price_list: result?.price_list || this.preview?.selling_price_list || "",
 					pricing: {
 						...(this.preview?.pricing || {}),
-						price_list: pricing?.price_list || this.preview?.pricing?.price_list || "",
-						source: pricing?.source || this.preview?.pricing?.source || "",
-						allow_rate_change: pricing?.allow_rate_change ?? this.preview?.pricing?.allow_rate_change,
+						price_list: result?.price_list || this.preview?.pricing?.price_list || "",
+						source: result?.source || this.preview?.pricing?.source || "",
+						allow_rate_change: result?.allow_rate_change ?? this.preview?.pricing?.allow_rate_change,
 					},
 				};
 				this.draftItems = [...this.draftItems];
@@ -427,7 +417,7 @@ export default {
 							name: row.name || "",
 							item_code: row.item_code,
 							qty: Number(row.qty),
-							rate: Number(row.rate),
+							rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
 							warehouse: row.warehouse || "",
 						})),
 					},
@@ -447,16 +437,17 @@ export default {
 		},
 
 		async submitDocument() {
-			if (!this.preview?.can_submit || this.draftDirty || this.busy) return;
+			if (!this.preview?.can_submit || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
 				const result = await callMethod(SUBMIT_METHOD, {
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
+					source_mode: this.sourceMode || "standard",
 				}, "POST");
 				this.$emit("changed", result);
-				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name });
+				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name, source_mode: this.sourceMode || "standard" });
 				this.completedResult = await this.decorateCompletedResult(submitted);
 				this.$emit("completed", this.completedResult);
 			} catch (error) {
@@ -467,7 +458,7 @@ export default {
 			}
 		},
 		async applyWorkflow(action) {
-			if (!action || this.draftDirty || !this.preview?.workflow_eligible || this.busy) return;
+			if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -476,10 +467,11 @@ export default {
 					action,
 					expected_modified: this.preview.modified,
 					expected_workflow_state: this.preview.workflow_readiness?.current_state || "",
+					source_mode: this.sourceMode || "standard",
 				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name });
+					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name, source_mode: this.sourceMode || "standard" });
 					this.completedResult = await this.decorateCompletedResult(submitted);
 					this.$emit("completed", this.completedResult);
 					return;
@@ -556,12 +548,19 @@ export default {
 				action,
 				doctype: "Sales Invoice",
 				name: this.completedResult.name,
+				company: this.completedResult.company || this.preview?.company || "",
+				branch: this.completedResult.branch || this.preview?.branch || "",
 				customer: this.completedResult.customer || this.preview?.customer || "",
 			});
 		},
 
 		requestClose() {
-			if (!this.busy) this.$emit("close");
+			if (this.busy) return;
+			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
+				frappe.confirm(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
+				return;
+			}
+			this.$emit("close");
 		},
 	},
 };
@@ -578,6 +577,8 @@ export default {
 .invoice-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .invoice-edit-items { display:grid; gap:.35rem; }
 .invoice-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) 7rem 8rem minmax(12rem,1fr) 8rem auto; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-edit-item-label { display:grid; gap:.15rem; }
+.invoice-edit-item-label small,.invoice-source-lock { color:var(--text-muted); font-size:.7rem; }
 .invoice-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
 .invoice-next-actions { display:grid; gap:.65rem; padding:.85rem; border:1px solid var(--edge-color-brand-200,var(--blue-200,#bfdbfe)); border-radius:.6rem; background:var(--edge-color-brand-50,var(--blue-50,#eff6ff)); }
 .invoice-next-actions p { margin:.2rem 0 0; color:var(--text-muted); }

@@ -7,7 +7,7 @@
 		@close="requestClose"
 	>
 		<div class="invoice-mode-switch" role="group" aria-label="Sales Invoice creation mode">
-			<button v-for="option in modes" :key="option.key" type="button" class="edge-button" :class="{ 'edge-button--primary': mode === option.key }" :disabled="saving" @click="setMode(option.key)">{{ option.label }}</button>
+			<button v-for="option in visibleModes" :key="option.key" type="button" class="edge-button" :class="{ 'edge-button--primary': mode === option.key }" :disabled="saving" @click="setMode(option.key)">{{ option.label }}</button>
 		</div>
 
 		<div v-if="saveError" class="selling-form-error" role="alert">{{ saveError }}</div>
@@ -63,10 +63,13 @@
 				/>
 
 				<EdgeLinkField
-					v-if="canSwitchPriceList"
+					v-if="mode === 'new'"
 					:modelValue="values.price_list"
-					label="Price List"
-					placeholder="Choose an assigned Price List"
+					label="Selling Price List"
+					placeholder="Select assigned Price List"
+					description="The effective default follows Price List Governance. Source-document conversions keep their existing commercial terms."
+					:required="Boolean(pricingContext.selection_required)"
+					:disabled="Boolean(pricingContext.locked) || !Boolean(pricingContext.can_select)"
 					:searcher="searchPriceList"
 					@update:modelValue="setPriceList"
 				/>
@@ -149,7 +152,10 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Open Full Form</button>
+				<div class="selling-form-footer-actions">
+					<button v-if="mode === 'new'" type="button" class="edge-button" :disabled="saving" @click="openMakeSalePage">Open Make Sale Page</button>
+					<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode !== 'new' && !sourceDocument)" @click="saveDraft">{{ saving ? "Saving..." : saveLabel }}</button>
@@ -166,6 +172,7 @@ import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 const GUIDED_CONTEXT = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
+const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
 const SOURCE_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_sources";
 const LOYALTY_STATUS = "retailedge.loyalty_rewards.get_customer_loyalty_status";
@@ -182,7 +189,7 @@ function initialValues(context = {}) {
 		branch: context.operating?.branch || "",
 		warehouse: context.operating?.default_stock_location || "",
 		customer: "",
-		price_list: "",
+		price_list: context.pricing?.price_list || "",
 		posting_date: context.today || "",
 		shipping_rule: "",
 		loyalty_points: 0,
@@ -195,8 +202,12 @@ function initialValues(context = {}) {
 export default {
 	name: "ProfessionalSalesInvoiceDialog",
 	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
-	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
-	emits: ["close", "saved", "open-native"],
+	props: {
+		open: { type: Boolean, default: false },
+		context: { type: Object, default: () => ({}) },
+		canUseNativeDesk: { type: Boolean, default: false },
+	},
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			mode: "new",
@@ -205,8 +216,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
-			pricingSignatures: {},
-			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
+			pricingContext: { ...(this.context.pricing || {}) },
 			guidedContext: null,
 			loadingContext: false,
 			loyaltyToken: 0,
@@ -229,14 +239,15 @@ export default {
 		};
 	},
 	computed: {
-		pricingContext() { return this.guidedContext?.pricing || this.context.pricing || {}; },
-		priceListLabel() { return this.values.price_list || this.pricingContext.price_list || "ERPNext default"; },
-		canSwitchPriceList() { return Boolean(this.pricingContext.can_switch_price_list && this.availablePriceLists.length); },
-		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
+		visibleModes() {
+			return this.modes;
+		},
+		priceListLabel() { return this.pricingContext?.price_list || "Choose Price List"; },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
 		},
+		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 		sourceLabel() {
@@ -249,7 +260,7 @@ export default {
 				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
 		},
 		sourceHint() {
-			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
+			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. RetailEdge reviews the canonical return draft and follows any active Frappe Workflow before submission; no refund or Payment Entry is created automatically.";
 			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
 		},
 		saveLabel() {
@@ -263,11 +274,10 @@ export default {
 			if (next) {
 				this.mode = "new";
 				this.sourceDocument = "";
-				this.values = initialValues(this.context);
 				this.guidedContext = null;
-				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
-				this.pricingTokens = {};
-				this.pricingSignatures = {};
+				this.pricingContext = { ...(this.context.pricing || {}) };
+				this.values = initialValues(this.context);
+				this.applyRatePermission(this.pricingContext);
 				this.loyaltyToken += 1;
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
@@ -277,6 +287,10 @@ export default {
 		},
 	},
 	methods: {
+		openMakeSalePage() {
+			if (this.saving || this.mode !== "new") return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
+		},
 		async loadGuidedContext() {
 			if (this.loadingContext) return;
 			this.loadingContext = true;
@@ -290,10 +304,12 @@ export default {
 					branch: defaults.branch || this.values.branch,
 					warehouse: defaults.warehouse || this.values.warehouse,
 					posting_date: defaults.posting_date || this.values.posting_date,
+					price_list: defaults.price_list || guided?.pricing?.price_list || this.values.price_list,
 					update_stock: Number(defaults.update_stock ?? 1),
 				};
 				if (!guided?.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
-				this.availablePriceLists = [...(guided?.pricing?.available_price_lists || [])];
+				this.pricingContext = { ...(guided?.pricing || this.pricingContext || {}) };
+				this.applyRatePermission(this.pricingContext);
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to resolve the Sales Invoice operating context.");
 			} finally {
@@ -310,6 +326,14 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		applyRatePermission(pricing = this.pricingContext || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
+			this.itemColumns = this.itemColumns.map((column) =>
+				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+			);
+		},
+		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; this.applyRatePermission(pricing || {}); if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
+		async setPriceList(next) { if (this.pricingContext?.locked || this.mode !== "new") return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Selling Price List."); } },
 		searchShippingRule(query) {
 			return callMethod(SHIPPING_SEARCH, { txt: query || "", values: this.values }).then((rows) => Array.isArray(rows) ? rows : []);
 		},
@@ -321,40 +345,23 @@ export default {
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
-		async refreshPriceListOptions() {
-			const rows = await this.searchPriceList("");
-			this.availablePriceLists = rows.map((row) => row.value || row.label).filter(Boolean);
-			if (this.values.price_list && !this.availablePriceLists.includes(this.values.price_list)) this.values.price_list = "";
-		},
-		setPriceList(next) {
-			this.values.price_list = next || "";
-			this.pricingSignatures = {};
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
-		},
 		setCustomer(next) {
-			const previousCustomer = this.values.customer || "";
-			this.values.customer = next || "";
-			this.pricingSignatures = {};
-			this.refreshPriceListOptions().catch(() => {});
+			const value = next || "";
+			const changed = this.values.customer !== value;
+			this.values.customer = value;
 			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
-			if (previousCustomer !== this.values.customer) {
+			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshAllItemPricing();
+				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
 		},
 		postingDateChanged() {
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
-			this.pricingSignatures = {};
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			if (this.values.customer) {
-				this.loadLoyaltyStatus();
-				this.refreshAllItemPricing();
-			}
+			if (this.values.customer) this.loadLoyaltyStatus();
 		},
 		async loadLoyaltyStatus() {
 			if (!this.values.customer) return;
@@ -382,18 +389,25 @@ export default {
 		},
 		async setBranch(next) {
 			this.values.branch = next || "";
-			this.pricingSignatures = {};
 			this.values.warehouse = "";
-			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
-			if (!this.values.branch || !this.values.company) return;
+			if (!this.values.company) return;
+			if (!this.values.branch) {
+				try {
+					await this.refreshPriceListContext();
+					this.refreshAllItemPricing();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to refresh Selling Price List.");
+				}
+				return;
+			}
 			const token = ++this.cascadeToken;
 			try {
 				const resolved = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.branch, preference: "sales" });
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || "";
-				await this.refreshPriceListOptions();
+				await this.refreshPriceListContext();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve Branch Stock Location.");
@@ -401,7 +415,6 @@ export default {
 		},
 		async setWarehouse(next) {
 			this.values.warehouse = next || "";
-			this.pricingSignatures = {};
 			if (!this.values.warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -417,32 +430,13 @@ export default {
 				}
 			}
 		},
-		pricingSignature(row) {
-			return [
-				this.values.company,
-				this.values.branch,
-				this.values.warehouse,
-				this.values.customer,
-				this.values.price_list,
-				this.values.posting_date,
-				row?.item_code || "",
-				row?.qty || 1,
-			].join("|");
-		},
 		updateItems(nextRows) {
+			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const normalized = { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
-				if (!normalized.item_code) {
-					delete this.pricingSignatures[index];
-					return normalized;
-				}
-				const signature = this.pricingSignature(normalized);
-				if (this.pricingSignatures[index] !== signature) {
-					changed.push(index);
-					return { ...normalized, rate: "" };
-				}
-				return normalized;
+				const prior = previous[index] || {};
+				if (row.item_code && row.item_code !== prior.item_code) changed.push(index);
+				return { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
 			});
 			changed.forEach((index) => this.refreshItemPricing(index));
 		},
@@ -455,16 +449,14 @@ export default {
 				const pricing = await callMethod(GUIDED_PRICING, { item_code: row.item_code, values: { ...this.values, qty: row.qty } });
 				if (this.pricingTokens[index] !== token) return;
 				this.values.items[index] = { ...this.values.items[index], rate: pricing.rate ?? "" };
-				this.pricingSignatures[index] = this.pricingSignature(this.values.items[index]);
 				this.values.items = [...this.values.items];
+				this.pricingContext = { ...(this.pricingContext || {}), ...(pricing || {}) }; this.applyRatePermission(this.pricingContext);
+				if (pricing?.price_list && (pricing?.locked || !this.values.price_list)) this.values.price_list = pricing.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
-		refreshAllItemPricing() {
-			this.pricingSignatures = {};
-			this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); });
-		},
+		refreshAllItemPricing() { this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); }); },
 		async saveDraft() {
 			if (this.saving) return;
 			this.saving = true;

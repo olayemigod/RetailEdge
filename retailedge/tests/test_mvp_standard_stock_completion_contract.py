@@ -20,7 +20,7 @@ def test_completion_is_bounded_to_standard_stock_documents():
 	assert 'SUPPORTED_DOCTYPES = {STOCK_ENTRY_DOCTYPE, STOCK_RECONCILIATION_DOCTYPE}' in source
 	assert 'MATERIAL_TRANSFER' in source
 	assert 'STOCK_RECONCILIATION_PURPOSE' in source
-	assert 'MAX_STANDARD_ITEMS = 50' in source
+	assert 'MAX_STANDARD_ITEMS = 100' in source
 	assert 'Amended stock documents require Advanced ERPNext review.' in source
 	assert 'Serial No or Batch tracking and requires Advanced ERPNext' in source
 
@@ -121,8 +121,105 @@ def test_completion_dialog_uses_server_authoritative_actions_only():
 		"Advanced: Open in ERPNext",
 	):
 		assert contract in source
-	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
+	for forbidden in (".workflow_state =", ".docstatus =", ".status =", "window.EdgeUI"):
 		assert forbidden not in source
+	assert "window.EdgeSuiteUI" in source
+
+
+
+
+def test_stock_preview_separates_edit_blockers_from_submit_permission():
+	source = _read(SERVICE)
+	preview = source[source.index("def _build_preview"):source.index("@frappe.whitelist()", source.index("def _build_preview"))]
+	assert "edit_blockers = list(blockers)" in preview
+	assert '"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers' in preview
+	assert "You do not have permission to submit this {0}." in preview
+	assert preview.index("edit_blockers = list(blockers)") < preview.index("You do not have permission to submit this {0}.")
+
+
+def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
+	source = _read(SERVICE)
+	dialog = _read(DIALOG)
+	method = source[source.index("def update_standard_stock_document_draft("):source.index('@frappe.whitelist(methods=["POST"])', source.index("def update_standard_stock_document_draft(") + 10)]
+	for contract in (
+		"def update_standard_stock_document_draft(",
+		"_lock_document(doctype, name)",
+		"_assert_expected_modified(doc, expected_modified)",
+		'frappe.has_permission(doctype, "write", doc=doc)',
+		"_validate_company_and_scope(doc)",
+		"_transfer_preview(doc, company, scope)",
+		"_adjustment_preview(doc, company, scope)",
+		"_update_stock_draft_items(doc, items, preview=preview)",
+		"doc.save()",
+		'result["persistence"] = "draft_update"',
+	):
+		assert contract in source
+	for forbidden in (
+		"frappe.db.commit",
+		"ignore_permissions=True",
+		'frappe.new_doc("Stock Ledger Entry")',
+		'frappe.new_doc("GL Entry")',
+		".docstatus =",
+		".workflow_state =",
+	):
+		assert forbidden not in method
+
+	for contract in (
+		"update_standard_stock_document_draft",
+		"Edit draft items",
+		"Save Draft Changes",
+		"draftPostingDate",
+		"draftRemarks",
+		"editable_items",
+		"expected_modified",
+		"EdgeChildTable",
+		"window.EdgeSuiteUI",
+	):
+		assert contract in dialog
+	assert "window.EdgeUI" not in dialog
+
+
+
+def test_stock_completion_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for contract in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved stock draft changes?',
+		'this.preview?.can_edit && this.draftDirty',
+	):
+		assert contract in dialog
+
+
+def test_stock_draft_editor_revalidates_existing_and_new_items_as_simple_stock_items():
+	source = _read(SERVICE)
+	method = source[source.index("def _update_stock_draft_items"):source.index("def _build_preview")]
+	assert 'if kind == "transfer":\n\t\t\t_assert_simple_transfer_item(item_code)' in method
+	assert 'else:\n\t\t\t_assert_simple_adjustment_item(item_code)' in method
+	assert method.index('item_code = _clean(row.get("item_code"))') < method.index('_assert_simple_transfer_item(item_code)')
+
+
+def test_stock_draft_editor_keeps_scope_and_tracking_complexity_out_of_editable_payload():
+	source = _read(SERVICE)
+	for contract in (
+		'"s_warehouse": _clean(preview.get("source_warehouse"))',
+		'"t_warehouse": _clean(preview.get("target_warehouse"))',
+		'"warehouse": _clean(preview.get("warehouse"))',
+		"_item_tracking(item_code)",
+		"uses Serial No or Batch tracking and requires Advanced ERPNext",
+	):
+		assert contract in source
+	for forbidden in (
+		'item.get("source_warehouse")',
+		'item.get("target_warehouse")',
+		'item.get("warehouse")',
+		'item.get("company")',
+		'item.get("branch")',
+		'item.get("purpose")',
+	):
+		assert forbidden not in source[source.index("def _update_stock_draft_items"):source.index("def _build_preview")]
 
 
 def test_business_hub_opens_completion_after_both_guided_stock_drafts():

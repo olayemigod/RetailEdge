@@ -13,7 +13,7 @@
 				<div class="delivery-completion-summary">
 					<div><span>Delivery Note</span><strong>{{ preview.name }}</strong></div>
 					<div><span>Customer</span><strong>{{ preview.customer || "Not set" }}</strong></div>
-					<div><span>Source Sales Order</span><strong>{{ preview.source_sales_order || "Not resolved" }}</strong></div>
+					<div><span>{{ preview.source_sales_invoice ? "Source Sales Invoice" : "Source Sales Order" }}</span><strong>{{ preview.source_sales_invoice || preview.source_sales_order || "Direct delivery" }}</strong></div>
 					<div><span>Company</span><strong>{{ preview.company || "Not set" }}</strong></div>
 					<div><span>Branch</span><strong>{{ preview.branch || "Company-wide" }}</strong></div>
 					<div><span>Status</span><strong>{{ preview.status || "Draft" }}</strong></div>
@@ -174,7 +174,7 @@ const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_previe
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
@@ -435,6 +435,8 @@ export default {
 				action,
 				doctype: "Delivery Note",
 				name: this.completedResult.name,
+				company: this.completedResult.company || this.preview?.company || "",
+				branch: this.completedResult.branch || this.preview?.branch || "",
 				customer: this.completedResult.customer || this.preview?.customer || "",
 			});
 		},

@@ -44,21 +44,26 @@ def test_draft_listing_is_permission_aware_and_requires_operating_scope():
 	assert "frappe.get_all(" not in listing
 
 
-def test_standard_shape_is_one_purchase_invoice_company_currency_without_advance_or_complexity():
+def test_standard_shape_supports_bounded_same_scope_purchase_invoice_settlement_without_advance_or_complexity():
 	source = _read(BACKEND)
 	assert '!= "Pay"' in source
 	assert '!= SUPPLIER_DOCTYPE' in source
-	assert "Only a single Purchase Invoice allocation is supported" in source
+	assert "MAX_STANDARD_REFERENCES = 20" in source
+	assert "def _reference_previews" in source
+	assert "Only Purchase Invoice allocations are supported by standard supplier settlement" in source
 	assert "Supplier advances require Advanced ERPNext review" in source
-	assert "Payments allocated to multiple documents require Advanced ERPNext review" in source
 	assert "Return Purchase Invoices require Advanced ERPNext review" in source
 	assert "Multi-currency Purchase Invoice payments require Advanced ERPNext review" in source
 	assert "Multi-currency Payment Entries require Advanced ERPNext review" in source
-	assert "Standard supplier payment must allocate the full payment to one Purchase Invoice" in source
+	assert "Standard supplier settlement must allocate the full payment across its Purchase Invoices" in source
+	assert "All Purchase Invoice allocations in a standard supplier settlement must belong to one Branch" in source
+	assert "The Payment Entry must carry the Branch of its Purchase Invoice allocations" in source
 	assert "Supplier advances or unallocated amounts require Advanced ERPNext review" in source
 	assert "Payments with deductions or exchange differences require Advanced ERPNext review" in source
 	assert "Standard supplier payment requires a Bank or Cash payment account" in source
 	assert "Standard supplier payment requires the Supplier payable account" in source
+	assert '"references": references' in source
+	assert '"reference_count": len(references)' in source
 
 
 def test_restricted_blank_branch_and_context_tampering_fail_closed():
@@ -98,7 +103,9 @@ def test_business_hub_supplier_payment_reviews_and_submits_without_forced_native
 	assert "expected_payment_entry_modified" in page
 	assert "Submit Payment" in page
 	assert "Open in ERPNext" in page
-	assert "Standard Pay Supplier supports one Purchase Invoice per payment" in page
+	assert "Quick Pay Supplier supports one Purchase Invoice per payment" in page
+	assert "allowMultiReferenceSupplierPayment" in page
+	assert "Managed Supplier Settlement supports up to" in page
 	supplier_creation = page[page.index("async saveDraft()"):page.index("formatAmount(value)")]
 	assert 'this.$emit("saved", result);' in supplier_creation
 	assert "if (this.isSupplierPayment)" in supplier_creation
@@ -115,6 +122,7 @@ def test_supplier_submit_stays_standard_and_native_open_is_explicit():
 	assert "expected_payment_entry_modified: this.supplierReview.payment_entry_modified" in page
 	assert "frappe.confirm(" in page
 	submit = page[page.index("async submitSupplierPayment()"):page.index("async saveDraft()")]
+	assert 'this.$emit("saved", result);' in submit
 	assert 'this.$emit("close");' in submit
 	assert 'frappe.set_route("Form", "Payment Entry"' not in submit
 	assert "frappe.show_alert" not in submit

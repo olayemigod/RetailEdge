@@ -10,7 +10,7 @@ from frappe.utils.user import get_user_fullname
 
 from erpnext.stock.get_item_details import get_pos_profile
 
-from retailedge.branch_assignment import get_raw_assignment_price_lists
+from retailedge.branch_assignment import get_branch_assignment_price_lists
 from retailedge.branch_profile import get_exact_branch_profile, get_user_pos_profiles
 from retailedge.operating_context import get_operating_context
 
@@ -199,21 +199,36 @@ def _raw_assigned_price_lists(
 	sources: dict[str, list[str]] = {
 		"user_permission": [],
 		"branch_assignment": [],
+		"branch_default": [],
 		"pos_profile": [],
 		"branch_pos_profile": [],
 		"effective_pos_profile": [],
 	}
 
-	assignment_price_lists = get_raw_assignment_price_lists(
-		user=user,
-		company=company or None,
-		branch=branch or None,
-	)
-	if assignment_price_lists:
-		has_assignment_boundary = True
-		for name in assignment_price_lists:
-			candidates.add(name)
-			sources["branch_assignment"].append(name)
+	if company and branch:
+		assignment_scope = get_branch_assignment_price_lists(
+			user=user,
+			company=company,
+			branch=branch,
+		)
+		assignment_names = [
+			str(name or "").strip()
+			for name in assignment_scope.get("names") or []
+			if str(name or "").strip()
+		]
+		if assignment_names:
+			has_assignment_boundary = True
+			for name in assignment_names:
+				candidates.add(name)
+				sources["branch_assignment"].append(name)
+
+		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
+		if profile:
+			for fieldname in ("default_selling_price_list", "default_buying_price_list"):
+				name = str(getattr(profile, fieldname, None) or "").strip()
+				if name:
+					candidates.add(name)
+					sources["branch_default"].append(name)
 
 	price_permissions = get_user_permissions(user).get("Price List", []) or []
 	if price_permissions:

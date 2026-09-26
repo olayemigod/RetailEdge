@@ -8,6 +8,8 @@ from retailedge.master_experience import (
 	CUSTOMER_ACTION,
 	ITEM_ACTION,
 	SUPPLIER_ACTION,
+	_promote_long_transaction_pages,
+	_promote_make_sale,
 	get_retailedge_business_hub_context,
 )
 
@@ -46,6 +48,36 @@ class TestMasterExperience(unittest.TestCase):
 		self.assertNotIn("new-customer", keys)
 		self.assertNotIn("new-supplier", keys)
 		self.assertNotIn("new-item", keys)
+
+	@patch("retailedge.master_experience.frappe.has_permission", return_value=True)
+	@patch("retailedge.master_experience.frappe.db.exists", return_value=True)
+	@patch("retailedge.master_experience._can_open_page", return_value=True)
+	def test_transaction_promotions_recreate_groups_removed_by_edgesuite_only_containment(
+		self, _can_open_page, _exists, _has_permission
+	):
+		navigation = [{"key": "home", "label": "Home", "icon": "home", "items": []}]
+		_promote_make_sale(navigation)
+		_promote_long_transaction_pages(navigation)
+
+		groups = {group["key"]: group for group in navigation}
+		self.assertIn("sell", groups)
+		self.assertIn("buy", groups)
+		self.assertIn("stock", groups)
+		self.assertIn("make-sale", {item["target"] for item in groups["sell"]["items"]})
+		self.assertIn("record-purchase", {item["target"] for item in groups["buy"]["items"]})
+		self.assertIn("transfer-stock", {item["target"] for item in groups["stock"]["items"]})
+		self.assertIn("stock-adjustment", {item["target"] for item in groups["stock"]["items"]})
+
+	@patch("retailedge.master_experience.frappe.has_permission", return_value=False)
+	@patch("retailedge.master_experience.frappe.db.exists", return_value=True)
+	@patch("retailedge.master_experience._can_open_page", return_value=True)
+	def test_transaction_promotions_do_not_create_groups_without_doctype_create_permission(
+		self, _can_open_page, _exists, _has_permission
+	):
+		navigation = [{"key": "home", "label": "Home", "icon": "home", "items": []}]
+		_promote_make_sale(navigation)
+		_promote_long_transaction_pages(navigation)
+		self.assertEqual([group["key"] for group in navigation], ["home"])
 
 	def test_master_action_contracts_use_native_erpnext_masters(self):
 		self.assertEqual(CUSTOMER_ACTION["doctype"], "Customer")

@@ -134,6 +134,15 @@
 				</div>
 			</section>
 
+			<section v-if="activeTab === 'pricing'" class="form-section">
+				<h4>Pricing defaults</h4>
+				<p class="section-hint">Branch Price Lists participate in the precedence configured under Settings → Price List Governance. Leave them blank when the merchant policy should resolve pricing from another source.</p>
+				<div class="form-grid">
+					<EdgeLinkField :modelValue="editor.default_selling_price_list" label="Default Selling Price List" placeholder="Optional" description="Used first for sales in this Branch." :searcher="searchDefaultSellingPriceList" @update:modelValue="editor.default_selling_price_list = $event || ''" />
+					<EdgeLinkField :modelValue="editor.default_buying_price_list" label="Default Buying Price List" placeholder="Optional" description="Used first for purchases in this Branch." :searcher="searchDefaultBuyingPriceList" @update:modelValue="editor.default_buying_price_list = $event || ''" />
+				</div>
+			</section>
+
 			<section v-if="activeTab === 'operations'" class="form-section">
 				<h4>POS & stock defaults</h4>
 				<p class="section-hint">POS Profile is optional for non-POS users. Stock Location choices are restricted to the selected Company.</p>
@@ -141,8 +150,6 @@
 					<EdgeLinkField :modelValue="editor.default_pos_profile" label="Default POS Profile" placeholder="Optional" :searcher="searchDefaultPosProfile" @update:modelValue="editor.default_pos_profile = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_pos_opening_cash_account" label="POS Opening Cash Account" placeholder="Optional" :searcher="searchPosOpeningAccount" @update:modelValue="editor.default_pos_opening_cash_account = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_cash_mode_of_payment" label="Cash Mode of Payment" placeholder="Optional" :searcher="searchCashMode" @update:modelValue="editor.default_cash_mode_of_payment = $event || ''" />
-					<EdgeLinkField :modelValue="editor.default_selling_price_list" label="Default Selling Price List" placeholder="Optional" :searcher="searchDefaultSellingPriceList" @update:modelValue="editor.default_selling_price_list = $event || ''" />
-					<EdgeLinkField :modelValue="editor.default_buying_price_list" label="Default Buying Price List" placeholder="Optional" :searcher="searchDefaultBuyingPriceList" @update:modelValue="editor.default_buying_price_list = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_warehouse" label="Default Stock Location" placeholder="Optional" :searcher="searchDefaultWarehouse" @update:modelValue="editor.default_warehouse = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_source_warehouse" label="Default Source Stock Location" placeholder="Optional" :searcher="searchSourceWarehouse" @update:modelValue="editor.default_source_warehouse = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_target_warehouse" label="Default Destination Stock Location" placeholder="Optional" :searcher="searchTargetWarehouse" @update:modelValue="editor.default_target_warehouse = $event || ''" />
@@ -267,7 +274,7 @@ export default {
 		filters: { company: "", branch: "", enabled: "" }, sortKey: "company", sortDirection: "asc", userName: "", menuItems: [], canUseNativeDesk: false,
 		editorOpen: false, editorLoading: false, saving: false, editorError: "", editor: blankEditor(), state: {}, activeTab: "identity",
 		reassignOpen: false, reassigning: false, reassignError: "", reassign: { company: "", branch: "" },
-		tabs: [{ key: "identity", label: "Identity" }, { key: "operations", label: "POS & Stock" }, { key: "accounting", label: "Accounting" }, { key: "controls", label: "Controls" }],
+		tabs: [{ key: "identity", label: "Identity" }, { key: "pricing", label: "Pricing" }, { key: "operations", label: "POS & Stock" }, { key: "accounting", label: "Accounting" }, { key: "controls", label: "Controls" }],
 		columns: [
 			{ key: "profile_name", label: "Setup" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" },
 			{ key: "enabled", label: "Status" }, { key: "is_default_for_company", label: "Default" },
@@ -335,10 +342,10 @@ export default {
 		searchEditorCompany(query) { return this.search("company", query, this.editor); },
 		searchEditorBranch(query) { return this.search("branch", query, this.editor); },
 		searchDefaultPosProfile(query) { return this.search("default_pos_profile", query); },
-		searchPosOpeningAccount(query) { return this.search("default_pos_opening_cash_account", query); },
-		searchCashMode(query) { return this.search("default_cash_mode_of_payment", query); },
 		searchDefaultSellingPriceList(query) { return this.search("default_selling_price_list", query); },
 		searchDefaultBuyingPriceList(query) { return this.search("default_buying_price_list", query); },
+		searchPosOpeningAccount(query) { return this.search("default_pos_opening_cash_account", query); },
+		searchCashMode(query) { return this.search("default_cash_mode_of_payment", query); },
 		searchDefaultWarehouse(query) { return this.search("default_warehouse", query); },
 		searchSourceWarehouse(query) { return this.search("default_source_warehouse", query); },
 		searchTargetWarehouse(query) { return this.search("default_target_warehouse", query); },

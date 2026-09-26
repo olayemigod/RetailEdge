@@ -79,9 +79,16 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 		self.assertNotIn('frappe.new_doc("Purchase Order")', source)
 		self.assertNotIn("frappe.set_route", source)
 
+	def test_purchase_order_dialog_defaults_native_fallback_closed(self):
+		dialog = self.read("public/js/professional_purchasing/ProfessionalPurchaseOrderDialog.vue")
+		self.assertIn('nativeFallbackEnabled: { type: Boolean, default: false }', dialog)
+		self.assertIn("Advanced: Open in ERPNext", dialog)
+		self.assertNotIn("Open Full Form", dialog)
+
 	def test_edgesuite_only_overlay_disables_native_full_form_fallback(self):
 		source = self.read("public/js/professional_purchasing/ProfessionalPurchaseOrderOverlay.vue")
-		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE', source)
+		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', source)
+		self.assertIn('Boolean(access.can_use_native_desk)', source)
 		self.assertIn('const ACCESS_MODE = "edgesuite_only"', source)
 		self.assertIn('frappe.new_doc("Purchase Order")', source)
 		self.assertIn("if (!this.nativeFallbackEnabled) return;", source)
@@ -114,7 +121,8 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 			"ADVANCED_PURCHASE_ORDER_LABEL,",
 		):
 			self.assertIn(contract, source)
-		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE', source)
+		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', source)
+		self.assertIn('Boolean(access.can_use_native_desk)', source)
 		self.assertIn('button.hidden = true', source)
 		self.assertIn('button.classList.contains("retailedge-po-reference")', source)
 

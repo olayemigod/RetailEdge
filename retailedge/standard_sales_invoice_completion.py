@@ -5,11 +5,12 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_datetime, getdate
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return as erpnext_make_sales_return
 
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
-from retailedge.guided_pricing import resolve_price_list_context
+from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
-from retailedge.professional_draft_items import editable_items, update_draft_items
+from retailedge.professional_draft_items import _validate_warehouse_branch, editable_items, update_draft_items
 from retailedge.professional_selling import (
 	_assert_read,
 	_validate_stored_operational_branch,
@@ -23,6 +24,8 @@ DELIVERY_NOTE_DOCTYPE = "Delivery Note"
 SALES_ORDER_DOCTYPE = "Sales Order"
 _LOCK_TABLE = "tabSales Invoice"
 MAX_ITEM_SUMMARY = 10
+SOURCE_MODE_STANDARD = "standard"
+SOURCE_MODE_SALES_RETURN = "sales_return"
 
 
 def _clean(value: Any) -> str:
@@ -85,14 +88,23 @@ def _validate_invoice_context(doc) -> tuple[str, str]:
 	return company, invoice_branch
 
 
-def _standard_invoice_blockers(doc) -> list[str]:
+def _standard_invoice_blockers(
+	doc,
+	*,
+	include_date_validation: bool = True,
+	source_mode: str = SOURCE_MODE_STANDARD,
+) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
 		blockers.append(_("Only draft Sales Invoices can use standard EdgeSuite completion."))
 	if doc.get("amended_from"):
 		blockers.append(_("Amended Sales Invoices require Advanced ERPNext review."))
-	if cint(doc.get("is_return")) or _clean(doc.get("return_against")):
-		blockers.append(_("Return / Credit Note completion requires Advanced ERPNext review."))
+	is_return = bool(cint(doc.get("is_return")) or _clean(doc.get("return_against")))
+	if source_mode == SOURCE_MODE_SALES_RETURN:
+		if not cint(doc.get("is_return")) or not _clean(doc.get("return_against")):
+			blockers.append(_("Sales Return completion requires an ERPNext Return / Credit Note draft linked to its source Sales Invoice."))
+	elif is_return:
+		blockers.append(_("Return / Credit Note completion requires the governed Sales Return workflow."))
 	if cint(doc.get("is_pos")):
 		blockers.append(_("POS Sales Invoice completion requires Advanced ERPNext review."))
 	if cint(doc.get("is_consolidated")):
@@ -110,7 +122,7 @@ def _standard_invoice_blockers(doc) -> list[str]:
 
 	posting_date = doc.get("posting_date")
 	due_date = doc.get("due_date")
-	if posting_date and due_date:
+	if include_date_validation and posting_date and due_date:
 		try:
 			if getdate(due_date) < getdate(posting_date):
 				blockers.append(_("Due Date cannot be before Posting Date. Edit the draft dates before completing."))
@@ -127,6 +139,17 @@ def _standard_invoice_blockers(doc) -> list[str]:
 		blockers.append(_("Automatic advance allocation requires Advanced ERPNext review."))
 
 	return list(dict.fromkeys(blockers))
+
+
+def _validate_sales_item_access(doc) -> list[str]:
+	blockers: list[str] = []
+	for index, row in enumerate(list(doc.get("items") or []), start=1):
+		item_code = _clean(row.get("item_code"))
+		if not item_code:
+			blockers.append(_("Item is missing on Sales Invoice row {0}.").format(index))
+			continue
+		_assert_read("Item", item_code)
+	return blockers
 
 
 def _reference_names(doc, fieldname: str) -> set[str]:
@@ -198,6 +221,101 @@ def _validate_source_context(
 		"source_branch": source_branch,
 		"blockers": list(dict.fromkeys(blockers)),
 	}
+
+
+def _return_item_signature(rows: list[Any]) -> list[tuple[str, float, float, str]]:
+	result: list[tuple[str, float, float, str]] = []
+	for row in rows:
+		result.append(
+			(
+				_clean(row.get("item_code")),
+				flt(row.get("qty")),
+				flt(row.get("rate")),
+				_clean(row.get("warehouse")),
+			)
+		)
+	return sorted(result)
+
+
+def _validate_sales_return_context(doc, *, company: str, invoice_branch: str) -> dict[str, Any]:
+	blockers: list[str] = []
+	source_name = _clean(doc.get("return_against"))
+	if not cint(doc.get("is_return")) or not source_name:
+		return {
+			"source_type": SALES_INVOICE_DOCTYPE,
+			"source_name": source_name,
+			"source_branch": "",
+			"blockers": [_("Sales Return completion requires a mapped ERPNext Return / Credit Note draft.")],
+		}
+	if not frappe.db.exists(SALES_INVOICE_DOCTYPE, source_name):
+		blockers.append(_("Source Sales Invoice {0} no longer exists.").format(source_name))
+		return {
+			"source_type": SALES_INVOICE_DOCTYPE,
+			"source_name": source_name,
+			"source_branch": "",
+			"blockers": blockers,
+		}
+
+	source = frappe.get_doc(SALES_INVOICE_DOCTYPE, source_name)
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "read", doc=source):
+		frappe.throw(
+			_("You do not have permission to read source Sales Invoice {0}.").format(source_name),
+			frappe.PermissionError,
+		)
+	if cint(source.docstatus) != 1:
+		blockers.append(_("Source Sales Invoice {0} is not submitted.").format(source_name))
+	if cint(source.get("is_return")):
+		blockers.append(_("Create the Return / Credit Note from the original Sales Invoice, not from another return."))
+	if cint(source.get("is_consolidated")):
+		blockers.append(_("Consolidated POS Sales Invoice returns require the native POS return workflow."))
+	if _clean(source.get("company")) != company:
+		blockers.append(_("Source Sales Invoice Company does not match the Return / Credit Note."))
+	if _clean(source.get("customer")) != _clean(doc.get("customer")):
+		blockers.append(_("Source Sales Invoice Customer does not match the Return / Credit Note."))
+
+	source_branch = _validate_stored_operational_branch(
+		company=_clean(source.get("company")) or company,
+		branch=_stored_branch(source),
+		label=_("Source Sales Invoice {0}").format(source_name),
+	)
+	if source_branch and invoice_branch and source_branch != invoice_branch:
+		blockers.append(_("Source Sales Invoice Branch does not match the Return / Credit Note Branch."))
+
+	rows = list(doc.get("items") or [])
+	if any(flt(row.get("qty")) >= 0 for row in rows):
+		blockers.append(_("Standard Sales Return completion requires negative return quantities on every item row."))
+
+	if cint(doc.docstatus) == 0:
+		try:
+			canonical = erpnext_make_sales_return(source.name)
+		except Exception:
+			canonical = None
+			blockers.append(_("ERPNext could not rebuild the canonical Sales Return mapping for validation."))
+		if canonical:
+			if not cint(canonical.get("is_return")) or _clean(canonical.get("return_against")) != source.name:
+				blockers.append(_("ERPNext canonical Sales Return linkage no longer matches this draft."))
+			if bool(cint(canonical.get("update_stock"))) != bool(cint(doc.get("update_stock"))):
+				blockers.append(_("Return / Credit Note Update Stock no longer matches ERPNext's canonical mapping."))
+			if _return_item_signature(rows) != _return_item_signature(list(canonical.get("items") or [])):
+				blockers.append(
+					_("This Return / Credit Note no longer matches ERPNext's canonical remaining return quantities. Use Advanced ERPNext for a partial or customised return.")
+				)
+
+	return {
+		"source_type": SALES_INVOICE_DOCTYPE,
+		"source_name": source_name,
+		"source_branch": source_branch,
+		"blockers": list(dict.fromkeys(blockers)),
+	}
+
+
+def _completion_source_context(doc, *, company: str, invoice_branch: str, source_mode: str) -> dict[str, Any]:
+	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
+	if source_mode == SOURCE_MODE_SALES_RETURN:
+		return _validate_sales_return_context(doc, company=company, invoice_branch=invoice_branch)
+	if source_mode != SOURCE_MODE_STANDARD:
+		frappe.throw(_("Unsupported Sales Invoice completion source mode."), frappe.ValidationError)
+	return _validate_source_context(doc, company=company, invoice_branch=invoice_branch)
 
 
 def _validate_stock_context(
@@ -327,13 +445,16 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 	return result
 
 
-def _build_preview(doc) -> dict[str, Any]:
+def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str, Any]:
 	company, invoice_branch = _validate_invoice_context(doc)
-	blockers = _standard_invoice_blockers(doc)
-	source_context = _validate_source_context(
+	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
+	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
+	source_context = _completion_source_context(
 		doc,
 		company=company,
 		invoice_branch=invoice_branch,
+		source_mode=source_mode,
 	)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
@@ -345,6 +466,12 @@ def _build_preview(doc) -> dict[str, Any]:
 	)
 	blockers.extend(stock_context["blockers"])
 	blockers = list(dict.fromkeys(blockers))
+	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False, source_mode=source_mode)
+	edit_blockers.extend(source_context["blockers"])
+	if source_mode == SOURCE_MODE_SALES_RETURN:
+		edit_blockers.append(_("Sales Return quantities remain owned by ERPNext canonical return mapping."))
+	edit_blockers.extend(stock_context["blockers"])
+	edit_blockers = list(dict.fromkeys(edit_blockers))
 
 	workflow_readiness = get_workflow_readiness(
 		doctype=SALES_INVOICE_DOCTYPE,
@@ -390,20 +517,24 @@ def _build_preview(doc) -> dict[str, Any]:
 			"available_price_lists": pricing.get("available_price_lists") or [],
 			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 		},
-		"default_warehouse": default_warehouse,
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
+		"is_return": bool(cint(doc.get("is_return"))),
+		"return_against": _clean(doc.get("return_against")),
+		"source_mode": source_mode,
 		"posting_date": _clean(doc.get("posting_date")),
 		"due_date": _clean(doc.get("due_date")),
 		"po_no": _clean(doc.get("po_no")),
 		"remarks": _clean(doc.get("remarks")),
 		"can_edit": bool(
 			cint(doc.docstatus) == 0
+			and not edit_blockers
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
 		),
 		"can_edit_dates": bool(
 			cint(doc.docstatus) == 0
+			and not edit_blockers
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
 		),
 		"can_edit_update_stock": bool(
@@ -412,6 +543,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
+		"default_warehouse": default_warehouse,
 		"source_type": source_context["source_type"],
 		"source_name": source_context["source_name"],
 		"item_count": len(list(doc.get("items") or [])),
@@ -508,10 +640,44 @@ def _assert_saved_invoice_dates(doc, posting_value, due_value) -> None:
 
 
 @frappe.whitelist()
-def get_standard_sales_invoice_completion_preview(name: str) -> dict[str, Any]:
-	"""Return a persistence-free completion review for one standard Sales Invoice."""
+def get_standard_sales_invoice_completion_preview(
+	name: str,
+	source_mode: str = SOURCE_MODE_STANDARD,
+) -> dict[str, Any]:
+	"""Return a persistence-free completion review for one governed Sales Invoice."""
 	doc = _get_sales_invoice(name)
-	return _build_preview(doc)
+	return _build_preview(doc, source_mode=source_mode)
+
+
+@frappe.whitelist()
+def get_standard_sales_invoice_completion_item_pricing(
+	name: str,
+	item_code: str,
+	qty: float = 1,
+	warehouse: str = "",
+	posting_date: str = "",
+) -> dict[str, Any]:
+	"""Price a new Sales Invoice row from the draft's stored Selling Price List."""
+	doc = _get_sales_invoice(name)
+	company, branch = _validate_invoice_context(doc)
+	if cint(doc.docstatus) != 0 or not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("Only editable draft Sales Invoices can price additional items here."), frappe.PermissionError)
+	item_code = _clean(item_code)
+	_assert_read("Item", item_code)
+	warehouse = _clean(warehouse or doc.get("set_warehouse"))
+	if warehouse:
+		_validate_warehouse_branch(warehouse, company=company, branch=branch)
+	return resolve_sales_item_pricing(
+		item_code=item_code,
+		company=company,
+		customer=_clean(doc.get("customer")),
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=_clean(posting_date or doc.get("posting_date")),
+		qty=flt(qty or 1),
+		document_price_list=_clean(doc.get("selling_price_list")),
+		user=frappe.session.user,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -535,6 +701,30 @@ def update_standard_sales_invoice_draft(
 		frappe.throw(_("Only draft Sales Invoices can be edited here."), frappe.ValidationError)
 	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
 		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+
+	company, invoice_branch = _validate_invoice_context(doc)
+	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False)
+	edit_blockers.extend(_validate_sales_item_access(doc))
+	source_context = _validate_source_context(
+		doc,
+		company=company,
+		invoice_branch=invoice_branch,
+	)
+	edit_blockers.extend(source_context["blockers"])
+	stock_context = _validate_stock_context(
+		doc,
+		company=company,
+		invoice_branch=invoice_branch,
+		source_type=source_context["source_type"],
+		source_branch=source_context["source_branch"],
+	)
+	edit_blockers.extend(stock_context["blockers"])
+	edit_blockers = list(dict.fromkeys(edit_blockers))
+	if edit_blockers:
+		frappe.throw(
+			_("Sales Invoice draft editing is blocked:\n- {0}").format("\n- ".join(edit_blockers)),
+			frappe.ValidationError,
+		)
 
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
@@ -576,6 +766,7 @@ def update_standard_sales_invoice_draft(
 			customer=_clean(doc.get("customer")),
 			posting_date=str(posting_value),
 			default_warehouse=_clean(doc.get("set_warehouse")),
+			selected_price_list=_clean(doc.get("selling_price_list")),
 		)
 
 	# ERPNext owns taxes, totals, source quantity limits, credit controls and
@@ -601,6 +792,8 @@ def update_standard_sales_invoice_dates(
 	doc = _get_sales_invoice(name)
 	_assert_expected_modified(doc, expected_modified)
 	_validate_invoice_context(doc)
+	if cint(doc.get("is_return")) or _clean(doc.get("return_against")):
+		frappe.throw(_("Return / Credit Note dates remain owned by the governed Sales Return workflow."), frappe.ValidationError)
 	if cint(doc.docstatus) != 0:
 		frappe.throw(_("Only draft Sales Invoices can have dates edited here."), frappe.ValidationError)
 	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
@@ -637,6 +830,7 @@ def update_standard_sales_invoice_dates(
 def submit_standard_sales_invoice(
 	name: str,
 	expected_modified: str | None = None,
+	source_mode: str = SOURCE_MODE_STANDARD,
 ) -> dict[str, Any]:
 	"""Submit one reviewed standard Sales Invoice through native ERPNext accounting."""
 	name = _clean(name)
@@ -645,11 +839,14 @@ def submit_standard_sales_invoice(
 	_assert_expected_modified(doc, expected_modified)
 	company, invoice_branch = _validate_invoice_context(doc)
 
-	blockers = _standard_invoice_blockers(doc)
-	source_context = _validate_source_context(
+	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
+	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
+	source_context = _completion_source_context(
 		doc,
 		company=company,
 		invoice_branch=invoice_branch,
+		source_mode=source_mode,
 	)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
@@ -698,6 +895,9 @@ def submit_standard_sales_invoice(
 		"customer": _clean(doc.get("customer")),
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
 		"update_stock": bool(cint(doc.get("update_stock"))),
+		"is_return": bool(cint(doc.get("is_return"))),
+		"return_against": _clean(doc.get("return_against")),
+		"source_mode": source_mode,
 		"source_type": source_context["source_type"],
 		"source_name": source_context["source_name"],
 		"source_of_truth": "ERPNext native submit",
@@ -711,6 +911,7 @@ def apply_standard_sales_invoice_workflow_action(
 	action: str,
 	expected_modified: str | None = None,
 	expected_workflow_state: str | None = None,
+	source_mode: str = SOURCE_MODE_STANDARD,
 ) -> dict[str, Any]:
 	"""Apply one Frappe Workflow action to a reviewed standard Sales Invoice."""
 	name = _clean(name)
@@ -723,11 +924,14 @@ def apply_standard_sales_invoice_workflow_action(
 	expected_modified = _assert_expected_modified(doc, expected_modified)
 	company, invoice_branch = _validate_invoice_context(doc)
 
-	blockers = _standard_invoice_blockers(doc)
-	source_context = _validate_source_context(
+	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
+	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
+	source_context = _completion_source_context(
 		doc,
 		company=company,
 		invoice_branch=invoice_branch,
+		source_mode=source_mode,
 	)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
@@ -751,10 +955,27 @@ def apply_standard_sales_invoice_workflow_action(
 			frappe.ValidationError,
 		)
 
-	return apply_document_workflow_action(
+	result = apply_document_workflow_action(
 		doctype=SALES_INVOICE_DOCTYPE,
 		name=name,
 		action=action,
 		expected_modified=expected_modified,
 		expected_state=str(expected_workflow_state or ""),
 	)
+	if cint(result.get("docstatus")) == 1:
+		current = _get_sales_invoice(name)
+		result.update(
+			{
+				"company": _clean(current.get("company")),
+				"branch": _stored_branch(current) or stock_context["effective_branch"],
+				"customer": _clean(current.get("customer")),
+				"outstanding_amount": flt(current.get("outstanding_amount")),
+				"update_stock": bool(cint(current.get("update_stock"))),
+				"is_return": bool(cint(current.get("is_return"))),
+				"return_against": _clean(current.get("return_against")),
+				"source_mode": source_mode,
+				"source_type": source_context["source_type"],
+				"source_name": source_context["source_name"],
+			}
+		)
+	return result

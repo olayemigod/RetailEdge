@@ -83,26 +83,31 @@
 			<ProfessionalQuotationDialog
 				:open="quotationOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="quotationOpen = false"
 				@saved="handleQuotationSaved"
 			/>
 			<ProfessionalSalesOrderDialog
 				:open="salesOrderOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="salesOrderOpen = false"
 				@saved="handleSalesOrderSaved"
 			/>
 			<ProfessionalDeliveryDialog
 				:open="deliveryOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="deliveryOpen = false"
 				@saved="handleDeliverySaved"
 			/>
 			<ProfessionalSalesInvoiceDialog
 				:open="salesInvoiceOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="salesInvoiceOpen = false"
 				@saved="handleSalesInvoiceSaved"
+				@open-page="openNewSalesInvoiceOnPage"
 			/>
 			<StandardSellingCompletionDialog
 				:open="completionOpen"
@@ -125,6 +130,7 @@
 			<StandardSalesInvoiceCompletionDialog
 				:open="salesInvoiceCompletionOpen"
 				:document="salesInvoiceCompletionDocument"
+				:sourceMode="salesInvoiceCompletionSourceMode"
 				:canUseNativeDesk="canUseNativeDesk"
 				:showNextActions="true"
 				@close="closeSalesInvoiceCompletion"
@@ -155,13 +161,14 @@ import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog
 import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue";
 import ProfessionalSellingRecords from "./ProfessionalSellingRecords.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+import { getTransactionEntryPreference } from "../retailedge_business_hub/guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
@@ -219,6 +226,7 @@ export default {
 			deliveryCompletionDocument: null,
 			salesInvoiceCompletionOpen: false,
 			salesInvoiceCompletionDocument: null,
+			salesInvoiceCompletionSourceMode: "standard",
 			paymentOpen: false,
 			paymentIntent: "",
 			paymentInitialContext: {},
@@ -273,7 +281,8 @@ export default {
 			const target = window.retailedgeProfessionalSellingTarget;
 			if (!target?.doctype || !target?.name) return;
 			delete window.retailedgeProfessionalSellingTarget;
-			if (target.doctype === "Sales Invoice") this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: target.name });
+			if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
+			if (target.doctype === "Sales Invoice") this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: target.name }, target.source_mode || "standard");
 		},
 		mapNavigationGroups(groups) {
 			return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) }));
@@ -284,11 +293,17 @@ export default {
 			if (item.target_type === "DocType") return `/app/${doctypeSlug(item.target)}`;
 			return item.target || "";
 		},
+		hasPageTarget(target) {
+			return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
-			else if (item.target) window.open(route || item.target, "_blank", "noopener,noreferrer");
+			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
+			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
+			else if (item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
 		stageDescription(key) {
 			return ({
@@ -305,11 +320,18 @@ export default {
 			if (document?.key === "sales-invoice") return "Create / Convert Invoice";
 			return `Create ${document?.label || "Document"}`;
 		},
-		startCreate(document) {
+		async startCreate(document) {
 			if (document?.key === "quotation") { this.quotationOpen = true; return; }
 			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
 			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
-			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; }
+			if (document?.key === "sales-invoice") {
+				const preference = await getTransactionEntryPreference({ force: true });
+				if (preference?.value === "full" && this.hasPageTarget("make-sale")) {
+					frappe.set_route("make-sale");
+					return;
+				}
+				this.salesInvoiceOpen = true;
+			}
 		},
 		openAdvancedNative(document) {
 			if (!this.canUseNativeDesk || !document?.doctype) return;
@@ -339,8 +361,11 @@ export default {
 		},
 		handleSalesInvoiceSaved(result) {
 			this.salesInvoiceOpen = false;
-			if (result?.name && !result?.is_return) {
-				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
+			if (result?.name) {
+				this.openSalesInvoiceCompletion(
+					{ doctype: "Sales Invoice", name: result.name },
+					result?.is_return ? "sales_return" : "standard",
+				);
 			}
 			this.loadWorkspace();
 			this.$refs.sellingRecords?.refresh?.();
@@ -358,7 +383,7 @@ export default {
 			if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }
 			if (action === "advanced") { this.openAdvancedRecord(document, row.name); return; }
 			if (action === "make-payment") { this.openCustomerPayment(document, row); return; }
-			if (["create-sales-order", "create-delivery-note", "create-sales-invoice"].includes(action)) {
+			if (["create-sales-order", "create-delivery-note", "create-sales-invoice", "create-return-credit-note"].includes(action)) {
 				await this.runConversionAction(action, document, row);
 				return;
 			}
@@ -366,7 +391,19 @@ export default {
 			if (document.key === "quotation") { this.openStandardCompletion({ doctype: "Quotation", name: row.name }); return; }
 			if (document.key === "sales-order") { this.openStandardCompletion({ doctype: "Sales Order", name: row.name }); return; }
 			if (document.key === "delivery-note") { this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name }); return; }
-			if (document.key === "sales-invoice") this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });
+			if (document.key === "sales-invoice") {
+				if (!row.is_return) {
+					const preference = await getTransactionEntryPreference({ force: true });
+					if (preference?.value === "full" && this.hasPageTarget("make-sale")) {
+						this.openSalesInvoiceDraftOnPage(row.name);
+						return;
+					}
+				}
+				this.openSalesInvoiceCompletion(
+					{ doctype: "Sales Invoice", name: row.name },
+					row.is_return ? "sales_return" : "standard",
+				);
+			}
 		},
 		async runConversionAction(action, document, row) {
 			const route = {
@@ -379,6 +416,7 @@ export default {
 				"create-delivery-note": document.key === "sales-invoice"
 					? { method: "retailedge.professional_delivery.create_delivery_note_from_sales_invoice", args: { sales_invoice: row.name } }
 					: { method: "retailedge.professional_delivery.create_delivery_note_from_sales_order", args: { sales_order: row.name } },
+				"create-return-credit-note": { method: "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft", args: { sales_invoice: row.name } },
 			}[action];
 			if (!route?.method) return;
 			try {
@@ -400,7 +438,7 @@ export default {
 					if (Number(result.docstatus || 0) === 0) {
 						if (result.doctype === "Sales Order") this.openStandardCompletion(result);
 						else if (result.doctype === "Delivery Note") this.openDeliveryCompletion(result);
-						else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result);
+						else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result, result.is_return ? "sales_return" : "standard");
 						else {
 							const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
 							this.openDocumentOutput(existingDocument, result, "view");
@@ -415,7 +453,7 @@ export default {
 				frappe.show_alert({ message: __((result.doctype || "Document") + " " + (result.name || "") + " created as draft"), indicator: "green" });
 				if (result.doctype === "Sales Order") this.openStandardCompletion(result);
 				else if (result.doctype === "Delivery Note") this.openDeliveryCompletion(result);
-				else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result);
+				else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result, result.is_return ? "sales_return" : "standard");
 			} catch (error) {
 				frappe.msgprint({ title: __("Unable to continue selling workflow"), message: errorMessage(error, "ERPNext could not create the requested downstream document."), indicator: "red" });
 			}
@@ -424,7 +462,7 @@ export default {
 			if (!["sales-order", "sales-invoice"].includes(document?.key) || !row?.name) return;
 			this.paymentIntent = document.key === "sales-order" ? "receive-sales-order-payment" : "receive-customer-payment";
 			this.paymentInitialContext = {
-				company: this.sellingContext?.operating?.company || this.tenantName || "",
+				company: row.company || this.sellingContext?.operating?.company || this.tenantName || "",
 				branch: row.branch || row.retailedge_branch || this.sellingContext?.operating?.branch || this.branchName || "",
 				party: row.customer || "",
 				reference_name: row.name,
@@ -457,7 +495,13 @@ export default {
 			this.handleRecordAction({
 				action: payload.action,
 				document,
-				row: { name: payload.name, docstatus: 1, customer: payload.customer || "" },
+				row: {
+					name: payload.name,
+					docstatus: 1,
+					company: payload.company || "",
+					branch: payload.branch || "",
+					customer: payload.customer || "",
+				},
 			});
 		},
 
@@ -501,14 +545,44 @@ export default {
 			this.loadWorkspace();
 			this.$refs.sellingRecords?.refresh?.();
 		},
-		openSalesInvoiceCompletion(document) {
+		openNewSalesInvoiceOnPage(payload = {}) {
+			try {
+				sessionStorage.setItem(
+					`retailedge:make-sale:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`,
+					JSON.stringify({ createdAt: Date.now(), values: JSON.parse(JSON.stringify(payload?.values || {})) }),
+				);
+			} catch (_error) {
+				frappe.show_alert?.({ message: "Unable to carry the invoice into Make Sale in this browser session.", indicator: "orange" }, 7);
+				return;
+			}
+			this.salesInvoiceOpen = false;
+			frappe.set_route("make-sale");
+		},
+		openSalesInvoiceDraftOnPage(name) {
+			name = String(name || "").trim();
+			if (!name) return;
+			try {
+				window.sessionStorage.setItem(
+					`retailedge:make-sale:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`,
+					JSON.stringify({ createdAt: Date.now(), document_name: name }),
+				);
+			} catch (_error) {
+				frappe.show_alert?.({ message: "Unable to carry the draft into Make Sale in this browser session.", indicator: "orange" }, 7);
+				return;
+			}
+			this.closeSalesInvoiceCompletion();
+			frappe.set_route("make-sale");
+		},
+		openSalesInvoiceCompletion(document, sourceMode = "standard") {
 			if (document?.doctype !== "Sales Invoice" || !document?.name) return;
+			this.salesInvoiceCompletionSourceMode = sourceMode || document.source_mode || (document.is_return ? "sales_return" : "standard");
 			this.salesInvoiceCompletionDocument = { doctype: "Sales Invoice", name: document.name };
 			this.salesInvoiceCompletionOpen = true;
 		},
 		closeSalesInvoiceCompletion() {
 			this.salesInvoiceCompletionOpen = false;
 			this.salesInvoiceCompletionDocument = null;
+			this.salesInvoiceCompletionSourceMode = "standard";
 		},
 		handleSalesInvoiceCompletionChanged() {
 			this.loadWorkspace();

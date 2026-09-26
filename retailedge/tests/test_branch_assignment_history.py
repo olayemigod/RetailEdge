@@ -46,6 +46,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"effective_to",
 			"status",
 			"is_primary",
+			"allowed_price_lists",
 			"transfer_reason",
 			"notes",
 		):
@@ -64,10 +65,11 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		self.assertTrue(_ranges_overlap(date(2026, 1, 1), date(2026, 6, 30), date(2026, 6, 1), None))
 		self.assertFalse(_ranges_overlap(date(2026, 1, 1), date(2026, 6, 30), date(2026, 7, 1), None))
 
+	@patch("retailedge.branch_assignment._attach_assignment_price_lists", side_effect=lambda rows: rows)
 	@patch("retailedge.branch_assignment._has_assignment_doctype", return_value=True)
-	@patch("retailedge.branch_assignment.frappe.get_list")
-	def test_active_assignment_lookup_uses_effective_dates_not_saved_status(self, mock_get_list, _mock_doctype):
-		mock_get_list.return_value = [
+	@patch("retailedge.branch_assignment.frappe.get_all")
+	def test_active_assignment_lookup_uses_effective_dates_not_saved_status(self, mock_get_all, _mock_doctype, _mock_attach):
+		mock_get_all.return_value = [
 			frappe._dict(
 				name="RE-BA-1",
 				user="user@example.com",
@@ -82,7 +84,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		]
 		rows = get_active_branch_assignments(user="user@example.com", company="Company A", as_of="2026-08-27")
 		self.assertEqual([row["branch"] for row in rows], ["Branch B"])
-		filters = mock_get_list.call_args.kwargs["filters"]
+		filters = mock_get_all.call_args.kwargs["filters"]
 		self.assertNotIn("status", filters)
 		self.assertEqual(filters["effective_from"], ["<=", date(2026, 8, 27)])
 
@@ -111,6 +113,20 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_branch_assignment_price_list_governance_is_history_safe(self):
+		definition = json.loads(ASSIGNMENT_JSON.read_text(encoding="utf-8"))
+		fields = {row["fieldname"]: row for row in definition["fields"]}
+		self.assertEqual(fields["allowed_price_lists"]["options"], "RetailEdge Branch Assignment Price List")
+		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
+		for contract in (
+			"def get_branch_assignment_price_lists(",
+			"def update_branch_assignment_price_lists(",
+			"controlled_assignment_price_list_update",
+			'changed.append("allowed_price_lists")',
+			'"allowed_price_lists": _assignment_price_list_names',
+		):
+			self.assertIn(contract, source)
+
 	def test_edgesuite_history_page_is_sortable_and_has_assign_transfer_actions(self):
 		source = ASSIGNMENT_VUE.read_text(encoding="utf-8")
 		for contract in (
@@ -124,6 +140,10 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"sortDirection",
 			"effective_from",
 			"effective_to",
+			"Allowed Price Lists",
+			"Manage Assigned Price Lists",
+			"UPDATE_PRICE_LISTS_METHOD",
+			"EdgeChildTable",
 		):
 			self.assertIn(contract, source)
 
@@ -131,9 +151,9 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
 		for contract in (
 			"def update_branch_assignment_price_lists(",
-			"controlled_price_list_update",
+			"controlled_assignment_price_list_update",
 			'if status == "Ended"',
-			'doc.set("price_lists"',
+			'doc.set("allowed_price_lists"',
 		):
 			self.assertIn(contract, source)
 		method = source[source.index("def update_branch_assignment_price_lists("):source.index("def transfer_branch_assignment(")]

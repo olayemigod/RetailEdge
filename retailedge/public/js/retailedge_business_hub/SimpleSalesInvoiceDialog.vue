@@ -59,7 +59,7 @@
 
 				<label class="guided-field">
 					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
+					<input v-model="values.posting_date" class="form-control" type="date" required />
 				</label>
 
 				<EdgeLinkField
@@ -74,12 +74,14 @@
 				/>
 
 				<EdgeLinkField
-					v-if="canSwitchPriceList"
 					:modelValue="values.price_list"
-					label="Price List"
-					placeholder="Choose an assigned Price List"
-					description="Only Price Lists permitted by your active Branch Assignment are available. The configured pricing policy still controls precedence."
+					label="Selling Price List"
+					placeholder="Select assigned Price List"
+					description="The effective default follows Price List Governance. When switching is allowed, choose from Price Lists assigned to you for this Branch."
+					:required="Boolean(formContext.pricing?.selection_required)"
+					:disabled="Boolean(formContext.pricing?.locked) || !Boolean(formContext.pricing?.can_select)"
 					:searcher="searchPriceList"
+					:context="searchContext"
 					@update:modelValue="setPriceList"
 				/>
 
@@ -122,10 +124,13 @@
 				:newRowsFirst="true"
 				@update:rows="updateItems"
 			/>
+			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">
+				Quick Sale is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
+			</p>
 
 			<p class="guided-invoice-hint">
-				Rates use your assigned Price List or POS Profile where available, followed by ERPNext pricing
-				rules and selling defaults. The server validates pricing again when the draft is saved.
+				The effective Selling Price List follows Price List Governance. When switching is allowed, Branch-assigned alternatives can be chosen.
+				Changing the Price List automatically re-prices entered items, and the server validates pricing again when the draft is saved.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -141,9 +146,10 @@
 
 		<template #footer>
 			<div class="guided-invoice-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
-				</button>
+				<div class="guided-invoice-footer-actions">
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInMakeSale">Continue in Make Sale</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="guided-invoice-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -151,7 +157,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || !transactionContextReady"
+						:disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -164,16 +170,19 @@
 
 <script>
 import {
+	confirmAboveEdgeModal,
 	callMethod,
 	errorMessage,
 	quickCreateCustomer,
 	quickCreateItem,
 	resolveBranchWarehouse,
+	QUICK_ENTRY_MAX_LINES,
 } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
+const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
@@ -196,11 +205,12 @@ function emptyValues() {
 
 function sourceLabel(source) {
 	return {
+		branch_default: "Branch default",
+		user_selected: "Selected Price List",
+		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
-		assigned_choice: "Assigned Price List choice",
 		pos_profile: "Assigned POS Profile",
-		branch_default: "Branch default",
 		party_default: "Customer default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Selling",
@@ -213,16 +223,15 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeLinkField: runtimeComponents.EdgeLinkField,
-		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			loading: false,
@@ -231,8 +240,8 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
-			pricingSignatures: {},
 			pricingCache: new Map(),
+			initialValuesSnapshot: "",
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
@@ -285,9 +294,6 @@ export default {
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
-		canSwitchPriceList() {
-			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length);
-		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item default";
 		},
@@ -300,8 +306,15 @@ export default {
 				branch: this.values.branch,
 				warehouse: this.values.warehouse,
 				customer: this.values.customer,
+				price_list: this.values.price_list,
 			};
 		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
+		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
+		quickEntryTooLarge() { return this.populatedItemCount > QUICK_ENTRY_MAX_LINES; },
+		QUICK_ENTRY_MAX_LINES() { return QUICK_ENTRY_MAX_LINES; },
 	},
 	watch: {
 		open(next) {
@@ -317,7 +330,6 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.pricingCache.clear();
-			this.pricingSignatures = {};
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -329,11 +341,8 @@ export default {
 				if (!this.formContext.capabilities?.can_edit_update_stock) {
 					this.values.update_stock = 1;
 				}
-				if (this.formContext.capabilities?.can_override_rate === false) {
-					this.itemColumns = this.itemColumns.map((column) =>
-						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
-					);
-				}
+				this.applyRatePermission(this.formContext.pricing || {});
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Sales Invoice.");
 			} finally {
@@ -342,7 +351,18 @@ export default {
 		},
 		requestClose() {
 			if (this.saving) return;
-			this.$emit("close");
+			if (!this.hasUnsavedChanges) {
+				this.$emit("close");
+				return;
+			}
+			confirmAboveEdgeModal(
+				"Discard the unsaved Quick Sale changes?",
+				() => this.$emit("close")
+			);
+		},
+		continueInMakeSale() {
+			if (this.saving) return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
@@ -357,6 +377,7 @@ export default {
 					branch: this.values.branch,
 					warehouse: this.values.warehouse,
 					customer: this.values.customer,
+					price_list: this.values.price_list,
 				},
 			});
 			return Array.isArray(results) ? results : [];
@@ -373,22 +394,37 @@ export default {
 		searchPriceList(query) {
 			return this.searchOptions("price_list", query);
 		},
-		async refreshPriceListOptions() {
-			const options = await this.searchPriceList("");
-			const names = options.map((option) => option.value || option.label).filter(Boolean);
-			this.formContext.pricing = {
-				...(this.formContext.pricing || {}),
-				available_price_lists: names,
-				can_switch_price_list: names.length > 1,
-			};
-			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
+		applyRatePermission(pricing = this.formContext.pricing || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
+			this.itemColumns = this.itemColumns.map((column) =>
+				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+			);
 		},
-		setPriceList(next) {
+		async refreshPriceListContext({ preserveSelection = false } = {}) {
+			if (!this.values.company) return;
+			const selected = preserveSelection ? (this.values.price_list || "") : "";
+			const pricing = await callMethod(PRICE_CONTEXT_METHOD, {
+				mode: "selling",
+				company: this.values.company,
+				branch: this.values.branch || "",
+				party: this.values.customer || "",
+				selected_price_list: selected,
+			});
+			this.formContext.pricing = pricing || {};
+			this.applyRatePermission(pricing || {});
+			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
+		},
+		async setPriceList(next) {
+			if (this.formContext.pricing?.locked) return;
 			this.values.price_list = next || "";
 			this.pricingCache.clear();
-			this.pricingSignatures = {};
-			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
+			try {
+				await this.refreshPriceListContext({ preserveSelection: true });
+				this.refreshAllItemPricing();
+			} catch (error) {
+				this.values.price_list = "";
+				this.saveError = errorMessage(error, "Unable to use the selected Selling Price List.");
+			}
 		},
 		searchLineLink(column, query) {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
@@ -408,25 +444,33 @@ export default {
 			return column?.fieldname === "item_code" ? "Create Item" : "Create new";
 		},
 		setCustomer(next) {
-			const previousCustomer = this.values.customer || "";
-			this.values.customer = next || "";
+			const value = next || "";
+			const changed = this.values.customer !== value;
+			this.values.customer = value;
 			this.pricingCache.clear();
-			this.pricingSignatures = {};
-			this.refreshPriceListOptions().catch(() => {});
-			if (previousCustomer !== this.values.customer) {
+			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshAllItemPricing();
+				this.refreshPriceListContext()
+					.then(() => this.refreshAllItemPricing())
+					.catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
 		},
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
-			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
-			this.pricingSignatures = {};
-			if (!branch || !this.values.company) return;
+			if (!this.values.company) return;
+			if (!branch) {
+				try {
+					await this.refreshPriceListContext();
+					this.refreshAllItemPricing();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to refresh Selling Price List.");
+				}
+				return;
+			}
 			const token = ++this.cascadeToken;
 			try {
 				const resolved = await resolveBranchWarehouse({
@@ -437,7 +481,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
-				await this.refreshPriceListOptions();
+				await this.refreshPriceListContext();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
@@ -449,7 +493,6 @@ export default {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
 			this.pricingCache.clear();
-			this.pricingSignatures = {};
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -471,19 +514,15 @@ export default {
 			}
 		},
 		updateItems(nextRows) {
+			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const normalized = { ...row, item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
-				if (!normalized.item_code) {
-					delete this.pricingSignatures[index];
-					return normalized;
-				}
-				const signature = this.pricingCacheKey(normalized);
-				if (this.pricingSignatures[index] !== signature) {
+				const prior = previous[index] || {};
+				if (row.item_code && row.item_code !== prior.item_code) {
 					changed.push(index);
-					return { ...normalized, rate: "" };
+					return { ...row, rate: "" };
 				}
-				return normalized;
+				return { ...row };
 			});
 			for (const index of changed) this.loadItemPricing(index);
 		},
@@ -526,13 +565,13 @@ export default {
 				if (result?.rate !== null && result?.rate !== undefined) {
 					this.values.items[index] = { ...this.values.items[index], rate: result.rate };
 				}
-				this.pricingSignatures[index] = this.pricingCacheKey(this.values.items[index]);
-				this.values.items = [...this.values.items];
 				this.formContext.pricing = {
 					...(this.formContext.pricing || {}),
+					...result,
 					price_list: result?.price_list || this.formContext.pricing?.price_list || "",
 					source: result?.source || this.formContext.pricing?.source || "item_fallback",
 				};
+				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) {
 					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
@@ -540,7 +579,6 @@ export default {
 			}
 		},
 		refreshAllItemPricing() {
-			this.pricingSignatures = {};
 			if (!this.values.customer) return;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {
@@ -549,14 +587,9 @@ export default {
 				}
 			});
 		},
-		postingDateChanged() {
-			this.pricingCache.clear();
-			this.pricingSignatures = {};
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
-		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;
+			if (this.quickEntryTooLarge) { this.saveError = `Quick Sale supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in the full page for larger transactions.`; return; }
 			this.saveError = "";
 			this.saving = true;
 			try {
@@ -678,4 +711,5 @@ export default {
 		justify-content: flex-end;
 	}
 }
+.guided-entry-size-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--edge-warning, #f79009); border-radius: 8px; background: var(--edge-warning-subtle, #fffaeb); color: var(--edge-warning-text, #7a2e0e); font-size: .82rem; }
 </style>

@@ -49,6 +49,52 @@ def _validate_source_against_operating_context(source) -> tuple[str, str]:
 	return company, branch
 
 
+def _lock_sales_order(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabSales Order` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Sales Order {0} no longer exists.").format(name))
+
+
+def _existing_draft_delivery_for_sales_order(sales_order: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT dn.name
+		FROM `tabDelivery Note` dn
+		INNER JOIN `tabDelivery Note Item` item ON item.parent = dn.name
+		WHERE dn.docstatus = 0 AND item.against_sales_order = %s
+		ORDER BY dn.creation ASC
+		LIMIT 3
+		""",
+		(sales_order,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Delivery Notes already reference Sales Order {0}. Review them before creating another delivery.").format(sales_order)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Delivery Note", rows[0].name)
+	if not frappe.has_permission("Delivery Note", "read", doc=doc):
+		frappe.throw(
+			_("A draft Delivery Note already exists for this Sales Order, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	linked_orders = {
+		str(row.get("against_sales_order") or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get("against_sales_order") or "").strip()
+	}
+	if linked_orders != {sales_order}:
+		frappe.throw(
+			_("The existing draft Delivery Note combines multiple Sales Orders. Use Advanced ERPNext review.")
+		)
+	return doc
+
+
 def _lock_sales_invoice(name: str) -> None:
 	rows = frappe.db.sql(
 		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
@@ -187,6 +233,16 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 		frappe.throw(_("This Sales Order is already fully delivered."))
 
 	company, source_branch = _validate_source_against_operating_context(source)
+	_lock_sales_order(source.name)
+	existing = _existing_draft_delivery_for_sales_order(source.name)
+	if existing:
+		existing_branch = _source_branch(existing) or source_branch
+		return _delivery_response(
+			existing,
+			branch=existing_branch,
+			source_sales_order=source.name,
+			existing=True,
+		)
 
 	# ERPNext owns remaining-quantity checks, Sales Order Item -> Delivery Note Item
 	# references, packed items, tax mapping and stock semantics.

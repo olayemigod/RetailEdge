@@ -45,7 +45,7 @@ def test_business_expenses_disabled_state_is_normal_ui_not_an_exception():
     assert 'frappe.set_route("retail-settings")' in frontend
 
 
-def test_settings_are_managed_in_horizontal_tab_workspace():
+def test_settings_are_managed_in_vertical_navigation_workspace():
     backend = (
         ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
     ).read_text(encoding="utf-8")
@@ -55,6 +55,7 @@ def test_settings_are_managed_in_horizontal_tab_workspace():
     vue = (ROOT / "public" / "js" / "retail_settings" / "RetailSettings.vue").read_text(encoding="utf-8")
 
     for key in (
+        '"pricing-governance"',
         '"sales-operations"',
         '"cashier-expenses"',
         '"business-expenses"',
@@ -75,12 +76,15 @@ def test_settings_are_managed_in_horizontal_tab_workspace():
 
     assert "edgeui.bundle.js" in page
     assert "retail_settings.bundle.js" in page
-    assert 'class="settings-tabs"' in vue
-    assert "flex-wrap:nowrap" in vue
-    assert "overflow-x:auto" in vue
+    assert 'class="settings-navigation"' in vue
+    assert 'class="settings-nav"' in vue
+    assert 'class="settings-content"' in vue
+    assert "grid-template-columns:minmax(220px, 270px) minmax(0, 1fr)" in vue
+    assert "position:sticky" in vue
     assert "Save Changes" in vue
     assert "EdgeLinkField" in vue
     assert "RoleList" in vue
+    assert "PriorityList" in vue
 
 
 def test_sidebar_and_waffle_use_managed_settings_and_review_pages():

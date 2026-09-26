@@ -136,6 +136,7 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 		'"create-sales-order"',
 		'"create-delivery-note"',
 		'"create-sales-invoice"',
+		'"create-return-credit-note"',
 		'"make-payment"',
 		'flt(row.get("per_delivered")) < 99.999',
 		'flt(row.get("per_billed")) < 99.999',
@@ -148,7 +149,7 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 	assert "Array.isArray(row?.actions)" in records
 	for contract in (
 		'if (action === "make-payment")',
-		'["create-sales-order", "create-delivery-note", "create-sales-invoice"].includes(action)',
+		'["create-sales-order", "create-delivery-note", "create-sales-invoice", "create-return-credit-note"].includes(action)',
 		"runConversionAction(action, document, row)",
 		"openCustomerPayment(document, row)",
 		"create_sales_order_from_quotation",
@@ -157,8 +158,44 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 		"create_sales_invoice_from_delivery_note",
 		"create_delivery_note_from_sales_order",
 		"create_delivery_note_from_sales_invoice",
+		"create_sales_return_credit_note_draft",
 	):
 		assert contract in workspace
+
+
+
+def test_delivery_note_invoice_hint_is_removed_for_invoice_sourced_or_direct_order_billed_delivery():
+	backend = read(BACKEND)
+	for contract in (
+		"def _delivery_has_direct_sales_order_billing",
+		"si.docstatus = 1",
+		"COALESCE(si.is_return, 0) = 0",
+		"COALESCE(item.delivery_note, '') = ''",
+		"direct_order_billing = _delivery_has_direct_sales_order_billing(delivery)",
+		"if invoice_sourced or direct_order_billing:",
+		'action.get("value") != "create-sales-invoice"',
+	):
+		assert contract in backend
+
+
+def test_completion_next_actions_preserve_authoritative_company_and_branch_context():
+	workspace = read(WORKSPACE)
+	for marker in (
+		'company: payload.company || ""',
+		'branch: payload.branch || ""',
+		'company: row.company || this.sellingContext?.operating?.company',
+		'branch: row.branch || row.retailedge_branch || this.sellingContext?.operating?.branch',
+	):
+		assert marker in workspace
+
+	for dialog in (
+		APP_ROOT / "public/js/professional_selling/StandardSellingCompletionDialog.vue",
+		APP_ROOT / "public/js/professional_selling/StandardDeliveryCompletionDialog.vue",
+		APP_ROOT / "public/js/professional_selling/StandardSalesInvoiceCompletionDialog.vue",
+	):
+		source = read(dialog)
+		assert 'company: this.completedResult.company || this.preview?.company || ""' in source
+		assert 'branch: this.completedResult.branch || this.preview?.branch || ""' in source
 
 
 def test_professional_selling_keeps_submitted_completion_open_for_next_workflow():
@@ -207,3 +244,14 @@ def test_draft_completion_actions_remain_document_specific_and_accounting_safe()
 		'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });',
 	):
 		assert contract in workspace
+
+
+def test_sales_return_next_action_requires_professional_selling_page_access():
+	source = (APP_ROOT / "professional_selling.py").read_text(encoding="utf-8")
+	assert 'def _can_open_page(page_name: str) -> bool:' in source
+	assert 'frappe.get_doc("Page", page_name).is_permitted()' in source
+	assert '_can_open_page("professional-selling")' in source
+	return_index = source.index('actions.append({"value": "create-return-credit-note"')
+	gate_index = source.rfind('_can_open_page("professional-selling")', 0, return_index)
+	assert gate_index >= 0
+

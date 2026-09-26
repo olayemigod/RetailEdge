@@ -57,6 +57,7 @@ def update_draft_items(
 	posting_date: str,
 	default_warehouse: str = "",
 	default_delivery_date: str = "",
+	selected_price_list: str = "",
 ) -> None:
 	if isinstance(requested_items, str):
 		requested_items = frappe.parse_json(requested_items)
@@ -96,6 +97,7 @@ def update_draft_items(
 				posting_date=posting_date,
 				default_warehouse=default_warehouse,
 				default_delivery_date=default_delivery_date,
+				selected_price_list=selected_price_list,
 			)
 			continue
 
@@ -114,6 +116,7 @@ def update_draft_items(
 			posting_date=posting_date,
 			default_warehouse=default_warehouse,
 			default_delivery_date=default_delivery_date,
+			selected_price_list=selected_price_list,
 		)
 
 	for row_name, row in list(current_rows.items()):
@@ -142,6 +145,7 @@ def _apply_editable_row_values(
 	posting_date: str,
 	default_warehouse: str,
 	default_delivery_date: str,
+	selected_price_list: str,
 ) -> None:
 	qty = flt(values.get("qty"))
 	if qty <= 0:
@@ -164,13 +168,11 @@ def _apply_editable_row_values(
 		warehouse=warehouse,
 		posting_date=posting_date,
 		qty=qty,
+		document_price_list=selected_price_list,
 		user=frappe.session.user,
 	)
 	resolved_rate = pricing.get("rate")
-	rate_locked = (
-		pricing.get("source") == "pos_profile"
-		and not pricing.get("allow_rate_change", True)
-	)
+	rate_locked = pricing.get("source") == "pos_profile" and not pricing.get("allow_rate_change", True)
 	if rate_locked or rate_value in (None, ""):
 		if resolved_rate is None:
 			frappe.throw(
@@ -190,6 +192,38 @@ def _apply_editable_row_values(
 		delivery_date = clean(values.get("delivery_date") or row.get("delivery_date") or default_delivery_date)
 		if delivery_date:
 			row.delivery_date = delivery_date
+
+
+def _resolve_rate(
+	*,
+	item_code: str,
+	company: str,
+	customer: str,
+	branch: str,
+	warehouse: str,
+	posting_date: str,
+	qty: float,
+	selected_price_list: str = "",
+) -> float:
+	if not item_code:
+		return 0.0
+	resolved = resolve_sales_item_pricing(
+		item_code=item_code,
+		company=company,
+		customer=customer,
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=posting_date,
+		qty=qty,
+		document_price_list=selected_price_list,
+		user=frappe.session.user,
+	)
+	rate = resolved.get("rate")
+	if rate is None:
+		frappe.throw(
+			_("No selling price could be resolved for Item {0}. Enter a rate before saving.").format(item_code)
+		)
+	return flt(rate)
 
 
 def _validate_warehouse_branch(warehouse: str, *, company: str, branch: str) -> None:

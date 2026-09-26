@@ -71,6 +71,25 @@
 					</div>
 				</section>
 
+				<section class="edge-panel operating-context-entry-style">
+					<div>
+						<span class="operating-context-kicker">Personal transaction preference</span>
+						<h4>Transaction Entry Style</h4>
+						<p>Choose how supported transaction actions should open for your user account. This does not change other users or ERPNext document rules.</p>
+					</div>
+					<EdgeDropdown
+						v-model="entryPreferenceLabel"
+						:options="entryPreferenceOptions"
+						label="Preferred entry surface"
+						:disabled="entryPreferenceSaving"
+						@change="saveEntryPreference"
+					/>
+					<div class="entry-preference-help">
+						<strong>{{ entryPreferenceLabel }}</strong>
+						<span>{{ entryPreferenceDescription }}</span>
+					</div>
+				</section>
+
 				<section class="edge-panel operating-context-guidance">
 					<h4>What changes when you switch?</h4>
 					<ul>
@@ -87,6 +106,22 @@
 </template>
 
 <script>
+const ENTRY_PREFERENCE_METHOD = "retailedge.transaction_entry_preference.get_transaction_entry_preference";
+const ENTRY_PREFERENCE_SAVE_METHOD = "retailedge.transaction_entry_preference.set_transaction_entry_preference";
+const ENTRY_PREFERENCE_LABELS = Object.freeze({
+	smart: "Smart",
+	quick: "Quick Entry",
+	full: "Full Page",
+});
+const ENTRY_PREFERENCE_VALUES = Object.freeze(
+	Object.fromEntries(Object.entries(ENTRY_PREFERENCE_LABELS).map(([value, label]) => [label, value]))
+);
+const ENTRY_PREFERENCE_DESCRIPTIONS = Object.freeze({
+	Smart: "Keep each workspace's recommended default. Quick-entry transactions still use the 10-line safety limit and can continue on the persistent page.",
+	"Quick Entry": "Prefer compact governed popups. Transactions that exceed the quick-entry safety limit must continue on the persistent page.",
+	"Full Page": "Prefer persistent EdgeSuite pages such as Make Sale, Record Purchase, Transfer Stock and Stock Adjustment.",
+});
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeDropdown"];
 
 function runtimeComponents() {
@@ -131,6 +166,9 @@ export default {
 			tenantName: "",
 			userName: "",
 			canUseNativeDesk: false,
+			entryPreferenceLabel: "Smart",
+			entryPreferenceOptions: Object.values(ENTRY_PREFERENCE_LABELS),
+			entryPreferenceSaving: false,
 		};
 	},
 	computed: {
@@ -138,24 +176,53 @@ export default {
 			if (!this.current?.company) return "No operating context selected";
 			return `${this.current.company}${this.current.branch ? ` · ${this.current.branch}` : ""}`;
 		},
+		entryPreferenceDescription() {
+			return ENTRY_PREFERENCE_DESCRIPTIONS[this.entryPreferenceLabel] || ENTRY_PREFERENCE_DESCRIPTIONS.Smart;
+		},
 	},
 	created() {
 		const components = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		this.edgeUIValid = this.missingComponents.length === 0;
-		this._onPageShow = () => this.loadContext();
+		this._onPageShow = () => {
+			this.loadContext();
+			this.loadEntryPreference();
+		};
 	},
 	mounted() {
 		window.addEventListener("retailedge-operating-context-page-show", this._onPageShow);
 		if (this.edgeUIValid) {
 			this.loadNavigation();
 			this.loadContext();
+			this.loadEntryPreference();
 		}
 	},
 	beforeUnmount() {
 		window.removeEventListener("retailedge-operating-context-page-show", this._onPageShow);
 	},
 	methods: {
+		async loadEntryPreference() {
+			try {
+				const result = await callMethod(ENTRY_PREFERENCE_METHOD);
+				this.entryPreferenceLabel = ENTRY_PREFERENCE_LABELS[result?.value] || "Smart";
+			} catch (_error) {
+				this.entryPreferenceLabel = "Smart";
+			}
+		},
+		async saveEntryPreference() {
+			const value = ENTRY_PREFERENCE_VALUES[this.entryPreferenceLabel] || "smart";
+			this.entryPreferenceSaving = true;
+			try {
+				const result = await callMethod(ENTRY_PREFERENCE_SAVE_METHOD, { value });
+				this.entryPreferenceLabel = ENTRY_PREFERENCE_LABELS[result?.value] || "Smart";
+				frappe.show_alert({ message: __("Transaction entry preference updated."), indicator: "green" });
+			} catch (error) {
+				frappe.show_alert({ message: error?.message || __("Unable to update transaction entry preference."), indicator: "red" }, 7);
+				await this.loadEntryPreference();
+			} finally {
+				this.entryPreferenceSaving = false;
+			}
+		},
 		async loadNavigation() {
 			try {
 				const navigation = typeof window.retailedgeGetBusinessHubContext === "function"
@@ -317,8 +384,13 @@ export default {
 .operating-context-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .operating-context-blockers { display: grid; gap: 0.65rem; margin-top: 1rem; }
 .operating-context-warning { display: grid; gap: 0.2rem; padding: 0.85rem 1rem; border-radius: 0.6rem; background: var(--orange-50, rgba(245, 158, 11, 0.1)); }
+.operating-context-entry-style { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(14rem,.8fr); gap:1rem; align-items:end; }
+.operating-context-entry-style h4 { margin:.2rem 0 .35rem; }
+.operating-context-entry-style p { margin:0; color:var(--text-muted); }
+.entry-preference-help { grid-column:1 / -1; display:grid; gap:.2rem; padding:.75rem .9rem; border:1px solid var(--edge-border-color,var(--border-color)); border-radius:.6rem; }
+.entry-preference-help span { color:var(--text-muted); }
 .operating-context-guidance h4 { margin-top: 0; }
 .operating-context-guidance ul { margin-bottom: 0; padding-left: 1.15rem; }
 .operating-context-guidance li + li { margin-top: 0.4rem; }
-@media (max-width: 720px) { .operating-context-fields { grid-template-columns: 1fr; } .operating-context-current { flex-direction: column; } }
+@media (max-width: 720px) { .operating-context-fields, .operating-context-entry-style { grid-template-columns: 1fr; } .entry-preference-help { grid-column:auto; } .operating-context-current { flex-direction: column; } }
 </style>

@@ -173,7 +173,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 	def test_adapter_uses_permission_aware_bounded_search_and_native_draft_insert(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
-		self.assertIn("MAX_ITEMS = 50", source)
+		self.assertIn("MAX_ITEMS = 100", source)
 		self.assertIn("search_link(", source)
 		self.assertIn('query="erpnext.controllers.queries.item_query"', source)
 		self.assertIn('filters: dict[str, Any] = {"is_purchase_item": 1}', source)
@@ -185,14 +185,12 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_browser_can_only_request_a_governed_buying_price_list(self):
+	def test_browser_price_list_choice_is_revalidated_by_server_governance(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
-		pricing = (APP_ROOT / "guided_pricing.py").read_text()
 		self.assertIn("resolve_price_list_context", source)
 		self.assertNotIn('values.get("buying_price_list")', source)
-		self.assertIn('requested_price_list=values.get("price_list") or ""', source)
-		self.assertIn("requested_price_list not in available_price_lists", pricing)
-		self.assertIn("Price List switching is disabled by the current pricing policy.", pricing)
+		self.assertIn('selected_price_list=str(values.get("price_list") or "").strip()', source)
+		self.assertIn("search_allowed_price_lists", source)
 
 	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
@@ -201,7 +199,8 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("expense_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("ERPNext pricing", source)
+		self.assertIn("resolve_purchase_item_pricing", source)
+		self.assertIn("doc.buying_price_list", source)
 
 	def test_dialog_uses_shared_edgesuite_components_and_resolves_buying_price(self):
 		component = (
@@ -250,7 +249,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 
 	def test_limits_are_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
-		self.assertEqual(MAX_ITEMS, 50)
+		self.assertEqual(MAX_ITEMS, 100)
 
 
 if __name__ == "__main__":

@@ -102,9 +102,12 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		company=company,
 		branch=branch,
 		party=customer,
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=frappe.session.user,
 		requested_price_list=values.get("price_list") or "",
 	)
+	if pricing_context.get("selection_required"):
+		frappe.throw(_("Choose a Selling Price List assigned to you for this Branch before saving."))
 
 	doc = frappe.new_doc("Quotation")
 	doc.company = company
@@ -131,6 +134,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 			warehouse=warehouse,
 			posting_date=str(transaction_date),
 			qty=item["qty"],
+			selected_price_list=pricing_context.get("price_list") or "",
 			user=frappe.session.user,
 			requested_price_list=values.get("price_list") or "",
 		)

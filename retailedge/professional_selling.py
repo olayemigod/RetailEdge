@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from erpnext.controllers.sales_and_purchase_return import get_returned_qty_map_for_row
 from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
@@ -15,7 +16,11 @@ from retailedge.branch_context import (
 	resolve_branch_from_warehouse,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
-from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_sales_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.operating_context import (
 	get_allowed_operating_branches,
 	get_operating_context,
@@ -334,7 +339,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 	company = str(operating.get("company") or "").strip()
 	branch = str(operating.get("branch") or "").strip()
 	pricing: dict[str, Any] = {}
-	if company and _permission("Price List", "read"):
+	if company:
 		pricing = resolve_price_list_context(
 			mode="selling",
 			company=company,
@@ -349,13 +354,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"branch": branch,
 			"default_stock_location": operating.get("default_stock_location") or "",
 		},
-		"pricing": {
-			"price_list": pricing.get("price_list") or "",
-			"source": pricing.get("source") or "",
-			"allow_rate_change": bool(pricing.get("allow_rate_change", True)),
-			"available_price_lists": pricing.get("available_price_lists") or [],
-			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
-		},
+		"pricing": pricing,
 		"documents": documents,
 		"today": nowdate(),
 		"shipping": {
@@ -401,6 +400,15 @@ def search_professional_selling_options(
 			page_length=limit,
 			reference_doctype=definition["doctype"],
 			link_fieldname=definition["party_field"],
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_sales_item": 1}
@@ -469,7 +477,7 @@ def get_professional_selling_item_pricing(
 	item_code: str,
 	values: dict | str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve item price on the server; any selected Price List is revalidated against governance."""
+	"""Resolve item price on the server from the merchant-governed effective Price List."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
 		frappe.throw(
@@ -492,6 +500,7 @@ def get_professional_selling_item_pricing(
 		warehouse=warehouse,
 		posting_date=str(values.get("transaction_date") or values.get("posting_date") or nowdate()),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=frappe.session.user,
 		requested_price_list=values.get("price_list") or "",
 	)
@@ -548,6 +557,15 @@ def _selling_list_definition(document: str) -> dict[str, Any]:
 	return dict(definition)
 
 
+def _can_open_page(page_name: str) -> bool:
+	try:
+		if not frappe.db.exists("Page", page_name):
+			return False
+		return bool(frappe.get_doc("Page", page_name).is_permitted())
+	except Exception:
+		return False
+
+
 def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str, str]]:
 	"""Return permission/status-aware secondary actions for one submitted selling record.
 
@@ -578,7 +596,12 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			and flt(row.get("per_billed")) < 99.999
 		):
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
-		if _permission("Payment Entry", "create") and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005:
+		if (
+			_permission("Payment Entry", "create")
+			and status not in {"Closed", "Completed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+			and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005
+		):
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
 	elif document == "delivery-note":
@@ -598,6 +621,13 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			and status not in {"Cancelled", "Return"}
 		):
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if (
+			_permission("Sales Invoice", "create")
+			and _can_open_page("professional-selling")
+			and not cint(row.get("is_return"))
+			and status not in {"Cancelled", "Return"}
+		):
+			actions.append({"value": "create-return-credit-note", "label": _("Return / Credit Note")})
 		if _permission("Payment Entry", "create") and flt(row.get("outstanding_amount")) > 0.005:
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
@@ -736,6 +766,46 @@ def get_professional_selling_list(
 
 
 @frappe.whitelist()
+def _delivery_has_direct_sales_order_billing(delivery) -> bool:
+	sales_orders = {
+		str(row.get("against_sales_order") or "").strip()
+		for row in list(delivery.get("items") or [])
+		if str(row.get("against_sales_order") or "").strip()
+	}
+	if not sales_orders:
+		return False
+	rows = frappe.db.sql(
+		"""
+		SELECT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 1
+			AND COALESCE(si.is_return, 0) = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		LIMIT 1
+		""",
+		{"sales_orders": tuple(sales_orders)},
+	)
+	return bool(rows)
+
+def _sales_invoice_has_returnable_items(invoice) -> bool:
+	if cint(invoice.docstatus) != 1 or cint(invoice.get("is_return")):
+		return False
+	customer = str(invoice.get("customer") or "").strip()
+	if not customer:
+		return False
+	for row in list(invoice.get("items") or []):
+		row_name = str(row.get("name") or "").strip()
+		qty = flt(row.get("qty"))
+		if not row_name or qty <= 0:
+			continue
+		returned = get_returned_qty_map_for_row(invoice.name, customer, row_name, "Sales Invoice") or {}
+		if qty - flt(returned.get("qty")) > 0.000001:
+			return True
+	return False
+
+
 def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
 	"""Resolve permitted next actions for one visible Professional Selling record."""
 	document = str(document or "").strip()
@@ -756,9 +826,21 @@ def get_professional_selling_record_actions(document: str, name: str) -> dict[st
 			_("The selected document is not available in your current Company/Branch context."),
 			frappe.PermissionError,
 		)
+	actions = list(row.get("actions") or [])
+	if document == "delivery-note":
+		delivery = frappe.get_doc("Delivery Note", name)
+		invoice_sourced = any(str(row.get("against_sales_invoice") or "").strip() for row in delivery.get("items") or [])
+		direct_order_billing = _delivery_has_direct_sales_order_billing(delivery)
+		if invoice_sourced or direct_order_billing:
+			actions = [action for action in actions if action.get("value") != "create-sales-invoice"]
+	elif document == "sales-invoice":
+		invoice = frappe.get_doc("Sales Invoice", name)
+		if not _sales_invoice_has_returnable_items(invoice):
+			actions = [action for action in actions if action.get("value") != "create-return-credit-note"]
+
 	return {
 		"document": document,
 		"doctype": result.get("doctype"),
 		"name": name,
-		"actions": list(row.get("actions") or []),
+		"actions": actions,
 	}

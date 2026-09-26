@@ -174,6 +174,149 @@ def _validate_invoice_stock_context(target, *, company: str, source_branch: str)
 	return mapped_branch
 
 
+def _lock_native_invoice_source(source_doctype: str, name: str) -> None:
+	table = {
+		"Sales Order": "tabSales Order",
+		"Delivery Note": "tabDelivery Note",
+	}.get(source_doctype)
+	if not table:
+		frappe.throw(_("Unsupported Sales Invoice source."), frappe.ValidationError)
+	rows = frappe.db.sql(f"SELECT name FROM `{table}` WHERE name = %s FOR UPDATE", (name,))
+	if not rows:
+		frappe.throw(_("{0} {1} no longer exists.").format(source_doctype, name))
+
+
+def _native_invoice_source_field(source_doctype: str) -> str:
+	if source_doctype == "Sales Order":
+		return "sales_order"
+	if source_doctype == "Delivery Note":
+		return "delivery_note"
+	frappe.throw(_("Unsupported Sales Invoice source."), frappe.ValidationError)
+	return ""
+
+
+def _existing_draft_invoice_for_source(source_doctype: str, source_name: str):
+	fieldname = _native_invoice_source_field(source_doctype)
+	rows = frappe.db.sql(
+		f"""
+		SELECT DISTINCT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 0 AND item.`{fieldname}` = %s
+		ORDER BY si.creation ASC
+		LIMIT 3
+		""",
+		(source_name,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Sales Invoices already reference {0} {1}. Review them before creating another invoice.").format(
+				source_doctype, source_name
+			)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Invoice", rows[0].name)
+	if not frappe.has_permission("Sales Invoice", "read", doc=doc):
+		frappe.throw(
+			_("A draft Sales Invoice already exists for this source, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	linked = {
+		str(row.get(fieldname) or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get(fieldname) or "").strip()
+	}
+	if linked != {source_name}:
+		frappe.throw(
+			_("The existing draft Sales Invoice combines multiple source documents. Use Advanced ERPNext review.")
+		)
+	if source_doctype == "Sales Order":
+		delivery_links = {
+			str(row.get("delivery_note") or "").strip()
+			for row in list(doc.get("items") or [])
+			if str(row.get("delivery_note") or "").strip()
+		}
+		if delivery_links:
+			frappe.throw(
+				_("A draft Sales Invoice for this Sales Order is owned by Delivery Note billing. Continue from the Delivery Note instead.")
+			)
+	return doc
+
+
+def _draft_sales_order_conflicts_for_quotation(quotation: str) -> list[str]:
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT so.name
+		FROM `tabSales Order` so
+		INNER JOIN `tabSales Order Item` item ON item.parent = so.name
+		WHERE so.docstatus = 0 AND item.prevdoc_docname = %s
+		ORDER BY so.creation ASC
+		LIMIT 10
+		""",
+		(quotation,),
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
+
+
+def _direct_sales_order_draft_invoice_conflicts(sales_orders: set[str]) -> list[str]:
+	"""Return draft invoices owned directly by Sales Orders, not Delivery Notes."""
+	sales_orders = {str(name or "").strip() for name in sales_orders if str(name or "").strip()}
+	if not sales_orders:
+		return []
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		ORDER BY si.creation ASC
+		LIMIT 10
+		""",
+		{"sales_orders": tuple(sales_orders)},
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
+
+
+def _lock_delivery_sales_orders(source) -> set[str]:
+	"""Serialize Delivery Note billing with direct Sales Order billing."""
+	sales_orders = sorted(
+		{
+			str(row.get("against_sales_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("against_sales_order") or "").strip()
+		}
+	)
+	for sales_order in sales_orders:
+		_lock_native_invoice_source("Sales Order", sales_order)
+	return set(sales_orders)
+
+
+def _has_direct_sales_order_submitted_billing(sales_orders: set[str]) -> bool:
+	"""Return True when any linked Sales Order was already invoiced without a Delivery Note."""
+	sales_orders = {str(name or "").strip() for name in sales_orders if str(name or "").strip()}
+	if not sales_orders:
+		return False
+	rows = frappe.db.sql(
+		"""
+		SELECT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 1
+			AND COALESCE(si.is_return, 0) = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		LIMIT 1
+		""",
+		{"sales_orders": tuple(sales_orders)},
+	)
+	return bool(rows)
+
 def _lock_quotation_for_direct_invoice(name: str) -> None:
 	rows = frappe.db.sql(
 		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
@@ -494,6 +637,13 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 	# Serialize direct conversion by source Quotation so concurrent clicks either
 	# create one draft or observe and open that same draft.
 	_lock_quotation_for_direct_invoice(source.name)
+	sales_order_conflicts = _draft_sales_order_conflicts_for_quotation(source.name)
+	if sales_order_conflicts:
+		frappe.throw(
+			_(
+				"Quotation {0} cannot create a direct Sales Invoice while draft Sales Order(s) {1} remain open. Complete or cancel the Sales Order draft first."
+			).format(source.name, ", ".join(sales_order_conflicts))
+		)
 	existing_conversion = get_quotation_conversion(source.name)
 	existing_invoice = str((existing_conversion or {}).get("sales_invoice") or "").strip()
 	if existing_invoice and frappe.db.exists("Sales Invoice", existing_invoice):
@@ -556,6 +706,35 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 		frappe.throw(_("Submit the {0} before creating a Sales Invoice from it.").format(source_doctype))
 
 	company, source_branch = _validate_source_context(source, source_label=source_doctype)
+	_lock_native_invoice_source(source_doctype, source.name)
+	existing = _existing_draft_invoice_for_source(source_doctype, source.name)
+	if existing:
+		existing_branch = _source_branch(existing) or source_branch
+		return {
+			**_invoice_response(
+				existing,
+				branch=existing_branch,
+				source_doctype=source_doctype,
+				source_name=source.name,
+			),
+			"existing": True,
+		}
+	if source_doctype == "Delivery Note":
+		linked_sales_orders = _lock_delivery_sales_orders(source)
+		conflicts = _direct_sales_order_draft_invoice_conflicts(linked_sales_orders)
+		if conflicts:
+			frappe.throw(
+				_(
+					"Delivery Note {0} cannot prepare another Sales Invoice while direct Sales Order draft invoice(s) {1} remain open. Complete or cancel the Sales Order-owned draft first."
+				).format(source.name, ", ".join(conflicts))
+			)
+		if _has_direct_sales_order_submitted_billing(linked_sales_orders):
+			frappe.throw(
+				_(
+					"This Delivery Note belongs to a Sales Order that has already been billed directly. Continue any remaining billing from the Sales Order instead of creating a second invoice lineage from the Delivery Note."
+				),
+				frappe.ValidationError,
+			)
 	target = mapper(source.name)
 	if not target or target.doctype != "Sales Invoice":
 		frappe.throw(_("ERPNext could not prepare a Sales Invoice from this {0}.").format(source_doctype))
@@ -575,12 +754,15 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 	if target.get("shipping_rule"):
 		_validate_shipping_rule(target.shipping_rule, company=company)
 	target.insert()
-	return _invoice_response(
-		target,
-		branch=mapped_branch,
-		source_doctype=source_doctype,
-		source_name=source.name,
-	)
+	return {
+		**_invoice_response(
+			target,
+			branch=mapped_branch,
+			source_doctype=source_doctype,
+			source_name=source.name,
+		),
+		"existing": False,
+	}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -601,6 +783,44 @@ def create_sales_invoice_from_delivery_note(delivery_note: str) -> dict[str, Any
 	)
 
 
+def _lock_sales_return_source(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
+		(str(name or "").strip(),),
+	)
+	if not rows:
+		frappe.throw(_("Sales Invoice {0} no longer exists.").format(name))
+
+
+def _existing_sales_return_draft(source_name: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT name
+		FROM `tabSales Invoice`
+		WHERE docstatus = 0
+			AND COALESCE(is_return, 0) = 1
+			AND return_against = %s
+		ORDER BY creation ASC
+		LIMIT 3
+		""",
+		(source_name,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Return / Credit Notes already exist for Sales Invoice {0}. Review them before preparing another return.").format(source_name)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Invoice", rows[0].name)
+	if not frappe.has_permission("Sales Invoice", "read", doc=doc):
+		frappe.throw(
+			_("A draft Return / Credit Note already exists for this Sales Invoice, but you do not have permission to review it."),
+			frappe.PermissionError,
+		)
+	return doc
+
+
 @frappe.whitelist(methods=["POST"])
 def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 	"""Prepare and insert an ERPNext Sales Invoice return as draft only."""
@@ -608,6 +828,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 		frappe.throw(_("You do not have permission to create Sales Invoice."), frappe.PermissionError)
 	sales_invoice = str(sales_invoice or "").strip()
 	_assert_read("Sales Invoice", sales_invoice)
+	_lock_sales_return_source(sales_invoice)
 	source = frappe.get_doc("Sales Invoice", sales_invoice)
 	if source.docstatus != 1:
 		frappe.throw(_("Submit the Sales Invoice before preparing a Return / Credit Note."))
@@ -617,6 +838,29 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 		frappe.throw(_("Use the native POS return workflow for a consolidated POS Sales Invoice."))
 
 	company, source_branch = _validate_source_context(source, source_label="Sales Invoice")
+	existing = _existing_sales_return_draft(source.name)
+	if existing:
+		mapped_branch = _validate_invoice_stock_context(
+			existing,
+			company=company,
+			source_branch=source_branch,
+		)
+		response = _invoice_response(
+			existing,
+			branch=mapped_branch,
+			source_doctype="Sales Invoice",
+			source_name=source.name,
+		)
+		response.update(
+			{
+				"is_return": True,
+				"return_against": source.name,
+				"posting_status": "Draft",
+				"existing": True,
+			}
+		)
+		return response
+
 	target = erpnext_make_sales_return(source.name)
 	if not target or target.doctype != "Sales Invoice":
 		frappe.throw(_("ERPNext could not prepare a Return / Credit Note from this Sales Invoice."))
@@ -651,6 +895,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 			"is_return": True,
 			"return_against": source.name,
 			"posting_status": "Draft",
+			"existing": False,
 		}
 	)
 	return response

@@ -23,6 +23,20 @@ class TestProfessionalDelivery(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_sales_order_delivery_reuses_one_exact_source_draft(self):
+		source = self.read("professional_delivery.py")
+		for contract in (
+			"def _lock_sales_order",
+			"FOR UPDATE",
+			"def _existing_draft_delivery_for_sales_order",
+			"dn.docstatus = 0 AND item.against_sales_order = %s",
+			"Multiple draft Delivery Notes already reference Sales Order",
+			"linked_orders != {sales_order}",
+			"source_sales_order=source.name",
+			"existing=True",
+		):
+			self.assertIn(contract, source)
+
 	def test_sales_invoice_to_delivery_uses_erpnext_native_mapper_and_blocks_double_stock(self):
 		source = self.read("professional_delivery.py")
 		for contract in (

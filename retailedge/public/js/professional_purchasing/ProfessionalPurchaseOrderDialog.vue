@@ -58,11 +58,14 @@
 				/>
 
 				<EdgeLinkField
-					v-if="canSwitchPriceList"
 					:modelValue="values.price_list"
-					label="Price List"
-					placeholder="Choose an assigned Price List"
+					label="Buying Price List"
+					placeholder="Select assigned Price List"
+					description="The effective default follows Price List Governance. When switching is allowed, choose from your Branch-assigned Price Lists."
+					:required="Boolean(formContext.pricing?.selection_required)"
+					:disabled="Boolean(formContext.pricing?.locked) || !Boolean(formContext.pricing?.can_select)"
 					:searcher="searchPriceList"
+					:context="searchContext"
 					@update:modelValue="setPriceList"
 				/>
 
@@ -91,8 +94,7 @@
 			/>
 
 			<p class="guided-po-hint">
-				Buying Rate is resolved again on the server from the authenticated user's Buying Price List,
-				ERPNext item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
+				Buying Rate is resolved again on the server from the Price List selected by the merchant's governance policy, ERPNext item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -103,7 +105,7 @@
 
 		<template #footer>
 			<div class="guided-po-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
 				<div class="guided-po-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">
@@ -127,6 +129,7 @@ import {
 const CONTEXT_METHOD = "retailedge.professional_purchase_order.get_professional_purchase_order_context";
 const SEARCH_METHOD = "retailedge.professional_purchase_order.search_professional_purchase_order_options";
 const PRICING_METHOD = "retailedge.professional_purchase_order.get_professional_purchase_order_item_pricing";
+const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.professional_purchase_order.create_professional_purchase_order_draft";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
@@ -146,10 +149,11 @@ function emptyValues() {
 
 function sourceLabel(source) {
 	return {
+		branch_default: "Branch default",
+		user_selected: "Selected Price List",
+		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
-		assigned_choice: "Assigned Price List choice",
-		branch_default: "Branch default",
 		party_default: "Supplier default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Buying",
@@ -168,7 +172,7 @@ export default {
 	},
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -193,8 +197,7 @@ export default {
 		branchEnabled() { return Boolean(this.formContext.capabilities?.branch_enabled); },
 		canCreateSupplier() { return Boolean(this.formContext.capabilities?.can_create_supplier); },
 		canCreateItem() { return Boolean(this.formContext.capabilities?.can_create_item); },
-		canSwitchPriceList() { return (this.formContext.pricing?.available_price_lists || []).length > 1; },
-		pricingLabel() { return this.values.price_list || this.formContext.pricing?.price_list || "Item buying fallback"; },
+		pricingLabel() { return this.formContext.pricing?.price_list || "Item buying fallback"; },
 		pricingSourceLabel() { return sourceLabel(this.formContext.pricing?.source); },
 		searchContext() {
 			return {
@@ -202,6 +205,7 @@ export default {
 				branch: this.values.branch,
 				warehouse: this.values.warehouse,
 				supplier: this.values.supplier,
+				price_list: this.values.price_list,
 			};
 		},
 	},
@@ -242,48 +246,43 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		async refreshPriceListContext({ preserveSelection = false } = {}) { if (!this.values.company) return; const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "buying", company: this.values.company, branch: this.values.branch || "", party: this.values.supplier || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.formContext.pricing = pricing || {}; if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
+		async setPriceList(next) { if (this.formContext.pricing?.locked) return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Buying Price List."); } },
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createSupplier(query) { return quickCreateSupplier(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
-		async refreshPriceListOptions() {
-			const rows = await this.searchPriceList("");
-			const names = rows.map((row) => row.value || row.label).filter(Boolean);
-			this.formContext.pricing = {
-				...(this.formContext.pricing || {}),
-				available_price_lists: names,
-				can_switch_price_list: names.length > 1,
-			};
-			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
-		},
-		setPriceList(next) {
-			this.values.price_list = next || "";
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
-		},
 		setSupplier(next) {
-			const changed = Boolean(this.values.supplier && this.values.supplier !== next);
-			this.values.supplier = next || "";
-			this.refreshPriceListOptions().catch(() => {});
+			const value = next || "";
+			const changed = this.values.supplier !== value;
+			this.values.supplier = value;
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshAllItemPricing();
+				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Buying Price List."); });
 			}
 		},
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
-			this.values.price_list = "";
-			if (!branch || !this.values.company) return;
+			if (!this.values.company) return;
+			if (!branch) {
+				try {
+					await this.refreshPriceListContext();
+					this.refreshAllItemPricing();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to refresh Buying Price List.");
+				}
+				return;
+			}
 			const token = ++this.cascadeToken;
 			try {
 				const resolved = await resolveBranchWarehouse({ company: this.values.company, branch, preference: "purchase" });
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
-				await this.refreshPriceListOptions();
+				await this.refreshPriceListContext();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve the Branch receiving Stock Location.");
@@ -333,10 +332,12 @@ export default {
 			try {
 				const result = await callMethod(PRICING_METHOD, {
 					item_code: row.item_code,
-					values: { ...this.searchContext, price_list: this.values.price_list, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
+					values: { ...this.searchContext, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
 				});
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
+				this.formContext.pricing = { ...(this.formContext.pricing || {}), ...(result || {}) };
+				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}

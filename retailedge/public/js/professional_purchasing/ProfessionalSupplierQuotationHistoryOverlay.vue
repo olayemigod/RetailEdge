@@ -99,13 +99,15 @@ export default {
 			loading: false,
 			loaded: false,
 			error: "",
-			history: { company: "", branch: "", supplier: "", limit: 50, rows: [] },
+			history: { company: "", branch: "", supplier: "", limit: 50, can_create_purchase_order: false, rows: [] },
 			filters: { company: "", branch: "", supplier: "" },
 			sort: { key: "transaction_date", direction: "desc" },
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		nativeFallbackEnabled() { const access = frappe.boot?.edgesuite_ui_access || {};
+			const mode = String(access.mode || "").trim();
+			return mode !== ACCESS_MODE && Boolean(access.can_use_native_desk); },
 		sortedRows() {
 			const rows = [...(this.history.rows || [])];
 			const { key, direction } = this.sort;
@@ -155,7 +157,9 @@ export default {
 		clearSupplier() { this.filters.supplier = ""; this.loaded = false; this.loadHistory(); },
 		canPreparePurchaseOrder(row) {
 			const status = String(row?.status || "");
-			return Number(row?.docstatus || 0) === 1 && !["Cancelled", "Stopped", "Expired"].includes(status);
+			return Boolean(this.history.can_create_purchase_order)
+				&& Number(row?.docstatus || 0) === 1
+				&& !["Cancelled", "Stopped", "Expired"].includes(status);
 		},
 		preparePurchaseOrder(name) { if (name) window.dispatchEvent(new CustomEvent(PREPARE_PO_EVENT, { detail: { supplier_quotation: name } })); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; },

@@ -21,6 +21,19 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertNotIn("Return + Debit Note", component)
 		self.assertNotIn("return_and_debit", component)
 
+	def test_record_purchase_supplier_debit_note_handoff_is_consumed_by_professional_purchasing(self):
+		record_purchase = (APP_ROOT / "public/js/record_purchase/RecordPurchase.vue").read_text()
+		purchasing = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()
+
+		self.assertIn("retailedgeProfessionalPurchasingTarget", record_purchase)
+		self.assertIn('action: "supplier-debit-note"', record_purchase)
+		self.assertIn("applyPendingTarget()", purchasing)
+		self.assertIn("delete window.retailedgeProfessionalPurchasingTarget", purchasing)
+		self.assertIn('String(target.user || "") !== String(frappe.session?.user || "Guest")', purchasing)
+		self.assertIn('target.action === "supplier-debit-note"', purchasing)
+		self.assertIn('source_type: "purchase_invoice"', purchasing)
+		self.assertIn("OPEN_PURCHASE_RETURN_REVIEW_EVENT", purchasing)
+
 	def test_ui_uses_backend_filtered_sources_and_clears_dependent_selections(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
 
@@ -45,6 +58,13 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("retailedge.professional_purchase_returns.submit_purchase_return_review", overlay)
 		self.assertIn("Advanced: Prepare in ERPNext", overlay)
 		self.assertIn("never chains a stock return and supplier debit note automatically", (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text())
+
+	def test_return_review_native_fallback_requires_explicit_desk_grant_and_non_edgesuite_mode(self):
+		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue").read_text()
+		self.assertIn('const mode = String(access.mode || "").trim();', overlay)
+		self.assertIn("mode !== ACCESS_MODE", overlay)
+		self.assertIn("Boolean(access.can_use_native_desk)", overlay)
+		self.assertIn("if (!this.nativeFallbackEnabled", overlay)
 
 	def test_existing_professional_purchasing_flows_and_edgesuite_runtime_remain(self):
 		component = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()

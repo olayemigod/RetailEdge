@@ -40,7 +40,9 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 			self.assertIn(contract, controller)
 		hidden = controller.split("hiddenButtonLabels:", 1)[1].split("],", 1)[0]
 		self.assertNotIn("PURCHASE_RECEIPTS_TRIGGER_LABEL", hidden)
-		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE', controller)
+		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', controller)
+		self.assertIn('String(access.mode || "").trim() !== ACCESS_MODE', controller)
+		self.assertIn('Boolean(access.can_use_native_desk)', controller)
 
 	def test_native_receipt_handoffs_are_explicitly_advanced_when_allowed(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
