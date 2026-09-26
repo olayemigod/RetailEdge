@@ -117,15 +117,12 @@
 
 			<p class="guided-expense-hint">
 				The expense account, cost centre and cash account are resolved from the selected category
-				and current cashier context. Receipt upload and review details remain available in the full form.
+				and current cashier context. After saving, continue the expense through the RetailEdge workflow form.
 			</p>
 		</form>
 
 		<template #footer>
 			<div class="guided-expense-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
-				</button>
 				<div class="guided-expense-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -189,10 +186,9 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved"],
 	data() {
 		return {
 			loading: false,
@@ -258,15 +254,6 @@ export default {
 				return;
 			}
 			confirmAboveEdgeModal("Discard the unsaved Cashier Expense changes?", () => this.$emit("close"));
-		},
-		openFullForm() {
-			if (this.saving || !this.nativeFallbackEnabled) return;
-			const openNative = () => this.$emit("open-native", "RetailEdge Cashier Expense");
-			if (!this.hasUnsavedChanges) {
-				openNative();
-				return;
-			}
-			confirmAboveEdgeModal("Discard the unsaved Cashier Expense changes and open the full form?", openNative);
 		},
 		async searchCategory(query) {
 			const results = await callMethod(SEARCH_METHOD, {
