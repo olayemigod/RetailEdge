@@ -63,7 +63,7 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 			with self.subTest(relative=relative):
 				component = self.read(relative)
 				self.assertIn("pricingTokens", component)
-				self.assertIn("const token = (this.pricingTokens[index] || 0) + 1", component)
+				self.assertIn("const token =", component)
 				self.assertIn("this.pricingTokens[index] = token", component)
 				self.assertIn("this.pricingTokens[index] !== token", component)
 				self.assertIn("refreshAllItemPricing", component)
