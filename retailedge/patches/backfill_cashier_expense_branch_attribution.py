@@ -12,11 +12,13 @@ STRONG_BRANCH_SOURCES = {
 	"POS Profile.service_branch",
 	"POS Profile.retail_branch",
 	"POS Profile.default_branch",
+	"POS Profile.retailedge_branch",
 	"POS Opening Shift.branch",
 	"POS Opening Shift.set_branch",
 	"POS Opening Shift.service_branch",
 	"POS Opening Shift.retail_branch",
 	"POS Opening Shift.default_branch",
+	"POS Opening Shift.retailedge_branch",
 }
 
 
@@ -29,18 +31,18 @@ def execute():
 	if not all(meta.has_field(fieldname) for fieldname in required):
 		return
 
-	rows = frappe.get_all(
-		"RetailEdge Cashier Expense",
-		filters={"branch": ["in", ["", None]]},
-		fields=[
-			"name",
-			"company",
-			"cashier",
-			"pos_profile",
-			"linked_pos_opening_shift",
-		],
-		limit_page_length=0,
-		order_by="creation asc",
+	rows = frappe.db.sql(
+		"""
+		SELECT name, company, cashier, pos_profile, linked_pos_opening_shift
+		FROM `tabRetailEdge Cashier Expense`
+		WHERE IFNULL(branch, '') = ''
+		  AND (
+			IFNULL(pos_profile, '') != ''
+			OR IFNULL(linked_pos_opening_shift, '') != ''
+		  )
+		ORDER BY creation ASC
+		""",
+		as_dict=True,
 	)
 
 	for row in rows:
