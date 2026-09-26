@@ -6,6 +6,7 @@ const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
 const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
 const GLOBAL_CREATE_BUTTON_ID = "retailedge-global-create-button";
+const GLOBAL_CREATE_HOST_ID = "retailedge-global-create-host";
 const GLOBAL_CREATE_STYLE_ID = "retailedge-global-create-style";
 
 const GROUP_PRESENTATION = Object.freeze({
@@ -203,19 +204,67 @@ function deskSlug(value) {
 		.replace(/^-|-$/g, "");
 }
 
+function withDocTypeMeta(doctype) {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			resolve(frappe.get_meta?.(doctype) || null);
+		};
+		try {
+			if (typeof frappe.model?.with_doctype !== "function") {
+				finish();
+				return;
+			}
+			const pending = frappe.model.with_doctype(doctype, finish);
+			if (pending && typeof pending.then === "function") {
+				pending.then(finish).catch(reject);
+			}
+		} catch (error) {
+			reject(error);
+		}
+	});
+}
+
+function canCreateDocType(doctype) {
+	try {
+		return typeof frappe.model?.can_create === "function"
+			? Boolean(frappe.model.can_create(doctype))
+			: false;
+	} catch (_error) {
+		return false;
+	}
+}
+
+async function openDocTypeMenuTarget(doctype) {
+	const target = String(doctype || "").trim();
+	if (!target) return false;
+	try {
+		const meta = await withDocTypeMeta(target);
+		if (meta?.quick_entry && canCreateDocType(target) && typeof frappe.new_doc === "function") {
+			frappe.new_doc(target);
+			return true;
+		}
+	} catch (error) {
+		console.warn(`[RetailEdge Product Menu] quick-entry detection failed for ${target}`, error);
+	}
+	frappe.set_route("List", target);
+	return true;
+}
+
 function openNativeDeskTarget(linkType, linkTo) {
 	const target = String(linkTo || "").trim();
 	if (!target) return false;
-	let url = "";
 	if (linkType === "Report") {
-		url = `/app/query-report/${encodeURIComponent(target)}`;
-	} else if (linkType === "DocType") {
-		url = `/app/${deskSlug(target)}`;
-	} else {
-		return false;
+		frappe.set_route("query-report", target);
+		return true;
 	}
-	window.open(url, "_blank", "noopener,noreferrer");
-	return true;
+	if (linkType === "DocType") {
+		void openDocTypeMenuTarget(target);
+		return true;
+	}
+	return false;
 }
 
 function nativeSidebarTarget(label) {
@@ -298,6 +347,7 @@ async function installProductMenu({ force = false } = {}) {
 		state.installed = true;
 		state.lastError = null;
 		state.lastConfig = config;
+		installGlobalCreateMountObserver();
 		mountGlobalCreateButton();
 		return config;
 	})()
@@ -351,6 +401,14 @@ function ensureGlobalCreateStyle() {
 	const style = document.createElement("style");
 	style.id = GLOBAL_CREATE_STYLE_ID;
 	style.textContent = `
+		#${GLOBAL_CREATE_HOST_ID} {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
 		#${GLOBAL_CREATE_BUTTON_ID} {
 			display: inline-flex;
 			align-items: center;
@@ -427,7 +485,7 @@ function locateGlobalCreateAnchor() {
 	}
 
 	const notification = document.querySelector(
-		".dropdown-notifications, .notifications, [data-original-title*='Notification'], [aria-label*='Notification']"
+		".dropdown-notifications, .notifications, .navbar .notifications-icon, [data-original-title*='Notification'], [aria-label*='Notification']"
 	);
 	if (notification) {
 		return {
@@ -436,14 +494,26 @@ function locateGlobalCreateAnchor() {
 		};
 	}
 
-	const toolbar = document.querySelector(".navbar .navbar-right, .navbar .ml-auto, .edge-topbar__actions");
+	const toolbar = document.querySelector(
+		".navbar .navbar-nav:last-child, .navbar .navbar-right, .navbar .ml-auto, .edge-topbar__actions"
+	);
 	return toolbar ? { node: toolbar, position: "prepend" } : null;
 }
 
+function createGlobalCreateHost(anchor) {
+	const parentTag = String(anchor?.node?.parentElement?.tagName || "").toUpperCase();
+	const host = document.createElement(parentTag === "UL" || parentTag === "OL" ? "li" : "div");
+	host.id = GLOBAL_CREATE_HOST_ID;
+	host.className = "retailedge-global-create-host";
+	host.setAttribute("data-retailedge-global-create-host", "1");
+	host.appendChild(createGlobalCreateButton());
+	return host;
+}
+
 function mountGlobalCreateButton() {
-	const existing = document.getElementById(GLOBAL_CREATE_BUTTON_ID);
+	const existingHost = document.getElementById(GLOBAL_CREATE_HOST_ID);
 	if (!hasGuidedCreateAction()) {
-		existing?.remove();
+		existingHost?.remove();
 		return false;
 	}
 
@@ -451,15 +521,42 @@ function mountGlobalCreateButton() {
 	const anchor = locateGlobalCreateAnchor();
 	if (!anchor?.node) return false;
 
-	const button = existing || createGlobalCreateButton();
+	const host = existingHost || createGlobalCreateHost(anchor);
 	if (anchor.position === "prepend") {
-		if (button.parentElement !== anchor.node || anchor.node.firstElementChild !== button) {
-			anchor.node.prepend(button);
+		if (host.parentElement !== anchor.node || anchor.node.firstElementChild !== host) {
+			anchor.node.prepend(host);
 		}
-	} else if (button.parentElement !== anchor.node.parentElement || button.previousElementSibling !== anchor.node) {
-		anchor.node.insertAdjacentElement(anchor.position, button);
+	} else if (host.parentElement !== anchor.node.parentElement || host.previousElementSibling !== anchor.node) {
+		anchor.node.insertAdjacentElement(anchor.position, host);
 	}
-	return true;
+	return Boolean(document.getElementById(GLOBAL_CREATE_BUTTON_ID));
+}
+
+let globalCreateObserver = null;
+let globalCreateMountScheduled = false;
+
+function scheduleGlobalCreateMount() {
+	if (globalCreateMountScheduled) return;
+	globalCreateMountScheduled = true;
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => {
+		globalCreateMountScheduled = false;
+		mountGlobalCreateButton();
+	});
+}
+
+function installGlobalCreateMountObserver() {
+	if (globalCreateObserver || !document.body) {
+		scheduleGlobalCreateMount();
+		return;
+	}
+	globalCreateObserver = new MutationObserver(() => {
+		if (!hasGuidedCreateAction()) return;
+		const button = document.getElementById(GLOBAL_CREATE_BUTTON_ID);
+		if (!button?.isConnected) scheduleGlobalCreateMount();
+	});
+	globalCreateObserver.observe(document.body, { childList: true, subtree: true });
+	scheduleGlobalCreateMount();
 }
 
 function productMenuIsOpen() {
@@ -514,6 +611,7 @@ function scheduleRefresh() {
 	schedule(() => {
 		if (state.installed) refreshProductMenu();
 		else installProductMenu();
+		scheduleGlobalCreateMount();
 	});
 }
 
@@ -530,6 +628,7 @@ window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
 window.retailedgeRequestProductMenuOpen = requestProductMenuOpen;
 window.retailedgeMountGlobalCreateButton = mountGlobalCreateButton;
+window.retailedgeOpenDocTypeMenuTarget = openDocTypeMenuTarget;
 window.retailedgeOpenNativeTarget = openNativeDeskTarget;
 window.retailedgeProductMenuState = state;
 
