@@ -30,6 +30,23 @@ def test_product_menu_exposes_permission_aware_global_create_action():
     assert "__retailedgeOpenGuidedCreate = true" in source
 
 
+def test_global_create_button_mounts_beside_shared_toolbar_controls():
+    source = PRODUCT_MENU.read_text(encoding="utf-8")
+    assert 'const GLOBAL_CREATE_BUTTON_ID = "retailedge-global-create-button"' in source
+    assert "function hasGuidedCreateAction()" in source
+    assert "function locateGlobalCreateAnchor()" in source
+    assert "function mountGlobalCreateButton()" in source
+    assert "document.querySelector(PRODUCT_MENU_TRIGGER_SELECTOR)" in source
+    assert "dropdown-notifications" in source
+    assert 'button.setAttribute("aria-label", "Create")' in source
+    assert 'label.textContent = "Create"' in source
+    assert 'plus.textContent = "+"' in source
+    assert "requestGuidedCreate();" in source
+    assert "mountGlobalCreateButton();" in source
+    assert "window.retailedgeMountGlobalCreateButton = mountGlobalCreateButton" in source
+    assert "@media (max-width: 768px)" in source
+
+
 def test_global_create_reuses_canonical_business_hub_guided_host():
     bridge = ROUTE_BRIDGE.read_text(encoding="utf-8")
     hub = BUSINESS_HUB.read_text(encoding="utf-8")
