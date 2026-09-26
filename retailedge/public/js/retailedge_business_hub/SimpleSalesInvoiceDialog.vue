@@ -170,6 +170,7 @@
 
 <script>
 import {
+	confirmAboveEdgeModal,
 	callMethod,
 	errorMessage,
 	quickCreateCustomer,
@@ -354,7 +355,7 @@ export default {
 				this.$emit("close");
 				return;
 			}
-			frappe.confirm(
+			confirmAboveEdgeModal(
 				"Discard the unsaved Quick Sale changes?",
 				() => this.$emit("close")
 			);

@@ -68,6 +68,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.guided_cash_transfer.get_simple_cash_transfer_context";
 const SEARCH_METHOD = "retailedge.guided_cash_transfer.search_simple_cash_transfer_options";
 const CREATE_METHOD = "retailedge.guided_cash_transfer.create_simple_cash_transfer_draft";
@@ -119,13 +120,13 @@ export default {
 		requestClose() {
 			if (this.saving) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm("Discard the unsaved Cash / Bank Transfer changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Cash / Bank Transfer changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
 			const openNative = () => this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
 			if (!this.hasUnsavedChanges) { openNative(); return; }
-			frappe.confirm("Discard the unsaved Cash / Bank Transfer changes and open the full ERPNext form?", openNative);
+			confirmAboveEdgeModal("Discard the unsaved Cash / Bank Transfer changes and open the full ERPNext form?", openNative);
 		},
 		async saveDraft() {
 			if (this.saving || this.loading) return;

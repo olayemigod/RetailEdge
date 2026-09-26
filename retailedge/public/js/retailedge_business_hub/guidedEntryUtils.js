@@ -132,6 +132,46 @@ export function errorMessage(error, fallback) {
 	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
+function elevateFrappeConfirmation(dialog) {
+	if (typeof document === "undefined") return;
+	const returnedWrapper =
+		dialog?.$wrapper?.get?.(0)
+		|| dialog?.$wrapper?.[0]
+		|| null;
+	const frappeModals = Array.from(document.querySelectorAll(".modal"));
+	const wrapper = returnedWrapper || frappeModals[frappeModals.length - 1] || null;
+	if (wrapper?.style) {
+		wrapper.style.setProperty("z-index", "100000", "important");
+		wrapper.setAttribute("data-retailedge-overlay-confirm", "1");
+	}
+
+	const backdrops = Array.from(document.querySelectorAll(".modal-backdrop"));
+	const backdrop = backdrops[backdrops.length - 1];
+	if (backdrop?.style) {
+		backdrop.style.setProperty("z-index", "99990", "important");
+		backdrop.setAttribute("data-retailedge-overlay-confirm-backdrop", "1");
+	}
+}
+
+export function confirmAboveEdgeModal(message, onConfirm, onCancel = null) {
+	const confirmFn = typeof frappe !== "undefined" ? frappe.confirm : null;
+	if (typeof confirmFn !== "function") {
+		const accepted = typeof window !== "undefined" && typeof window.confirm === "function"
+			? window.confirm(String(message || ""))
+			: false;
+		if (accepted) onConfirm?.();
+		else onCancel?.();
+		return null;
+	}
+
+	const dialog = confirmFn(message, onConfirm, onCancel || undefined);
+	const elevate = () => elevateFrappeConfirmation(dialog);
+	elevate();
+	if (typeof requestAnimationFrame === "function") requestAnimationFrame(elevate);
+	if (typeof setTimeout === "function") setTimeout(elevate, 0);
+	return dialog;
+}
+
 export function resolveBranchWarehouse({ company, branch = "", warehouse = "", preference = "default" }) {
 	return callMethod(BRANCH_WAREHOUSE_METHOD, {
 		company,

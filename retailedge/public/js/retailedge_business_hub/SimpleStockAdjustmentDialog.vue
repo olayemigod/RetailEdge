@@ -84,7 +84,7 @@
 </template>
 
 <script>
-import { callMethod, errorMessage, resolveBranchWarehouse, QUICK_ENTRY_MAX_LINES } from "./guidedEntryUtils";
+import { callMethod, confirmAboveEdgeModal, errorMessage, resolveBranchWarehouse, QUICK_ENTRY_MAX_LINES } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_stock_adjustment.get_simple_stock_adjustment_context";
 const SEARCH_METHOD = "retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options";
@@ -150,7 +150,7 @@ export default {
 		requestClose() {
 			if (this.saving) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm("Discard the unsaved Quick Adjustment changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Quick Adjustment changes?", () => this.$emit("close"));
 		},
 		continueInAdjustmentPage() {
 			if (this.saving) return;

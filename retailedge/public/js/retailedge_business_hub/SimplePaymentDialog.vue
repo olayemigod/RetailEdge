@@ -443,6 +443,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.guided_payment.get_simple_payment_context";
 const SEARCH_METHOD = "retailedge.guided_payment.search_simple_payment_options";
 const MODE_METHOD = "retailedge.guided_payment.get_simple_payment_mode_details";
@@ -499,11 +500,7 @@ function errorMessage(error, fallback) {
 
 function confirmAction(message) {
 	return new Promise((resolve) => {
-		if (typeof frappe.confirm !== "function") {
-			resolve(false);
-			return;
-		}
-		frappe.confirm(message, () => resolve(true), () => resolve(false));
+		confirmAboveEdgeModal(message, () => resolve(true), () => resolve(false));
 	});
 }
 
@@ -709,7 +706,7 @@ export default {
 		requestClose() {
 			if (this.saving || this.submitting) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm(
+			confirmAboveEdgeModal(
 				this.isSupplierPayment && this.allowMultiReferenceSupplierPayment
 					? "Discard the unsaved supplier settlement changes?"
 					: "Discard the unsaved Quick Payment changes?",
