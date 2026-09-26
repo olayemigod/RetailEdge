@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.pos_cashier_expense import apply_retailedge_cashier_expenses_to_closing_shift
+from retailedge.pos_cashier_expense import (
+	apply_retailedge_cashier_expenses_to_closing_data,
+	apply_retailedge_cashier_expenses_to_closing_shift,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,6 +102,63 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 			"retailedge.pos_cashier_expense.ensure_pos_closing_cashier_expense_custom_fields",
 			hooks,
 		)
+
+	def test_posnext_closing_preview_override_is_registered(self):
+		hooks = self.read("hooks.py")
+		self.assertIn(
+			'"pos_next.api.shifts.get_closing_shift_data": '
+			'"retailedge.pos_cashier_expense.get_posnext_closing_shift_data_with_cashier_expenses"',
+			hooks,
+		)
+
+	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row_from_rows")
+	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
+	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
+	@patch("retailedge.pos_cashier_expense.frappe.get_meta")
+	def test_posnext_closing_preview_reduces_expected_cash_idempotently(
+		self,
+		mock_meta,
+		mock_settings,
+		mock_summary,
+		mock_cash_row,
+	):
+		mock_meta.return_value.has_field.return_value = True
+		mock_settings.return_value = SimpleNamespace(
+			enable_cashier_expense_workflow=1,
+			enable_cashier_expense_pos_integration=1,
+			include_cashier_expenses_in_pos_closing=1,
+		)
+		mock_summary.return_value = {
+			"total": 150,
+			"count": 2,
+			"pending_review": 50,
+			"pending_ledger": 0,
+			"posted": 100,
+			"rejected": 0,
+		}
+		row = {"mode_of_payment": "Cash", "expected_amount": 1100, "closing_amount": None}
+		mock_cash_row.return_value = row
+		payload = {
+			"pos_opening_shift": "OPEN-1",
+			"pos_profile": "POS-1",
+			"payment_reconciliation": [row],
+			"retailedge_cashier_expense_total": 0,
+		}
+
+		result = apply_retailedge_cashier_expenses_to_closing_data(
+			payload,
+			opening_shift="OPEN-1",
+		)
+		self.assertIs(result, payload)
+		self.assertEqual(row["expected_amount"], 950)
+		self.assertEqual(payload["retailedge_cashier_expense_total"], 150)
+		self.assertEqual(payload["retailedge_cashier_expense_count"], 2)
+
+		apply_retailedge_cashier_expenses_to_closing_data(
+			payload,
+			opening_shift="OPEN-1",
+		)
+		self.assertEqual(row["expected_amount"], 950)
 
 	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row")
 	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
