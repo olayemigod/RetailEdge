@@ -110,7 +110,7 @@
 						v-if="canUseNativeDesk"
 						type="button"
 						class="edge-button"
-						@click="$emit('open-native', detail.name)"
+						@click="openNativeRecord"
 					>
 						Advanced: Open Full Record
 					</button>
@@ -122,7 +122,7 @@
 </template>
 
 <script>
-const DETAIL_METHOD = "retailedge.expense_register.get_cashier_expense_detail";
+const DETAIL_METHOD = "retailedge.cashier_expense_detail.get_cashier_expense_detail";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -160,7 +160,7 @@ export default {
 		branch: { type: String, default: "" },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "open-native"],
+	emits: ["close"],
 	data() {
 		return {
 			loading: false,
@@ -249,6 +249,11 @@ export default {
 			if (!value) return "—";
 			try { return frappe.datetime.str_to_user(value); }
 			catch (_error) { return String(value); }
+		},
+		openNativeRecord() {
+			if (!this.canUseNativeDesk || !this.detail?.name) return;
+			this.$emit("close");
+			frappe.set_route("Form", "RetailEdge Cashier Expense", this.detail.name);
 		},
 	},
 };
