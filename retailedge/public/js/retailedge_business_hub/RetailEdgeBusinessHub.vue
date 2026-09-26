@@ -364,19 +364,16 @@
 
 			<SimpleCashierExpenseDialog
 				:open="simpleCashierExpenseOpen"
-				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleCashierExpense"
 				@saved="handleSimpleCashierExpenseSaved"
-				@open-native="openNativeCashierExpense"
 			/>
-			<GuidedWorkflowCompletionDialog
-				:open="cashierExpenseCompletionOpen"
-				:document="cashierExpenseCompletionDocument"
-				label="Cashier Expense"
-				:canUseNativeDesk="nativeFallbackEnabled"
-				@close="closeCashierExpenseCompletion"
-				@changed="handleCashierExpenseCompletionChanged"
-				@completed="handleCashierExpenseCompletionCompleted"
+			<CashierExpenseDetailDialog
+				:open="cashierExpenseWorkflowOpen"
+				:expenseName="cashierExpenseWorkflowName"
+				:company="context.company || ''"
+				:branch="context.branch || ''"
+				@close="closeCashierExpenseWorkflow"
+				@updated="handleCashierExpenseWorkflowUpdated"
 			/>
 
 			<SimpleStockTransferDialog
@@ -413,7 +410,7 @@ import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
 import StandardInternalTransferCompletionDialog from "./StandardInternalTransferCompletionDialog.vue";
 import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
-import GuidedWorkflowCompletionDialog from "./GuidedWorkflowCompletionDialog.vue";
+import CashierExpenseDetailDialog from "../expense_register/CashierExpenseDetailDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
@@ -592,7 +589,7 @@ export default {
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
-		GuidedWorkflowCompletionDialog,
+		CashierExpenseDetailDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		StandardPurchaseInvoiceCompletionDialog,
@@ -635,8 +632,8 @@ export default {
 			purchaseInvoiceCompletionOpen: false,
 			purchaseInvoiceCompletionDocument: null,
 			simpleCashierExpenseOpen: false,
-			cashierExpenseCompletionOpen: false,
-			cashierExpenseCompletionDocument: null,
+			cashierExpenseWorkflowOpen: false,
+			cashierExpenseWorkflowName: "",
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
 			stockCompletionOpen: false,
@@ -1380,29 +1377,18 @@ export default {
 			const completion = result?.completion || {};
 			const name = completion.name || result?.name || "";
 			if (name) {
-				this.cashierExpenseCompletionDocument = {
-					doctype: completion.doctype || result?.doctype || "RetailEdge Cashier Expense",
-					name,
-				};
-				this.cashierExpenseCompletionOpen = true;
+				this.cashierExpenseWorkflowName = name;
+				this.cashierExpenseWorkflowOpen = true;
 			}
 			this.refreshHomeSnapshot();
 		},
-		closeCashierExpenseCompletion() {
-			this.cashierExpenseCompletionOpen = false;
-			this.cashierExpenseCompletionDocument = null;
+		closeCashierExpenseWorkflow() {
+			this.cashierExpenseWorkflowOpen = false;
+			this.cashierExpenseWorkflowName = "";
 		},
-		handleCashierExpenseCompletionChanged() {
+		handleCashierExpenseWorkflowUpdated() {
 			this.refreshHomeSnapshot();
-		},
-		handleCashierExpenseCompletionCompleted() {
-			this.closeCashierExpenseCompletion();
 			this.refreshContext({ force: true });
-		},
-		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
-			if (!this.nativeFallbackEnabled) return;
-			this.simpleCashierExpenseOpen = false;
-			frappe.new_doc(doctype);
 		},
 		closeSimpleStockTransfer() {
 			this.simpleStockTransferOpen = false;
@@ -1476,7 +1462,11 @@ export default {
 				return;
 			}
 			if (item.target_type === "DocType") {
-				frappe.set_route("List", item.target);
+				if (typeof window.retailedgeOpenDocTypeMenuTarget === "function") {
+					window.retailedgeOpenDocTypeMenuTarget(item.target);
+				} else {
+					frappe.set_route("List", item.target);
+				}
 				return;
 			}
 			if (item.target_type === "Report") {
