@@ -122,8 +122,14 @@ def get_cash_movement_visual_aggregates(filters: dict[str, Any] | str | None = N
 	sql = f"""
 		SELECT
 			gle.posting_date,
-			COALESCE(SUM(gle.debit), 0) AS money_in,
-			COALESCE(SUM(gle.credit), 0) AS money_out
+			COALESCE(
+				SUM(CASE WHEN ({query["movement_expression"]}) = 'Money In' THEN gle.debit ELSE 0 END),
+				0
+			) AS money_in,
+			COALESCE(
+				SUM(CASE WHEN ({query["movement_expression"]}) = 'Money Out' THEN gle.credit ELSE 0 END),
+				0
+			) AS money_out
 		FROM `tabGL Entry` gle
 		INNER JOIN `tabAccount` acc ON acc.name = gle.account
 		{query["joins"]}
@@ -346,8 +352,14 @@ def _query_summary(query: dict[str, Any]) -> dict[str, Any]:
 	sql = f"""
 		SELECT
 			COUNT(gle.name) AS movement_count,
-			COALESCE(SUM(gle.debit), 0) AS money_in,
-			COALESCE(SUM(gle.credit), 0) AS money_out,
+			COALESCE(
+				SUM(CASE WHEN ({query["movement_expression"]}) = 'Money In' THEN gle.debit ELSE 0 END),
+				0
+			) AS money_in,
+			COALESCE(
+				SUM(CASE WHEN ({query["movement_expression"]}) = 'Money Out' THEN gle.credit ELSE 0 END),
+				0
+			) AS money_out,
 			COALESCE(SUM(gle.debit - gle.credit), 0) AS net_change,
 			COUNT(DISTINCT gle.account) AS account_count
 		FROM `tabGL Entry` gle
