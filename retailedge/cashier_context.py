@@ -998,12 +998,20 @@ def get_shift_cash_snapshot(
 			expenses = frappe.get_all(
 				"RetailEdge Cashier Expense",
 				filters=filters,
-				fields=["amount"],
+				fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
 				limit_page_length=0,
 			)
 		except Exception:
 			expenses = []
-		result["prior_expenses"] = sum(flt(row.amount) for row in expenses)
+		result["prior_expenses"] = sum(
+			flt(row.amount)
+			for row in expenses
+			if (getattr(row, "cash_source", None) or "POS Till") == "POS Till"
+			and (
+				(getattr(row, "expense_status", None) == "Draft")
+				or (getattr(row, "cash_movement_status", None) or "Disbursed") == "Disbursed"
+			)
+		)
 
 	result["available_before"] = flt(result["opening_cash"]) + flt(result["cash_sales"]) - flt(result["prior_expenses"])
 	source_parts = [result["source"]]
