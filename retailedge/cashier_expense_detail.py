@@ -207,6 +207,25 @@ def apply_cashier_expense_workflow_action(
 
 	action = str(action or "").strip().lower().replace("-", "_")
 	remarks = str(remarks or "").strip()
+	settings = get_cashier_expense_posting_settings()
+	preview = build_cashier_expense_posting_preview(doc)
+	capabilities = _workflow_capabilities(doc, preview, settings)
+	capability_by_action = {
+		"submit": "can_submit",
+		"approve": "can_approve",
+		"reject": "can_reject",
+		"reopen": "can_reopen",
+		"refresh_posting": "can_refresh_posting",
+		"post_accounts": "can_post_accounts",
+	}
+	capability = capability_by_action.get(action)
+	if not capability:
+		frappe.throw(_("Unsupported Cashier Expense workflow action."), frappe.ValidationError)
+	if not capabilities.get(capability):
+		frappe.throw(
+			_("You do not have permission or the Cashier Expense is not eligible for this action."),
+			frappe.PermissionError,
+		)
 
 	if action == "submit":
 		submit_cashier_expense(doc.name)
@@ -223,8 +242,6 @@ def apply_cashier_expense_workflow_action(
 			doc.name,
 			expected_modified=expected_modified,
 		)
-	else:
-		frappe.throw(_("Unsupported Cashier Expense workflow action."), frappe.ValidationError)
 
 	return get_cashier_expense_detail(
 		doc.name,
