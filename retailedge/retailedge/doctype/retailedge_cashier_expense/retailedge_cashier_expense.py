@@ -45,10 +45,10 @@ class RetailEdgeCashierExpense(Document):
 		self._status_before_submit = self.expense_status or "Draft"
 		if not self.expense_status or self.expense_status == "Draft":
 			self.expense_status = "Submitted"
-		if not self.cash_movement_status or self.cash_movement_status == "Not Disbursed":
+		if not getattr(self, "cash_movement_status", None) or getattr(self, "cash_movement_status", None) == "Not Disbursed":
 			self.cash_movement_status = "Disbursed"
 		posting_settings = get_cashier_expense_posting_settings()
-		if not self.posting_mode_applied:
+		if not getattr(self, "posting_mode_applied", None):
 			self.posting_mode_applied = posting_settings["posting_mode"]
 		if posting_settings["enabled"] and posting_settings["posting_mode"] == "Direct Posting":
 			self.ledger_status = "Pending Ledger"
@@ -66,14 +66,14 @@ class RetailEdgeCashierExpense(Document):
 			new_status=self.expense_status,
 			context={
 				"ledger_status": self.ledger_status,
-				"cash_movement_status": self.cash_movement_status,
-				"posting_mode": self.posting_mode_applied,
+				"cash_movement_status": getattr(self, "cash_movement_status", None),
+				"posting_mode": getattr(self, "posting_mode_applied", None),
 			},
 		)
 		attempt_direct_cashier_expense_posting(self)
 
 	def before_cancel(self):
-		if self.ledger_status == "Posted" or self.posting_reference:
+		if getattr(self, "ledger_status", None) == "Posted" or getattr(self, "posting_reference", None):
 			frappe.throw(
 				_("Posted Cashier Expenses cannot be cancelled while their accounting entry is active. Use a controlled accounting reversal before cancelling the operational record.")
 			)
@@ -98,13 +98,13 @@ class RetailEdgeCashierExpense(Document):
 			self.expense_status = "Draft"
 		if not self.ledger_status:
 			self.ledger_status = "Not Applicable"
-		if not self.entry_source:
+		if not getattr(self, "entry_source", None):
 			self.entry_source = "RetailEdge"
-		if not self.cash_source:
+		if not getattr(self, "cash_source", None):
 			self.cash_source = "POS Till"
-		if not self.cash_movement_status:
+		if not getattr(self, "cash_movement_status", None):
 			self.cash_movement_status = "Not Disbursed"
-		if not self.posting_mode_applied:
+		if not getattr(self, "posting_mode_applied", None):
 			self.posting_mode_applied = get_cashier_expense_posting_settings()["posting_mode"]
 		if self.include_in_daily_audit in (None, ""):
 			self.include_in_daily_audit = 1
