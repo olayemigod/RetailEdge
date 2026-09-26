@@ -14,7 +14,6 @@ DIALOG_NAMES = (
 	"SimpleCashDepositDialog",
 	"SimpleCashTransferDialog",
 	"SimplePurchaseInvoiceDialog",
-	"SimpleCashierExpenseDialog",
 	"SimpleStockTransferDialog",
 	"SimpleStockAdjustmentDialog",
 )
@@ -76,6 +75,14 @@ class RetailEdgePreReportingAccessHardeningTests(unittest.TestCase):
 				source = (APP_ROOT / f"public/js/retailedge_business_hub/{name}.vue").read_text()
 				self.assertIn("nativeFallbackEnabled: { type: Boolean, default: false }", source)
 				self.assertIn('v-if="nativeFallbackEnabled"', source)
+
+	def test_cashier_expense_has_no_native_full_form_fallback(self):
+		source = (
+			APP_ROOT / "public/js/retailedge_business_hub/SimpleCashierExpenseDialog.vue"
+		).read_text()
+		self.assertNotIn("nativeFallbackEnabled", source)
+		self.assertNotIn("Open Full Form", source)
+		self.assertNotIn("open-native", source)
 
 
 if __name__ == "__main__":
