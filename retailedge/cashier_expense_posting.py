@@ -25,10 +25,16 @@ def get_cashier_expense_posting_settings():
 	except Exception:
 		settings = SimpleNamespace()
 
+	legacy_require_approval = bool(getattr(settings, "require_cashier_expense_approval_before_posting", 1))
+	posting_mode = str(getattr(settings, "cashier_expense_posting_mode", None) or "").strip()
+	if posting_mode not in {"Controlled Posting", "Direct Posting"}:
+		posting_mode = "Controlled Posting" if legacy_require_approval else "Direct Posting"
+
 	return {
 		"enabled": bool(getattr(settings, "enable_cashier_expense_accounting_posting", 0)),
+		"posting_mode": posting_mode,
 		"posting_document_type": getattr(settings, "cashier_expense_posting_document_type", None) or "Journal Entry",
-		"require_approval_before_posting": bool(getattr(settings, "require_cashier_expense_approval_before_posting", 1)),
+		"require_approval_before_posting": posting_mode == "Controlled Posting",
 		"allow_rejected_posting": bool(getattr(settings, "allow_rejected_cashier_expense_posting", 0)),
 		"remark_template": getattr(settings, "cashier_expense_posting_remark_template", None)
 		or "RetailEdge Cashier Expense {expense_name} - {expense_category}",
@@ -50,8 +56,12 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 	credit_account = getattr(doc, "payment_account", None) or settings.get("default_payable_account")
 	cost_center = getattr(doc, "cost_center", None)
 
+	if not settings["enabled"]:
+		reasons.append("Cashier Expense accounting posting is disabled in RetailEdge Settings.")
+	if settings["posting_document_type"] != "Journal Entry":
+		reasons.append("Cashier Expenses can currently post only through Journal Entry.")
 	if doc.docstatus == 2 or expense_status == "Cancelled":
-		reasons.append("Cancelled expenses are not eligible for future ledger posting.")
+		reasons.append("Cancelled expenses are not eligible for ledger posting.")
 	if ledger_status == "Posted":
 		reasons.append("This cashier expense is already marked as Posted.")
 	if amount <= 0:
@@ -71,7 +81,9 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 		reasons.extend(_validate_credit_account(credit_account, company))
 
 	if settings["require_approval_before_posting"] and expense_status != "Pending Ledger":
-		reasons.append("Expense must be in Pending Ledger status before posting is allowed.")
+		reasons.append("Controlled Posting requires approval and Pending Ledger status before posting.")
+	if not settings["require_approval_before_posting"] and expense_status not in {"Submitted", "Pending Ledger"}:
+		reasons.append("Direct Posting requires a submitted cashier expense before accounting posting.")
 	if expense_status == "Rejected" and not settings["allow_rejected_posting"]:
 		reasons.append("Rejected cashier expenses are blocked from posting by RetailEdge Settings.")
 	if posting_reference:
@@ -109,6 +121,7 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 		"expense_name": doc.name,
 		"posting_ready": posting_ready,
 		"posting_block_reason": "\n".join(reasons) if reasons else None,
+		"posting_mode": settings["posting_mode"],
 		"posting_document_type": settings["posting_document_type"],
 		"company": company,
 		"posting_date": posting_date,
