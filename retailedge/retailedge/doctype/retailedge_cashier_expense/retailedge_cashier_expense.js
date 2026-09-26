@@ -292,8 +292,10 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			});
 		}, group);
 
+		const postingSettings = frm.events.get_cashier_expense_settings(frm);
 		if (
 			frm.doc.docstatus === 1 &&
+			cint(postingSettings.enable_cashier_expense_accounting_posting || 0) &&
 			frm.doc.ledger_status !== "Posted" &&
 			frm.events.user_can_post_to_accounts() &&
 			(frm.doc.posting_ready || frm.doc.ledger_status === "Failed")
