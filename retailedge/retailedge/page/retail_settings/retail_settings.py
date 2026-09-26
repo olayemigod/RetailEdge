@@ -105,6 +105,9 @@ SETTINGS_GROUPS = (
 				"label": "Cashier Expense Controls",
 				"fields": (
 					"enable_cashier_expense_workflow",
+					"enable_cashier_expense_pos_integration",
+					"show_cashier_expense_in_pos",
+					"include_cashier_expenses_in_pos_closing",
 					"require_cashier_expense_attachment",
 					"include_cashier_expenses_in_variance_report",
 					"require_open_shift_for_cashier_expense",
@@ -118,9 +121,9 @@ SETTINGS_GROUPS = (
 				"label": "Accounting Posting",
 				"fields": (
 					"enable_cashier_expense_accounting_posting",
+					"cashier_expense_posting_mode",
 					"cashier_expense_posting_document_type",
 					"default_cashier_expense_payable_account",
-					"require_cashier_expense_approval_before_posting",
 					"allow_rejected_cashier_expense_posting",
 					"cashier_expense_posting_remark_template",
 				),

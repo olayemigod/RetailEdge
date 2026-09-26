@@ -998,12 +998,20 @@ def get_shift_cash_snapshot(
 			expenses = frappe.get_all(
 				"RetailEdge Cashier Expense",
 				filters=filters,
-				fields=["amount"],
+				fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
 				limit_page_length=0,
 			)
 		except Exception:
 			expenses = []
-		result["prior_expenses"] = sum(flt(row.amount) for row in expenses)
+		result["prior_expenses"] = sum(
+			flt(row.amount)
+			for row in expenses
+			if (getattr(row, "cash_source", None) or "POS Till") == "POS Till"
+			and (
+				(getattr(row, "expense_status", None) == "Draft")
+				or (getattr(row, "cash_movement_status", None) or "Disbursed") == "Disbursed"
+			)
+		)
 
 	result["available_before"] = flt(result["opening_cash"]) + flt(result["cash_sales"]) - flt(result["prior_expenses"])
 	source_parts = [result["source"]]
@@ -1037,6 +1045,11 @@ def get_cashier_expense_entry_context(user: str | None = None, company: str | No
 		"cash_balance_source": snapshot.get("source"),
 		"cash_control_message": "\n".join(message_parts) if message_parts else None,
 		"settings": {
+			"cashier_expense_posting_mode": str(getattr(settings, "cashier_expense_posting_mode", None) or "Controlled Posting"),
+			"enable_cashier_expense_accounting_posting": int(bool(getattr(settings, "enable_cashier_expense_accounting_posting", 0))),
+			"enable_cashier_expense_pos_integration": int(bool(getattr(settings, "enable_cashier_expense_pos_integration", 0))),
+			"show_cashier_expense_in_pos": int(bool(getattr(settings, "show_cashier_expense_in_pos", 1))),
+			"include_cashier_expenses_in_pos_closing": int(bool(getattr(settings, "include_cashier_expenses_in_pos_closing", 1))),
 			"require_open_shift_for_cashier_expense": int(bool(getattr(settings, "require_open_shift_for_cashier_expense", 1))),
 			"allow_cashier_expense_date_edit": int(bool(getattr(settings, "allow_cashier_expense_date_edit", 0))),
 			"include_draft_cashier_expenses_in_cash_check": int(bool(getattr(settings, "include_draft_cashier_expenses_in_cash_check", 1))),
