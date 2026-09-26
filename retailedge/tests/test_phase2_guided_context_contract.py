@@ -27,6 +27,7 @@ PURCHASE_UI = ROOT / "public/js/retailedge_business_hub/SimplePurchaseInvoiceDia
 HUB = ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue"
 COMPLETION = ROOT / "standard_sales_invoice_completion.py"
 WORKFLOW_COMPLETION_UI = ROOT / "public/js/retailedge_business_hub/GuidedWorkflowCompletionDialog.vue"
+CASHIER_WORKFLOW_UI = ROOT / "public/js/expense_register/CashierExpenseDetailDialog.vue"
 WORKFLOW_READINESS = ROOT / "workflow_readiness.py"
 SETTINGS = ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.json"
 
@@ -228,18 +229,19 @@ class TestPhase2GuidedContextContract(unittest.TestCase):
 
 	def test_cashier_expense_save_continues_workflow_inside_edgesuite(self):
 		source = HUB.read_text(encoding="utf-8")
-		dialog = WORKFLOW_COMPLETION_UI.read_text(encoding="utf-8")
+		dialog = CASHIER_WORKFLOW_UI.read_text(encoding="utf-8")
 		start = source.index("handleSimpleCashierExpenseSaved(result)")
-		end = source.index("openNativeCashierExpense", start)
+		end = source.index("closeCashierExpenseWorkflow()", start)
 		handler = source[start:end]
 		self.assertNotIn("frappe.set_route", handler)
 		self.assertNotIn("frappe.new_doc", handler)
-		self.assertIn("cashierExpenseCompletionOpen = true", handler)
-		self.assertIn("<GuidedWorkflowCompletionDialog", source)
-		self.assertIn("retailedge.workflow_readiness.get_document_workflow_readiness", dialog)
-		self.assertIn("retailedge.workflow_actions.apply_document_workflow_action", dialog)
+		self.assertIn("cashierExpenseWorkflowOpen = true", handler)
+		self.assertIn("<CashierExpenseDetailDialog", source)
+		self.assertNotIn("openNativeCashierExpense", source)
+		self.assertIn("retailedge.cashier_expense_detail.get_cashier_expense_detail", dialog)
+		self.assertIn("retailedge.cashier_expense_detail.apply_cashier_expense_workflow_action", dialog)
 		self.assertIn("expected_modified", dialog)
-		self.assertIn("expected_state", dialog)
+		self.assertIn("Post Journal Entry", dialog)
 
 	def test_workflow_readiness_exposes_snapshot_version_for_edgesuite_actions(self):
 		source = WORKFLOW_READINESS.read_text(encoding="utf-8")
