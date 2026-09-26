@@ -475,7 +475,7 @@ export default {
 					JSON.stringify({ createdAt: Date.now(), document_name: name }),
 				);
 			} catch (_error) {
-				frappe.show_alert?.({ message: "Unable to carry the Purchase Invoice draft into Record Purchase in this browser session.", indicator: "orange" }, 7);
+				this.actionError = "Unable to carry the Purchase Invoice draft into Record Purchase in this browser session.";
 				return false;
 			}
 			this.closePurchaseInvoiceCompletion();
