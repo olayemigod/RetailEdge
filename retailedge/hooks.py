@@ -216,7 +216,10 @@ doc_events = {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
 	},
 	"POS Closing Shift": {
-		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+		"validate": [
+			"retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+			"retailedge.pos_cashier_expense.apply_retailedge_cashier_expenses_to_closing_shift",
+		],
 		"on_submit": "retailedge.events.pos_closing_shift.on_pos_closing_shift_submit",
 		"after_insert": "retailedge.events.pos_closing_shift.on_pos_closing_shift_save",
 	},
@@ -241,6 +244,7 @@ after_migrate = [
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
 	"retailedge.coexistence.ensure_neutral_branch_field_labels",
 	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
+	"retailedge.pos_cashier_expense.ensure_pos_closing_cashier_expense_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
