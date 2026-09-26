@@ -3,6 +3,11 @@ import SalesReportingReport from "./sales_reporting/SalesReportingReport.vue";
 const REPORT_PRODUCT = "RetailEdge";
 const GOVERNED_EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
 const SALES_REPORT_PROVIDERS = Object.freeze({
+	sales_analysis: {
+		key: "sales-analysis",
+		pageMethod: "retailedge.sales_analysis.get_sales_analysis",
+		maxDatasetRows: 10000,
+	},
 	sales_by_item: {
 		key: "sales-by-item",
 		pageMethod: "retailedge.sales_reporting.get_sales_by_item",
@@ -81,7 +86,8 @@ function mountSalesReportingPage(target, options = {}) {
 	const app = edgeUI.createEdgeApp(SalesReportingReport, {
 		reportType: options.reportType || "sales_by_item",
 	});
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

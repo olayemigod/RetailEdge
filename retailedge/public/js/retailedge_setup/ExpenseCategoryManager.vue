@@ -2,7 +2,7 @@
 	<section class="expense-category-manager">
 		<header class="manager-header">
 			<div>
-				<span class="manager-kicker">RetailEdge Setup</span>
+				<span class="manager-kicker">Business Setup</span>
 				<h2>Expense Categories</h2>
 				<p>Maintain the controlled categories used by Business Expenses, Cashier Expenses and expense reporting.</p>
 			</div>

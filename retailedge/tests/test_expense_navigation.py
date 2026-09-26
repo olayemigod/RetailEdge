@@ -6,12 +6,13 @@ from retailedge.edgesuite_ui import NAVIGATION_GROUPS
 
 
 class TestExpenseNavigation(unittest.TestCase):
-	def test_expenses_group_owns_register_cashier_expenses_and_categories(self):
+	def test_expenses_group_owns_business_register_cashier_expenses_and_categories(self):
 		groups = {group["key"]: group for group in NAVIGATION_GROUPS}
 		expense_items = [(item["label"], item["target_type"], item["target"]) for item in groups["expenses"]["items"]]
 		self.assertEqual(
 			expense_items,
 			[
+				("Business Expenses", "Page", "business-expenses"),
 				("Expense Register", "Page", "expense-register"),
 				("Cashier Expenses", "DocType", "RetailEdge Cashier Expense"),
 				("Expense Categories", "DocType", "RetailEdge Expense Category"),

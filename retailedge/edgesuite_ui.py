@@ -116,7 +116,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "pricing-promotions", "label": "Pricing & Promotions", "icon": "tag", "items": (
-			{"label": "Pricing & Promotions Overview", "target_type": "Page", "target": "pricing-promotions-control", "icon": "tag"},
+			{"label": "Pricing & Promotions", "target_type": "Page", "target": "pricing-promotions-control", "icon": "tag"},
 			{"label": "Price Lists", "target_type": "DocType", "target": "Price List", "icon": "tag"},
 			{"label": "Item Prices", "target_type": "DocType", "target": "Item Price", "icon": "tag"},
 			{"label": "Pricing Rules", "target_type": "DocType", "target": "Pricing Rule", "icon": "settings"},
@@ -175,11 +175,11 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard", "mode": "native_fallback"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
-			{"label": "Bank Matching", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "report"},
 		),
 	},
 	{
 		"key": "expenses", "label": "Expenses", "icon": "file-text", "items": (
+			{"label": "Business Expenses", "target_type": "Page", "target": "business-expenses", "icon": "file-text"},
 			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
 			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
 			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
@@ -230,17 +230,17 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
-			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
-			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
-			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review", "icon": "report"},
-			{"label": "Cash Shift Verification", "target_type": "Report", "target": "RetailEdge Cash Shift Verification", "icon": "report"},
+			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},
+			{"label": "Daily Sales Audit", "target_type": "Page", "target": "daily-sales-audit", "icon": "shield"},
+			{"label": "Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
+			{"label": "Cash Shift Verification", "target_type": "Page", "target": "cash-shift-verification", "icon": "report"},
 			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit", "icon": "report"},
-			{"label": "POS Closing Variance vs Expenses", "target_type": "Report", "target": "POS Closing Variance vs Expenses", "icon": "report"},
-			{"label": "Unmatched Bank Transactions", "target_type": "Report", "target": "RetailEdge Unmatched Bank Transactions", "icon": "report"},
-			{"label": "Unmatched Bank Payments", "target_type": "Report", "target": "RetailEdge Unmatched Bank Payment Events", "icon": "report"},
-			{"label": "Reconciliation Readiness", "target_type": "Report", "target": "RetailEdge Bank Match Reconciliation Readiness", "icon": "shield"},
-			{"label": "Reconciliation Handoff", "target_type": "Report", "target": "RetailEdge Reconciliation Handoff", "icon": "report"},
-			{"label": "Daily Sales Audit Register", "target_type": "Report", "target": "RetailEdge Daily Sales Audit Register", "icon": "report"},
+			{"label": "POS Closing Variance & Expenses", "target_type": "Page", "target": "pos-closing-variance", "icon": "report"},
+			{"label": "Unmatched Bank Transactions", "target_type": "Page", "target": "unmatched-bank-transactions", "icon": "report"},
+			{"label": "Unmatched Bank Payments", "target_type": "Page", "target": "unmatched-bank-payments", "icon": "report"},
+			{"label": "Banking Readiness", "target_type": "Page", "target": "banking-readiness", "icon": "shield"},
+			{"label": "Reconciliation Handoff", "target_type": "Page", "target": "reconciliation-handoff", "icon": "report"},
+			{"label": "Daily Sales Audit Register", "target_type": "Page", "target": "daily-sales-audit-register", "icon": "report"},
 		),
 	},
 	{
@@ -259,7 +259,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "setup", "label": "Setup", "icon": "settings", "required_roles": ("System Manager",), "items": (
-			{"label": "Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
+			{"label": "Settings", "target_type": "Page", "target": "retail-settings", "icon": "settings"},
 			{"label": "Branch Setup", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
 			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
 			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},

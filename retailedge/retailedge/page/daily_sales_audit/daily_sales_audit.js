@@ -21,7 +21,7 @@ function hideNativePageSidebar(wrapper) {
 function renderLoadError(wrapper, error) {
 	const errorDiv = document.createElement("div"); errorDiv.className = "alert alert-danger p-6 text-center";
 	const title = document.createElement("strong"); title.textContent = __(`${PAGE_TITLE} failed to load`);
-	const detail = document.createElement("div"); detail.textContent = error?.message || __("Unknown page load error"); errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
+	const detail = document.createElement("div"); detail.textContent = window.retailedge?.userErrorMessage?.(error, __("Unknown page load error")) || __("Unknown page load error"); errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
 }
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);

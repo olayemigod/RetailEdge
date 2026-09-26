@@ -27,6 +27,9 @@ ASSIGNMENT_JS = (
 	/ "retailedge_branch_assignment.js"
 )
 ASSIGNMENT_VUE = APP_ROOT / "public" / "js" / "branch_assignments" / "BranchAssignments.vue"
+MASTER_EXPERIENCE = APP_ROOT / "master_experience.py"
+BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
+PRODUCT_MENU = APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js"
 
 
 class TestBranchAssignmentHistory(unittest.TestCase):
@@ -114,6 +117,8 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"EdgeAppShell",
 			"Branch Assignments",
 			"Assign User",
+			"Edit Price Lists",
+			"update_branch_assignment_price_lists",
 			"Transfer",
 			"setSort(column.key)",
 			"sortDirection",
@@ -122,12 +127,50 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_price_list_access_can_change_without_rewriting_branch_history(self):
+		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
+		for contract in (
+			"def update_branch_assignment_price_lists(",
+			"controlled_price_list_update",
+			'if status == "Ended"',
+			'doc.set("price_lists"',
+		):
+			self.assertIn(contract, source)
+		method = source[source.index("def update_branch_assignment_price_lists("):source.index("def transfer_branch_assignment(")]
+		for forbidden in ("effective_from =", "effective_to =", "company =", "branch ="):
+			self.assertNotIn(forbidden, method)
+
 	def test_setup_hub_exposes_branch_assignments_page(self):
 		setup = (APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.py").read_text(encoding="utf-8")
 		setup_vue = (APP_ROOT / "public" / "js" / "retailedge_setup" / "RetailEdgeSetup.vue").read_text(encoding="utf-8")
 		self.assertIn('"label": "Branch Assignments"', setup)
 		self.assertIn('"page": "branch-assignments"', setup)
 		self.assertIn("if (resource?.page)", setup_vue)
+
+
+	def test_branch_assignments_is_promoted_to_sidebar_and_waffle_navigation(self):
+		master = MASTER_EXPERIENCE.read_text(encoding="utf-8")
+		business_hub = BUSINESS_HUB.read_text(encoding="utf-8")
+		product_menu = PRODUCT_MENU.read_text(encoding="utf-8")
+
+		for contract in (
+			'"label": "Branch Assignments"',
+			'"target": "branch-assignments"',
+			"def _add_branch_assignment_navigation",
+			"_add_branch_assignment_navigation(navigation_groups)",
+		):
+			self.assertIn(contract, master)
+
+		authoritative_method = "retailedge.master_experience.get_retailedge_business_hub_context"
+		self.assertIn(authoritative_method, business_hub)
+		self.assertIn(authoritative_method, product_menu)
+		self.assertNotIn("retailedge.edgesuite_ui.get_retailedge_business_hub_context", business_hub)
+		self.assertNotIn("retailedge.edgesuite_ui.get_retailedge_business_hub_context", product_menu)
+
+	def test_branch_assignment_page_uses_retailedge_theme_identity(self):
+		source = ASSIGNMENT_VUE.read_text(encoding="utf-8")
+		self.assertIn('product="retailedge"', source)
+		self.assertNotIn('product="RetailEdge"', source)
 
 
 if __name__ == "__main__":

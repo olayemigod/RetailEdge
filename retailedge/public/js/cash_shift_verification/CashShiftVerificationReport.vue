@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="shift-fallback">
 		<strong>Cash Shift Verification could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -73,14 +73,7 @@
 						@select="onCashierSelected"
 						@clear="clearCashier"
 					/>
-					<label class="edge-field"
-						><span class="edge-field-label">From Date</span
-						><input v-model="filters.from_date" type="date" class="edge-input"
-					/></label>
-					<label class="edge-field"
-						><span class="edge-field-label">To Date</span
-						><input v-model="filters.to_date" type="date" class="edge-input"
-					/></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<EdgeDropdown v-model="filters.cash_status" :options="cashStatuses" label="Cash Status" placeholder="All" />
 					<div class="filter-action">
 						<button
@@ -125,7 +118,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "cash-shift-verification";
 function runtimeComponents() {
@@ -169,6 +162,8 @@ export default {
 			canUseNativeDesk: false,
 			cashierLabel: "",
 			currentPage: 1,
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -254,8 +249,12 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-shift-verification") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -319,6 +318,17 @@ export default {
 		posProfileSearch(txt) {
 			return this.searchOptions("pos_profile", txt);
 		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";
@@ -376,7 +386,7 @@ export default {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
 				this.error =
-					"The shared EdgeSuite Cash Shift Verification provider is unavailable.";
+					"The Cash Shift Verification reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;

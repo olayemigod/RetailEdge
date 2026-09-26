@@ -4,13 +4,18 @@
 	const SHELL_REPORT_ROUTES = Object.freeze({
 		"/app/cash-movement": "cash-movement",
 		"/app/expense-register": "expense-register",
+		"/app/expense-analysis": "expense-analysis",
 		"/app/expense-review": "expense-review",
+		"/app/payment-settlement-analysis": "payment-settlement-analysis",
 		"/app/cash-shift-verification": "cash-shift-verification",
 		"/app/daily-sales-audit": "daily-sales-audit",
+		"/app/sales-analysis": "sales-analysis",
 		"/app/sales-by-item": "sales-by-item",
 		"/app/sales-invoice-register": "sales-invoice-register",
 		"/app/customer-receivables": "customer-receivables",
 		"/app/purchase-register": "purchase-register",
+		"/app/supplier-performance": "supplier-performance",
+		"/app/purchase-analysis": "purchase-analysis",
 		"/app/supplier-payables": "supplier-payables",
 		"/app/stock-position": "stock-position",
 	});
@@ -32,6 +37,39 @@
 		return plainMatch?.[1] || fallback;
 	}
 	function activeReportKey() { const path = String(window.location?.pathname || "").replace(/\/$/, ""); return SHELL_REPORT_ROUTES[path] || ""; }
+	function routeTarget(route) {
+		return String(route || "").replace(/^\/app\//, "").split("/").filter(Boolean)[0] || "";
+	}
+	function setReportRouteHandoff(route, filters = {}) {
+		const target = routeTarget(route);
+		if (!target) return;
+		const cleanFilters = Object.fromEntries(
+			Object.entries(filters || {}).filter(([, value]) => value !== undefined && value !== null && value !== "")
+		);
+		window.__retailedgeBusinessHubRouteHandoff = {
+			target,
+			filters: cleanFilters,
+			createdAt: Date.now(),
+		};
+		frappe.route_options = {
+			...cleanFilters,
+			retailedge_business_hub_handoff: 1,
+			retailedge_business_hub_target: target,
+		};
+	}
+	function consumeReportRouteHandoff(target) {
+		const handoff = window.__retailedgeBusinessHubRouteHandoff;
+		if (!handoff || Date.now() - Number(handoff.createdAt || 0) > 60_000) {
+			delete window.__retailedgeBusinessHubRouteHandoff;
+			return {};
+		}
+		if (String(handoff.target || "") !== String(target || "")) return {};
+		const filters = { ...(handoff.filters || {}) };
+		delete window.__retailedgeBusinessHubRouteHandoff;
+		if (frappe.route_options?.retailedge_business_hub_handoff) frappe.route_options = null;
+		return filters;
+	}
+
 	function reportParentFilters(component) {
 		const parent = component?.$parent;
 		if (typeof parent?.providerFilters === "function") return parent.providerFilters() || {};
@@ -94,6 +132,18 @@
 		const GovernedLegacyExportMenu = defineComponent({ name: "RetailEdgeGovernedLegacyExportMenu", inheritAttrs: false, render() { if (activeReportKey()) return null; return h(baseExportMenu, this.$attrs, this.$slots); } });
 		runtime.registerComponent("EdgeReportShell", GovernedReportShell, { replace: true }); runtime.registerComponent("EdgeExportMenu", GovernedLegacyExportMenu, { replace: true }); shellGovernanceInstalled = true; return true;
 	}
-	const api = Object.freeze({ getCapabilities, exportReport, printReport, installShellGovernance }); window.RetailEdgeReportingActions = api;
+	const api = Object.freeze({
+		getCapabilities,
+		exportReport,
+		printReport,
+		installShellGovernance,
+		setReportRouteHandoff,
+		consumeReportRouteHandoff,
+	});
+	window.RetailEdgeReportingActions = api;
+	window.retailedgeSetReportRouteHandoff = setReportRouteHandoff;
+	if (typeof window.retailedgeConsumeBusinessHubRouteOptions !== "function") {
+		window.retailedgeConsumeBusinessHubRouteOptions = consumeReportRouteHandoff;
+	}
 	installShellGovernance(window.EdgeSuiteUI); window.addEventListener("edgesuite:report-runtime-ready", () => installShellGovernance(window.EdgeSuiteUI));
 })();

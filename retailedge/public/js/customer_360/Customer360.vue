@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="customer-360-fallback">
 		<strong>Customer 360 could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -20,7 +20,7 @@
 				<div>
 					<p class="customer-360-eyebrow">Customer Intelligence</p>
 					<h2>Customer 360</h2>
-					<p>Understand one customer from submitted ERPNext sales, current receivables and RetailEdge profitability evidence.</p>
+					<p>Understand one customer from submitted ERPNext sales, current receivables and profitability evidence.</p>
 				</div>
 			</header>
 

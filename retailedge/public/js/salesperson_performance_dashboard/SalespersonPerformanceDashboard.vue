@@ -17,7 +17,7 @@
 				margin-bottom: 12px;
 			"
 		>
-			EdgeSuite UI failed to load
+			The interface could not be loaded
 		</div>
 		<div style="color: var(--edge-text-muted, #8c8c8c); margin-bottom: 20px; font-size: 14px">
 			Missing components: {{ missingComponents.join(", ") }}
@@ -43,7 +43,7 @@
 		product="retailedge"
 		:menuItems="menuItems"
 		activeRoute="/app/salesperson-performance-dashboard"
-		title="RetailEdge"
+		title="ProcessEdge Retail"
 		:tenantName="tenantName"
 		:branchName="branchName"
 		:userName="userName"
@@ -54,7 +54,7 @@
 			<template #header>
 				<EdgePageHeader
 					title="Salesperson Performance Dashboard"
-					subtitle="Proportional salesperson allocations for submitted RetailEdge invoices"
+					subtitle="Proportional salesperson allocations for submitted Sales Invoices"
 					:withBackButton="false"
 				/>
 			</template>

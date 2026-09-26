@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="audit-fallback">
 		<strong>Daily Sales Audit could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Daily Sales Audit"
 			eyebrow="Review & Approvals"
-			subtitle="Inspect daily sales audit records, variances, review requirements, and clarification exceptions using the existing RetailEdge audit engine."
+			subtitle="Inspect daily sales audit records, variances, review requirements, and clarification exceptions using the existing audit engine."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -44,8 +44,7 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.pos_profile" label="POS Profile" placeholder="All POS profiles" :searcher="posProfileSearch" @select="onPosProfileSelected" @clear="clearPosProfile" />
 					<EdgeLinkField v-model="filters.cashier" :selectedLabel="cashierLabel" label="Cashier" placeholder="All cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<EdgeDropdown v-model="filters.audit_status" :options="auditStatuses" label="Audit Status" placeholder="All" />
 					<EdgeDropdown v-model="filters.audit_result" :options="auditResults" label="Audit Result" placeholder="All" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
@@ -61,7 +60,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "daily-sales-audit";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -75,6 +74,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canUseNativeDesk: false, currentPage: 1,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", audit_status: "", audit_result: "", from_date: "", to_date: "", page_size: 50 },
 			auditStatuses: ["Draft", "Ready for Review", "In Review", "Balanced", "Variance Found", "Clarification Required", "Approved", "Rejected", "Cancelled", "Reopened"],
 			auditResults: ["Not Checked", "Balanced", "Shortage", "Overage", "Mixed Variance", "Requires Clarification"],
@@ -93,7 +93,10 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.daily_sales_audit_page.get_daily_sales_audit_page_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Daily Sales Audit controls."); }
 			finally { this.metadataLoading = false; }
@@ -103,6 +106,18 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.daily_sales_audit_page.search_daily_sales_audit_page_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, pos_profile: this.filters.pos_profile }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.clearCashier();
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
 		onBranchSelected(option) { this.filters.branch = option.value; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
@@ -112,7 +127,7 @@ export default {
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		async fetchData() {
-			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Daily Sales Audit provider is unavailable."; return; }
+			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The Daily Sales Audit reporting service is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });

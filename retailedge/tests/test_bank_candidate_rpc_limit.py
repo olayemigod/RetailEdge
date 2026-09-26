@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import unittest
+
+import frappe
 from unittest.mock import patch
 
 from retailedge.bank_candidate_engine import get_direction_aware_bank_candidates
 
 
 class BankCandidateRpcLimitTests(unittest.TestCase):
+	def setUp(self):
+		self._original_user = frappe.session.user
+		frappe.set_user("Administrator")
+
+	def tearDown(self):
+		frappe.set_user(self._original_user or "Administrator")
+
 	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._hydrate_payment_entry_metadata", return_value={})
 	@patch("retailedge.bank_candidate_engine.enrich_ranked_candidates", side_effect=lambda _bt, rows: rows)

@@ -103,6 +103,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		branch=branch,
 		party=customer,
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc("Quotation")
@@ -131,6 +132,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 			posting_date=str(transaction_date),
 			qty=item["qty"],
 			user=frappe.session.user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")

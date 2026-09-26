@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="receivables-fallback">
 		<strong>Customer Receivables could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -44,6 +44,7 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeDropdown v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
+					<EdgeDropdown v-model="filters.overdue_only" :options="[{ value: 0, label: 'All open invoices' }, { value: 1, label: 'Overdue only' }]" label="Due Status" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
@@ -106,7 +107,7 @@ export default {
 			customerLabel: "",
 			actionInvoice: "",
 			canUseNativeDesk: false,
-			filters: { company: "", branch: "", customer: "", customer_group: "", ageing_bucket: "All", page_size: 50 },
+			filters: { company: "", branch: "", customer: "", customer_group: "", ageing_bucket: "All", overdue_only: 0, page_size: 50 },
 			currentPage: 1,
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
 		};
@@ -169,7 +170,7 @@ export default {
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		async fetchData() {
 			if (!this.filters.company) return;
-			if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Customer Receivables provider is unavailable."; return; }
+			if (!this.reportProvider?.load) { this.error = "The Customer Receivables reporting service is unavailable."; return; }
 			this.loading = true;
 			this.error = "";
 			try {

@@ -1,6 +1,6 @@
 const PRODUCT = "RetailEdge";
 const SHARED_RUNTIME_ASSET = "edgeui.bundle.js";
-const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
@@ -321,6 +321,62 @@ function refreshProductMenu() {
 	return edgeUI.mountProductMenu?.() ?? true;
 }
 
+const PRODUCT_MENU_DROPDOWN_ID = "edge-product-menu-dropdown";
+const PRODUCT_MENU_TRIGGER_SELECTOR = [
+	'[aria-controls="edge-product-menu-dropdown"]',
+	"#edge-product-menu-trigger",
+	".edge-product-menu__trigger",
+	".edge-topbar__launcher",
+	".edge-topbar__waffle",
+	"[data-edge-product-menu-trigger]",
+].join(", ");
+
+function productMenuIsOpen() {
+	const dropdown = document.getElementById(PRODUCT_MENU_DROPDOWN_ID);
+	return Boolean(dropdown && !dropdown.hidden && dropdown.getAttribute("aria-hidden") !== "true");
+}
+
+function requestProductMenuOpen() {
+	if (productMenuIsOpen()) return true;
+	const edgeUI = runtime();
+	for (const method of ["openProductMenu", "showProductMenu", "toggleProductMenu"]) {
+		if (typeof edgeUI?.[method] !== "function") continue;
+		try {
+			edgeUI[method]();
+			return true;
+		} catch (error) {
+			console.warn(`[RetailEdge Product Menu] ${method} failed`, error);
+		}
+	}
+	// EdgeSuite UI owns Ctrl+K as the canonical product-menu shortcut. Reuse
+	// that public interaction as a final recovery path instead of maintaining
+	// a second RetailEdge flyout implementation.
+	document.dispatchEvent(new KeyboardEvent("keydown", {
+		key: "k",
+		code: "KeyK",
+		ctrlKey: true,
+		bubbles: true,
+		cancelable: true,
+	}));
+	return true;
+}
+
+function recoverProductMenuTrigger(event) {
+	const trigger = event.target?.closest?.(PRODUCT_MENU_TRIGGER_SELECTOR);
+	if (!trigger) return;
+	// Allow the EdgeSuite UI trigger to handle the click first. If its mounted
+	// flyout was lost during a Desk/Vue remount, restore the registered product
+	// menu and open it on the next frame.
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => {
+		if (productMenuIsOpen()) return;
+		Promise.resolve(state.installed ? refreshProductMenu() : installProductMenu())
+			.finally(() => schedule(() => {
+				if (!productMenuIsOpen()) requestProductMenuOpen();
+			}));
+	});
+}
+
 function scheduleRefresh() {
 	const schedule =
 		window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
@@ -334,12 +390,14 @@ function scheduleRefresh() {
 	document.addEventListener(eventName, scheduleRefresh);
 });
 document.addEventListener("click", handleNativeSidebarClick, true);
+document.addEventListener("click", recoverProductMenuTrigger, true);
 window.frappe?.router?.on?.("change", scheduleRefresh);
 
 window.retailedgeGetBusinessHubContext = fetchContext;
 window.retailedgeCacheBusinessHubContext = cacheContext;
 window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
+window.retailedgeRequestProductMenuOpen = requestProductMenuOpen;
 window.retailedgeOpenNativeTarget = openNativeDeskTarget;
 window.retailedgeProductMenuState = state;
 

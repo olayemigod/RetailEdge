@@ -44,7 +44,7 @@
 
 				<div class="authority-note">
 					<strong>ERPNext posting authority</strong>
-					<p>RetailEdge does not create General Ledger or Payment Ledger entries directly. Native Payment Entry submission remains authoritative.</p>
+					<p>This workflow does not create General Ledger or Payment Ledger entries directly. Native Payment Entry submission remains authoritative.</p>
 				</div>
 
 				<div v-if="preview.blockers?.length" class="transfer-blockers">

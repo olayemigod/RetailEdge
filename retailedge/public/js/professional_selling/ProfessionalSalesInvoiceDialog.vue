@@ -63,6 +63,15 @@
 				/>
 
 				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Stock Location"
 					placeholder="Optional stock location"
@@ -110,8 +119,11 @@
 			</section>
 
 			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
-				<span><strong>Update Stock</strong><small>Stock moves only if this draft is later submitted by an authorised user.</small></span>
+				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="!canEditUpdateStock || loadingContext" />
+				<span>
+					<strong>Update Stock</strong>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings." }}</small>
+				</span>
 			</label>
 
 			<EdgeChildTable
@@ -127,7 +139,7 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">RetailEdge resolves selling prices again on the server. Delivery charges remain ERPNext Shipping Rule calculations.</p>
+			<p class="selling-form-hint">Selling prices are resolved again on the server. Delivery charges remain ERPNext Shipping Rule calculations.</p>
 
 			<label class="selling-field selling-field--wide">
 				<span>Remarks</span>
@@ -151,6 +163,7 @@
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
 import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
+const GUIDED_CONTEXT = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
@@ -169,10 +182,11 @@ function initialValues(context = {}) {
 		branch: context.operating?.branch || "",
 		warehouse: context.operating?.default_stock_location || "",
 		customer: "",
+		price_list: "",
 		posting_date: context.today || "",
 		shipping_rule: "",
 		loyalty_points: 0,
-		update_stock: 0,
+		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -191,6 +205,10 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			pricingSignatures: {},
+			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
+			guidedContext: null,
+			loadingContext: false,
 			loyaltyToken: 0,
 			loyaltyLoading: false,
 			loyaltyStatus: {},
@@ -211,7 +229,10 @@ export default {
 		};
 	},
 	computed: {
-		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
+		pricingContext() { return this.guidedContext?.pricing || this.context.pricing || {}; },
+		priceListLabel() { return this.values.price_list || this.pricingContext.price_list || "ERPNext default"; },
+		canSwitchPriceList() { return Boolean(this.pricingContext.can_switch_price_list && this.availablePriceLists.length); },
+		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
@@ -229,7 +250,7 @@ export default {
 		},
 		sourceHint() {
 			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
-			return "The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.";
+			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
 		},
 		saveLabel() {
 			if (this.mode === "new") return "Save Draft";
@@ -238,19 +259,47 @@ export default {
 		},
 	},
 	watch: {
-		open(next) {
+		async open(next) {
 			if (next) {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.guidedContext = null;
+				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
+				this.pricingTokens = {};
+				this.pricingSignatures = {};
 				this.loyaltyToken += 1;
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
 				this.saveError = "";
+				await this.loadGuidedContext();
 			}
 		},
 	},
 	methods: {
+		async loadGuidedContext() {
+			if (this.loadingContext) return;
+			this.loadingContext = true;
+			try {
+				const guided = await callMethod(GUIDED_CONTEXT);
+				this.guidedContext = guided || {};
+				const defaults = guided?.defaults || {};
+				this.values = {
+					...this.values,
+					company: defaults.company || this.values.company,
+					branch: defaults.branch || this.values.branch,
+					warehouse: defaults.warehouse || this.values.warehouse,
+					posting_date: defaults.posting_date || this.values.posting_date,
+					update_stock: Number(defaults.update_stock ?? 1),
+				};
+				if (!guided?.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
+				this.availablePriceLists = [...(guided?.pricing?.available_price_lists || [])];
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to resolve the Sales Invoice operating context.");
+			} finally {
+				this.loadingContext = false;
+			}
+		},
 		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		setMode(mode) { if (!this.saving) { this.mode = mode; this.sourceDocument = ""; this.saveError = ""; } },
 		requestClose() { if (!this.saving) this.$emit("close"); },
@@ -260,6 +309,7 @@ export default {
 		searchCustomer(query) { return this.searchOptions("customer", query); },
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
+		searchPriceList(query) { return this.searchOptions("price_list", query); },
 		searchShippingRule(query) {
 			return callMethod(SHIPPING_SEARCH, { txt: query || "", values: this.values }).then((rows) => Array.isArray(rows) ? rows : []);
 		},
@@ -271,14 +321,27 @@ export default {
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		async refreshPriceListOptions() {
+			const rows = await this.searchPriceList("");
+			this.availablePriceLists = rows.map((row) => row.value || row.label).filter(Boolean);
+			if (this.values.price_list && !this.availablePriceLists.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		setCustomer(next) {
-			const changed = this.values.customer && this.values.customer !== next;
+			const previousCustomer = this.values.customer || "";
 			this.values.customer = next || "";
+			this.pricingSignatures = {};
+			this.refreshPriceListOptions().catch(() => {});
 			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
-			if (changed) {
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
 			}
@@ -286,7 +349,12 @@ export default {
 		postingDateChanged() {
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
-			if (this.values.customer) this.loadLoyaltyStatus();
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			if (this.values.customer) {
+				this.loadLoyaltyStatus();
+				this.refreshAllItemPricing();
+			}
 		},
 		async loadLoyaltyStatus() {
 			if (!this.values.customer) return;
@@ -314,7 +382,9 @@ export default {
 		},
 		async setBranch(next) {
 			this.values.branch = next || "";
+			this.pricingSignatures = {};
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			if (!this.values.branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
@@ -323,6 +393,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve Branch Stock Location.");
@@ -330,6 +401,7 @@ export default {
 		},
 		async setWarehouse(next) {
 			this.values.warehouse = next || "";
+			this.pricingSignatures = {};
 			if (!this.values.warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -345,13 +417,32 @@ export default {
 				}
 			}
 		},
+		pricingSignature(row) {
+			return [
+				this.values.company,
+				this.values.branch,
+				this.values.warehouse,
+				this.values.customer,
+				this.values.price_list,
+				this.values.posting_date,
+				row?.item_code || "",
+				row?.qty || 1,
+			].join("|");
+		},
 		updateItems(nextRows) {
-			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) changed.push(index);
-				return { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				const normalized = { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				if (!normalized.item_code) {
+					delete this.pricingSignatures[index];
+					return normalized;
+				}
+				const signature = this.pricingSignature(normalized);
+				if (this.pricingSignatures[index] !== signature) {
+					changed.push(index);
+					return { ...normalized, rate: "" };
+				}
+				return normalized;
 			});
 			changed.forEach((index) => this.refreshItemPricing(index));
 		},
@@ -364,12 +455,16 @@ export default {
 				const pricing = await callMethod(GUIDED_PRICING, { item_code: row.item_code, values: { ...this.values, qty: row.qty } });
 				if (this.pricingTokens[index] !== token) return;
 				this.values.items[index] = { ...this.values.items[index], rate: pricing.rate ?? "" };
+				this.pricingSignatures[index] = this.pricingSignature(this.values.items[index]);
 				this.values.items = [...this.values.items];
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
-		refreshAllItemPricing() { this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); }); },
+		refreshAllItemPricing() {
+			this.pricingSignatures = {};
+			this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); });
+		},
 		async saveDraft() {
 			if (this.saving) return;
 			this.saving = true;

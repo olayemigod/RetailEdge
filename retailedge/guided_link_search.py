@@ -110,6 +110,17 @@ def _sales_candidates(fieldname: str, values: dict[str, Any], query: str) -> lis
 			),
 			query,
 		)
+	if fieldname == "price_list":
+		# Price List visibility/selection is governed by the canonical pricing
+		# resolver in guided_sales_invoice. Delegate instead of broad-searching
+		# Price List so Branch Assignment, party/POS/Branch precedence, User
+		# Permission and switch policy remain authoritative.
+		return guided_sales_invoice.search_simple_sales_invoice_options(
+			fieldname,
+			query,
+			values,
+			CANDIDATE_LIMIT,
+		)
 	if fieldname == "warehouse":
 		filters = guided_sales_invoice._warehouse_search_filters(
 			company=company,
@@ -181,6 +192,15 @@ def _purchase_candidates(fieldname: str, values: dict[str, Any], query: str) -> 
 				link_fieldname="item_code",
 			),
 			query,
+		)
+	if fieldname == "price_list":
+		# Preserve the same governed buying Price List contract when the shared
+		# EdgeSuite ranker override is active.
+		return guided_purchase_invoice.search_simple_purchase_invoice_options(
+			fieldname,
+			query,
+			values,
+			CANDIDATE_LIMIT,
 		)
 	if fieldname == "warehouse":
 		filters = guided_purchase_invoice._warehouse_search_filters(

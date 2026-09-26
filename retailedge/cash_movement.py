@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
-from retailedge.operating_context import get_operational_branch_scope
+from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope, validate_operating_branch
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -114,6 +114,40 @@ def search_cash_movement_options(
 	if kind == "account":
 		return _search_cash_accounts(txt=txt, company=company)
 	frappe.throw(_("Unsupported Cash Movement search type."))
+
+
+def get_cash_movement_visual_aggregates(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return daily Cash/Bank movement aggregates using the governed Cash Movement scope."""
+	query = _prepare_query(_coerce_filters(filters))
+	sql = f"""
+		SELECT
+			gle.posting_date,
+			COALESCE(SUM(gle.debit), 0) AS money_in,
+			COALESCE(SUM(gle.credit), 0) AS money_out
+		FROM `tabGL Entry` gle
+		INNER JOIN `tabAccount` acc ON acc.name = gle.account
+		{query["joins"]}
+		WHERE {query["where_sql"]}
+		GROUP BY gle.posting_date
+		ORDER BY gle.posting_date ASC
+	"""
+	rows = frappe.db.sql(sql, values=query["values"], as_dict=True)
+	return {
+		"rows": [
+			{
+				"posting_date": row.posting_date,
+				"money_in": flt(row.money_in),
+				"money_out": flt(row.money_out),
+			}
+			for row in rows
+		],
+		"currency": query["currency"],
+		"scope": {
+			"company": query["company"],
+			"branch": query["requested_branch"],
+			"branch_scope": query["branch_scope_label"],
+		},
+	}
 
 
 @frappe.whitelist()
@@ -444,6 +478,12 @@ def _resolve_branch_scope(*, company: str, requested_branch: str) -> dict[str, A
 		if str(branch or "").strip()
 	)
 	if requested_branch:
+		validate_operating_branch(
+			company=company,
+			branch=requested_branch,
+			user=user,
+			throw=True,
+		)
 		if restricted and requested_branch not in allowed:
 			frappe.throw(
 				_("You do not have active RetailEdge Branch access to Branch {0}.").format(requested_branch),
@@ -499,16 +539,15 @@ def _search_companies(txt: str) -> list[dict[str, Any]]:
 def _search_branches(*, txt: str, company: str) -> list[dict[str, Any]]:
 	if not company:
 		return []
-	scope = _resolve_branch_scope(company=company, requested_branch="")
-	filters: dict[str, Any] = {"company": company}
-	if not scope["global_access"]:
-		if not scope["allowed_branches"]:
-			return []
-		filters["name"] = ["in", scope["allowed_branches"]]
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if not allowed:
+		return []
 	rows = frappe.get_list(
 		"Branch",
-		filters=filters,
-		or_filters={"name": ["like", f"%{txt}%"]},
+		filters=[
+			["Branch", "name", "like", f"%{txt}%"],
+			["Branch", "name", "in", allowed],
+		],
 		fields=["name"],
 		order_by="name asc",
 		limit_page_length=MAX_LINK_RESULTS,

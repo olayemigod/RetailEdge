@@ -1,13 +1,13 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Operating Context could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
-		product="RetailEdge"
+		product="retailedge"
 		title="Operating Context"
-		:tenantName="current.company || tenantName"
+		:tenantName="tenantName || current.company"
 		:branchName="current.branch || selectedBranch"
 		:userName="userName"
 		:menuItems="menuItems"
@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-operating-context-page">
 			<EdgePageHeader
 				title="Operating Context"
-				description="Choose the Company and Branch that should guide new RetailEdge work. Existing documents keep their saved accounting, branch and stock values."
+				description="Choose the Company and Branch that should guide new work. Existing documents keep their saved accounting, branch and stock values."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -42,9 +42,9 @@
 
 					<div v-if="posRequired && selectedBranch" class="operating-context-pos">
 						<div>
-							<span class="operating-context-kicker">Required POS access</span>
-							<strong>{{ posProfile || "POS Profile not ready" }}</strong>
-							<small>{{ posMessage || "Your Branch Setup POS Profile is valid for this operating Branch." }}</small>
+							<span class="operating-context-kicker">POS readiness</span>
+							<strong>{{ posProfile || (posReady ? "POS ready" : "POS setup incomplete") }}</strong>
+							<small>{{ posMessage || "POS setup is checked when POS is opened. It does not block Branch switching." }}</small>
 						</div>
 						<EdgeStatusBadge :status="posReady ? 'Active' : 'Warning'" />
 					</div>
@@ -60,7 +60,7 @@
 						<button
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !selectedCompany || !selectedBranch || (posRequired && !posReady)"
+							:disabled="busy || !selectedCompany || !selectedBranch"
 							@click="switchContext"
 						>
 							{{ busy ? "Updating…" : "Use Selected Branch" }}
@@ -77,8 +77,8 @@
 						<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
 						<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
 						<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
-						<li>Users assigned to ERPNext POS Profiles must have a valid Branch Setup POS Profile for the selected Branch.</li>
-						<li>An active POS shift or unsaved POS/cart/payment state can block switching until that work is completed.</li>
+						<li>POS configuration is checked when POS is opened; an incomplete POS setup does not prevent switching Branch.</li>
+						<li>An active POS shift or unsaved POS/cart/payment state can still block switching until that work is completed.</li>
 					</ul>
 				</section>
 			</div>
@@ -163,7 +163,7 @@ export default {
 					: await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
-				this.tenantName = navigation.context?.company || "";
+				this.tenantName = navigation.context?.company_label || navigation.context?.company || "";
 				this.userName = navigation.context?.user_name || "";
 			} catch (error) {
 				this.menuItems = [];
@@ -264,7 +264,7 @@ export default {
 			}
 		},
 		async switchContext() {
-			if (!this.selectedCompany || !this.selectedBranch || (this.posRequired && !this.posReady) || this.showClientBlocker()) return;
+			if (!this.selectedCompany || !this.selectedBranch || this.showClientBlocker()) return;
 			this.busy = true;
 			try {
 				await callMethod(
@@ -273,8 +273,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Updating operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Operating context updated."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}
@@ -289,8 +291,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Restoring default operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Default operating context restored."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}

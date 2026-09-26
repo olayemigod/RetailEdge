@@ -185,11 +185,14 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_browser_cannot_supply_the_effective_buying_price_list(self):
+	def test_browser_can_only_request_a_governed_buying_price_list(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
+		pricing = (APP_ROOT / "guided_pricing.py").read_text()
 		self.assertIn("resolve_price_list_context", source)
 		self.assertNotIn('values.get("buying_price_list")', source)
-		self.assertNotIn('values.get("price_list")', source)
+		self.assertIn('requested_price_list=values.get("price_list") or ""', source)
+		self.assertIn("requested_price_list not in available_price_lists", pricing)
+		self.assertIn("Price List switching is disabled by the current pricing policy.", pricing)
 
 	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
@@ -198,7 +201,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("expense_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("ERPNext's item-pricing service", source)
+		self.assertIn("ERPNext pricing", source)
 
 	def test_dialog_uses_shared_edgesuite_components_and_resolves_buying_price(self):
 		component = (

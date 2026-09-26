@@ -1,6 +1,20 @@
-# RetailEdge Visual Identity Contract
+# ProcessEdge Retail Visual Identity Contract
 
 ## Goal
+
+## Approved production identity
+
+- Public product name: **ProcessEdge Retail**
+- Graphic lockup: **ProcessEDGE Retail**
+- Approved product mark: **Shelf-R**
+- Rider: **Structured for Scale.**
+- Primary blue: **#0056A6**
+- Growth green: **#1C9C5D**
+- Dark blue: **#003E73**
+- Frappe Desk launcher short label: **PEdge Retail**.
+- Frappe Desk launcher icon: the approved blue Retail app icon, packaged as `pedge-retail-app-icon.png`.
+- The launcher routes directly to `/desk/retailedge-business-hub`; it must not derive a workspace slug such as `processedge-retail`.
+- Internal product/app code remains `retailedge`; the `RetailEdge` workspace/module identity, APIs, roles, DocTypes, reports, database fields and namespaces are not renamed.
 
 RetailEdge must remain an EdgeSuite UI product while being visually recognisable as a retail and business-operations application even when product names and logos are removed.
 
@@ -91,6 +105,8 @@ Before promotion:
 - confirm RetailEdge is visually distinguishable from VetEdge and EduEdge;
 - verify light and dark mode;
 - verify desktop, tablet, and mobile layouts;
+- verify the Frappe desktop shows one **PEdge Retail** launcher with the approved blue icon and opens Business Hub directly;
+- verify the legacy top-level RetailEdge workspace launcher is hidden rather than renamed/deleted;
 - verify sidebar active/hover states;
 - verify topbar context visibility;
 - verify KPI readability with large Nigerian Naira values;

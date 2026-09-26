@@ -26,6 +26,15 @@ class TestSimplePaymentPrefillContract(TestCase):
 		self.assertNotIn("initial.outstanding_amount", component)
 		self.assertNotIn("initial.allocated_amount", component)
 
+	def test_prefill_supports_sales_invoice_receipt_and_sales_order_advance(self):
+		component = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
+		).read_text()
+		self.assertIn('["receive-customer-payment", "receive-sales-order-payment"].includes(this.intent)', component)
+		self.assertIn("reference_name: referenceName", component)
+		self.assertIn("selected reference", component)
+		self.assertIn("one Sales Order advance", component)
+
 	def test_prefill_preserves_existing_draft_payment_service_and_stale_value_clearing(self):
 		component = (
 			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"

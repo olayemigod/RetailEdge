@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Sales Overview could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Sales Overview"
 			eyebrow="Sales Performance"
-			subtitle="Invoice health and product performance from RetailEdge's existing Sales Invoice Register and Sales by Item engines."
+			subtitle="Invoice health and product performance from the existing Sales Invoice Register and Sales by Item engines."
 			:summary="headlineSummary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,8 +34,7 @@
 		>
 			<template #filters>
 				<div class="sales-dashboard-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -78,7 +77,7 @@
 					<button type="button" class="edge-button edge-button--secondary sales-open" @click="openRoute(routes.sales_by_item)">Open Sales by Item</button>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Performance Drill-downs" description="Use the established RetailEdge dashboards for salesperson and branch comparison.">
+				<EdgeDashboardSection title="Performance Drill-downs" description="Use the established dashboards for salesperson and branch comparison.">
 					<div class="sales-drilldowns">
 						<button type="button" class="edge-button edge-button--secondary" @click="openRoute(routes.salesperson_performance)">Salesperson Performance</button>
 						<button type="button" class="edge-button edge-button--secondary" @click="openRoute(routes.branch_performance)">Branch Performance</button>
@@ -97,7 +96,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "sales-overview";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
@@ -126,6 +125,8 @@ export default {
 			tenantName: "",
 			userName: "",
 			nativeFallbackEnabled: false,
+			smartDate: {},
+			smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -148,6 +149,8 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
@@ -159,6 +162,16 @@ export default {
 			} finally {
 				this.metadataLoading = false;
 			}
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 		},
 		async fetchData() {
 			if (!this.filters.company) return;

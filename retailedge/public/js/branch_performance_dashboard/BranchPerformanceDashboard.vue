@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Branch Performance could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -44,9 +44,7 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.pos_profile" label="POS Profile" placeholder="All POS Profiles" :searcher="posProfileSearch" @select="onPosProfileSelected" @clear="clearPosProfile" />
 					<EdgeLinkField v-model="filters.cashier" label="Cashier" placeholder="All permitted cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
-					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range Preset" @change="onPresetChange" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<EdgeDropdown v-model="filters.payment_method" :options="paymentMethods" label="Payment Method" placeholder="All payment methods" />
 					<label class="branch-performance-check"><input v-model="filters.only_pos_invoices" type="checkbox" :true-value="1" :false-value="0" /> Only POS invoices</label>
 					<label class="branch-performance-check"><input v-model="filters.include_unattributed" type="checkbox" :true-value="1" :false-value="0" /> Include unattributed</label>
@@ -56,7 +54,7 @@
 			</template>
 
 			<EdgeDashboardGrid minColumnWidth="24rem">
-				<EdgeDashboardSection title="Branch Scorecard" description="Operational comparison using the existing RetailEdge Branch Performance engine." span="2">
+				<EdgeDashboardSection title="Branch Scorecard" description="Operational comparison using the existing Branch Performance engine." span="2">
 					<EdgeReportTable :columns="dashboardColumns" :rows="rows" rowKey="branch" :formatter="formatCell" @cell-click="openCell" />
 				</EdgeDashboardSection>
 				<EdgeDashboardSection title="Attention Required" description="Branches with payment issues, pending audits or material cash variance.">
@@ -86,7 +84,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "branch-performance";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -105,7 +103,7 @@ export default {
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
 			rows: [], columns: [], summary: [], messages: [], menuItems: [], tenantName: "", userName: "", paymentMethods: [], nativeFallbackEnabled: false,
-			datePresets: ["This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year", "Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period", "Full Branch History"],
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", date_range_preset: "This Month", from_date: "", to_date: "", payment_method: "", only_pos_invoices: 0, include_unattributed: 1, include_fallback_branch_resolution: 0 },
 		};
 	},
@@ -133,7 +131,8 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("branch-performance-dashboard") || {};
 				this.filters = { ...this.filters, ...hubHandoff };
-				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
 				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
@@ -148,7 +147,17 @@ export default {
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.branch_performance_dashboard.search_branch_performance_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, pos_profile: this.filters.pos_profile }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.filters.cashier = ""; }, onBranchSelected(option) { this.filters.branch = option.value; this.filters.pos_profile = ""; this.filters.cashier = ""; }, clearBranch() { this.filters.branch = ""; this.filters.pos_profile = ""; this.filters.cashier = ""; }, onPosProfileSelected(option) { this.filters.pos_profile = option.value; this.filters.cashier = ""; }, clearPosProfile() { this.filters.pos_profile = ""; this.filters.cashier = ""; }, onCashierSelected(option) { this.filters.cashier = option.value; }, clearCashier() { this.filters.cashier = ""; },
-		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.date_range_preset = "Custom Period";
+		},
 		async fetchData() {
 			if (!this.filters.company) return;
 			this.loading = true; this.error = "";

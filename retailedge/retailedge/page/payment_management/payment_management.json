@@ -11,15 +11,15 @@
   "owner": "Administrator",
   "page_name": "payment-management",
   "roles": [
-    {"role": "System Manager"},
-    {"role": "Sales User"},
-    {"role": "Sales Manager"},
-    {"role": "Accounts User"},
-    {"role": "Accounts Manager"},
-    {"role": "RetailEdge Manager"},
-    {"role": "RetailEdgeManager"},
-    {"role": "RetailEdge Branch Manager"},
-    {"role": "RetailEdgeBranchManager"}
+    {
+      "role": "System Manager"
+    },
+    {
+      "role": "Accounts User"
+    },
+    {
+      "role": "Accounts Manager"
+    }
   ],
   "script": null,
   "standard": "Yes",

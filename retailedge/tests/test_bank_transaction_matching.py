@@ -12,6 +12,7 @@ from retailedge.bank_transaction_match_workflow import create_or_get_bank_transa
 from retailedge.bank_transaction_matching import (
 	_apply_exception_classification,
 	_build_matching_row,
+	assert_can_access_bank_transaction_matching,
 	_build_payment_entry_candidate,
 	_build_sales_invoice_candidates,
 	_get_bank_transaction_rows,
@@ -54,6 +55,16 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		APP_ROOT
 		/ "retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
 	)
+
+
+	@patch("retailedge.bank_transaction_matching.user_has_any_role")
+	def test_operational_banking_access_does_not_authorize_auditor_only_role(self, has_role):
+		has_role.return_value = False
+		with self.assertRaises(frappe.PermissionError):
+			assert_can_access_bank_transaction_matching(user="auditor@example.com")
+		roles = has_role.call_args.kwargs["roles"]
+		self.assertNotIn("RetailEdge Auditor", roles)
+		self.assertNotIn("RetailEdgeAuditor", roles)
 
 	def _field(self, fieldname, fieldtype="Data"):
 		return SimpleNamespace(fieldname=fieldname, fieldtype=fieldtype)

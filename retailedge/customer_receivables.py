@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 )
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.receivables_collections import enrich_receivable_rows
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.stock_movement_filters import branch_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -22,10 +23,19 @@ MAX_LINK_RESULTS = 20
 MAX_CUSTOMER_OPTION_SCAN = 60
 MAX_INVOICE_SCAN_ROWS = 2000
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
+CONTROLLED_COMPANY_WIDE_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+	"Sales Manager",
+}
 
 
 @frappe.whitelist()
 def get_customer_receivables_context() -> dict[str, Any]:
+	require_report_view_access("customer-receivables")
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
@@ -45,6 +55,7 @@ def get_customer_receivables_context() -> dict[str, Any]:
 			"customer": "",
 			"customer_group": "",
 			"ageing_bucket": "All",
+			"overdue_only": 0,
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
@@ -96,8 +107,7 @@ def _search_receivable_customers(
 	invoice_filters: dict[str, Any],
 ) -> list[dict[str, str]]:
 	like = f"%{txt}%"
-	invoice_rows = frappe.get_list(
-		"Sales Invoice",
+	invoice_rows = _sales_invoice_rows(
 		filters=invoice_filters,
 		or_filters={
 			"customer": ["like", like],
@@ -141,6 +151,7 @@ def search_customer_receivables_options(
 	branch: str = "",
 	customer_group: str = "",
 ) -> list[dict[str, str]]:
+	require_report_view_access("customer-receivables")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
@@ -204,6 +215,8 @@ def _build_customer_receivables_dataset(filters: frappe._dict) -> dict[str, Any]
 		overdue_days = max(0, date_diff(balance_date, due_date))
 		bucket = _ageing_bucket(overdue_days)
 		if filters.get("ageing_bucket") not in (None, "", "All", bucket):
+			continue
+		if cint(filters.get("overdue_only")) and overdue_days <= 0:
 			continue
 		rows.append(
 			{
@@ -300,12 +313,11 @@ def _get_permitted_invoice_headers(filters: frappe._dict) -> list[frappe._dict]:
 	if branch_field:
 		fields.append(branch_field)
 
-	rows = frappe.get_list(
-		"Sales Invoice",
+	rows = _sales_invoice_rows(
 		filters=query_filters,
 		fields=fields,
 		order_by="posting_date desc, name desc",
-		limit=MAX_INVOICE_SCAN_ROWS + 1,
+		limit_page_length=MAX_INVOICE_SCAN_ROWS + 1,
 	)
 	if len(rows) > MAX_INVOICE_SCAN_ROWS:
 		frappe.throw(
@@ -402,6 +414,83 @@ def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
 	)
 
 
+def _has_native_sales_invoice_read() -> bool:
+	return bool(frappe.has_permission("Sales Invoice", "read"))
+
+
+def _assert_controlled_sales_invoice_scope(filters: frappe._dict) -> None:
+	"""Authorize bounded RetailEdge receivables reads without granting raw Sales Invoice Desk access."""
+	company = str(filters.get("company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+	user = frappe.session.user
+	roles = set(frappe.get_roles(user))
+	scope = get_operational_branch_scope(company, user=user)
+	if scope.get("restricted"):
+		allowed = _allowed_scope_branches(scope)
+		if not allowed:
+			frappe.throw(
+				_("Your Branch receivables access is not active for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		if not _sales_invoice_branch_field():
+			frappe.throw(
+				_("Sales Invoice branch attribution is unavailable; controlled receivables access cannot be applied safely."),
+				frappe.PermissionError,
+			)
+		return
+	if roles.intersection(CONTROLLED_COMPANY_WIDE_ROLES):
+		return
+	frappe.throw(
+		_("Customer Receivables requires native Sales Invoice access or an active RetailEdge Branch assignment."),
+		frappe.PermissionError,
+	)
+
+
+def _assert_controlled_sales_invoice_query_scope(query_filters: dict[str, Any]) -> None:
+	"""Prove that a controlled Sales Invoice query cannot escape the caller's RetailEdge Branch authority."""
+	filters = frappe._dict(query_filters or {})
+	company = str(filters.get("company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+	user = frappe.session.user
+	roles = set(frappe.get_roles(user))
+	scope = get_operational_branch_scope(company, user=user)
+	if not scope.get("restricted"):
+		if roles.intersection(CONTROLLED_COMPANY_WIDE_ROLES):
+			return
+		frappe.throw(
+			_("Company-wide controlled receivables access is not permitted for this user."),
+			frappe.PermissionError,
+		)
+
+	allowed = set(_allowed_scope_branches(scope))
+	fieldname = _sales_invoice_branch_field()
+	if not allowed or not fieldname:
+		frappe.throw(
+			_("Controlled receivables access cannot prove an active Branch scope."),
+			frappe.PermissionError,
+		)
+	condition = filters.get(fieldname)
+	if isinstance(condition, (list, tuple)) and len(condition) >= 2 and str(condition[0]).lower() == "in":
+		selected = {str(value).strip() for value in (condition[1] or []) if str(value or "").strip()}
+	else:
+		selected = {str(condition).strip()} if str(condition or "").strip() else set()
+	if not selected or not selected.issubset(allowed):
+		frappe.throw(
+			_("Controlled receivables query is outside your assigned Branch scope."),
+			frappe.PermissionError,
+		)
+
+
+def _sales_invoice_rows(**kwargs) -> list[frappe._dict]:
+	"""Use ERPNext permission filtering when available; otherwise prove the controlled Branch predicate before reading."""
+	if _has_native_sales_invoice_read():
+		return frappe.get_list("Sales Invoice", **kwargs)
+	_assert_controlled_sales_invoice_query_scope(dict(kwargs.get("filters") or {}))
+	return frappe.get_all("Sales Invoice", **kwargs)
+
+
 def _sales_invoice_branch_field() -> str | None:
 	seen: set[str] = set()
 	for candidate in ("retailedge_branch", *BRANCH_FIELD_CANDIDATES):
@@ -414,9 +503,10 @@ def _sales_invoice_branch_field() -> str | None:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
-	if not frappe.has_permission("Sales Invoice", "read"):
-		frappe.throw(_("You do not have permission to view Sales Invoices."), frappe.PermissionError)
+	require_report_view_access("customer-receivables")
 	_assert_named_read("Company", filters.company)
+	if not _has_native_sales_invoice_read():
+		_assert_controlled_sales_invoice_scope(filters)
 	for doctype, fieldname in (("Customer", "customer"), ("Customer Group", "customer_group")):
 		if filters.get(fieldname):
 			_assert_named_read(doctype, filters.get(fieldname))

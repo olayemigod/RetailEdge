@@ -7,6 +7,7 @@ from frappe import _
 
 from retailedge.branch_context import resolve_branch_from_opening_shift, resolve_branch_from_pos_profile
 from retailedge.cashier_context import find_open_pos_opening_shift
+from retailedge.branch_profile import resolve_branch_pos_requirement
 from retailedge.operating_context import get_operating_context
 from retailedge.pos_runtime import get_pos_runtime_capabilities
 
@@ -138,6 +139,17 @@ def prepare_pos_launch() -> dict[str, Any]:
 	default_profile = _clean(operating.get("default_pos_profile"))
 	if not company or not branch:
 		frappe.throw(_("Choose an Operating Company and Branch before starting POS."))
+
+	pos_state = resolve_branch_pos_requirement(
+		company=company,
+		branch=branch,
+		user=frappe.session.user,
+	)
+	if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
+		frappe.throw(
+			pos_state.get("pos_message") or _("A valid POS Profile is required to start POS in this Branch.")
+		)
+	default_profile = _clean(pos_state.get("pos_profile")) or default_profile
 
 	pos = get_pos_runtime_capabilities()
 	if not (pos.start_target or pos.start_url):

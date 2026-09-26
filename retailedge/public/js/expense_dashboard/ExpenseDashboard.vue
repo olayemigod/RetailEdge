@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Expenses Dashboard could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -34,8 +34,7 @@
 		>
 			<template #filters>
 				<div class="expense-dashboard-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -85,7 +84,7 @@
 						<span>{{ budgetStatusDetail }}</span>
 					</div>
 					<div v-if="budgetInsight.ambiguous_category_count" class="expense-budget-warning">
-						{{ budgetInsight.ambiguous_category_count }} category mapping{{ budgetInsight.ambiguous_category_count === 1 ? " is" : "s are" }} shared across the same account/cost-centre budget. RetailEdge does not split those targets arbitrarily.
+						{{ budgetInsight.ambiguous_category_count }} category mapping{{ budgetInsight.ambiguous_category_count === 1 ? " is" : "s are" }} shared across the same account/cost-centre budget. Those targets are not split arbitrarily.
 					</div>
 				</EdgeDashboardSection>
 
@@ -144,7 +143,7 @@
 <script>
 import { defaultDashboardExportOptions, exportDashboard, getDashboardCapabilities, printDashboard } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "expense-overview";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
@@ -159,6 +158,7 @@ export default {
 			exportBusy: false, printBusy: false, capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(), headlineSummary: [], attention: [], breakdowns: {}, comparison: {}, recentExpenses: [], metadata: {},
 			budgetInsight: { available: false, reason: "", category_targets: [] }, periodContext: { mtd: {}, ytd: {}, metadata: {} }, menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", view_mode: "consolidated", include_unposted_cashier_expenses: 0 },
 		};
 	},
@@ -215,12 +215,25 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.expense_dashboard.get_expense_dashboard_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.capabilities = context.capabilities || this.capabilities;
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.filters.view_mode = "consolidated"; this.filters.include_unposted_cashier_expenses = 0;
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Expenses Dashboard controls."); }
 			finally { this.metadataLoading = false; }
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 		},
 		async fetchData() {
 			if (!this.filters.company) return; this.loading = true; this.error = "";

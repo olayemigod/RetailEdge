@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="inventory-intelligence-fallback">
 		<strong>Inventory Intelligence could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -80,7 +80,7 @@
 				<span v-if="Number(scan.synthetic_zero_items || 0) > 0">{{ Number(scan.synthetic_zero_items) }} zero-balance item(s) retained from demand/reorder evidence</span>
 				<span>Replenishment uses ERPNext Item Reorder configuration</span>
 				<span>Stock cover is historical estimation, not a forecast</span>
-				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
+				<span v-if="!showCosts">Cost values hidden by cost-visibility settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
 			</template>
 		</EdgeReportShell>
@@ -181,7 +181,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Inventory Intelligence",
-				filename: `RetailEdge Inventory Intelligence ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Inventory Intelligence ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -206,7 +206,7 @@ export default {
 				{ label: "Replenishment Source", value: "ERPNext Item Reorder configuration" },
 				{ label: "Zero-stock Visibility", value: this.includeZero ? "Included" : "Excluded by filter" },
 				{ label: "Stock Cover", value: "Historical estimate, not forecast" },
-				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
+				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by cost-visibility settings" },
 			];
 		},
 	},

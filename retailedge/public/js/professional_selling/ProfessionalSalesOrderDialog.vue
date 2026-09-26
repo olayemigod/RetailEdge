@@ -69,6 +69,15 @@
 				/>
 
 				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Source Stock Location"
 					placeholder="Optional stock location"
@@ -146,6 +155,7 @@ function initialValues(context = {}) {
 		branch: context.operating?.branch || "",
 		warehouse: context.operating?.default_stock_location || "",
 		customer: "",
+		price_list: "",
 		transaction_date: today,
 		delivery_date: today,
 		shipping_rule: "",
@@ -168,6 +178,8 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			pricingSignatures: {},
+			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
 			values: initialValues(this.context),
 			itemTableField: { label: "Items", description: "Add the products or services included in this order." },
 			itemColumns: [
@@ -178,7 +190,8 @@ export default {
 		};
 	},
 	computed: {
-		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
+		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
+		canSwitchPriceList() { return Boolean(this.context.pricing?.can_switch_price_list && this.availablePriceLists.length); },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 	},
@@ -188,6 +201,9 @@ export default {
 				this.mode = "new";
 				this.sourceQuotation = "";
 				this.values = initialValues(this.context);
+				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
+				this.pricingTokens = {};
+				this.pricingSignatures = {};
 				this.saveError = "";
 			}
 		},
@@ -206,16 +222,30 @@ export default {
 		searchCustomer(query) { return this.searchOptions("customer", query); },
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
+		searchPriceList(query) { return this.searchOptions("price_list", query); },
 		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createCustomer(query) { return quickCreateCustomer(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		async refreshPriceListOptions() {
+			const rows = await this.searchPriceList("");
+			this.availablePriceLists = rows.map((row) => row.value || row.label).filter(Boolean);
+			if (this.values.price_list && !this.availablePriceLists.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		setCustomer(next) {
-			const changed = this.values.customer && this.values.customer !== next;
+			const previousCustomer = this.values.customer || "";
 			this.values.customer = next || "";
-			if (changed) {
+			this.pricingSignatures = {};
+			this.refreshPriceListOptions().catch(() => {});
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
 			}
@@ -223,7 +253,9 @@ export default {
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
+			this.pricingSignatures = {};
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
@@ -232,6 +264,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve Branch Stock Location.");
@@ -240,6 +273,7 @@ export default {
 		async setWarehouse(next) {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
+			this.pricingSignatures = {};
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -255,16 +289,32 @@ export default {
 				}
 			}
 		},
+		pricingSignature(row) {
+			return [
+				this.values.company,
+				this.values.branch,
+				this.values.warehouse,
+				this.values.customer,
+				this.values.price_list,
+				this.values.transaction_date,
+				row?.item_code || "",
+				row?.qty || 1,
+			].join("|");
+		},
 		updateItems(nextRows) {
-			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) {
-					changed.push(index);
-					return { ...row, rate: "" };
+				const normalized = { ...row, item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				if (!normalized.item_code) {
+					delete this.pricingSignatures[index];
+					return normalized;
 				}
-				return { ...row };
+				const signature = this.pricingSignature(normalized);
+				if (this.pricingSignatures[index] !== signature) {
+					changed.push(index);
+					return { ...normalized, rate: "" };
+				}
+				return normalized;
 			});
 			changed.forEach((index) => this.loadItemPricing(index));
 		},
@@ -277,11 +327,14 @@ export default {
 				const result = await callMethod(PRICING_METHOD, { document: DOCUMENT, item_code: row.item_code, values: { ...this.values, qty: row.qty || 1 } });
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
+				this.pricingSignatures[index] = this.pricingSignature(this.values.items[index]);
+				this.values.items = [...this.values.items];
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
 		refreshAllItemPricing() {
+			this.pricingSignatures = {};
 			if (!this.values.customer) return;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {

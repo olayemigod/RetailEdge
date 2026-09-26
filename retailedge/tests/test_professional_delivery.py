@@ -23,6 +23,36 @@ class TestProfessionalDelivery(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_sales_invoice_to_delivery_uses_erpnext_native_mapper_and_blocks_double_stock(self):
+		source = self.read("professional_delivery.py")
+		for contract in (
+			"erpnext_make_delivery_note_from_invoice",
+			"def create_delivery_note_from_sales_invoice(",
+			"source.docstatus != 1",
+			'source.get("is_return")',
+			'source.get("update_stock")',
+			"duplicate stock movement",
+			"target = erpnext_make_delivery_note_from_invoice(source.name)",
+			"not target.get(\"items\")",
+			"target.insert()",
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn("target.submit()", source)
+		self.assertNotIn("ignore_permissions=True", source)
+
+	def test_sales_invoice_delivery_creation_reuses_existing_draft(self):
+		source = self.read("professional_delivery.py")
+		for contract in (
+			"def _lock_sales_invoice",
+			"FOR UPDATE",
+			"def _existing_delivery_for_invoice",
+			"item.against_sales_invoice = %s",
+			"dn.docstatus",
+			'"existing": existing',
+			"if existing:",
+		):
+			self.assertIn(contract, source)
+
 	def test_delivery_never_mutates_or_submits_source_or_target(self):
 		source = self.read("professional_delivery.py")
 		for forbidden in (

@@ -135,16 +135,7 @@ class TestPrereportingCashMovementScope(unittest.TestCase):
 
 	def test_restricted_zero_branch_search_returns_no_options(self):
 		with (
-			patch.object(
-				cash_movement,
-				"_resolve_branch_scope",
-				return_value={
-					"global_access": False,
-					"restricted": True,
-					"allowed_branches": [],
-					"effective_branches": [],
-				},
-			),
+			patch.object(cash_movement, "get_allowed_operating_branches", return_value=[]),
 			patch.object(cash_movement.frappe, "get_list") as get_list,
 		):
 			self.assertEqual(cash_movement._search_branches(txt="", company="Scope Co"), [])

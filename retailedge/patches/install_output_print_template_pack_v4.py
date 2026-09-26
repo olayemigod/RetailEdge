@@ -1,0 +1,5 @@
+from retailedge.professional_print_formats import ensure_retailedge_professional_print_formats
+
+
+def execute():
+	ensure_retailedge_professional_print_formats()

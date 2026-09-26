@@ -1,5 +1,5 @@
 app_name = "retailedge"
-app_title = "RetailEdge"
+app_title = "PEdge Retail"
 app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
@@ -15,15 +15,14 @@ required_apps = ["edgesuite_ui"]
 # ------------------
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "retailedge",
-# 		"logo": "/assets/retailedge/logo.png",
-# 		"title": "RetailEdge",
-# 		"route": "/retailedge",
-# 		"has_permission": "retailedge.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "retailedge",
+		"logo": "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-blue-v1.svg",
+		"title": "PEdge Retail",
+		"route": "/desk/retailedge-business-hub",
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -34,6 +33,7 @@ app_include_css = [
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 	"/assets/retailedge/css/retailedge_guided_create_menu.css",
 	"/assets/retailedge/css/retailedge_product_identity.css",
+	"/assets/retailedge/css/retailedge_navigation_shell_compat.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
@@ -129,10 +129,11 @@ doctype_list_js = {
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "retailedge.utils.jinja_methods",
-# 	"filters": "retailedge.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"retailedge.print_output_context.get_business_print_context",
+	],
+}
 
 # Installation
 # ------------
@@ -167,6 +168,9 @@ doctype_list_js = {
 doc_events = {
 	"Bank Account": {
 		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
+	},
+	"Item Price": {
+		"validate": "retailedge.pricing_promotions_workspace.validate_item_price_assignment",
 	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
@@ -212,7 +216,10 @@ doc_events = {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
 	},
 	"POS Closing Shift": {
-		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+		"validate": [
+			"retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+			"retailedge.pos_cashier_expense.apply_retailedge_cashier_expenses_to_closing_shift",
+		],
 		"on_submit": "retailedge.events.pos_closing_shift.on_pos_closing_shift_submit",
 		"after_insert": "retailedge.events.pos_closing_shift.on_pos_closing_shift_save",
 	},
@@ -233,22 +240,29 @@ doc_events = {
 # before_tests = "retailedge.install.before_tests"
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
+	"retailedge.patches.ensure_retailedge_manager_payment_entry_read.execute",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
 	"retailedge.coexistence.ensure_neutral_branch_field_labels",
 	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
+	"retailedge.pos_cashier_expense.ensure_pos_closing_cashier_expense_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
+	"retailedge.desktop_identity.sync_retailedge_desktop_identity",
 ]
 boot_session = "retailedge.boot.boot_session"
 
 # Permission scope
 # ------------------------------
 permission_query_conditions = {
+	"Price List": "retailedge.pricing_promotions_workspace.get_price_list_permission_query_conditions",
+	"Item Price": "retailedge.pricing_promotions_workspace.get_item_price_permission_query_conditions",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
 	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
 }
 has_permission = {
+	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
@@ -274,8 +288,14 @@ override_whitelisted_methods = {
 	"retailedge.sales_reporting.get_sales_by_item_export": "retailedge.operating_report_defaults.get_sales_by_item_export",
 	"retailedge.sales_reporting.get_sales_invoice_register": "retailedge.operating_report_defaults.get_sales_invoice_register",
 	"retailedge.sales_reporting.get_sales_invoice_register_export": "retailedge.operating_report_defaults.get_sales_invoice_register_export",
+	"retailedge.sales_analysis.get_sales_analysis": "retailedge.operating_report_defaults.get_sales_analysis",
+	"retailedge.sales_analysis.get_sales_analysis_export": "retailedge.operating_report_defaults.get_sales_analysis_export",
 	"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context",
 	"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options",
+	"retailedge.purchase_analysis.get_purchase_analysis": "retailedge.operating_report_defaults.get_purchase_analysis",
+	"retailedge.purchase_analysis.get_purchase_analysis_export": "retailedge.operating_report_defaults.get_purchase_analysis_export",
+	"retailedge.supplier_performance.get_supplier_performance": "retailedge.operating_report_defaults.get_supplier_performance",
+	"retailedge.supplier_performance.get_supplier_performance_export": "retailedge.operating_report_defaults.get_supplier_performance_export",
 	"retailedge.purchase_reporting.get_purchase_register": "retailedge.operating_report_defaults.get_purchase_register",
 	"retailedge.purchase_reporting.get_purchase_register_export": "retailedge.operating_report_defaults.get_purchase_register_export",
 	"retailedge.purchase_reporting.get_supplier_payables": "retailedge.operating_report_defaults.get_supplier_payables",

@@ -5,12 +5,14 @@ from typing import Any, Literal
 import frappe
 from frappe import _
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.caching import request_cache
 
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 
-from retailedge.branch_profile import get_branch_profile
+from retailedge.branch_assignment import get_assignment_price_lists
+from retailedge.branch_profile import get_branch_profile, get_exact_branch_profile
+from retailedge.utils.settings import get_retailedge_settings
 
 PriceMode = Literal["selling", "buying"]
 
@@ -28,6 +30,19 @@ STANDARD_PRICE_LIST: dict[PriceMode, str] = {
 	"buying": "Standard Buying",
 }
 
+SELLING_POLICY_ORDERS = {
+	"Party > POS > Branch > Assigned Choice": ("party", "pos", "branch", "assigned_choice"),
+	"Party > Branch > POS > Assigned Choice": ("party", "branch", "pos", "assigned_choice"),
+	"POS > Party > Branch > Assigned Choice": ("pos", "party", "branch", "assigned_choice"),
+	"Branch > Party > POS > Assigned Choice": ("branch", "party", "pos", "assigned_choice"),
+	"Assigned Choice > Party > POS > Branch": ("assigned_choice", "party", "pos", "branch"),
+}
+BUYING_POLICY_ORDERS = {
+	"Party > Branch > Assigned Choice": ("party", "branch", "assigned_choice"),
+	"Branch > Party > Assigned Choice": ("branch", "party", "assigned_choice"),
+	"Assigned Choice > Party > Branch": ("assigned_choice", "party", "branch"),
+}
+
 
 @request_cache
 def resolve_price_list_context(
@@ -37,37 +52,133 @@ def resolve_price_list_context(
 	branch: str = "",
 	party: str = "",
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
-	"""Resolve the effective guided-entry Price List for the current user.
-
-	The client never supplies or authorises its own Price List. Selection is made
-	from current-user defaults/permissions and trusted ERPNext/RetailEdge setup.
-	The result is request-cached so a multi-line invoice resolves user/POS/default
-	context once instead of repeating the same setup queries for every item.
-	"""
+	"""Resolve the effective Price List from trusted, merchant-governed sources."""
 	user = user or frappe.session.user
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
 	party = str(party or "").strip()
+	requested_price_list = str(requested_price_list or "").strip()
 	if mode not in ("selling", "buying"):
 		frappe.throw(_("Unsupported guided pricing mode."))
 	if not company:
 		frappe.throw(_("Company is required to resolve pricing."))
 
-	for key in USER_DEFAULT_KEYS[mode]:
-		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
+	settings = get_retailedge_settings()
+	governance_enabled = _setting_check(settings, "enable_price_list_governance", default=True)
+	allow_switch = _setting_check(settings, "allow_price_list_switch", default=True)
+	available_price_lists = _available_assigned_price_lists(
+		mode=mode, company=company, branch=branch, user=user
+	)
+
+	if requested_price_list:
+		if not governance_enabled or not allow_switch:
+			frappe.throw(_("Price List switching is disabled by the current pricing policy."), frappe.PermissionError)
+		if requested_price_list not in available_price_lists:
+			frappe.throw(
+				_("Price List {0} is not assigned to you for this Branch.").format(requested_price_list),
+				frappe.PermissionError,
+			)
+
+	if governance_enabled:
+		policy_field = "selling_price_list_policy" if mode == "selling" else "buying_price_list_policy"
+		policy_name = str(getattr(settings, policy_field, "") or "").strip()
+		orders = SELLING_POLICY_ORDERS if mode == "selling" else BUYING_POLICY_ORDERS
+		policy = orders.get(policy_name) or next(iter(orders.values()))
+	else:
+		policy = ("user_default", "user_permission", "pos", "party")
+
+	for source in policy:
+		context = _resolve_policy_source(
+			source=source,
+			mode=mode,
+			company=company,
+			branch=branch,
+			party=party,
+			user=user,
+			requested_price_list=requested_price_list,
+			available_price_lists=available_price_lists,
+		)
+		if context:
+			return _with_choice_context(
+				context,
+				available_price_lists=available_price_lists,
+				can_switch=governance_enabled and allow_switch,
+			)
+
+	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
+	candidate = str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip()
+	if candidate and _valid_price_list(candidate, mode=mode, user=user):
+		return _with_choice_context(
+			_price_context(candidate, mode=mode, source="erpnext_default"),
+			available_price_lists=available_price_lists,
+			can_switch=governance_enabled and allow_switch,
+		)
+
+	candidate = STANDARD_PRICE_LIST[mode]
+	if _valid_price_list(candidate, mode=mode, user=user):
+		return _with_choice_context(
+			_price_context(candidate, mode=mode, source="standard_price_list"),
+			available_price_lists=available_price_lists,
+			can_switch=governance_enabled and allow_switch,
+		)
+
+	return _with_choice_context(
+		{
+			"price_list": "",
+			"currency": "",
+			"source": "item_fallback",
+			"mode": mode,
+			"pos_profile": "",
+			"allow_rate_change": True,
+		},
+		available_price_lists=available_price_lists,
+		can_switch=governance_enabled and allow_switch,
+	)
+
+
+def _setting_check(settings, fieldname: str, *, default: bool) -> bool:
+	value = getattr(settings, fieldname, None)
+	if value in (None, ""):
+		return default
+	return bool(cint(value))
+
+
+def _with_choice_context(
+	context: dict[str, Any], *, available_price_lists: list[str], can_switch: bool
+) -> dict[str, Any]:
+	current = str(context.get("price_list") or "").strip()
+	has_alternative = any(str(name or "").strip() != current for name in available_price_lists)
+	return {
+		**context,
+		"available_price_lists": available_price_lists,
+		"can_switch_price_list": bool(can_switch and has_alternative),
+	}
+
+
+def _resolve_policy_source(
+	*,
+	source: str,
+	mode: PriceMode,
+	company: str,
+	branch: str,
+	party: str,
+	user: str,
+	requested_price_list: str,
+	available_price_lists: list[str],
+) -> dict[str, Any] | None:
+	if source == "party":
+		candidate = _party_price_list(mode=mode, party=party)
 		if candidate and _valid_price_list(candidate, mode=mode, user=user):
-			return _price_context(candidate, mode=mode, source="user_default")
+			return _price_context(candidate, mode=mode, source="party_default")
+		return None
 
-	permission_candidate = _default_user_permission_price_list(user=user, mode=mode)
-	if permission_candidate:
-		return _price_context(permission_candidate, mode=mode, source="user_permission")
-
-	if mode == "selling":
+	if source == "pos" and mode == "selling":
 		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
-		pos_price_list = str(pos.get("selling_price_list") or "").strip() if pos else ""
-		if pos and pos_price_list and _valid_price_list(pos_price_list, mode="selling", user=user):
-			context = _price_context(pos_price_list, mode="selling", source="pos_profile")
+		candidate = str(pos.get("selling_price_list") or "").strip() if pos else ""
+		if pos and candidate and _valid_price_list(candidate, mode=mode, user=user):
+			context = _price_context(candidate, mode=mode, source="pos_profile")
 			context.update(
 				{
 					"pos_profile": pos.get("name") or "",
@@ -75,28 +186,69 @@ def resolve_price_list_context(
 				}
 			)
 			return context
+		return None
 
-	party_price_list = _party_price_list(mode=mode, party=party)
-	if party_price_list and _valid_price_list(party_price_list, mode=mode, user=user):
-		return _price_context(party_price_list, mode=mode, source="party_default")
+	if source == "branch":
+		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True) if branch else None
+		fieldname = "default_selling_price_list" if mode == "selling" else "default_buying_price_list"
+		candidate = str(getattr(profile, fieldname, None) or "").strip() if profile else ""
+		if candidate and _valid_price_list(candidate, mode=mode, user=user):
+			return _price_context(candidate, mode=mode, source="branch_default")
+		return None
 
-	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
-	candidate = str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip()
-	if candidate and _valid_price_list(candidate, mode=mode, user=user):
-		return _price_context(candidate, mode=mode, source="erpnext_default")
+	if source == "assigned_choice":
+		candidate = _assigned_choice(
+			mode=mode,
+			user=user,
+			requested_price_list=requested_price_list,
+			available_price_lists=available_price_lists,
+		)
+		return _price_context(candidate, mode=mode, source="assigned_choice") if candidate else None
 
-	candidate = STANDARD_PRICE_LIST[mode]
-	if _valid_price_list(candidate, mode=mode, user=user):
-		return _price_context(candidate, mode=mode, source="standard_price_list")
+	if source == "user_default":
+		for key in USER_DEFAULT_KEYS[mode]:
+			candidate = str(frappe.defaults.get_user_default(key) or "").strip()
+			if candidate and _valid_price_list(candidate, mode=mode, user=user):
+				return _price_context(candidate, mode=mode, source="user_default")
+		return None
 
-	return {
-		"price_list": "",
-		"currency": "",
-		"source": "item_fallback",
-		"mode": mode,
-		"pos_profile": "",
-		"allow_rate_change": True,
-	}
+	if source == "user_permission":
+		candidate = _default_user_permission_price_list(user=user, mode=mode)
+		return _price_context(candidate, mode=mode, source="user_permission") if candidate else None
+
+	return None
+
+
+def _available_assigned_price_lists(
+	*, mode: PriceMode, company: str, branch: str, user: str
+) -> list[str]:
+	assigned = get_assignment_price_lists(
+		user=user, company=company, branch=branch or None, mode=mode
+	)
+	if assigned:
+		return assigned
+	return _user_permission_price_lists(user=user, mode=mode)
+
+
+def _assigned_choice(
+	*,
+	mode: PriceMode,
+	user: str,
+	requested_price_list: str,
+	available_price_lists: list[str],
+) -> str:
+	if requested_price_list:
+		return requested_price_list
+	if not available_price_lists:
+		return ""
+	for key in USER_DEFAULT_KEYS[mode]:
+		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
+		if candidate in available_price_lists:
+			return candidate
+	permission_default = _default_user_permission_price_list(user=user, mode=mode)
+	if permission_default in available_price_lists:
+		return permission_default
+	return available_price_lists[0] if len(available_price_lists) == 1 else ""
 
 
 def resolve_sales_item_pricing(
@@ -109,12 +261,18 @@ def resolve_sales_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Customer", customer, user=user)
 	context = resolve_price_list_context(
-		mode="selling", company=company, branch=branch, party=customer, user=user
+		mode="selling",
+		company=company,
+		branch=branch,
+		party=customer,
+		user=user,
+		requested_price_list=requested_price_list,
 	)
 	details = _erpnext_item_details(
 		mode="selling",
@@ -126,12 +284,14 @@ def resolve_sales_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(details.get("rate"), details.get("price_list_rate"))
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		standard_rate = frappe.get_cached_value("Item", item_code, "standard_rate")
+		standard_rate = _nonzero_rate_or_none(
+			frappe.get_cached_value("Item", item_code, "standard_rate")
+		)
 		if standard_rate is not None:
-			rate = flt(standard_rate)
+			rate = standard_rate
 			rate_source = "item_standard_rate"
 
 	return {
@@ -153,12 +313,18 @@ def resolve_purchase_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Supplier", supplier, user=user)
 	context = resolve_price_list_context(
-		mode="buying", company=company, branch=branch, party=supplier, user=user
+		mode="buying",
+		company=company,
+		branch=branch,
+		party=supplier,
+		user=user,
+		requested_price_list=requested_price_list,
 	)
 	details = _erpnext_item_details(
 		mode="buying",
@@ -170,16 +336,15 @@ def resolve_purchase_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(
-		details.get("rate"),
-		details.get("price_list_rate"),
-		details.get("last_purchase_rate"),
-	)
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		last_purchase_rate = frappe.get_cached_value("Item", item_code, "last_purchase_rate")
-		if last_purchase_rate not in (None, ""):
-			rate = flt(last_purchase_rate)
+		last_purchase_rate = _nonzero_rate_or_none(
+			details.get("last_purchase_rate")
+			or frappe.get_cached_value("Item", item_code, "last_purchase_rate")
+		)
+		if last_purchase_rate is not None:
+			rate = last_purchase_rate
 			rate_source = "item_last_purchase_rate"
 
 	return {
@@ -237,6 +402,8 @@ def _resolve_user_pos_profile(*, company: str, branch: str, user: str) -> frappe
 			if pos:
 				return pos
 
+	if not frappe.has_permission("POS Profile", "read", user=user):
+		return None
 	try:
 		standard = get_pos_profile(company, user=user)
 	except Exception:
@@ -263,6 +430,18 @@ def _permitted_pos_profile(name: str, *, company: str, user: str) -> frappe._dic
 	if user_rows and not frappe.db.exists("POS Profile User", {"parent": name, "user": user}):
 		return None
 	return frappe._dict(pos)
+
+
+def _user_permission_price_lists(*, user: str, mode: PriceMode) -> list[str]:
+	permissions = get_user_permissions(user).get("Price List", []) or []
+	ordered = sorted(permissions, key=lambda row: int(row.get("is_default") or 0), reverse=True)
+	return list(
+		dict.fromkeys(
+			str(row.get("doc") or "").strip()
+			for row in ordered
+			if _valid_price_list(str(row.get("doc") or "").strip(), mode=mode, user=user)
+		)
+	)
 
 
 def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
@@ -336,11 +515,38 @@ def _assert_read_permission(doctype: str, name: str, *, user: str) -> None:
 		)
 
 
-def _first_rate(*values: Any) -> float | None:
-	for value in values:
-		if value not in (None, ""):
-			return flt(value)
-	return None
+def _nonzero_rate_or_none(value: Any) -> float | None:
+	if value in (None, ""):
+		return None
+	rate = flt(value)
+	return rate if rate else None
+
+
+def _effective_erpnext_rate(details: dict[str, Any] | frappe._dict) -> float | None:
+	"""Resolve an effective ERPNext rate without accepting its initialized zero placeholder."""
+	explicit_rate = _nonzero_rate_or_none(details.get("rate"))
+	if explicit_rate is not None:
+		return explicit_rate
+
+	price_list_rate = _nonzero_rate_or_none(details.get("price_list_rate"))
+	if price_list_rate is None:
+		return None
+
+	rate_with_margin = price_list_rate
+	margin = flt(details.get("margin_rate_or_amount") or 0)
+	margin_type = str(details.get("margin_type") or "").strip()
+	if margin_type == "Percentage":
+		rate_with_margin = price_list_rate * (1 + (margin / 100.0))
+	elif margin_type == "Amount":
+		rate_with_margin = price_list_rate + margin
+
+	discount_amount = flt(details.get("discount_amount") or 0)
+	discount_percentage = flt(details.get("discount_percentage") or 0)
+	if discount_amount:
+		return flt(rate_with_margin - discount_amount)
+	if discount_percentage:
+		return flt(rate_with_margin * (1 - (discount_percentage / 100.0)))
+	return flt(rate_with_margin)
 
 
 def _rate_or_none(value: Any) -> float | None:

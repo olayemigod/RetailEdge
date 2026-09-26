@@ -1,19 +1,76 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
 from urllib.parse import quote
 
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
+from frappe.email.doctype.email_account.email_account import EmailAccount
 from frappe.utils import cint, flt, validate_email_address
+from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existing_field
 from retailedge.operating_context import get_operating_context
-from retailedge.professional_print_formats import get_preferred_print_format
+from retailedge.professional_print_formats import (
+	MANAGED_PRINT_FORMATS,
+	get_preferred_print_format,
+	is_managed_print_format_html,
+)
 
 MAX_LINK_RESULTS = 20
 MAX_PRINT_FORMATS = 50
+
+
+def _managed_format_names(doctype: str) -> list[str]:
+	return [
+		str(spec.get("name") or "").strip()
+		for spec in MANAGED_PRINT_FORMATS
+		if spec.get("doctype") == doctype and str(spec.get("name") or "").strip()
+	]
+
+
+def _outgoing_email_ready() -> bool:
+	try:
+		return bool(EmailAccount.find_default_outgoing())
+	except Exception:
+		return False
+
+
+@contextmanager
+def _output_render_options(*, show_logo: int = 1, include_qr: int = 0):
+	previous = getattr(frappe.flags, "retailedge_output_options", None)
+	frappe.flags.retailedge_output_options = {
+		"show_logo": cint(show_logo),
+		"include_qr": cint(include_qr),
+	}
+	try:
+		yield
+	finally:
+		frappe.flags.retailedge_output_options = previous
+
+
+def _render_document(
+	doctype: str,
+	name: str,
+	*,
+	print_format: str,
+	no_letterhead: int = 1,
+	show_logo: int = 1,
+	include_qr: int = 0,
+	as_pdf: bool = False,
+):
+	with _output_render_options(show_logo=show_logo, include_qr=include_qr):
+		return frappe.get_print(
+			doctype,
+			name,
+			print_format=print_format,
+			as_pdf=as_pdf,
+			no_letterhead=cint(no_letterhead),
+		)
+
+
 OUTPUT_DOCUMENTS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "quotation",
@@ -63,7 +120,7 @@ _DOCUMENT_BY_DOCTYPE = {row["doctype"]: row for row in OUTPUT_DOCUMENTS}
 
 def _preferred_print_format(doctype: str) -> str:
 	if str(doctype or "").strip() == "POS Invoice":
-		return "POS Receipt 80mm"
+		return "PEdge POS Receipt 80mm"
 	return get_preferred_print_format(doctype)
 
 
@@ -132,34 +189,50 @@ def _validate_print_format(doctype: str, print_format: str | None) -> str:
 		return print_format
 	if not frappe.db.exists("Print Format", print_format):
 		frappe.throw(_("Print Format {0} is not available.").format(print_format))
-	if not _permission("Print Format", "read", name=print_format):
-		frappe.throw(
-			_("You do not have permission to use Print Format {0}.").format(print_format),
-			frappe.PermissionError,
-		)
-	row = frappe.db.get_value("Print Format", print_format, ["doc_type", "disabled"], as_dict=True) or {}
+	row = frappe.db.get_value(
+		"Print Format", print_format, ["doc_type", "disabled", "html"], as_dict=True
+	) or {}
 	if str(row.get("doc_type") or "") != doctype:
 		frappe.throw(_("Print Format {0} is not for {1}.").format(print_format, doctype))
 	if cint(row.get("disabled")):
 		frappe.throw(_("Print Format {0} is disabled.").format(print_format))
+	managed = is_managed_print_format_html(row.get("html"))
+	if not managed and not _permission("Print Format", "read", name=print_format):
+		frappe.throw(
+			_("You do not have permission to use Print Format {0}.").format(print_format),
+			frappe.PermissionError,
+		)
 	return print_format
 
 
 def _available_print_formats(doctype: str) -> list[str]:
 	formats = ["Standard"]
-	if not _permission("Print Format", "read"):
-		return formats
-	rows = frappe.get_list(
-		"Print Format",
-		filters={"doc_type": doctype, "disabled": 0},
-		fields=["name"],
-		order_by="name asc",
-		limit_page_length=MAX_PRINT_FORMATS,
-	)
-	for row in rows:
-		name = str(row.get("name") or "").strip()
-		if name and name not in formats:
+
+	# App-managed customer-safe formats are selectable based on permission to print
+	# the source document; direct Print Format DocType access is not required.
+	for spec in MANAGED_PRINT_FORMATS:
+		if spec.get("doctype") != doctype:
+			continue
+		name = str(spec.get("name") or "").strip()
+		if not name or not frappe.db.exists("Print Format", name):
+			continue
+		row = frappe.db.get_value("Print Format", name, ["disabled", "html"], as_dict=True) or {}
+		if not cint(row.get("disabled")) and is_managed_print_format_html(row.get("html")) and name not in formats:
 			formats.append(name)
+
+	# Other ERPNext/customer-defined formats remain permission-gated.
+	if _permission("Print Format", "read"):
+		rows = frappe.get_list(
+			"Print Format",
+			filters={"doc_type": doctype, "disabled": 0},
+			fields=["name"],
+			order_by="name asc",
+			limit_page_length=MAX_PRINT_FORMATS,
+		)
+		for row in rows:
+			name = str(row.get("name") or "").strip()
+			if name and name not in formats:
+				formats.append(name)
 
 	preferred = _preferred_print_format(doctype)
 	if preferred and preferred in formats:
@@ -184,6 +257,7 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 		"company": doc.get("company") if doc.meta.has_field("company") else "",
 		"branch": branch,
 		"status": doc.get("status") if doc.meta.has_field("status") else "",
+		"docstatus": cint(doc.docstatus),
 		"currency": doc.get("currency") if doc.meta.has_field("currency") else "",
 		"grand_total": flt(doc.get("grand_total")) if doc.meta.has_field("grand_total") else 0,
 		"contact_email": doc.get("contact_email") if doc.meta.has_field("contact_email") else "",
@@ -222,7 +296,7 @@ def get_document_output_context() -> dict[str, Any]:
 			"public_pdf_links": False,
 			"business_documents_immutable": True,
 		},
-		"user_name": frappe.get_user().get_fullname() if getattr(frappe, "session", None) else "",
+		"user_name": get_user_fullname(frappe.session.user) if getattr(frappe, "session", None) else "",
 	}
 
 
@@ -256,8 +330,14 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 		{
 			"can_print": _permission(doctype, "print", name=name),
 			"can_email": _permission(doctype, "email", name=name),
+			"can_write": _permission(doctype, "write", name=name),
+			"email_configured": _outgoing_email_ready(),
 			"print_formats": formats,
+			"managed_print_formats": _managed_format_names(doctype),
 			"recommended_print_format": preferred if preferred in formats else "Standard",
+			"default_use_letterhead": False,
+			"default_show_logo": True,
+			"default_include_qr": False,
 			"default_email_subject": share_copy["subject"],
 			"default_email_message": share_copy["message"],
 			"native_route": f"{definition['native_route']}/{quote(str(name), safe='')}",
@@ -267,18 +347,59 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 
 
 @frappe.whitelist(methods=["GET"])
-def download_document_pdf(document: str, name: str, print_format: str = "Standard", no_letterhead: int = 0):
+def render_document_preview(
+	document: str,
+	name: str,
+	print_format: str = "Standard",
+	no_letterhead: int = 1,
+	show_logo: int = 1,
+	include_qr: int = 0,
+) -> dict[str, Any]:
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
 	_assert_document_permission(doctype, name, "print")
 	print_format = _validate_print_format(doctype, print_format)
-	pdf = frappe.get_print(
+	html = _render_document(
+		doctype,
+		name,
+		print_format=print_format,
+		as_pdf=False,
+		no_letterhead=no_letterhead,
+		show_logo=show_logo,
+		include_qr=include_qr,
+	)
+	return {
+		"html": html,
+		"print_format": print_format,
+		"no_letterhead": cint(no_letterhead),
+		"show_logo": cint(show_logo),
+		"include_qr": cint(include_qr),
+	}
+
+
+@frappe.whitelist(methods=["GET"])
+def download_document_pdf(
+	document: str,
+	name: str,
+	print_format: str = "Standard",
+	no_letterhead: int = 1,
+	show_logo: int = 1,
+	include_qr: int = 0,
+):
+	definition = get_output_document_definition(document)
+	doctype = definition["doctype"]
+	_assert_document_permission(doctype, name, "read")
+	_assert_document_permission(doctype, name, "print")
+	print_format = _validate_print_format(doctype, print_format)
+	pdf = _render_document(
 		doctype,
 		name,
 		print_format=print_format,
 		as_pdf=True,
-		no_letterhead=cint(no_letterhead),
+		no_letterhead=no_letterhead,
+		show_logo=show_logo,
+		include_qr=include_qr,
 	)
 	frappe.local.response.filename = f"{doctype}-{name}.pdf"
 	frappe.local.response.filecontent = pdf
@@ -293,13 +414,20 @@ def send_document_email(
 	subject: str = "",
 	message: str = "",
 	print_format: str = "Standard",
-	no_letterhead: int = 0,
+	no_letterhead: int = 1,
+	show_logo: int = 1,
+	include_qr: int = 0,
 ) -> dict[str, Any]:
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
 	_assert_document_permission(doctype, name, "print")
 	_assert_document_permission(doctype, name, "email")
+	if not _outgoing_email_ready():
+		frappe.throw(
+			_("Outgoing email is not configured. Configure a default outgoing Email Account before sending documents."),
+			frappe.OutgoingEmailError,
+		)
 	print_format = _validate_print_format(doctype, print_format)
 	recipient = str(recipient or "").strip()
 	validate_email_address(recipient, throw=True)
@@ -308,12 +436,14 @@ def send_document_email(
 	share_copy = _default_share_copy(definition, summary)
 	subject = str(subject or share_copy["subject"]).strip()
 	message = str(message or share_copy["message"]).strip()
-	pdf = frappe.get_print(
+	pdf = _render_document(
 		doctype,
 		name,
 		print_format=print_format,
 		as_pdf=True,
-		no_letterhead=cint(no_letterhead),
+		no_letterhead=no_letterhead,
+		show_logo=show_logo,
+		include_qr=include_qr,
 	)
 	frappe.sendmail(
 		recipients=[recipient],

@@ -5,7 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
-from frappe.utils import cint, flt, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import (
@@ -68,10 +68,27 @@ SELLING_DOCUMENTS: tuple[dict[str, Any], ...] = (
 _DOCUMENT_BY_KEY = {row["key"]: row for row in SELLING_DOCUMENTS}
 _DOCUMENT_BY_DOCTYPE = {row["doctype"]: row for row in SELLING_DOCUMENTS}
 
+_LIST_DOCUMENTS: dict[str, dict[str, Any]] = {
+	**{row["key"]: dict(row) for row in SELLING_DOCUMENTS},
+	"sales-invoice": {
+		"key": "sales-invoice",
+		"doctype": "Sales Invoice",
+		"item_doctype": "Sales Invoice Item",
+		"label": "Sales Invoice",
+		"stage": "Invoice",
+		"date_field": "posting_date",
+		"party_field": "customer",
+		"native_route": "/app/sales-invoice",
+	},
+}
+
 
 def get_selling_document_definition(value: str) -> dict[str, Any]:
 	key = str(value or "").strip()
-	definition = _DOCUMENT_BY_KEY.get(key) or _DOCUMENT_BY_DOCTYPE.get(key)
+	definition = (
+		_LIST_DOCUMENTS.get(key)
+		or next((row for row in _LIST_DOCUMENTS.values() if row.get("doctype") == key), None)
+	)
 	if not definition:
 		frappe.throw(_("Unsupported Professional Selling document: {0}").format(key))
 	return dict(definition)
@@ -229,6 +246,7 @@ def _validate_context(
 				)
 	return company, branch, warehouse
 
+
 def _operating_document_filters(doctype: str, *, company: str, branch: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta(doctype)
@@ -250,6 +268,7 @@ def _operating_document_filters(doctype: str, *, company: str, branch: str) -> d
 			filters[branch_field] = ["in", scope["allowed_branches"]]
 	return filters
 
+
 def _branch_filters(company: str) -> dict[str, Any]:
 	if not company:
 		return {"name": "__never__"}
@@ -261,6 +280,7 @@ def _branch_filters(company: str) -> dict[str, Any]:
 	if scope["restricted"] or allowed:
 		filters["name"] = ["in", allowed] if allowed else "__never__"
 	return filters
+
 
 def _warehouse_filters(company: str, branch: str) -> dict[str, Any] | None:
 	if not company:
@@ -333,6 +353,8 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"price_list": pricing.get("price_list") or "",
 			"source": pricing.get("source") or "",
 			"allow_rate_change": bool(pricing.get("allow_rate_change", True)),
+			"available_price_lists": pricing.get("available_price_lists") or [],
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 		},
 		"documents": documents,
 		"today": nowdate(),
@@ -401,6 +423,20 @@ def search_professional_selling_options(
 			page_length=limit,
 			reference_doctype=definition["doctype"],
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_filters(company, branch)
 		if filters is None:
@@ -433,7 +469,7 @@ def get_professional_selling_item_pricing(
 	item_code: str,
 	values: dict | str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve item price on the server; the browser never selects the effective Price List."""
+	"""Resolve item price on the server; any selected Price List is revalidated against governance."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
 		frappe.throw(
@@ -457,6 +493,7 @@ def get_professional_selling_item_pricing(
 		posting_date=str(values.get("transaction_date") or values.get("posting_date") or nowdate()),
 		qty=flt(values.get("qty") or 1),
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
@@ -479,6 +516,9 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 	limit = max(1, min(int(limit or 8), 20))
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "docstatus", "modified"]
+	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	if branch_field and branch_field not in fields:
+		fields.append(branch_field)
 	for candidate in (
 		definition["party_field"],
 		definition["date_field"],
@@ -498,3 +538,227 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 		limit_page_length=limit,
 	)
 	return [dict(row) for row in rows]
+
+
+def _selling_list_definition(document: str) -> dict[str, Any]:
+	key = str(document or "").strip()
+	definition = _LIST_DOCUMENTS.get(key)
+	if not definition:
+		frappe.throw(_("Unsupported Professional Selling list: {0}").format(key))
+	return dict(definition)
+
+
+def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str, str]]:
+	"""Return permission/status-aware secondary actions for one submitted selling record.
+
+	These are discoverability hints only. Every target endpoint revalidates
+	permissions, Company/Branch context and native ERPNext conversion rules.
+	"""
+	if cint(row.get("docstatus")) != 1:
+		return []
+
+	actions: list[dict[str, str]] = []
+	status = str(row.get("status") or "").strip()
+	if document == "quotation":
+		if _permission("Sales Order", "create") and status not in {"Ordered", "Lost", "Cancelled", "Expired"}:
+			actions.append({"value": "create-sales-order", "label": _("Create Sales Order")})
+		if _permission("Sales Invoice", "create") and status not in {"Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"}:
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+
+	elif document == "sales-order":
+		if (
+			_permission("Delivery Note", "create")
+			and status not in {"Closed", "Completed", "Cancelled"}
+			and flt(row.get("per_delivered")) < 99.999
+		):
+			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if (
+			_permission("Sales Invoice", "create")
+			and status not in {"Closed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+		):
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+		if _permission("Payment Entry", "create") and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005:
+			actions.append({"value": "make-payment", "label": _("Make Payment")})
+
+	elif document == "delivery-note":
+		if (
+			_permission("Sales Invoice", "create")
+			and not cint(row.get("is_return"))
+			and status not in {"Closed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+		):
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+
+	elif document == "sales-invoice":
+		if (
+			_permission("Delivery Note", "create")
+			and not cint(row.get("is_return"))
+			and not cint(row.get("update_stock"))
+			and status not in {"Cancelled", "Return"}
+		):
+			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if _permission("Payment Entry", "create") and flt(row.get("outstanding_amount")) > 0.005:
+			actions.append({"value": "make-payment", "label": _("Make Payment")})
+
+	return actions
+
+
+def _selling_list_status_filter(meta, status: str, filters: dict[str, Any]) -> None:
+	status = str(status or "").strip()
+	if not status or status == "All":
+		return
+	if status == "Draft":
+		filters["docstatus"] = 0
+		return
+	if status == "Submitted":
+		filters["docstatus"] = 1
+		return
+	if status == "Cancelled":
+		filters["docstatus"] = 2
+		return
+	if meta.has_field("status"):
+		filters["status"] = status
+
+
+@frappe.whitelist()
+def get_professional_selling_list(
+	document: str,
+	search: str = "",
+	status: str = "All",
+	from_date: str = "",
+	to_date: str = "",
+	start: int = 0,
+	page_length: int = 20,
+) -> dict[str, Any]:
+	"""Return a filter-aware, permission-aware selling list for the four Professional Selling tabs."""
+	definition = _selling_list_definition(document)
+	doctype = definition["doctype"]
+	if not _permission(doctype, "read"):
+		frappe.throw(_("You do not have permission to view {0}.").format(doctype), frappe.PermissionError)
+
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if not company:
+		frappe.throw(_("Choose an Operating Company before viewing Professional Selling records."))
+	_assert_read("Company", company)
+
+	filters = _operating_document_filters(doctype, company=company, branch=branch)
+	meta = frappe.get_meta(doctype)
+	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	_selling_list_status_filter(meta, status, filters)
+
+	date_field = definition["date_field"]
+	from_text = str(from_date or "").strip()
+	to_text = str(to_date or "").strip()
+	if from_text:
+		from_value = getdate(from_text)
+		filters[date_field] = [">=", from_value]
+	if to_text:
+		to_value = getdate(to_text)
+		if from_text and to_value < getdate(from_text):
+			frappe.throw(_("To Date cannot be before From Date."))
+		if date_field in filters:
+			filters[date_field] = ["between", [getdate(from_text), to_value]]
+		else:
+			filters[date_field] = ["<=", to_value]
+
+	search_text = str(search or "").strip()
+	or_filters: list[list[Any]] = []
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters.append(["name", "like", like])
+		party_field = definition["party_field"]
+		if meta.has_field(party_field):
+			or_filters.append([party_field, "like", like])
+		if meta.has_field("status"):
+			or_filters.append(["status", "like", like])
+
+	start = max(0, cint(start))
+	page_length = max(5, min(cint(page_length) or 20, 100))
+	fields = ["name", "docstatus", "modified"]
+	if branch_field and branch_field not in fields:
+		fields.append(branch_field)
+	for candidate in (
+		definition["party_field"],
+		date_field,
+		"status",
+		"grand_total",
+		"currency",
+		"shipping_rule",
+		"delivery_status",
+		"per_delivered",
+		"per_billed",
+		"advance_paid",
+		"outstanding_amount",
+		"update_stock",
+		"is_return",
+	):
+		if candidate not in fields and meta.has_field(candidate):
+			fields.append(candidate)
+
+	rows = frappe.get_list(
+		doctype,
+		filters=filters,
+		or_filters=or_filters,
+		fields=fields,
+		order_by=f"{date_field} desc, modified desc",
+		limit_start=start,
+		limit_page_length=page_length + 1,
+	)
+	has_more = len(rows) > page_length
+	rows = rows[:page_length]
+	result_rows: list[dict[str, Any]] = []
+	for row in rows:
+		payload = dict(row)
+		payload["branch"] = str(payload.get(branch_field) or branch or "").strip() if branch_field else branch
+		payload["actions"] = _selling_record_actions(definition["key"], payload)
+		result_rows.append(payload)
+	return {
+		"document": definition["key"],
+		"doctype": doctype,
+		"label": definition["label"],
+		"date_field": date_field,
+		"party_field": definition["party_field"],
+		"rows": result_rows,
+		"start": start,
+		"page_length": page_length,
+		"next_start": start + len(rows),
+		"has_more": has_more,
+		"filters": {
+			"search": search_text,
+			"status": str(status or "All"),
+			"from_date": from_text,
+			"to_date": to_text,
+		},
+	}
+
+
+@frappe.whitelist()
+def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
+	"""Resolve permitted next actions for one visible Professional Selling record."""
+	document = str(document or "").strip()
+	name = str(name or "").strip()
+	if not name:
+		frappe.throw(_("Document name is required."))
+
+	result = get_professional_selling_list(
+		document=document,
+		search=name,
+		status="All",
+		start=0,
+		page_length=20,
+	)
+	row = next((row for row in result.get("rows") or [] if str(row.get("name") or "") == name), None)
+	if not row:
+		frappe.throw(
+			_("The selected document is not available in your current Company/Branch context."),
+			frappe.PermissionError,
+		)
+	return {
+		"document": document,
+		"doctype": result.get("doctype"),
+		"name": name,
+		"actions": list(row.get("actions") or []),
+	}

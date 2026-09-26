@@ -1,6 +1,6 @@
 <template>
 	<div v-if="!edgeUIValid" class="stock-movement-fallback">
-		<strong>EdgeSuite UI failed to load</strong>
+		<strong>The interface could not be loaded</strong>
 		<span>Missing components: {{ missingComponents.join(", ") }}</span>
 	</div>
 
@@ -9,7 +9,7 @@
 		product="retailedge"
 		:menuItems="menuItems"
 		activeRoute="/app/stock-movement-history"
-		title="RetailEdge"
+		title="ProcessEdge Retail"
 		:tenantName="tenantName"
 		:branchName="branchName"
 		:userName="userName"
@@ -44,17 +44,7 @@
 						:required="true"
 						@select="onCompanySelected"
 					/>
-					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range" @change="onPresetChange" />
-
-					<div class="edge-field">
-						<label class="edge-field-label">From Date</label>
-						<input v-model="filters.from_date" class="edge-input" type="date" @change="onDateChange" />
-					</div>
-
-					<div class="edge-field">
-						<label class="edge-field-label">To Date</label>
-						<input v-model="filters.to_date" class="edge-input" type="date" @change="onDateChange" />
-					</div>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 
 					<EdgeLinkField
 						v-model="filters.item_code"
@@ -244,6 +234,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLinkField",
 	"EdgeExportMenu",
 	"EdgeDropdown",
+	"EdgeSmartDateRange",
 ];
 
 const HIDDEN_SUMMARY_LABELS = new Set(["Distinct Items", "Distinct Warehouses"]);
@@ -287,6 +278,8 @@ export default {
 			userName: "",
 			itemLabel: "",
 			nativeFallbackEnabled: false,
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				date_range_preset: "This Month",
@@ -303,19 +296,6 @@ export default {
 				page_size: 50,
 			},
 			currentPage: 1,
-			datePresets: [
-				"This Month",
-				"Today",
-				"Yesterday",
-				"This Week",
-				"This Quarter",
-				"This Year",
-				"Last Week",
-				"Last Month",
-				"Last Quarter",
-				"Last Year",
-				"Custom Period",
-			],
 			movementTypes: [
 				"Purchase Receipt",
 				"Sale",
@@ -380,6 +360,8 @@ export default {
 					callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"),
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || context.default_filters?.company || "";
 				this.branchName = context.branch_name || context.default_filters?.branch || "";
 				this.userName = context.user_name || "";
@@ -496,15 +478,15 @@ export default {
 				this.error = errorMessage(error, "The selected Warehouse is not valid for this context.");
 			}
 		},
-		async onPresetChange() {
-			if (this.filters.date_range_preset === "Custom Period") return;
-			const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset);
-			if (!dates) return;
-			this.filters.from_date = dates.from_date;
-			this.filters.to_date = dates.to_date;
-			this.currentPage = 1;
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
 		},
-		onDateChange() {
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 			this.filters.date_range_preset = "Custom Period";
 			this.currentPage = 1;
 		},

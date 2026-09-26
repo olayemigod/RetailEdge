@@ -11,7 +11,7 @@ from retailedge.branch_context import (
 	has_field,
 )
 from retailedge.branch_profile import get_branch_profile_defaults
-from retailedge.operating_context import get_operational_branch_scope
+from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope
 
 MAX_FILTER_RESULTS = 20
 PROFILE_WAREHOUSE_FIELDS = (
@@ -38,17 +38,14 @@ def branch_query(
 		return []
 	_assert_company_read(company)
 
-	query_filters: list[list[Any]] = [["Branch", "name", "like", f"%{txt or ''}%"]]
-	if has_field("Branch", "company"):
-		query_filters.append(["Branch", "company", "=", company])
-
 	user = frappe.session.user
-	scope = get_operational_branch_scope(company, user=user)
-	if scope.get("restricted"):
-		allowed = list(scope.get("allowed_branches") or [])
-		if not allowed:
-			return []
-		query_filters.append(["Branch", "name", "in", allowed])
+	allowed = get_allowed_operating_branches(company=company, user=user)
+	if not allowed:
+		return []
+	query_filters: list[list[Any]] = [
+		["Branch", "name", "like", f"%{txt or ''}%"],
+		["Branch", "name", "in", allowed],
+	]
 
 	return frappe.get_list(
 		"Branch",

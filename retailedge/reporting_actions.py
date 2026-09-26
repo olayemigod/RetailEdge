@@ -23,6 +23,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.operating_report_defaults import get_sales_by_item_export
 
 		return get_sales_by_item_export
+	if key == "sales-analysis":
+		from retailedge.operating_report_defaults import get_sales_analysis_export
+
+		return get_sales_analysis_export
 	if key == "sales-invoice-register":
 		from retailedge.operating_report_defaults import get_sales_invoice_register_export
 
@@ -31,6 +35,14 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.customer_receivables import get_customer_receivables_export
 
 		return get_customer_receivables_export
+	if key == "purchase-analysis":
+		from retailedge.operating_report_defaults import get_purchase_analysis_export
+
+		return get_purchase_analysis_export
+	if key == "supplier-performance":
+		from retailedge.operating_report_defaults import get_supplier_performance_export
+
+		return get_supplier_performance_export
 	if key == "purchase-register":
 		from retailedge.operating_report_defaults import get_purchase_register_export
 
@@ -51,6 +63,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.stock_accounting_integrity import get_stock_accounting_integrity_export
 
 		return get_stock_accounting_integrity_export
+	if key == "expense-analysis":
+		from retailedge.expense_analysis import get_expense_analysis_export
+
+		return get_expense_analysis_export
 	if key == "expense-register":
 		from retailedge.expense_register import get_expense_register_export
 
@@ -67,6 +83,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.daily_sales_audit_page import get_daily_sales_audit_page_export
 
 		return get_daily_sales_audit_page_export
+	if key == "payment-settlement-analysis":
+		from retailedge.payment_settlement_analysis import get_payment_settlement_analysis_export
+
+		return get_payment_settlement_analysis_export
 	if key == "cash-movement":
 		from retailedge.cash_movement import get_cash_movement_export
 

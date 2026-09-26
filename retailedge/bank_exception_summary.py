@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from retailedge.bank_transaction_matching import assert_can_access_bank_transaction_matching
 from retailedge.reporting_scope import validate_report_scope
 
 MAX_BANK_MATCH_SUMMARY_ROWS = 2000
@@ -15,6 +16,7 @@ RECONCILIATION_EXCEPTION_STATUSES = {"Blocked", "Failed"}
 
 @frappe.whitelist()
 def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	assert_can_access_bank_transaction_matching()
 	filters = _coerce_filters(filters)
 	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
@@ -58,7 +60,7 @@ def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> d
 	needs_review = [
 		row for row in rows if str(row.get("decision_status") or "").strip() in REVIEW_DECISION_STATUSES
 	]
-	ready = [
+	confirmed_pending = [
 		row
 		for row in rows
 		if str(row.get("decision_status") or "").strip() == "Confirmed"
@@ -67,18 +69,19 @@ def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> d
 	exceptions = [
 		row
 		for row in rows
-		if str(row.get("execution_status") or "").strip() in RECONCILIATION_EXCEPTION_STATUSES
+		if str(row.get("decision_status") or "").strip() == "Confirmed"
+		and str(row.get("execution_status") or "").strip() in RECONCILIATION_EXCEPTION_STATUSES
 	]
 
 	return {
 		"summary": [
 			{"label": _("Bank Matches Need Review"), "value": len(needs_review), "datatype": "Int"},
-			{"label": _("Ready for Reconciliation"), "value": len(ready), "datatype": "Int"},
+			{"label": _("Confirmed Pending Reconciliation"), "value": len(confirmed_pending), "datatype": "Int"},
 			{"label": _("Reconciliation Exceptions"), "value": len(exceptions), "datatype": "Int"},
 		],
 		"oldest_days": {
 			"needs_review": _oldest_days(needs_review),
-			"ready": _oldest_days(ready),
+			"ready": _oldest_days(confirmed_pending),
 			"exceptions": _oldest_days(exceptions),
 		},
 		"scope": {"company": company, "branch": branch, "from_date": from_date, "to_date": to_date},

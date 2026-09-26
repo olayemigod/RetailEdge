@@ -5,6 +5,8 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
+IDENTITY_CSS = APP_ROOT / "public" / "css" / "retailedge_product_identity.css"
+NAV_COMPAT_CSS = APP_ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 STOCK_ACCOUNTING_INTEGRITY = (
@@ -50,15 +52,94 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 		):
 			self.assertIn(expected, css)
 
-	def test_business_hub_keeps_shared_edgesuite_aliases_instead_of_private_fixed_palette(self):
+	def test_product_sidebar_follows_light_dark_edgesuite_semantic_tokens(self):
+		css = IDENTITY_CSS.read_text(encoding="utf-8")
+		for expected in (
+			"--retailedge-sidebar: var(--edge-color-surface);",
+			"--retailedge-sidebar-muted: var(--edge-color-ink-500);",
+			"background: var(--edge-color-surface);",
+			"border-right: 1px solid var(--edge-color-border);",
+			"color: var(--edge-color-ink-950);",
+			".edge-sidebar__brand-copy strong",
+			".edge-topbar__title-copy strong",
+			"background: var(--edge-color-surface-muted);",
+			'edge-sidebar-item[aria-current="page"]',
+			':root[data-edge-appearance="dark"] [data-edge-product="retailedge"]',
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"color: #f7fbfc;",
+			"color: #dce6ec;",
+			"background: rgba(255, 255, 255, 0.07);",
+			"border-right: 0;",
+		):
+			self.assertNotIn(forbidden, css)
+
+	def test_navigation_shell_compat_uses_only_edgesuite_theme_tokens(self):
+		css = NAV_COMPAT_CSS.read_text(encoding="utf-8")
+		for expected in (
+			".edge-app-shell.edge-nav-shell-v2",
+			"var(--edge-color-surface)",
+			"var(--edge-color-surface-muted)",
+			"var(--edge-color-border)",
+			"var(--edge-color-ink-950)",
+			"var(--edge-color-ink-700)",
+			"var(--edge-color-ink-500)",
+			"var(--edge-color-brand-50)",
+			"var(--edge-color-brand-600)",
+			"var(--edge-color-brand-700)",
+			'data-edge-appearance="dark"',
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"#0b1f33",
+			"#f7fbfc",
+			"#dce6ec",
+			"rgba(255, 255, 255",
+		):
+			self.assertNotIn(forbidden, css)
+
+	def test_business_hub_uses_semantic_theme_tokens_and_compact_business_indices(self):
 		component = BUSINESS_HUB.read_text(encoding="utf-8")
 		for expected in (
-			"var(--edge-border",
-			"var(--edge-surface",
-			"var(--edge-text-muted",
-			"var(--edge-primary",
+			"var(--edge-color-border",
+			"var(--edge-color-surface",
+			"var(--edge-color-surface-muted",
+			"var(--edge-color-ink-950",
+			"var(--edge-color-ink-500",
+			"var(--edge-color-brand-600",
+			':global(:root[data-edge-appearance="dark"]) .retailedge-business-hub',
+			".home-signal-icon {",
+			"width: 24px;",
+			"font-size: 0.96rem;",
 		):
 			self.assertIn(expected, component)
+
+		for forbidden in (
+			"var(--edge-surface, #ffffff)",
+			"var(--edge-surface-muted, #f8fafc)",
+			"var(--edge-text-muted, #667085)",
+			"var(--edge-primary, #2563eb)",
+		):
+			self.assertNotIn(forbidden, component)
+
+	def test_business_hub_identity_layer_has_no_hardcoded_light_dark_contrast_traps(self):
+		css = IDENTITY_CSS.read_text(encoding="utf-8")
+		for expected in (
+			"linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted))",
+			"color: var(--edge-color-ink-950);",
+			"background: color-mix(in srgb, var(--edge-color-brand-600) 16%, var(--edge-color-surface));",
+			":root[data-edge-appearance=\"dark\"] body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner",
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"linear-gradient(180deg, #fff, #f9fbfc)",
+			"background: var(--retailedge-ink);",
+		):
+			self.assertNotIn(forbidden, css)
 
 	def test_c22_integrity_page_uses_edgesuite_shell_and_semantic_theme_aliases(self):
 		component = STOCK_ACCOUNTING_INTEGRITY.read_text(encoding="utf-8")

@@ -29,6 +29,7 @@ from retailedge.branch_profile import (
 
 OPERATING_CONTEXT_TTL_SECONDS = 12 * 60 * 60
 OPERATING_CONTEXT_CACHE_PREFIX = "retailedge:operating-context"
+OPERATING_CONTEXT_SESSION_KEY = "retailedge_operating_context"
 
 
 @frappe.whitelist()
@@ -41,7 +42,8 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 	"""
 	user = frappe.session.user
 	requested_company = _clean(company)
-	cached = _read_cached_context(user=user)
+	persisted = _read_session_context()
+	cached = persisted or _read_cached_context(user=user)
 
 	if cached:
 		validated = _validate_context(
@@ -59,6 +61,7 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 					source="session",
 				)
 		else:
+			_clear_session_context()
 			_clear_cached_context(user=user)
 
 	return _resolve_fallback_context(company=requested_company, user=user)
@@ -126,6 +129,7 @@ def switch_operating_context(company: str, branch: str) -> dict[str, Any]:
 		user=user,
 		source="session",
 	)
+	_write_session_context(context)
 	_write_cached_context(context, user=user)
 	return context
 
@@ -140,6 +144,7 @@ def clear_operating_context() -> dict[str, Any]:
 		branch=_clean(fallback.get("branch")),
 		user=user,
 	)
+	_clear_session_context()
 	_clear_cached_context(user=user)
 	return fallback
 
@@ -452,22 +457,9 @@ def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> d
 		if not validated.get("allowed"):
 			return validated
 
-		pos_state = resolve_branch_pos_requirement(
-			company=validated["company"],
-			branch=validated["branch"],
-			user=user,
-		)
-		if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
-			if throw:
-				frappe.throw(
-					pos_state.get("pos_message") or _("A valid POS Profile is required for this Branch.")
-				)
-			return {
-				"allowed": False,
-				"company": validated["company"],
-				"branch": validated["branch"],
-				"reason": "pos_profile_required",
-			}
+		# Operating Company/Branch selection is a general business context, not a POS
+		# entitlement gate. POS readiness is still exposed by _build_context() for
+		# guidance, but it is enforced only when POS is actually launched.
 		return validated
 	finally:
 		if previous_messages is not None:
@@ -700,6 +692,50 @@ def _doctype_has_field(doctype: str, fieldname: str) -> bool:
 		return bool(frappe.get_meta(doctype).has_field(fieldname))
 	except Exception:
 		return False
+
+
+def _read_session_context() -> dict[str, Any]:
+	"""Read the active Company/Branch from Frappe's authenticated session payload.
+
+	This is the authoritative persistence layer for the user's current Desk session.
+	The legacy Redis key remains as a compatibility mirror only.
+	"""
+	try:
+		data = getattr(frappe.session, "data", None)
+		value = data.get(OPERATING_CONTEXT_SESSION_KEY) if data else None
+		return value if isinstance(value, dict) else {}
+	except Exception:
+		return {}
+
+
+def _write_session_context(context: dict[str, Any]) -> None:
+	payload = {
+		"company": context.get("company") or "",
+		"branch": context.get("branch") or "",
+	}
+	data = getattr(frappe.session, "data", None)
+	if data is None:
+		return
+	data[OPERATING_CONTEXT_SESSION_KEY] = payload
+
+	# Frappe otherwise persists sessiondata on a time threshold. A branch switch
+	# must survive the very next route/API request, so flush this session change now.
+	session_obj = getattr(frappe.local, "session_obj", None)
+	if session_obj and hasattr(session_obj, "update"):
+		session_obj.update(force=True)
+
+
+def _clear_session_context() -> None:
+	try:
+		data = getattr(frappe.session, "data", None)
+		if data is None:
+			return
+		data.pop(OPERATING_CONTEXT_SESSION_KEY, None)
+		session_obj = getattr(frappe.local, "session_obj", None)
+		if session_obj and hasattr(session_obj, "update"):
+			session_obj.update(force=True)
+	except Exception:
+		return
 
 
 def _cache_key(*, user: str) -> str:

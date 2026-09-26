@@ -15,7 +15,7 @@ def test_smart_date_uses_stable_server_reference_date():
 	text = SOURCE.read_text()
 	assert 'smartDateReference: ""' in text
 	assert ':referenceDate="smartDateReference || null"' in text
-	assert 'this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || ""' in text
+	assert "this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || \"\"" in text
 	assert ':referenceDate="filters.to_date || null"' not in text
 
 
@@ -24,7 +24,7 @@ def test_smart_date_resolution_only_updates_exact_report_dates():
 	assert "onSmartDateResolved(value)" in text
 	assert "this.filters.from_date = value.from_date" in text
 	assert "this.filters.to_date = value.to_date" in text
-	assert 'this.filters.date_range_preset = "Custom Period"' in text
+	assert "this.smartDate = { ...value }" in text
 	assert "this.currentPage = 1" in text
 
 
@@ -37,10 +37,11 @@ def test_provider_and_export_receive_exact_filters_not_free_text_expression():
 	assert "smartDate" not in text.split("providerFilters()", 1)[1].split("async fetchData", 1)[0]
 
 
-def test_existing_manual_and_preset_date_controls_remain_available_during_adoption():
+def test_smart_date_is_the_single_visible_date_authority():
 	text = SOURCE.read_text()
-	assert 'v-model="filters.date_range_preset"' in text
-	assert 'v-model="filters.from_date"' in text
-	assert 'v-model="filters.to_date"' in text
-	assert "onPresetChange()" in text
-	assert "onDateChange()" in text
+	assert '<EdgeSmartDateRange' in text
+	assert 'v-model="filters.date_range_preset"' not in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.to_date"' not in text
+	assert "onPresetChange()" not in text
+	assert "onDateChange()" not in text
