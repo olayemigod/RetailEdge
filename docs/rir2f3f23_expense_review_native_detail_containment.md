@@ -22,19 +22,19 @@ The first three open native forms directly. Generic DocType/Report navigation fr
 1. Expense Review remains available to its existing permitted readers.
 2. Reviewer authority continues to come from the existing Expense Review context and server-side review endpoint.
 3. **Review Action** remains EdgeSuite-owned and clickable only when `canReview` is true.
-4. Cashier Expense details open in a shared read-only EdgeSuite detail viewer backed by the governed Cashier Expense read scope.
+4. Cashier Expense details and lifecycle actions open in a shared EdgeSuite workflow form backed by the governed Cashier Expense read scope.
 5. Expense Category remains EdgeSuite-owned through Setup; User detail remains Native Desk-only.
-6. The Cashier Expense detail viewer exposes an Advanced native form action only when `can_use_native_desk` is true.
+6. Cashier Expense lifecycle actions remain inside EdgeSuite; the workflow form does not expose a native Cashier Expense form escape.
 7. Generic DocType/Report navigation also requires final Native Desk access.
 8. The fallback navigation context uses `retailedge.master_experience.get_retailedge_business_hub_context`.
-9. A read-only EdgeSuite user can inspect the scoped expense detail without gaining reviewer authority or Native Desk access.
+9. A read-only EdgeSuite user can inspect the scoped expense detail without gaining reviewer, posting, or Native Desk authority.
 
 ## Scope
 
 Runtime:
 - `retailedge/public/js/expense_review/ExpenseReviewReport.vue`
 - `retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue`
-- `retailedge/cashier_expense_detail.py` — dedicated permission/Branch-scoped read service for the shared detail viewer
+- `retailedge/cashier_expense_detail.py` — dedicated permission/Branch-scoped read and governed lifecycle action service for the shared workflow form
 
 Tests:
 - `retailedge/tests/test_rir2f3f23_expense_review_native_detail_containment_contract.py`
@@ -43,25 +43,24 @@ Tests:
 Documentation:
 - this record.
 
-## Explicitly Unchanged
-
-No Expense Review backend file is changed.
+## Explicitly Preserved
 
 The following remain unchanged:
 
 - `retailedge/expense_review.py`;
 - `retailedge/cashier_expense_audit.py`;
 - Include / Exclude / Needs Clarification mutation behavior;
-- reviewer role/permission evaluation;
+- reviewer role/permission rules;
 - posting-readiness calculation;
-- Cashier Expense lifecycle;
-- accounting posting;
+- Journal Entry accounting semantics;
 - report rows, summaries, pagination and export;
 - Company/Branch scope.
 
 The review mutation endpoints remain unchanged.
 
-The B4B10 read-scope contract remains authoritative. The new detail endpoint reuses that scope rather than creating a parallel visibility rule.
+The B4B10 read-scope contract remains authoritative. The workflow service reuses that scope rather than creating a parallel visibility rule.
+
+Cashier Expense lifecycle actions remain inside EdgeSuite by calling the existing Submit / Approve / Reject / Reopen / Refresh Posting Readiness / Post to Accounts backend rules. The UI does not invent a parallel workflow.
 
 ## Safety Rules
 
@@ -70,7 +69,7 @@ The B4B10 read-scope contract remains authoritative. The new detail endpoint reu
 - Do not mutate submitted accounting documents.
 - Do not change Cashier Expense posting or Daily Sales Audit inclusion semantics.
 - Keep review operations inside EdgeSuite where already supported.
-- Treat native record-detail forms only as explicit advanced inspection.
+- Do not require the native Cashier Expense DocType form to complete the operational lifecycle.
 
 ## Tests Required
 
@@ -80,10 +79,10 @@ Focused contracts must verify:
 - Review Action remains EdgeSuite-owned and permission-gated by `canReview`;
 - Cashier Expense detail opens inside EdgeSuite for permitted readers;
 - the detail endpoint reuses authoritative Cashier Expense Company/Branch read scope;
-- the Advanced native Cashier Expense action is hidden for EdgeSuite-only users;
+- the Cashier Expense workflow form exposes no native Cashier Expense form escape;
 - the direct native User path remains defensively gated;
 - generic DocType/Report navigation is gated;
-- review mutations, posting behavior and accounting truth remain unchanged.
+- review mutations, posting behavior and accounting truth remain governed by their existing backend rules.
 
 ## Freeze Rule
 
