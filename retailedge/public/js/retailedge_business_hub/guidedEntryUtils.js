@@ -134,10 +134,12 @@ export function errorMessage(error, fallback) {
 
 function elevateFrappeConfirmation(dialog) {
 	if (typeof document === "undefined") return;
-	const wrapper =
+	const returnedWrapper =
 		dialog?.$wrapper?.get?.(0)
 		|| dialog?.$wrapper?.[0]
 		|| null;
+	const frappeModals = Array.from(document.querySelectorAll(".modal"));
+	const wrapper = returnedWrapper || frappeModals[frappeModals.length - 1] || null;
 	if (wrapper?.style) {
 		wrapper.style.setProperty("z-index", "100000", "important");
 		wrapper.setAttribute("data-retailedge-overlay-confirm", "1");
