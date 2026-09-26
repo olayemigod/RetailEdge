@@ -199,7 +199,8 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("expense_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("ERPNext's item-pricing service", source)
+		self.assertIn("resolve_purchase_item_pricing", source)
+		self.assertIn("doc.buying_price_list", source)
 
 	def test_dialog_uses_shared_edgesuite_components_and_resolves_buying_price(self):
 		component = (
