@@ -459,8 +459,8 @@
    "is_query_report": 1,
    "label": "Cashier Expense Review",
    "link_count": 0,
-   "link_to": "RetailEdge Cashier Expense Review",
-   "link_type": "Report",
+   "link_to": "expense-review",
+   "link_type": "Page",
    "onboard": 0,
    "type": "Link"
   },
