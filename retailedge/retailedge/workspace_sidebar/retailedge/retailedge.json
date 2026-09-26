@@ -336,8 +336,8 @@
    "indent": 0,
    "keep_closed": 0,
    "label": "Cashier Expenses",
-   "link_to": "RetailEdge Cashier Expense",
-   "link_type": "DocType",
+   "link_to": "cashier-expenses",
+   "link_type": "Page",
    "show_arrow": 0,
    "type": "Link"
   },
