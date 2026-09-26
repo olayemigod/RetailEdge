@@ -14,8 +14,10 @@ from retailedge.operating_context import (
 from retailedge.cashier_expense import append_cashier_expense_action_log
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
+	get_cashier_expense_posting_settings,
 	refresh_cashier_expense_posting_readiness,
 )
+from retailedge.cashier_expense_accounting import attempt_direct_cashier_expense_posting
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -43,7 +45,14 @@ class RetailEdgeCashierExpense(Document):
 		self._status_before_submit = self.expense_status or "Draft"
 		if not self.expense_status or self.expense_status == "Draft":
 			self.expense_status = "Submitted"
-		if not self.ledger_status:
+		if not self.cash_movement_status or self.cash_movement_status == "Not Disbursed":
+			self.cash_movement_status = "Disbursed"
+		posting_settings = get_cashier_expense_posting_settings()
+		if not self.posting_mode_applied:
+			self.posting_mode_applied = posting_settings["posting_mode"]
+		if posting_settings["enabled"] and posting_settings["posting_mode"] == "Direct Posting":
+			self.ledger_status = "Pending Ledger"
+		elif not self.ledger_status:
 			self.ledger_status = "Not Applicable"
 		self.set_posting_readiness_preview()
 
@@ -55,8 +64,13 @@ class RetailEdgeCashierExpense(Document):
 			action="Submitted",
 			previous_status=previous_status,
 			new_status=self.expense_status,
-			context={"ledger_status": self.ledger_status},
+			context={
+				"ledger_status": self.ledger_status,
+				"cash_movement_status": self.cash_movement_status,
+				"posting_mode": self.posting_mode_applied,
+			},
 		)
+		attempt_direct_cashier_expense_posting(self)
 
 	def before_cancel(self):
 		self._status_before_cancel = self.expense_status
@@ -80,6 +94,14 @@ class RetailEdgeCashierExpense(Document):
 			self.expense_status = "Draft"
 		if not self.ledger_status:
 			self.ledger_status = "Not Applicable"
+		if not self.entry_source:
+			self.entry_source = "RetailEdge"
+		if not self.cash_source:
+			self.cash_source = "POS Till"
+		if not self.cash_movement_status:
+			self.cash_movement_status = "Not Disbursed"
+		if not self.posting_mode_applied:
+			self.posting_mode_applied = get_cashier_expense_posting_settings()["posting_mode"]
 		if self.include_in_daily_audit in (None, ""):
 			self.include_in_daily_audit = 1
 		if not self.daily_audit_inclusion_status:
