@@ -382,16 +382,16 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			[documentStatus, effectiveStatus, frm.doc.ledger_status || __("Not Applicable")]
 		);
 
-		if (effectiveStatus === "Pending Ledger") {
+		if (frm.doc.ledger_status === "Failed") {
 			frm.set_intro(
-				__("{0} This expense is approved and waiting for accounting posting.", [reviewMessage]),
+				__("{0} The till expense is recorded, but accounting posting needs attention: {1}", [reviewMessage, frm.doc.posting_block_reason || ""]),
 				"orange"
 			);
 			return;
 		}
-		if (frm.doc.ledger_status === "Failed") {
+		if (effectiveStatus === "Pending Ledger") {
 			frm.set_intro(
-				__("{0} The till expense is recorded, but accounting posting needs attention: {1}", [reviewMessage, frm.doc.posting_block_reason || ""]),
+				__("{0} This expense is approved and waiting for accounting posting.", [reviewMessage]),
 				"orange"
 			);
 			return;
@@ -566,6 +566,19 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"RetailEdgeAuditor",
 		]);
 		return (frappe.user_roles || []).some((role) => reviewerRoles.has(role));
+	},
+
+	user_can_post_to_accounts() {
+		const postingRoles = new Set([
+			"System Manager",
+			"Accounts Manager",
+			"Accounts User",
+			"RetailEdge Manager",
+			"RetailEdge Branch Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
+		]);
+		return (frappe.user_roles || []).some((role) => postingRoles.has(role));
 	},
 
 	user_can_refresh_posting_readiness() {
