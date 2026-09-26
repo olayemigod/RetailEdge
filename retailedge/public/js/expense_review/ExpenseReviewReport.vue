@@ -71,7 +71,6 @@
 		:branch="filters.branch"
 		:canUseNativeDesk="canUseNativeDesk"
 		@close="closeCashierExpenseDetail"
-		@open-native="openNativeCashierExpense"
 	/>
 </template>
 
@@ -166,7 +165,6 @@ export default {
 		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") { this.openCashierExpenseDetail(value); return; } if (column.fieldname === "expense_category" && this.hasPageTarget("retailedge-setup")) { frappe.route_options = { setup_resource: "expense-categories", expense_category: value }; frappe.set_route("retailedge-setup"); return; } if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value); },
 		openCashierExpenseDetail(expenseName) { const name = String(expenseName || "").trim(); if (!name) return; this.cashierExpenseDetailName = name; this.cashierExpenseDetailOpen = true; },
 		closeCashierExpenseDetail() { this.cashierExpenseDetailOpen = false; this.cashierExpenseDetailName = ""; },
-		openNativeCashierExpense(expenseName) { if (!this.canUseNativeDesk || !expenseName) return; this.closeCashierExpenseDetail(); frappe.set_route("Form", "RetailEdge Cashier Expense", expenseName); },
 		openReviewDialog(row) {
 			if (!this.canReview) { frappe.msgprint({ title: __("Read-only access"), message: __("You do not have reviewer permission for cashier expense actions."), indicator: "orange" }); return; }
 			frappe.prompt([
