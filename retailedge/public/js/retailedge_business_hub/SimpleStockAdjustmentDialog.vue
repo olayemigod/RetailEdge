@@ -150,7 +150,7 @@ export default {
 		requestClose() {
 			if (this.saving) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm("Discard the unsaved Quick Adjustment changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Quick Adjustment changes?", () => this.$emit("close"));
 		},
 		continueInAdjustmentPage() {
 			if (this.saving) return;
