@@ -84,7 +84,7 @@
 </template>
 
 <script>
-import { callMethod, errorMessage, resolveBranchWarehouse, QUICK_ENTRY_MAX_LINES } from "./guidedEntryUtils";
+import { callMethod, confirmAboveEdgeModal, errorMessage, resolveBranchWarehouse, QUICK_ENTRY_MAX_LINES } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_stock_adjustment.get_simple_stock_adjustment_context";
 const SEARCH_METHOD = "retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options";
