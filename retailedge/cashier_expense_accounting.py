@@ -116,47 +116,61 @@ def _post_cashier_expense_to_accounts(
 			or _("This Cashier Expense is not ready for accounting posting.")
 		)
 
-	journal = _build_journal_entry(doc, preview)
-	journal.insert()
-	if not journal.has_permission("submit"):
-		frappe.throw(
-			_("You do not have permission to submit the Journal Entry."),
-			frappe.PermissionError,
-		)
-	journal.submit()
-	if cint(journal.docstatus) != 1:
-		frappe.throw(_("The Journal Entry was not submitted."))
+	savepoint = None
+	if automatic:
+		savepoint = f"retailedge_cashier_direct_{frappe.generate_hash(length=8)}"
+		frappe.db.savepoint(savepoint)
 
-	previous_status = str(getattr(doc, "expense_status", None) or "Submitted")
-	frappe.db.set_value(
-		"RetailEdge Cashier Expense",
-		doc.name,
-		{
-			"posting_reference_type": POSTING_DOCUMENT_TYPE,
-			"posting_reference": journal.name,
-			"ledger_status": "Posted",
-			"expense_status": "Posted",
-			"posting_ready": 0,
-			"posting_block_reason": None,
-			"user_message": None,
-		},
-		update_modified=True,
-	)
-	append_cashier_expense_action_log(
-		doc.name,
-		action="Posted to Accounts",
-		previous_status=previous_status,
-		new_status="Posted",
-		context={
-			"posting_mode": settings["posting_mode"],
-			"journal_entry": journal.name,
-		},
-	)
-	return _posting_result(
-		frappe.get_doc("RetailEdge Cashier Expense", doc.name),
-		journal.name,
-		idempotent=False,
-	)
+	try:
+		journal = _build_journal_entry(doc, preview)
+		journal.insert()
+		if not journal.has_permission("submit"):
+			frappe.throw(
+				_("You do not have permission to submit the Journal Entry."),
+				frappe.PermissionError,
+			)
+		journal.submit()
+		if cint(journal.docstatus) != 1:
+			frappe.throw(_("The Journal Entry was not submitted."))
+
+		previous_status = str(getattr(doc, "expense_status", None) or "Submitted")
+		frappe.db.set_value(
+			"RetailEdge Cashier Expense",
+			doc.name,
+			{
+				"posting_reference_type": POSTING_DOCUMENT_TYPE,
+				"posting_reference": journal.name,
+				"ledger_status": "Posted",
+				"expense_status": "Posted",
+				"posting_ready": 0,
+				"posting_block_reason": None,
+				"user_message": None,
+			},
+			update_modified=True,
+		)
+		append_cashier_expense_action_log(
+			doc.name,
+			action="Posted to Accounts",
+			previous_status=previous_status,
+			new_status="Posted",
+			context={
+				"posting_mode": settings["posting_mode"],
+				"journal_entry": journal.name,
+			},
+		)
+		result = _posting_result(
+			frappe.get_doc("RetailEdge Cashier Expense", doc.name),
+			journal.name,
+			idempotent=False,
+		)
+	except Exception:
+		if savepoint:
+			frappe.db.rollback(save_point=savepoint)
+		raise
+	else:
+		if savepoint:
+			frappe.db.release_savepoint(savepoint)
+		return result
 
 
 def _assert_posting_access(doc, *, settings: dict[str, Any], automatic: bool) -> None:
