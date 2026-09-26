@@ -11,6 +11,7 @@ from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
 	get_cashier_expense_posting_settings,
 )
+from retailedge.operating_context import get_operational_branch_scope
 
 POSTING_DOCUMENT_TYPE = "Journal Entry"
 CONTROLLED_POSTING_ROLES = {
@@ -185,6 +186,15 @@ def _assert_posting_access(doc, *, settings: dict[str, Any], automatic: bool) ->
 			_("You do not have permission to update this Cashier Expense."),
 			frappe.PermissionError,
 		)
+	company = str(getattr(doc, "company", None) or "").strip()
+	branch = str(getattr(doc, "branch", None) or "").strip()
+	if company:
+		scope = get_operational_branch_scope(company, user=frappe.session.user)
+		if scope.get("restricted") and branch not in set(scope.get("allowed_branches") or []):
+			frappe.throw(
+				_("You do not have active Branch access to post this Cashier Expense."),
+				frappe.PermissionError,
+			)
 	for ptype, label in (("read", "read"), ("create", "create"), ("submit", "submit")):
 		if not frappe.has_permission(POSTING_DOCUMENT_TYPE, ptype):
 			frappe.throw(
