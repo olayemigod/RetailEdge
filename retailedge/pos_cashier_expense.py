@@ -56,8 +56,21 @@ def ensure_pos_closing_cashier_expense_custom_fields():
 	"""Idempotently add closing fields without modifying the POSNext package."""
 	if not frappe.db.exists("DocType", CLOSING_DOCTYPE):
 		return {}
-	create_custom_fields(POS_CLOSING_CUSTOM_FIELDS, ignore_validate=True, update=True)
-	return POS_CLOSING_CUSTOM_FIELDS
+	meta = frappe.get_meta(CLOSING_DOCTYPE)
+	insert_after = (
+		"payment_reconciliation"
+		if meta.has_field("payment_reconciliation")
+		else "pos_opening_shift"
+		if meta.has_field("pos_opening_shift")
+		else None
+	)
+	custom_fields = {
+		CLOSING_DOCTYPE: [dict(field) for field in POS_CLOSING_CUSTOM_FIELDS[CLOSING_DOCTYPE]]
+	}
+	if insert_after:
+		custom_fields[CLOSING_DOCTYPE][0]["insert_after"] = insert_after
+	create_custom_fields(custom_fields, ignore_validate=True, update=True)
+	return custom_fields
 
 
 @frappe.whitelist()
@@ -74,8 +87,16 @@ def get_pos_cashier_expense_capabilities(
 		and cint(getattr(settings, "enable_cashier_expense_pos_integration", 0))
 	)
 	posting = get_cashier_expense_posting_settings()
+	ready = bool(
+		integration_enabled
+		and context.get("linked_pos_opening_shift")
+		and context.get("company")
+		and context.get("payment_account")
+		and frappe.has_permission(EXPENSE_DOCTYPE, "create")
+	)
 	return {
 		"enabled": integration_enabled,
+		"ready": ready,
 		"show_action": integration_enabled and bool(cint(getattr(settings, "show_cashier_expense_in_pos", 1))),
 		"include_in_closing": integration_enabled
 		and bool(cint(getattr(settings, "include_cashier_expenses_in_pos_closing", 1))),
@@ -137,7 +158,7 @@ def create_pos_cashier_expense(values: dict[str, Any] | str | None = None) -> di
 
 	if values.get("description"):
 		doc.description = str(values.get("description")).strip()
-	if values.get("expense_date"):
+	if values.get("expense_date") and cint(getattr(settings, "allow_cashier_expense_date_edit", 0)):
 		doc.expense_date = getdate(values.get("expense_date"))
 	if values.get("attachment"):
 		doc.attachment = _validate_attachment(values.get("attachment"))
@@ -301,11 +322,14 @@ def _build_pos_closing_cashier_expense_summary(
 
 
 def _find_cash_reconciliation_row(doc, *, pos_profile: str | None):
-	cash_mode = (
-		frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
-		if pos_profile
-		else None
-	) or "Cash"
+	cash_mode = "Cash"
+	if pos_profile:
+		profile_meta = frappe.get_meta("POS Profile")
+		if profile_meta.has_field("posa_cash_mode_of_payment"):
+			cash_mode = (
+				frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
+				or cash_mode
+			)
 	for row in getattr(doc, "payment_reconciliation", []) or []:
 		if str(row.get("mode_of_payment") or "").strip() == str(cash_mode).strip():
 			return row
