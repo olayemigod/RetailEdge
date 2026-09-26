@@ -27,22 +27,21 @@ def _read(path: Path) -> str:
 
 def test_cashier_expense_detail_endpoint_is_permission_and_branch_scoped():
 	source = _read(CASHIER_DETAIL)
-	start = source.index("def get_cashier_expense_detail(")
-	detail_endpoint = source[start:]
 
-	assert "apply_cashier_expense_read_scope(filters)" in detail_endpoint
-	assert 'frappe.get_list(' in detail_endpoint
-	assert 'EXPENSE_DOCTYPE' in detail_endpoint
-	assert '"name": expense_name' in detail_endpoint
-	assert "ignore_permissions" not in detail_endpoint
-	assert "frappe.db.commit" not in detail_endpoint
-	assert "frappe.db.set_value" not in detail_endpoint
+	assert "apply_cashier_expense_read_scope(filters)" in source
+	assert 'frappe.get_list(' in source
+	assert 'EXPENSE_DOCTYPE' in source
+	assert '"name": expense_name' in source
+	assert "ignore_permissions" not in source
+	assert "frappe.db.commit" not in source
+	assert "frappe.db.set_value" not in source
 
 
-def test_cashier_expense_lists_use_shared_edgesuite_detail_viewer():
+def test_cashier_expense_lists_use_shared_edgesuite_workflow_form():
 	register = _read(REGISTER_COMPONENT)
 	review = _read(REVIEW_COMPONENT)
 	detail = _read(DETAIL_COMPONENT)
+	backend = _read(CASHIER_DETAIL)
 
 	assert 'import CashierExpenseDetailDialog from "./CashierExpenseDetailDialog.vue";' in register
 	assert 'this.openCashierExpenseDetail(sourceReference);' in register
@@ -50,10 +49,18 @@ def test_cashier_expense_lists_use_shared_edgesuite_detail_viewer():
 	assert 'import CashierExpenseDetailDialog from "../expense_register/CashierExpenseDetailDialog.vue";' in review
 	assert 'if (column.fieldname === "name") { this.openCashierExpenseDetail(value); return; }' in review
 	assert 'retailedge.cashier_expense_detail.get_cashier_expense_detail' in detail
-	assert ':canUseNativeDesk="canUseNativeDesk"' in register
-	assert ':canUseNativeDesk="canUseNativeDesk"' in review
-	assert "apply_expense_review_action" not in detail
-	assert "save" not in detail.lower()
+	assert 'retailedge.cashier_expense_detail.apply_cashier_expense_workflow_action' in detail
+	assert '@updated="fetchData"' in register
+	assert '@updated="fetchData"' in review
+	assert 'Advanced: Open Full Record' not in detail
+	assert 'frappe.set_route("Form", "RetailEdge Cashier Expense"' not in detail
+	assert "apply_cashier_expense_workflow_action" in backend
+	assert "submit_cashier_expense" in backend
+	assert "approve_cashier_expense" in backend
+	assert "reject_cashier_expense" in backend
+	assert "reopen_cashier_expense" in backend
+	assert "refresh_cashier_expense_posting_readiness" in backend
+	assert "post_cashier_expense_to_accounts" in backend
 
 
 def test_nested_quick_entry_confirmations_use_elevated_shared_helper():
@@ -69,3 +76,15 @@ def test_nested_quick_entry_confirmations_use_elevated_shared_helper():
 		assert "confirmAboveEdgeModal(" in source, filename
 		assert "frappe.confirm(" not in source, filename
 		assert "confirmAboveEdgeModal" in source.split("</script>", 1)[0], filename
+
+
+
+def test_cashier_expense_workflow_does_not_bypass_document_permissions():
+	source = (APP_ROOT / "cashier_expense.py").read_text(encoding="utf-8")
+	for function_name in ("approve_cashier_expense", "reject_cashier_expense", "reopen_cashier_expense"):
+		start = source.index(f"def {function_name}(")
+		next_def = source.find("\ndef ", start + 1)
+		block = source[start:] if next_def == -1 else source[start:next_def]
+		assert "doc.has_permission(\"write\")" in block
+		assert "doc.save()" in block
+		assert "ignore_permissions=True" not in block
