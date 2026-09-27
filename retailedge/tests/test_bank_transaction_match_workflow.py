@@ -24,6 +24,7 @@ from retailedge.bank_transaction_match_workflow import (
 from retailedge.bank_transaction_matching import get_bank_transaction_matching_rows
 from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import (
 	RetailEdgeBankTransactionMatch,
+	_resolve_manual_candidate_context,
 )
 from retailedge.retailedge.doctype.retailedge_settings.retailedge_settings import RetailEdgeSettings
 
@@ -380,6 +381,50 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(doc.match_status, "Strong Match")
 		self.assertEqual(doc.risk_level, "Low")
 		self.assertEqual(doc.candidate_type, "Sales Invoice")
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_manual_candidate_context"
+	)
+	def test_persisted_review_hydration_marks_candidate_as_locked(self, mock_resolve):
+		mock_resolve.return_value = {"doc_values": {}, "details": {}, "block_reason": None}
+		doc = SimpleNamespace(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Payment Entry",
+			suggested_document="PE-LOCKED",
+			sales_invoice=None,
+			payment_entry="PE-LOCKED",
+			details_json=None,
+			is_new=lambda: False,
+		)
+		RetailEdgeBankTransactionMatch._hydrate_candidate_context(doc)
+		self.assertTrue(mock_resolve.call_args.kwargs["lock_existing_candidate"])
+		self.assertEqual(mock_resolve.call_args.kwargs["suggested_document"], "PE-LOCKED")
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context",
+		return_value={},
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate",
+		return_value=None,
+	)
+	def test_persisted_review_missing_locked_candidate_never_substitutes_current_best(
+		self, mock_resolve, _mock_bank, mock_source_fallback
+	):
+		context = _resolve_manual_candidate_context(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-LOCKED",
+			sales_invoice="SINV-LOCKED",
+			lock_existing_candidate=True,
+		)
+		self.assertIn("Locked candidate", context["block_reason"])
+		self.assertIn("no alternate candidate was selected", context["block_reason"])
+		self.assertFalse(mock_resolve.call_args.kwargs["allow_fallback"])
+		mock_source_fallback.assert_not_called()
 
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
