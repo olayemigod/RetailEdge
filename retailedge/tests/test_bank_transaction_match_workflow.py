@@ -426,6 +426,50 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertFalse(mock_resolve.call_args.kwargs["allow_fallback"])
 		mock_source_fallback.assert_not_called()
 
+	@patch("retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row")
+	def test_persisted_sales_invoice_reconstructs_locked_payment_row_evidence(self, mock_validate):
+		mock_validate.return_value = {
+			"valid": True,
+			"candidate": {
+				"document_type": "Sales Invoice",
+				"document_name": "SINV-LOCKED",
+			},
+		}
+		locked_doc = SimpleNamespace(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-LOCKED",
+			sales_invoice="SINV-LOCKED",
+			payment_entry=None,
+			payment_row_index=2,
+			payment_event_source="Invoice Payment Row",
+			candidate_amount=1090.0,
+			payment_mode="Bank Transfer",
+			payment_account="Moniepoint - PED",
+		)
+		previous = getattr(frappe.flags, "retailedge_active_match_doc", None)
+		frappe.flags.retailedge_active_match_doc = locked_doc
+		try:
+			candidate = _resolve_matching_candidate(
+				bank_transaction_name="BTN-LOCKED",
+				suggested_document_type="Sales Invoice",
+				suggested_document="SINV-LOCKED",
+				sales_invoice="SINV-LOCKED",
+				allow_fallback=False,
+			)
+		finally:
+			frappe.flags.retailedge_active_match_doc = previous
+
+		self.assertEqual(candidate["document_name"], "SINV-LOCKED")
+		locked_row = mock_validate.call_args.args[0]
+		self.assertEqual(locked_row["candidate_name"], "SINV-LOCKED")
+		self.assertEqual(locked_row["payment_row_index"], 2)
+		self.assertEqual(locked_row["payment_event_source"], "Invoice Payment Row")
+		self.assertEqual(locked_row["payment_event_found"], 1)
+		self.assertEqual(locked_row["payment_row_amount"], 1090.0)
+		self.assertEqual(locked_row["payment_mode"], "Bank Transfer")
+		self.assertEqual(locked_row["payment_account"], "Moniepoint - PED")
+
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[],
