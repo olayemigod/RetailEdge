@@ -1211,7 +1211,7 @@ def _validate_locked_candidate_from_selected_row(row):
 		payments = frappe.get_all(
 			"Sales Invoice Payment",
 			filters={"parent": candidate_name},
-			fields=["idx", "mode_of_payment", "account", "amount"],
+			fields=["idx", "mode_of_payment", "account", "amount", "base_amount", "reference_no"],
 			order_by="idx",
 		)
 
@@ -1235,10 +1235,15 @@ def _validate_locked_candidate_from_selected_row(row):
 				"do_not_substitute": True,
 			}
 
-		if abs(flt(payment_row.amount) - flt(row.get("payment_row_amount"))) > amount_tolerance:
+		current_payment_row_amount = flt(payment_row.base_amount or payment_row.amount)
+		locked_payment_row_amount = flt(row.get("payment_row_amount"))
+		if abs(current_payment_row_amount - locked_payment_row_amount) > amount_tolerance:
 			return {
 				"valid": False,
-				"reason": f"Payment row amount mismatch: expected {row.get('payment_row_amount')}, got {payment_row.amount}",
+				"reason": (
+					"Payment row amount mismatch: "
+					f"expected {locked_payment_row_amount}, got {current_payment_row_amount}"
+				),
 				"do_not_substitute": True,
 			}
 
@@ -1258,25 +1263,29 @@ def _validate_locked_candidate_from_selected_row(row):
 				"do_not_substitute": True,
 			}
 
+		locked_event_source = cstr(row.get("payment_event_source")).strip() or "Invoice Payment Row"
+		locked_category = (
+			"pos_payment_match" if locked_event_source == "POS Payment Row" else "invoice_payment_row_match"
+		)
 		candidate["posting_date"] = si.posting_date
 		candidate["sales_invoice_outstanding_amount"] = flt(si.outstanding_amount)
 		candidate["sales_invoice_grand_total"] = flt(si.grand_total)
 		candidate["grand_total"] = flt(si.grand_total)
 		candidate["outstanding_amount"] = flt(si.outstanding_amount)
 		candidate["branch"] = si.retailedge_branch
-		candidate["payment_row_amount"] = flt(payment_row.amount)
-		candidate["candidate_amount"] = flt(payment_row.amount)
-		candidate["amount_difference"] = abs(bt_amount - flt(payment_row.amount))
+		candidate["payment_row_amount"] = current_payment_row_amount
+		candidate["candidate_amount"] = current_payment_row_amount
+		candidate["amount_difference"] = abs(bt_amount - current_payment_row_amount)
 		candidate["payment_mode"] = payment_row.mode_of_payment
 		candidate["payment_account"] = payment_row.account
 		candidate["payment_row_index"] = row_idx
 		candidate["payment_event_found"] = 1
-		candidate["payment_event_source"] = "POS Payment Row"
-		candidate["candidate_category"] = "invoice_payment_row_match"
-		candidate["candidate_category_label"] = get_candidate_category_label("invoice_payment_row_match")
+		candidate["payment_event_source"] = locked_event_source
+		candidate["candidate_category"] = locked_category
+		candidate["candidate_category_label"] = get_candidate_category_label(locked_category)
 
 		bt_ref = cstr(bt.get("reference_number") or bt.get("reference") or "").strip()
-		si_ref = cstr(payment_row.get("reference") or row.get("payment_reference") or "").strip()
+		si_ref = cstr(payment_row.get("reference_no") or row.get("payment_reference") or "").strip()
 		if si_ref and bt_ref and si_ref == bt_ref:
 			candidate["reference_match_exact"] = 1
 		else:
@@ -2075,6 +2084,22 @@ def _resolve_matching_candidate(
 				"reference_number": getattr(doc, "reference_number", None)
 				or getattr(doc, "payment_reference", None),
 			}
+			# Persisted Sales Invoice reviews keep the locked payment-row identity
+			# (row index + event source) and original candidate amount, but the
+			# selected-report transport fields payment_event_found/payment_row_amount
+			# are not DocType fields. Reconstruct only that missing validation
+			# evidence from the persisted locked record. Never discover or select a
+			# different row here.
+			locked_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
+			if locked_type == "Sales Invoice":
+				if (
+					row.get("payment_event_found") in (None, "")
+					and row.get("payment_row_index") not in (None, "")
+					and cstr(row.get("payment_event_source")).strip()
+				):
+					row["payment_event_found"] = 1
+				if row.get("payment_row_amount") in (None, ""):
+					row["payment_row_amount"] = getattr(doc, "candidate_amount", None)
 		else:
 			row = {
 				"bank_transaction": bank_transaction_name,

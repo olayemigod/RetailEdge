@@ -12,7 +12,8 @@
   "branch_setup",
   "branch_role",
   "is_primary",
-  "price_lists",
+  "pricing_section",
+  "allowed_price_lists",
   "period_section",
   "effective_from",
   "effective_to",
@@ -79,6 +80,18 @@
    "label": "Primary Branch"
   },
   {
+   "fieldname": "pricing_section",
+   "fieldtype": "Section Break",
+   "label": "Price List Access"
+  },
+  {
+   "description": "Price Lists this user may choose while working in this Branch when Price List Governance permits switching from the resolved default.",
+   "fieldname": "allowed_price_lists",
+   "fieldtype": "Table",
+   "label": "Allowed Price Lists",
+   "options": "RetailEdge Branch Assignment Price List"
+  },
+  {
    "fieldname": "period_section",
    "fieldtype": "Section Break",
    "label": "Assignment Period"
@@ -122,13 +135,6 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
-  },
-  {
-   "fieldname": "price_lists",
-   "fieldtype": "Table",
-   "label": "Allowed Price Lists",
-   "options": "RetailEdge Branch Assignment Price List",
-   "description": "Optional Price Lists the assigned user may choose for this Branch assignment. The active pricing policy and Price List type still apply."
   }
  ],
  "index_web_pages_for_search": 1,

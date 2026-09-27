@@ -16,6 +16,18 @@
   "cost_price_hidden_roles",
   "audit_foundation_section",
   "enable_sales_payment_audit",
+  "price_list_governance_tab",
+  "price_list_governance_section",
+  "enable_price_list_governance",
+  "selling_price_list_precedence",
+  "buying_price_list_precedence",
+  "price_list_switching_section",
+  "enable_assigned_price_list_switching",
+  "allow_price_list_switch_from_party_default",
+  "allow_price_list_switch_from_pos_default",
+  "allow_price_list_switch_from_branch_default",
+  "allow_price_list_switch_from_user_default",
+  "allow_price_list_switch_from_system_default",
   "cashier_expense_tab",
   "cashier_expense_section",
   "enable_cashier_expense_workflow",
@@ -72,7 +84,6 @@
   "apply_branch_default_pos_profile",
   "pricing_governance_tab",
   "pricing_governance_section",
-  "enable_price_list_governance",
   "selling_price_list_policy",
   "buying_price_list_policy",
   "allow_price_list_switch",
@@ -181,6 +192,92 @@
    "fieldname": "enable_sales_payment_audit",
    "fieldtype": "Check",
    "label": "Enable Sales & Payment Audit"
+  },
+  {
+   "fieldname": "price_list_governance_tab",
+   "fieldtype": "Tab Break",
+   "label": "Price List Governance"
+  },
+  {
+   "fieldname": "price_list_governance_section",
+   "fieldtype": "Section Break",
+   "label": "Price List Resolution Policy"
+  },
+  {
+   "default": "1",
+   "description": "Apply the configurable Price List precedence and switching policy to supported EdgeSuite sales and purchase entry flows.",
+   "fieldname": "enable_price_list_governance",
+   "fieldtype": "Check",
+   "label": "Enable Price List Governance"
+  },
+  {
+   "default": "party_default\npos_profile\nbranch_default\nuser_default\nuser_permission\nerpnext_default\nstandard_price_list",
+   "depends_on": "eval:doc.enable_price_list_governance",
+   "description": "One source key per line, highest priority first. Allowed selling keys: party_default, pos_profile, branch_default, user_default, user_permission, erpnext_default, standard_price_list.",
+   "fieldname": "selling_price_list_precedence",
+   "fieldtype": "Small Text",
+   "label": "Selling Price List Precedence"
+  },
+  {
+   "default": "party_default\nbranch_default\nuser_default\nuser_permission\nerpnext_default\nstandard_price_list",
+   "depends_on": "eval:doc.enable_price_list_governance",
+   "description": "One source key per line, highest priority first. Allowed buying keys: party_default, branch_default, user_default, user_permission, erpnext_default, standard_price_list.",
+   "fieldname": "buying_price_list_precedence",
+   "fieldtype": "Small Text",
+   "label": "Buying Price List Precedence"
+  },
+  {
+   "fieldname": "price_list_switching_section",
+   "fieldtype": "Section Break",
+   "label": "Price List Switching"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_price_list_governance",
+   "description": "Allow Branch Assignment Price Lists to appear as transaction alternatives when the resolved default source permits switching.",
+   "fieldname": "enable_assigned_price_list_switching",
+   "fieldtype": "Check",
+   "label": "Enable Assigned Price List Switching"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_price_list_governance && doc.enable_assigned_price_list_switching",
+   "description": "When enabled, users may switch from a Customer or Supplier default Price List to another Price List assigned to them for the Branch.",
+   "fieldname": "allow_price_list_switch_from_party_default",
+   "fieldtype": "Check",
+   "label": "Allow Switch from Customer / Supplier Default"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_price_list_governance && doc.enable_assigned_price_list_switching",
+   "description": "Selling only. When enabled, users may switch from the resolved POS Profile Price List to another Branch-assigned Price List.",
+   "fieldname": "allow_price_list_switch_from_pos_default",
+   "fieldtype": "Check",
+   "label": "Allow Switch from POS Profile Default"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_price_list_governance && doc.enable_assigned_price_list_switching",
+   "description": "When enabled, users may switch from the Branch default Price List to another Price List assigned to them for that Branch.",
+   "fieldname": "allow_price_list_switch_from_branch_default",
+   "fieldtype": "Check",
+   "label": "Allow Switch from Branch Default"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_price_list_governance && doc.enable_assigned_price_list_switching",
+   "description": "When enabled, users may switch from their user default or default User Permission Price List to a Branch-assigned alternative.",
+   "fieldname": "allow_price_list_switch_from_user_default",
+   "fieldtype": "Check",
+   "label": "Allow Switch from User Default"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_price_list_governance && doc.enable_assigned_price_list_switching",
+   "description": "When enabled, users may switch from ERPNext or Standard fallback Price Lists to a Branch-assigned alternative.",
+   "fieldname": "allow_price_list_switch_from_system_default",
+   "fieldtype": "Check",
+   "label": "Allow Switch from System Default"
   },
   {
    "fieldname": "cashier_expense_tab",
@@ -758,13 +855,6 @@
    "fieldname": "pricing_governance_section",
    "fieldtype": "Section Break",
    "label": "Price List Governance"
-  },
-  {
-   "default": "1",
-   "description": "Use merchant-configurable Price List precedence across guided selling and purchasing instead of one hard-coded priority order.",
-   "fieldname": "enable_price_list_governance",
-   "fieldtype": "Check",
-   "label": "Enable Price List Governance"
   },
   {
    "default": "Party > POS > Branch > Assigned Choice",

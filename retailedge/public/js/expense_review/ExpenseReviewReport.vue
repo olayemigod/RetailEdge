@@ -64,9 +64,18 @@
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
+	<CashierExpenseDetailDialog
+		:open="cashierExpenseDetailOpen"
+		:expenseName="cashierExpenseDetailName"
+		:company="filters.company"
+		:branch="filters.branch"
+		:canUseNativeDesk="canUseNativeDesk"
+		@close="closeCashierExpenseDetail"
+	/>
 </template>
 
 <script>
+import CashierExpenseDetailDialog from "../expense_register/CashierExpenseDetailDialog.vue";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-review";
@@ -76,11 +85,15 @@ function errorMessage(error, fallback) { return window.retailedge?.userErrorMess
 
 export default {
 	name: "ExpenseReviewReport",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		CashierExpenseDetailDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, canUseNativeDesk: false, currentPage: 1,
+			cashierExpenseDetailOpen: false, cashierExpenseDetailName: "",
 			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", cashier: "", expense_category: "", expense_status: "", daily_audit_inclusion_status: "Pending Review", posting_ready: "", from_date: "", to_date: "", page_size: 50 },
 			expenseStatuses: ["Draft", "Submitted", "Pending Ledger", "Rejected", "Posted", "Cancelled"],
@@ -149,7 +162,9 @@ export default {
 		},
 		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `expense-review:${index}`; },
-		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name" && this.hasPageTarget("expense-register")) { frappe.route_options = { expense_name: value }; frappe.set_route("expense-register"); return; } if (column.fieldname === "expense_category" && this.hasPageTarget("retailedge-setup")) { frappe.route_options = { setup_resource: "expense-categories", expense_category: value }; frappe.set_route("retailedge-setup"); return; } if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value); },
+		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") { this.openCashierExpenseDetail(value); return; } if (column.fieldname === "expense_category" && this.hasPageTarget("retailedge-setup")) { frappe.route_options = { setup_resource: "expense-categories", expense_category: value }; frappe.set_route("retailedge-setup"); return; } if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value); },
+		openCashierExpenseDetail(expenseName) { const name = String(expenseName || "").trim(); if (!name) return; this.cashierExpenseDetailName = name; this.cashierExpenseDetailOpen = true; },
+		closeCashierExpenseDetail() { this.cashierExpenseDetailOpen = false; this.cashierExpenseDetailName = ""; },
 		openReviewDialog(row) {
 			if (!this.canReview) { frappe.msgprint({ title: __("Read-only access"), message: __("You do not have reviewer permission for cashier expense actions."), indicator: "orange" }); return; }
 			frappe.prompt([

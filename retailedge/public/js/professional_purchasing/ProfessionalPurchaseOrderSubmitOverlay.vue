@@ -23,6 +23,18 @@
 			<div v-if="submitted" class="po-submit-review__success">
 				<strong>Purchase Order {{ submitted.name }} submitted.</strong>
 				<span>ERPNext has applied its normal Purchase Order submission rules and procurement status updates.</span>
+				<div v-if="submitted.next_actions?.length" class="po-submit-review__next-actions">
+					<button
+						v-for="action in submitted.next_actions"
+						:key="action.value"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting"
+						@click="runNextAction(action.value)"
+					>
+						{{ action.label }}
+					</button>
+				</div>
 			</div>
 			<div v-else-if="preview.blockers?.length" class="po-submit-review__blocked">
 				<strong v-if="preview.workflow_eligible">This Purchase Order is controlled by {{ preview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
@@ -93,6 +105,9 @@ const PREVIEW_METHOD = "retailedge.professional_purchase_order_submit.get_purcha
 const SUBMIT_METHOD = "retailedge.professional_purchase_order_submit.submit_standard_purchase_order";
 const WORKFLOW_METHOD = "retailedge.professional_purchase_order_submit.apply_standard_purchase_order_workflow_action";
 const OPEN_EVENT = "retailedge-open-purchase-order-submit";
+const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
+const PREPARE_PO_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_order";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
 function callMethod(method, args = {}, type = undefined) {
@@ -157,6 +172,31 @@ export default {
 			} catch (error) { this.error = errorMessage(error, "Unable to apply this Purchase Order workflow action."); }
 			finally { this.submitting = false; }
 		},
+		async runNextAction(action) {
+			if (!this.submitted?.name || !action || this.submitting) return;
+			if (action === "receive-stock") {
+				const purchaseOrder = this.submitted.name;
+				this.close();
+				window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT, {
+					detail: { purchase_order: purchaseOrder },
+				}));
+				return;
+			}
+			if (action === "create-purchase-invoice") {
+				this.submitting = true;
+				this.error = "";
+				try {
+					const result = await callMethod(PREPARE_PO_INVOICE_METHOD, { purchase_order: this.submitted.name }, "POST");
+					if (!result?.name) throw new Error("Purchase Invoice draft was not returned.");
+					this.submitting = false;
+					this.close();
+					window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: result }));
+				} catch (error) {
+					this.error = errorMessage(error, "Unable to prepare a Purchase Invoice from this Purchase Order.");
+					this.submitting = false;
+				}
+			}
+		},
 		async submitOrder() {
 			if (!this.preview?.can_submit || this.preview?.workflow_eligible || this.submitting) return;
 			this.submitting = true; this.error = "";
@@ -190,6 +230,7 @@ export default {
 .po-submit-review__context div,.po-submit-review__ready,.po-submit-review__blocked,.po-submit-review__success,.po-submit-review__error,.po-submit-review__workflow { padding:.75rem; border:1px solid var(--border-color,#d1d8dd); border-radius:.5rem; }
 .po-submit-review__context span,.po-submit-review__table small { display:block; opacity:.72; }
 .po-submit-review__ready,.po-submit-review__blocked,.po-submit-review__success,.po-submit-review__workflow { display:grid; gap:.5rem; }
+.po-submit-review__next-actions { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.25rem; }
 .po-submit-review__workflow-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 .po-submit-review__blocked ul { margin:.35rem 0 0 1.1rem; padding:0; }
 .po-submit-review__table td { vertical-align:top; }

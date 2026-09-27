@@ -50,6 +50,7 @@ def get_sales_item_pricing_batch(
 			warehouse=warehouse,
 			posting_date=values.get("posting_date") or nowdate(),
 			qty=row["qty"],
+			selected_price_list=str(values.get("price_list") or "").strip(),
 			user=user,
 			requested_price_list=values.get("price_list") or "",
 		)
@@ -85,6 +86,7 @@ def get_purchase_item_pricing_batch(
 			warehouse=warehouse,
 			posting_date=values.get("posting_date") or nowdate(),
 			qty=row["qty"],
+			selected_price_list=str(values.get("price_list") or "").strip(),
 			user=user,
 			requested_price_list=values.get("price_list") or "",
 		)

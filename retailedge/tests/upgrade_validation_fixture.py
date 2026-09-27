@@ -15,6 +15,26 @@ ITEM = "RE-UPGRADE-SERVICE"
 ITEM_GROUP = "RetailEdge Upgrade Items"
 PRICE_LIST = "RetailEdge Upgrade Selling"
 SNAPSHOT_PATH = Path("/tmp/retailedge-upgrade-before.json")
+LEGACY_PRICE_LIST_CHILD = "RE-UPGRADE-LEGACY-PRICE-LIST"
+LEGACY_SELLING_POLICY = "Branch > Party > POS > Assigned Choice"
+LEGACY_BUYING_POLICY = "Branch > Party > Assigned Choice"
+EXPECTED_SELLING_PRECEDENCE = [
+	"branch_default",
+	"party_default",
+	"pos_profile",
+	"user_default",
+	"user_permission",
+	"erpnext_default",
+	"standard_price_list",
+]
+EXPECTED_BUYING_PRECEDENCE = [
+	"branch_default",
+	"party_default",
+	"user_default",
+	"user_permission",
+	"erpnext_default",
+	"standard_price_list",
+]
 
 
 def _first_leaf_account(company: str, *, root_type: str, account_type: str = "") -> str:
@@ -200,6 +220,54 @@ def _ensure_item() -> None:
 	).insert()
 
 
+def _seed_legacy_price_list_governance() -> dict:
+	if not frappe.db.exists("DocType", "RetailEdge Settings"):
+		frappe.throw("Legacy RetailEdge Settings is unavailable on the release predecessor.")
+
+	for fieldname, value in (
+		("enable_price_list_governance", "1"),
+		("selling_price_list_policy", LEGACY_SELLING_POLICY),
+		("buying_price_list_policy", LEGACY_BUYING_POLICY),
+		("allow_price_list_switch", "0"),
+	):
+		frappe.db.set_single_value("RetailEdge Settings", fieldname, value)
+
+	if not frappe.db.table_exists("RetailEdge Branch Assignment Price List", cached=False):
+		frappe.throw("Legacy Branch Assignment Price List table is unavailable on the release predecessor.")
+
+	exists = frappe.db.sql(
+		"""
+		SELECT name
+		FROM `tabRetailEdge Branch Assignment Price List`
+		WHERE name = %s
+		LIMIT 1
+		""",
+		(LEGACY_PRICE_LIST_CHILD,),
+	)
+	if not exists:
+		frappe.db.sql(
+			"""
+			INSERT INTO `tabRetailEdge Branch Assignment Price List`
+				(name, creation, modified, modified_by, owner, docstatus, idx,
+				 parent, parentfield, parenttype, price_list)
+			VALUES
+				(%s, NOW(), NOW(), 'Administrator', 'Administrator', 0, 1,
+				 'RE-UPGRADE-LEGACY-ASSIGNMENT', 'price_lists',
+				 'RetailEdge Branch Assignment', %s)
+			""",
+			(LEGACY_PRICE_LIST_CHILD, PRICE_LIST),
+		)
+
+	return {
+		"selling_policy": LEGACY_SELLING_POLICY,
+		"buying_policy": LEGACY_BUYING_POLICY,
+		"allow_switch": 0,
+		"child_name": LEGACY_PRICE_LIST_CHILD,
+		"child_parentfield": "price_lists",
+		"child_price_list": PRICE_LIST,
+	}
+
+
 def _ledger_snapshot(invoice: str) -> dict:
 	rows = frappe.get_all(
 		"GL Entry",
@@ -224,6 +292,7 @@ def seed_upgrade_fixture() -> dict:
 	_ensure_transaction_masters()
 	_ensure_customer()
 	_ensure_item()
+	legacy_pricing = _seed_legacy_price_list_governance()
 
 	existing = frappe.get_all(
 		"Sales Invoice",
@@ -279,6 +348,7 @@ def seed_upgrade_fixture() -> dict:
 		"grand_total": flt(invoice.grand_total, 2),
 		"outstanding_amount": flt(invoice.outstanding_amount, 2),
 		"ledger": ledger,
+		"legacy_pricing": legacy_pricing,
 	}
 	SNAPSHOT_PATH.write_text(json.dumps(snapshot, sort_keys=True), encoding="utf-8")
 	# This is isolated CI fixture setup, not RetailEdge runtime transaction logic.
@@ -310,10 +380,43 @@ def verify_upgrade_fixture() -> dict:
 	assert frappe.db.exists("DocType", "RetailEdge Settings")
 	assert frappe.db.exists("Role", "RetailEdge Manager")
 
+	legacy_pricing = before["legacy_pricing"]
+	selling_precedence = str(
+		frappe.db.get_single_value("RetailEdge Settings", "selling_price_list_precedence") or ""
+	).splitlines()
+	buying_precedence = str(
+		frappe.db.get_single_value("RetailEdge Settings", "buying_price_list_precedence") or ""
+	).splitlines()
+	assert selling_precedence == EXPECTED_SELLING_PRECEDENCE
+	assert buying_precedence == EXPECTED_BUYING_PRECEDENCE
+	assert int(frappe.db.get_single_value("RetailEdge Settings", "enable_assigned_price_list_switching") or 0) == 0
+	for fieldname in (
+		"allow_price_list_switch_from_party_default",
+		"allow_price_list_switch_from_pos_default",
+		"allow_price_list_switch_from_branch_default",
+		"allow_price_list_switch_from_user_default",
+		"allow_price_list_switch_from_system_default",
+	):
+		assert int(frappe.db.get_single_value("RetailEdge Settings", fieldname) or 0) == 0
+
+	child = frappe.db.get_value(
+		"RetailEdge Branch Assignment Price List",
+		legacy_pricing["child_name"],
+		["parentfield", "parenttype", "price_list"],
+		as_dict=True,
+	)
+	assert child
+	assert child.parentfield == "allowed_price_lists"
+	assert child.parenttype == "RetailEdge Branch Assignment"
+	assert child.price_list == legacy_pricing["child_price_list"]
+
 	return {
 		"invoice": invoice.name,
 		"grand_total": flt(invoice.grand_total, 2),
 		"outstanding_amount": flt(invoice.outstanding_amount, 2),
 		"ledger": after_ledger,
 		"retailedge_manager_role": True,
+		"selling_price_list_precedence": selling_precedence,
+		"buying_price_list_precedence": buying_precedence,
+		"legacy_price_list_child_parentfield": child.parentfield,
 	}

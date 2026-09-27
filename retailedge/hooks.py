@@ -241,6 +241,7 @@ doc_events = {
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.patches.ensure_retailedge_manager_payment_entry_read.execute",
+	"retailedge.patches.ensure_stock_manager_company_read.execute",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
 	"retailedge.coexistence.ensure_neutral_branch_field_labels",
 	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
@@ -274,6 +275,7 @@ has_permission = {
 # Overriding Methods
 # ------------------------------
 override_whitelisted_methods = {
+	"pos_next.api.shifts.get_closing_shift_data": "retailedge.pos_cashier_expense.get_posnext_closing_shift_data_with_cashier_expenses",
 	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.master_experience.get_retailedge_business_hub_context",
 	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
 	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",

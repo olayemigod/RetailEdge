@@ -72,5 +72,6 @@ def test_rfq_rows_are_not_disguised_native_links_and_advanced_access_is_explicit
 	assert "Advanced: RFQs in ERPNext" in overlay
 	assert "nativeFallbackEnabled" in overlay
 	assert 'const ACCESS_MODE = "edgesuite_only"' in overlay
+	assert 'Boolean(access.can_use_native_desk)' in overlay
 	assert 'frappe.set_route("Form", "Request for Quotation", name)' in overlay
 	assert 'frappe.set_route("List", "Request for Quotation")' in overlay

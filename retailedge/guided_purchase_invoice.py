@@ -17,13 +17,17 @@ from retailedge.guided_entry_context import (
 	resolve_guided_default_branch,
 	validate_guided_branch_warehouse,
 )
-from retailedge.guided_pricing import resolve_price_list_context, resolve_purchase_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_purchase_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
 
 ACTION_KEY = "record-purchase"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
@@ -103,7 +107,7 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 			"bill_date": nowdate(),
 			"warehouse": warehouse,
 			"supplier": "",
-			"price_list": "",
+			"price_list": pricing.get("price_list") or "",
 			"update_stock": 0,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
@@ -145,6 +149,15 @@ def search_simple_purchase_invoice_options(
 			page_length=limit,
 			reference_doctype=PURCHASE_INVOICE_DOCTYPE,
 			link_fieldname="supplier",
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="buying",
+			company=company,
+			branch=branch,
+			party=supplier,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_purchase_item": 1}
@@ -223,6 +236,7 @@ def get_simple_purchase_invoice_item_pricing(
 		warehouse=warehouse,
 		posting_date=values.get("posting_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
 		requested_price_list=values.get("price_list") or "",
 	)
@@ -253,9 +267,11 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 		company=company,
 		branch=branch,
 		party=supplier,
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
-		requested_price_list=values.get("price_list") or "",
 	)
+	if pricing_context.get("selection_required"):
+		frappe.throw(_("Choose a Buying Price List assigned to you for this Branch before saving."))
 
 	doc = frappe.new_doc(PURCHASE_INVOICE_DOCTYPE)
 	doc.company = company
@@ -285,6 +301,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 			warehouse=warehouse,
 			posting_date=str(doc.posting_date),
 			qty=item["qty"],
+			selected_price_list=pricing_context.get("price_list") or "",
 			user=user,
 			requested_price_list=values.get("price_list") or "",
 		)
@@ -313,6 +330,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"supplier": doc.supplier,
 		"company": doc.company,
@@ -330,7 +348,7 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	if not isinstance(items, list) or not items:
 		frappe.throw(_("Add at least one purchase item."))
 	if len(items) > MAX_ITEMS:
-		frappe.throw(_("A Simple Purchase Invoice can contain at most {0} items.").format(MAX_ITEMS))
+		frappe.throw(_("A Purchase Invoice can contain at most {0} items in this guided entry flow.").format(MAX_ITEMS))
 
 	result: list[dict[str, Any]] = []
 	for index, item in enumerate(items, start=1):

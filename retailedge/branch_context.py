@@ -370,10 +370,14 @@ def resolve_branch_from_branch_profile(company=None, branch=None, user=None, pos
 		result["messages"].append("RetailEdge Branch Profile helpers are not available.")
 		return result
 
+	# An explicit POS Profile/opening-shift context is operational evidence of
+	# the branch mapping. Do not require the acting user to also be listed on
+	# the Branch Profile here; branch access is validated after resolution.
+	profile_lookup_user = None if pos_profile else user
 	profile = get_branch_profile(
 		company=company,
 		branch=branch,
-		user=user,
+		user=profile_lookup_user,
 		pos_profile=pos_profile,
 		warehouse=warehouse,
 		active_only=True,

@@ -21,6 +21,23 @@ class TestRIR2F3F17PurchaseReturnSupplierDebitNoteEdgeSuiteOwnershipContract(uni
 		self.assertIn("Review & Submit Return", ownership)
 		self.assertIn("Review & Submit Debit Note", ownership)
 
+	def test_professional_purchasing_visible_return_actions_open_governed_review(self):
+		component = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text(encoding="utf-8")
+		bundle = (APP_ROOT / "public/js/professional_purchasing.bundle.js").read_text(encoding="utf-8")
+		for contract in (
+			"Review & Submit Return",
+			"Review & Submit Debit Note",
+			"OPEN_PURCHASE_RETURN_REVIEW_EVENT",
+			'source_type: "purchase_receipt"',
+			'source_type: "purchase_invoice"',
+		):
+			self.assertIn(contract, component)
+		self.assertIn("consumeProfessionalPurchasingTarget", bundle)
+		self.assertIn("retailedgeProfessionalPurchasingTarget", bundle)
+		self.assertIn('target.action !== "supplier-debit-note"', bundle)
+		self.assertIn("delete window.retailedgeProfessionalPurchasingTarget", bundle)
+		self.assertIn('String(target.user || "") !== String(frappe.session?.user || "Guest")', bundle)
+
 	def test_overlay_owns_standard_review_and_submit_without_native_route(self):
 		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue").read_text(encoding="utf-8")
 

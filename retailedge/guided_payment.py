@@ -27,6 +27,8 @@ from retailedge.operating_context import (
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 MAX_LINK_RESULTS = 20
 MAX_REFERENCES = 20
+QUICK_MAX_REFERENCES = 1
+
 
 def _resolve_guided_payment_branch(
 	*,
@@ -77,10 +79,34 @@ PAYMENT_INTENTS: dict[str, dict[str, str]] = {
 }
 
 
+def _can_open_page(page_name: str) -> bool:
+	try:
+		if not frappe.db.exists("Page", page_name):
+			return False
+		return bool(frappe.get_doc("Page", page_name).is_permitted())
+	except Exception:
+		return False
+
+
+def _resolve_managed_supplier_settlement(intent: str, managed: int | bool) -> bool:
+	managed = bool(cint(managed))
+	if not managed:
+		return False
+	if intent != "pay-supplier":
+		frappe.throw(_("Managed multi-reference payment is only available for Supplier Payables."))
+	if not _can_open_page("supplier-payables"):
+		frappe.throw(
+			_("You do not have permission to use managed Supplier Payables settlement."),
+			frappe.PermissionError,
+		)
+	return True
+
+
 @frappe.whitelist()
-def get_simple_payment_context(intent: str) -> dict[str, Any]:
+def get_simple_payment_context(intent: str, managed: int = 0) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
+	managed_supplier_settlement = _resolve_managed_supplier_settlement(intent, managed)
 	user = frappe.session.user
 	operating = get_operating_context() or {}
 	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
@@ -106,6 +132,9 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 		user=user,
 		require_when_restricted=False,
 	)
+
+	managed_page = "supplier-payables" if intent == "pay-supplier" else "payment-management"
+	can_open_managed_page = _can_open_page(managed_page)
 
 	return {
 		"intent": intent,
@@ -135,8 +164,14 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
 			"native_form_fallback": True,
+			"managed_page": managed_page if can_open_managed_page else "",
+			"can_open_managed_page": can_open_managed_page,
+			"managed_supplier_settlement": managed_supplier_settlement,
 		},
-		"limits": {"link_results": MAX_LINK_RESULTS, "max_references": MAX_REFERENCES},
+		"limits": {
+			"link_results": MAX_LINK_RESULTS,
+			"max_references": MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES,
+		},
 	}
 
 
@@ -252,9 +287,14 @@ def get_simple_payment_reference_details(
 
 
 @frappe.whitelist(methods=["POST"])
-def create_simple_payment_draft(intent: str, values: dict | str | None = None) -> dict[str, Any]:
+def create_simple_payment_draft(
+	intent: str,
+	values: dict | str | None = None,
+	managed: int = 0,
+) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
+	managed_supplier_settlement = _resolve_managed_supplier_settlement(intent, managed)
 	values = _coerce_values(values)
 	user = frappe.session.user
 	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
@@ -302,7 +342,13 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	if amount <= 0:
 		frappe.throw(_("Amount must be greater than zero."))
 
-	references = _normalise_references(values.get("references"))
+	min_references = 0 if intent == "receive-customer-payment" else 1
+	max_references = MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES
+	references = _normalise_references(
+		values.get("references"),
+		min_references=min_references,
+		max_references=max_references,
+	)
 	snapshots: list[dict[str, Any]] = []
 	total_allocated = 0.0
 	resolved_branches: set[str] = set()
@@ -449,9 +495,10 @@ def _search_outstanding_references(
 		]
 
 	# Sales Order advances do not use an outstanding_amount database field.
-	# Resolve the live payable/advance balance through ERPNext's Payment Entry
-	# reference engine and return only orders that still accept payment.
-	fields = ["name", "transaction_date", "currency", "grand_total", "advance_paid"]
+	# Once the order is fully billed, settlement belongs to the resulting Sales
+	# Invoice receivable rather than a new Sales Order advance.
+	filters["per_billed"] = ["<", 99.999]
+	fields = ["name", "transaction_date", "currency", "grand_total", "advance_paid", "per_billed"]
 	rows = frappe.get_list(
 		reference_doctype,
 		filters=filters,
@@ -499,12 +546,19 @@ def _get_reference_snapshot(
 	_assert_read_permission(reference_doctype, reference_name)
 	party_field = config["party_type"].lower()
 	fields = ["company", party_field, "docstatus", "currency", "payment_terms_template"]
+	if reference_doctype == "Sales Order":
+		fields.append("per_billed")
 	branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		fields.append(branch_field)
 	row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True)
 	if not row or row.company != company or row.get(party_field) != party or cint(row.docstatus) != 1:
 		frappe.throw(_("{0} {1} is not a submitted payable reference for this party and company.").format(reference_doctype, reference_name))
+	if reference_doctype == "Sales Order" and flt(row.get("per_billed")) >= 99.999:
+		frappe.throw(
+			_("Sales Order {0} is fully billed. Record the payment against the resulting Sales Invoice instead.").format(reference_name),
+			frappe.ValidationError,
+		)
 
 	if row.payment_terms_template and frappe.db.get_value(
 		"Payment Terms Template",
@@ -570,13 +624,18 @@ def _get_reference_snapshot(
 	}
 
 
-def _normalise_references(references: Any) -> list[dict[str, Any]]:
+def _normalise_references(
+	references: Any,
+	*,
+	min_references: int = 1,
+	max_references: int = MAX_REFERENCES,
+) -> list[dict[str, Any]]:
 	if isinstance(references, str):
 		references = frappe.parse_json(references)
-	if not isinstance(references, list) or not references:
-		frappe.throw(_("Add at least one payable sales reference."))
-	if len(references) > MAX_REFERENCES:
-		frappe.throw(_("A Simple Payment can contain at most {0} invoice references.").format(MAX_REFERENCES))
+	if references is None:
+		references = []
+	if not isinstance(references, list):
+		frappe.throw(_("Payment references must be a list."))
 
 	result: list[dict[str, Any]] = []
 	seen: set[str] = set()
@@ -584,12 +643,22 @@ def _normalise_references(references: Any) -> list[dict[str, Any]]:
 		if not isinstance(row, dict):
 			frappe.throw(_("Payment reference row {0} is invalid.").format(index))
 		name = str(row.get("reference_name") or "").strip()
+		allocated_amount = flt(row.get("allocated_amount"))
 		if not name:
-			frappe.throw(_("Sales reference is required on row {0}.").format(index))
+			if allocated_amount:
+				frappe.throw(_("Payment reference is required on row {0}.").format(index))
+			continue
 		if name in seen:
-			frappe.throw(_("Sales reference {0} is selected more than once.").format(name))
+			frappe.throw(_("Payment reference {0} is selected more than once.").format(name))
 		seen.add(name)
-		result.append({"reference_name": name, "allocated_amount": flt(row.get("allocated_amount"))})
+		result.append({"reference_name": name, "allocated_amount": allocated_amount})
+
+	if len(result) < max(0, cint(min_references)):
+		frappe.throw(_("Add at least one payment reference."))
+	if len(result) > max(1, cint(max_references) or QUICK_MAX_REFERENCES):
+		frappe.throw(
+			_("This payment flow can contain at most {0} invoice reference(s).").format(max_references)
+		)
 	return result
 
 

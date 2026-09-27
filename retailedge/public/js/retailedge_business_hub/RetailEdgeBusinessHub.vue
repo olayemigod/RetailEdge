@@ -286,21 +286,34 @@
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleSalesInvoice"
 				@saved="handleSimpleSalesInvoiceSaved"
+				@open-page="openMakeSaleFromQuick"
 				@open-native="openNativeSalesInvoice"
 			/>
 			<StandardSalesInvoiceCompletionDialog
 				:open="salesInvoiceCompletionOpen"
 				:document="salesInvoiceCompletionDocument"
 				:canUseNativeDesk="nativeFallbackEnabled"
+				:showNextActions="true"
 				@close="closeSalesInvoiceCompletion"
 				@changed="handleSalesInvoiceCompletionChanged"
 				@completed="handleSalesInvoiceCompletionCompleted"
+				@next-action="handleSalesInvoiceCompletionNextAction"
+			/>
+			<StandardDeliveryCompletionDialog
+				:open="deliveryCompletionOpen"
+				:document="deliveryCompletionDocument"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeDeliveryCompletion"
+				@changed="handleDeliveryCompletionChanged"
+				@completed="handleDeliveryCompletionCompleted"
+				@next-action="handleDeliveryCompletionNextAction"
 			/>
 
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
 				:native-fallback-enabled="nativeFallbackEnabled"
 				:intent="simplePaymentIntent"
+				:initial-context="simplePaymentInitialContext"
 				@close="closeSimplePayment"
 				@saved="handleSimplePaymentSaved"
 				@open-native="openNativePayment"
@@ -335,15 +348,18 @@
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimplePurchaseInvoice"
 				@saved="handleSimplePurchaseInvoiceSaved"
+				@open-page="openRecordPurchaseFromQuick"
 				@open-native="openNativePurchaseInvoice"
 			/>
 			<StandardPurchaseInvoiceCompletionDialog
 				:open="purchaseInvoiceCompletionOpen"
 				:document="purchaseInvoiceCompletionDocument"
 				:canUseNativeDesk="nativeFallbackEnabled"
+				:showNextActions="true"
 				@close="closePurchaseInvoiceCompletion"
 				@changed="handlePurchaseInvoiceCompletionChanged"
 				@completed="handlePurchaseInvoiceCompletionCompleted"
+				@next-action="handlePurchaseInvoiceCompletionNextAction"
 			/>
 
 			<SimpleCashierExpenseDialog
@@ -368,6 +384,7 @@
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleStockTransfer"
 				@saved="handleSimpleStockTransferSaved"
+				@open-page="openTransferStockFromQuick"
 				@open-native="openNativeStockTransfer"
 			/>
 
@@ -376,6 +393,7 @@
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleStockAdjustment"
 				@saved="handleSimpleStockAdjustmentSaved"
+				@open-page="openStockAdjustmentFromQuick"
 				@open-native="openNativeStockAdjustment"
 			/>
 			<StandardStockCompletionDialog
@@ -401,16 +419,19 @@ import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
 import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
+import StandardDeliveryCompletionDialog from "../professional_selling/StandardDeliveryCompletionDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import BusinessHubChartCard from "./BusinessHubChartCard.vue";
-import { openQuickEntryMaster } from "./guidedEntryUtils";
+import { callMethod, getTransactionEntryPreference, openQuickEntryMaster, persistentTransactionPage } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
 const HOME_VISUALS_METHOD = "retailedge.business_hub_visuals.get_business_hub_visuals";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
+const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
+const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
@@ -419,6 +440,10 @@ const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
 const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
 const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";
+const MAKE_SALE_HANDOFF_PREFIX = "retailedge:make-sale:handoff:";
+const RECORD_PURCHASE_HANDOFF_PREFIX = "retailedge:record-purchase:handoff:";
+const TRANSFER_STOCK_HANDOFF_PREFIX = "retailedge:transfer-stock:handoff:";
+const STOCK_ADJUSTMENT_HANDOFF_PREFIX = "retailedge:stock-adjustment:handoff:";
 const QUICK_ENTRY_MASTER_ACTIONS = Object.freeze({
 	"new-customer": "Customer",
 	"new-supplier": "Supplier",
@@ -573,6 +598,7 @@ export default {
 		StandardPurchaseInvoiceCompletionDialog,
 		SimpleSalesInvoiceDialog,
 		StandardSalesInvoiceCompletionDialog,
+		StandardDeliveryCompletionDialog,
 		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
 		StandardStockCompletionDialog,
@@ -598,6 +624,9 @@ export default {
 			salesInvoiceCompletionDocument: null,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
+			simplePaymentInitialContext: {},
+			deliveryCompletionOpen: false,
+			deliveryCompletionDocument: null,
 			simpleCashDepositOpen: false,
 			internalTransferCompletionOpen: false,
 			internalTransferCompletionDocument: null,
@@ -616,7 +645,7 @@ export default {
 			quickActions: [],
 			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
 			featureFlags: {},
-			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
+			accessContext: { mode: "unknown", restricted_to_edgesuite: false, can_use_native_desk: false },
 		};
 	},
 	computed: {
@@ -627,7 +656,7 @@ export default {
 		},
 		nativeFallbackEnabled() {
 			return (
-				this.accessContext.can_use_native_desk !== false &&
+				Boolean(this.accessContext.can_use_native_desk) &&
 				this.featureFlags.native_document_fallback_enabled !== false
 			);
 		},
@@ -663,13 +692,14 @@ export default {
 					icon,
 				});
 			};
-			addAction("new-sales-invoice", "Make Sale");
+			addPage("make-sale", "Make Sale", "Use the full-page workspace for larger or multi-item Sales Invoices.", "shopping-cart");
 			addAction("receive-customer-payment");
 			addAction("pay-supplier");
 			addAction("record-expense");
 			addPage("professional-purchasing", "Receive Stock", "Open ready-to-receive Purchase Orders and prepare Purchase Receipts.", "download");
-			addAction("transfer-stock");
-			addAction("record-purchase");
+			addPage("transfer-stock", "Transfer Stock", "Use the full-page workspace for larger or multi-item stock movements.", "repeat");
+			addPage("stock-adjustment", "Stock Adjustment", "Use the full-page workspace for larger physical counts and stock corrections.", "clipboard");
+			addPage("record-purchase", "Record Purchase", "Use the full-page workspace for larger or multi-item Purchase Invoices.", "shopping-bag");
 			addPage("bank-matching-reconciliation", "Match Bank Transactions", "Review imported bank transactions, suggestions and reconciliation queues.", "repeat");
 			return shortcuts;
 		},
@@ -974,14 +1004,24 @@ export default {
 				frappe.set_route(shortcut.target);
 			}
 		},
-		runQuickAction(action) {
+		hasPageTarget(target) {
+			return Boolean(target && (this.navigationGroups || []).flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
+		async runQuickAction(action) {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
 			if (action.key === "new-sales-invoice") {
+				const preference = await getTransactionEntryPreference({ force: true });
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
 			if (GUIDED_PAYMENT_ACTIONS.has(action.key)) {
+				this.simplePaymentInitialContext = {};
 				this.simplePaymentIntent = action.key;
 				this.simplePaymentOpen = true;
 				return;
@@ -995,6 +1035,12 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_PURCHASE_ACTION) {
+				const preference = await getTransactionEntryPreference({ force: true });
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simplePurchaseInvoiceOpen = true;
 				return;
 			}
@@ -1008,10 +1054,22 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_STOCK_TRANSFER_ACTION) {
+				const preference = await getTransactionEntryPreference({ force: true });
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleStockTransferOpen = true;
 				return;
 			}
 			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
+				const preference = await getTransactionEntryPreference({ force: true });
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
@@ -1091,8 +1149,86 @@ export default {
 			this.refreshContext({ force: true });
 		},
 		handleSalesInvoiceCompletionCompleted() {
-			this.closeSalesInvoiceCompletion();
 			this.refreshContext({ force: true });
+		},
+		async handleSalesInvoiceCompletionNextAction(payload) {
+			if (!payload?.action || !payload?.name) return;
+			this.closeSalesInvoiceCompletion();
+			if (payload.action === "make-payment") {
+				this.simplePaymentIntent = "receive-customer-payment";
+				this.simplePaymentInitialContext = {
+					company: this.context.company || "",
+					branch: this.context.branch || "",
+					party: payload.customer || "",
+					reference_name: payload.name,
+				};
+				this.simplePaymentOpen = true;
+				return;
+			}
+			if (payload.action === "create-delivery-note") {
+				try {
+					const result = await callMethod(CREATE_DELIVERY_METHOD, { sales_invoice: payload.name }, "POST");
+					if (!result?.name) throw new Error("Delivery Note draft was not returned.");
+					if (Number(result.docstatus || 0) === 0) {
+						this.deliveryCompletionDocument = { doctype: "Delivery Note", name: result.name };
+						this.deliveryCompletionOpen = true;
+					} else {
+						this.openDocumentOutput("delivery-note", result.name, "view");
+					}
+				} catch (error) {
+					const message = window.retailedge?.userErrorMessage?.(error, "Unable to continue to Delivery Note.")
+						|| "Unable to continue to Delivery Note.";
+					frappe.show_alert?.({ message, indicator: "red" }, 8);
+				}
+				return;
+			}
+			if (payload.action === "create-return-credit-note") {
+				try {
+					const result = await callMethod(CREATE_RETURN_METHOD, { sales_invoice: payload.name }, "POST");
+					if (!result?.name) throw new Error("Return / Credit Note draft was not returned.");
+					window.retailedgeProfessionalSellingTarget = {
+						doctype: "Sales Invoice",
+						name: result.name,
+						source_mode: "sales_return",
+						user: frappe.session?.user || "Guest",
+					};
+					frappe.set_route("professional-selling");
+				} catch (error) {
+					const message = window.retailedge?.userErrorMessage?.(error, "Unable to prepare the Return / Credit Note.")
+						|| "Unable to prepare the Return / Credit Note.";
+					frappe.show_alert?.({ message, indicator: "red" }, 8);
+				}
+				return;
+			}
+			if (payload.action === "output") this.openDocumentOutput("sales-invoice", payload.name, "share");
+		},
+		closeDeliveryCompletion() {
+			this.deliveryCompletionOpen = false;
+			this.deliveryCompletionDocument = null;
+		},
+		handleDeliveryCompletionChanged() {
+			this.refreshContext({ force: true });
+		},
+		handleDeliveryCompletionCompleted() {
+			this.refreshContext({ force: true });
+		},
+		handleDeliveryCompletionNextAction(payload) {
+			if (payload?.action === "output" && payload?.name) {
+				this.closeDeliveryCompletion();
+				this.openDocumentOutput("delivery-note", payload.name, "share");
+			}
+		},
+		openMakeSaleFromQuick(payload = {}) {
+			try {
+				window.sessionStorage.setItem(`${MAKE_SALE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({
+					createdAt: Date.now(),
+					values: payload?.values || {},
+				}));
+			} catch (_error) {
+				// Route still works when browser session storage is unavailable.
+			}
+			this.simpleSalesInvoiceOpen = false;
+			frappe.set_route("make-sale");
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
 			if (!this.nativeFallbackEnabled) return;
@@ -1101,16 +1237,25 @@ export default {
 		},
 		closeSimplePayment() {
 			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 		},
 		handleSimplePaymentSaved(result) {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
-			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
+			this.simplePaymentInitialContext = {};
+			if (Number(result?.docstatus || 0) === 1) {
+				frappe.show_alert?.({ message: `Payment Entry ${result.name || ""} submitted`, indicator: "green" }, 7);
+				this.refreshContext({ force: true });
+				return;
+			}
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry", { stayInEdgeSuite: true });
 		},
 		openNativePayment(doctype = "Payment Entry") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 			frappe.new_doc(doctype);
 		},
 		closeSimpleCashDeposit() {
@@ -1179,8 +1324,48 @@ export default {
 			this.refreshContext({ force: true });
 		},
 		handlePurchaseInvoiceCompletionCompleted() {
-			this.closePurchaseInvoiceCompletion();
 			this.refreshContext({ force: true });
+		},
+		handlePurchaseInvoiceCompletionNextAction(payload) {
+			if (!payload?.action || !payload?.name) return;
+			this.closePurchaseInvoiceCompletion();
+			if (payload.action === "pay-supplier") {
+				this.simplePaymentIntent = "pay-supplier";
+				this.simplePaymentInitialContext = {
+					company: payload.company || this.context.company || "",
+					branch: payload.branch || this.context.branch || "",
+					party: payload.supplier || "",
+					reference_name: payload.name,
+				};
+				this.simplePaymentOpen = true;
+				return;
+			}
+			if (payload.action === "create-supplier-debit-note") {
+				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name, user: frappe.session?.user || "Guest" };
+				frappe.set_route("professional-purchasing");
+				return;
+			}
+			if (payload.action === "supplier-payables") {
+				const filters = {
+					company: payload.company || this.context.company || "",
+					branch: payload.branch || this.context.branch || "",
+					supplier: payload.supplier || "",
+				};
+				setBusinessHubRouteHandoff("/app/supplier-payables", filters);
+				frappe.set_route("supplier-payables");
+				return;
+			}
+			if (payload.action === "output") this.openDocumentOutput("purchase-invoice", payload.name, "share");
+		},
+		openDocumentOutput(document, name, mode = "share") {
+			if (!document || !name) return;
+			window.retailedgeDocumentOutputTarget = { document, name, mode };
+			frappe.set_route("document-output-sharing");
+		},
+		openRecordPurchaseFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`${RECORD_PURCHASE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simplePurchaseInvoiceOpen = false;
+			frappe.set_route("record-purchase");
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
 			if (!this.nativeFallbackEnabled) return;
@@ -1228,6 +1413,11 @@ export default {
 				this.openStockCompletion({ doctype: "Stock Entry", name: result.name });
 			}
 		},
+		openTransferStockFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`${TRANSFER_STOCK_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simpleStockTransferOpen = false;
+			frappe.set_route("transfer-stock");
+		},
 		openNativeStockTransfer(doctype = "Stock Entry") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simpleStockTransferOpen = false;
@@ -1257,6 +1447,11 @@ export default {
 		handleStockCompletionCompleted() {
 			this.closeStockCompletion();
 			this.refreshContext({ force: true });
+		},
+		openStockAdjustmentFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`${STOCK_ADJUSTMENT_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simpleStockAdjustmentOpen = false;
+			frappe.set_route("stock-adjustment");
 		},
 		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
 			if (!this.nativeFallbackEnabled) return;

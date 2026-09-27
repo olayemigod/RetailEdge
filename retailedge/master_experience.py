@@ -82,6 +82,38 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"icon": "shopping-cart",
 }
 
+MAKE_SALE_ITEM: dict[str, Any] = {
+	"label": "Make Sale",
+	"description": "Create larger or multi-item Sales Invoices in a resilient full-page workspace.",
+	"target_type": "Page",
+	"target": "make-sale",
+	"icon": "shopping-cart",
+}
+
+RECORD_PURCHASE_ITEM: dict[str, Any] = {
+	"label": "Record Purchase",
+	"description": "Create larger or multi-item Purchase Invoices in a resilient full-page workspace.",
+	"target_type": "Page",
+	"target": "record-purchase",
+	"icon": "shopping-bag",
+}
+
+TRANSFER_STOCK_ITEM: dict[str, Any] = {
+	"label": "Transfer Stock",
+	"description": "Move larger item sets between permitted Stock Locations in a resilient full-page workspace.",
+	"target_type": "Page",
+	"target": "transfer-stock",
+	"icon": "repeat",
+}
+
+STOCK_ADJUSTMENT_ITEM: dict[str, Any] = {
+	"label": "Stock Adjustment",
+	"description": "Record larger physical stock counts in a resilient full-page workspace.",
+	"target_type": "Page",
+	"target": "stock-adjustment",
+	"icon": "clipboard",
+}
+
 PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"label": "Professional Selling",
 	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided selling flow.",
@@ -337,6 +369,65 @@ def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> N
 		items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))
 		group["items"] = items
 		return
+
+
+def _promote_make_sale(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose the full-page Sales Invoice entry workspace when create access exists."""
+	if not _can_open_page(MAKE_SALE_ITEM["target"]):
+		return
+	try:
+		if not frappe.db.exists("DocType", "Sales Invoice") or not frappe.has_permission("Sales Invoice", "create"):
+			return
+	except Exception:
+		return
+	sell_group = next((group for group in navigation_groups if group.get("key") == "sell"), None)
+	if sell_group is None:
+		sell_group = {"key": "sell", "label": "Sell", "icon": "shopping-cart", "items": []}
+		home_index = next((index for index, group in enumerate(navigation_groups) if group.get("key") == "home"), -1)
+		navigation_groups.insert(home_index + 1 if home_index >= 0 else 0, sell_group)
+	items = list(sell_group.get("items") or [])
+	if any(item.get("target_type") == "Page" and item.get("target") == MAKE_SALE_ITEM["target"] for item in items):
+		return
+	workspace_index = next(
+		(index for index, item in enumerate(items) if item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"]),
+		-1,
+	)
+	items.insert(workspace_index + 1 if workspace_index >= 0 else 0, deepcopy(MAKE_SALE_ITEM))
+	sell_group["items"] = items
+
+
+def _promote_long_transaction_pages(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose full-page entry owners while keeping quick-entry actions separate."""
+	specs = (
+		("buy", RECORD_PURCHASE_ITEM, "Purchase Invoice"),
+		("stock", TRANSFER_STOCK_ITEM, "Stock Entry"),
+		("stock", STOCK_ADJUSTMENT_ITEM, "Stock Reconciliation"),
+	)
+	for group_key, page_item, doctype in specs:
+		if not _can_open_page(page_item["target"]):
+			continue
+		try:
+			if not frappe.db.exists("DocType", doctype) or not frappe.has_permission(doctype, "create"):
+				continue
+		except Exception:
+			continue
+		group = next((row for row in navigation_groups if row.get("key") == group_key), None)
+		if group is None:
+			group_meta = {
+				"buy": {"label": "Buy", "icon": "shopping-bag"},
+				"stock": {"label": "Stock", "icon": "layers"},
+			}[group_key]
+			group = {"key": group_key, **group_meta, "items": []}
+			insert_at = next(
+				(index for index, row in enumerate(navigation_groups) if row.get("key") in {"money", "operations", "insights", "reports", "setup"}),
+				len(navigation_groups),
+			)
+			navigation_groups.insert(insert_at, group)
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == page_item["target"] for item in items):
+			continue
+		items.insert(0, deepcopy(page_item))
+		group["items"] = items
 
 
 def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> None:
@@ -765,6 +856,8 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_company_profile_navigation(navigation_groups)
 	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
+	_promote_make_sale(navigation_groups)
+	_promote_long_transaction_pages(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_pricing_promotions_ownership(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
@@ -831,6 +924,10 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["operating_branch_context"] = "phase2_active"
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
+	feature_flags["make_sale"] = "full_page_with_quick_sale_companion"
+	feature_flags["record_purchase"] = "full_page_with_quick_purchase_companion"
+	feature_flags["transfer_stock"] = "full_page_with_quick_transfer_companion"
+	feature_flags["stock_adjustment"] = "full_page_with_quick_adjustment_companion"
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["pricing_promotions_ownership"] = "application_workspace"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"

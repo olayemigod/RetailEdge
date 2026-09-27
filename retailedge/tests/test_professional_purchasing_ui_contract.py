@@ -37,12 +37,18 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("Purchase Material Requests", component)
 		self.assertIn("Start RFQ", component)
 		self.assertIn("Prepare Receipt", component)
+		self.assertIn("Create Invoice", component)
+		self.assertIn("prepare_purchase_invoice_from_purchase_order", component)
+		self.assertIn("retailedge-professional-purchasing-purchase-invoice-ready", component)
+		self.assertIn('intent="pay-supplier"', component)
+		self.assertIn(':showNextActions="true"', component)
 		self.assertIn("sortBy('per_received')", component)
 		self.assertIn("sortMaterialBy('per_ordered')", component)
 		self.assertIn("canUseNativeDesk: false", component)
 		self.assertIn("this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);", component)
 		for event_name in (
 			"retailedge-open-professional-purchase-order",
+			"retailedge-open-purchase-order-submit",
 			"retailedge-open-professional-rfq-preview",
 			"retailedge-open-professional-rfq-history",
 			"retailedge-open-professional-supplier-quotation-history",
@@ -53,15 +59,18 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn('frappe.new_doc("Purchase Order")', component)
 		self.assertNotIn('frappe.set_route("Form", "Request for Quotation", result.name)', component)
 
-		prepare_receipt = component.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tasync preparePurchaseReturn()", 1)[0]
+		prepare_receipt = component.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tpreparePurchaseReturn()", 1)[0]
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", prepare_receipt)
 		self.assertNotIn("prepare_purchase_receipt_draft", prepare_receipt)
 		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt", result.name)', prepare_receipt)
 
-		# Purchase Return is a separately recorded ownership gap in F3F16. Keep
-		# its existing native completion path until that workflow gets its own slice.
-		purchase_return = component.split("\t\tasync preparePurchaseReturn() {", 1)[1].split("\n\t\tasync prepareSupplierDebitNote()", 1)[0]
-		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', purchase_return)
+		purchase_return = component.split("\t\tpreparePurchaseReturn() {", 1)[1].split("\n\t\tprepareSupplierDebitNote()", 1)[0]
+		debit_note = component.split("\t\tprepareSupplierDebitNote() {", 1)[1].split("\n\t\tasync reviewLandedCost()", 1)[0]
+		for method, source_type in ((purchase_return, "purchase_receipt"), (debit_note, "purchase_invoice")):
+			self.assertIn("OPEN_PURCHASE_RETURN_REVIEW_EVENT", method)
+			self.assertIn(f'source_type: "{source_type}"', method)
+			self.assertNotIn("canUseNativeDesk", method)
+			self.assertNotIn('frappe.set_route("Form"', method)
 
 		# Operational UX remains inside EdgeSuite rather than opening a parallel
 		# classic Frappe dialog/prompt/toast workflow.
@@ -71,6 +80,16 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("frappe.show_alert", component)
 		self.assertNotIn("window.EdgeUI", component)
 
+	def test_edgesuite_only_purchasing_has_no_dead_native_actions(self):
+		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+		self.assertIn('{{ canUseNativeDesk ? "Open" : "Review" }}', component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name })", component)
+		self.assertIn('v-if="canUseNativeDesk && capabilities.can_compare_supplier_quotations"', component)
+		self.assertIn('v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis"', component)
+		self.assertIn('v-if="canUseNativeDesk && procurementTracker.available"', component)
+		self.assertIn('v-if="canUseNativeDesk"', component)
+		self.assertIn("<strong v-else>{{ row.name }}</strong>", component)
+
 	def test_backend_is_draft_first_and_does_not_write_ledgers_or_bypass_supplier_validation(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
 
@@ -79,6 +98,11 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("rfq.insert()", source)
 		self.assertIn("make_purchase_receipt(po.name)", source)
 		self.assertIn("receipt.insert()", source)
+		self.assertIn("make_purchase_invoice_from_purchase_order(source.name)", source)
+		self.assertIn("make_purchase_invoice_from_purchase_receipt(source.name)", source)
+		self.assertIn("target.insert()", source)
+		self.assertIn("FOR UPDATE", source)
+		self.assertIn("_existing_source_purchase_invoice", source)
 		self.assertIn('"posting_status": "Draft"', source)
 		self.assertIn("validate_operating_branch", source)
 		self.assertNotIn("validate_user_branch_access(", source)
@@ -88,6 +112,31 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn('frappe.new_doc("GL Entry")', source)
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
+
+	def test_receipt_history_can_continue_to_purchase_invoice_inside_edgesuite(self):
+		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue").read_text()
+		backend = (APP_ROOT / "professional_purchase_receipt.py").read_text()
+		self.assertIn("Create Invoice", overlay)
+		self.assertIn("prepare_purchase_invoice_from_purchase_receipt", overlay)
+		self.assertIn("retailedge-professional-purchasing-purchase-invoice-ready", overlay)
+		self.assertIn('"can_prepare_invoice"', backend)
+		self.assertIn('"per_billed"', backend)
+
+	def test_purchase_receipt_billing_blocks_overlapping_direct_po_drafts(self):
+		source = (APP_ROOT / "professional_purchasing.py").read_text()
+		self.assertIn("_lock_receipt_purchase_orders", source)
+		self.assertIn("_lock_purchase_source(PURCHASE_ORDER_DOCTYPE, purchase_order)", source)
+		self.assertIn("_direct_po_draft_invoice_conflicts", source)
+		self.assertIn("COALESCE(item.purchase_receipt, '') = ''", source)
+		self.assertIn("direct Purchase Order draft invoice(s)", source)
+		self.assertIn("Complete or cancel the PO-owned draft first", source)
+
+	def test_purchase_invoice_draft_reuse_preserves_exact_source_lineage(self):
+		source = (APP_ROOT / "professional_purchasing.py").read_text()
+		self.assertIn("_existing_source_purchase_invoice", source)
+		self.assertIn('row.get("purchase_receipt")', source)
+		self.assertIn("owned by Purchase Receipt billing", source)
+		self.assertIn("Multiple draft Purchase Invoices already reference", source)
 
 	def test_business_hub_promotes_page_as_purchase_order_owner(self):
 		source = (APP_ROOT / "master_experience.py").read_text()

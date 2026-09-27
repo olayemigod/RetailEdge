@@ -17,6 +17,20 @@ function clearBranchContext(frm) {
 	if (frm.doc.branch_setup) frm.set_value("branch_setup", null);
 }
 
+function governPriceListAllocation(frm) {
+	if (!frm.fields_dict.allowed_price_lists) return;
+	// Existing assignment history is governed from the EdgeSuite page. New
+	// assignments may still be prepared in the native fallback before first save.
+	frm.toggle_enable("allowed_price_lists", frm.is_new());
+	if (!frm.is_new() && frm.doc.status !== "Ended" && frm.perm?.[0]?.write) {
+		frm.add_custom_button(
+			__("Manage Price Lists in EdgeSuite"),
+			() => frappe.set_route("branch-assignments"),
+			__("Actions")
+		);
+	}
+}
+
 function addTransferAction(frm) {
 	if (frm.is_new() || !frm.doc.name || frm.doc.status !== "Active" || !frm.perm?.[0]?.write) {
 		return;
@@ -70,6 +84,7 @@ frappe.ui.form.on("RetailEdge Branch Assignment", {
 	},
 	refresh(frm) {
 		setBranchQuery(frm);
+		governPriceListAllocation(frm);
 		addTransferAction(frm);
 	},
 	company(frm) {

@@ -42,7 +42,7 @@
 				<button v-if="config.analysis" type="button" class="secondary-action" @click="openExpenseRegister">Expense Register</button>
 				<template v-else>
 					<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
-					<button type="button" class="primary-action" @click="recordExpense">{{ consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense" }}</button>
+					<button type="button" class="primary-action" @click="recordExpense">{{ config.cashierOnly ? "Record Cashier Expense" : (consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense") }}</button>
 				</template>
 				<EdgeExportMenu
 					v-if="rows.length"
@@ -80,7 +80,7 @@
 					/>
 					<EdgeDropdown v-if="config.analysis" v-model="analysisPreset" :options="analysisPresets" label="Analysis View" @change="onAnalysisPresetChange" />
 					<EdgeDropdown v-if="config.analysis" v-model="filters.group_by" :options="groupByOptions" label="Group By" @change="onAnalysisGroupChange" />
-					<EdgeDropdown v-if="consolidatedViewAvailable && !config.analysis" v-model="filters.view_mode" :options="[{ value: 'consolidated', label: 'Consolidated business expenses' }, { value: 'cashier', label: 'Cashier / POS expenses only' }]" label="View" @change="onViewModeChanged" />
+					<EdgeDropdown v-if="consolidatedViewAvailable && !config.analysis && !config.cashierOnly" v-model="filters.view_mode" :options="[{ value: 'consolidated', label: 'Consolidated business expenses' }, { value: 'cashier', label: 'Cashier / POS expenses only' }]" label="View" @change="onViewModeChanged" />
 					<EdgeDropdown v-if="consolidatedViewAvailable && (config.analysis || filters.view_mode === 'consolidated')" v-model="filters.source_type" :options="sourceTypes" label="Source" placeholder="All expense sources" />
 					<label
 						v-if="consolidatedViewAvailable && (config.analysis || filters.view_mode === 'consolidated')"
@@ -127,9 +127,18 @@
 		@close="cashierExpenseOpen = false"
 		@saved="handleCashierExpenseSaved"
 	/>
+	<CashierExpenseDetailDialog
+		:open="cashierExpenseDetailOpen"
+		:expenseName="cashierExpenseDetailName"
+		:company="filters.company"
+		:branch="filters.branch"
+		:canUseNativeDesk="canUseNativeDesk"
+		@close="closeCashierExpenseDetail"
+	/>
 </template>
 
 <script>
+import CashierExpenseDetailDialog from "./CashierExpenseDetailDialog.vue";
 import SimpleCashierExpenseDialog from "../retailedge_business_hub/SimpleCashierExpenseDialog.vue";
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
@@ -148,6 +157,15 @@ const REPORT_CONFIG = {
 		providerKey: "expense-register",
 		route: "/app/expense-register",
 		analysis: false,
+		cashierOnly: false,
+	},
+	cashier_expenses: {
+		title: "Cashier Expenses",
+		subtitle: "Review cashier and POS-till expenses by period, Branch, Cashier, Category and status.",
+		providerKey: "expense-register",
+		route: "/app/cashier-expenses",
+		analysis: false,
+		cashierOnly: true,
 	},
 	expense_analysis: {
 		title: "Expense Analysis",
@@ -182,6 +200,7 @@ export default {
 	props: { reportType: { type: String, default: "expense_register" } },
 	components: {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		CashierExpenseDetailDialog,
 		SimpleCashierExpenseDialog,
 	},
 	data() {
@@ -199,6 +218,8 @@ export default {
 			menuItems: [],
 			canUseNativeDesk: false,
 			cashierExpenseOpen: false,
+			cashierExpenseDetailOpen: false,
+			cashierExpenseDetailName: "",
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -333,6 +354,11 @@ export default {
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
 				if (this.config.analysis) this.filters.view_mode = "consolidated";
+				if (this.config.cashierOnly) {
+					this.filters.view_mode = "cashier";
+					this.filters.source_type = "";
+					this.filters.include_unposted_cashier_expenses = 0;
+				}
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -588,21 +614,42 @@ export default {
 		},
 		openExpense(row) {
 			if (!row) return;
-			if (row.source_doctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) {
-				frappe.route_options = { business_expense: row.source_reference || "" };
+			const sourceDoctype = row.source_doctype
+				|| (this.filters.view_mode === "cashier" || this.config.cashierOnly ? "RetailEdge Cashier Expense" : "");
+			const sourceReference = row.source_reference || row.name || "";
+			if (sourceDoctype === "RetailEdge Cashier Expense" && sourceReference) {
+				this.openCashierExpenseDetail(sourceReference);
+				return;
+			}
+			if (sourceDoctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) {
+				frappe.route_options = { business_expense: sourceReference };
 				frappe.set_route("business-expenses");
 				return;
 			}
-			if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) {
-				frappe.route_options = { purchase_invoice: row.source_reference || "" };
+			if (sourceDoctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) {
+				frappe.route_options = { purchase_invoice: sourceReference };
 				frappe.set_route("purchase-register");
 				return;
 			}
-			if (this.canUseNativeDesk && row.source_doctype && row.source_reference) {
-				frappe.set_route("Form", row.source_doctype, row.source_reference);
+			if (this.canUseNativeDesk && sourceDoctype && sourceReference) {
+				frappe.set_route("Form", sourceDoctype, sourceReference);
 			}
 		},
+		openCashierExpenseDetail(expenseName) {
+			const name = String(expenseName || "").trim();
+			if (!name) return;
+			this.cashierExpenseDetailName = name;
+			this.cashierExpenseDetailOpen = true;
+		},
+		closeCashierExpenseDetail() {
+			this.cashierExpenseDetailOpen = false;
+			this.cashierExpenseDetailName = "";
+		},
 		recordExpense() {
+			if (this.config.cashierOnly) {
+				this.cashierExpenseOpen = true;
+				return;
+			}
 			if (this.consolidatedViewAvailable && this.hasPageTarget("business-expenses")) {
 				frappe.route_options = { action: "new" };
 				frappe.set_route("business-expenses");

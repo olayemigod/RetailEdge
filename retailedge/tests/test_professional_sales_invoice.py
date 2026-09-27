@@ -33,6 +33,48 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_sales_order_and_delivery_invoice_mapping_reuses_exact_source_draft(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"def _lock_native_invoice_source",
+			"FOR UPDATE",
+			"def _existing_draft_invoice_for_source",
+			"Multiple draft Sales Invoices already reference",
+			'return "sales_order"',
+			'return "delivery_note"',
+			"linked != {source_name}",
+			'"existing": True',
+			'"existing": False',
+		):
+			self.assertIn(contract, source)
+
+	def test_cross_source_invoice_drafts_fail_closed_before_mapping(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"_draft_sales_order_conflicts_for_quotation",
+			"draft Sales Order(s)",
+			"_direct_sales_order_draft_invoice_conflicts",
+			"COALESCE(item.delivery_note, '') = ''",
+			"direct Sales Order draft invoice(s)",
+			"owned by Delivery Note billing",
+		):
+			self.assertIn(contract, source)
+
+	def test_delivery_note_invoice_path_serializes_and_blocks_direct_sales_order_billing_overlap(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"def _lock_delivery_sales_orders",
+			'_lock_native_invoice_source("Sales Order", sales_order)',
+			"def _has_direct_sales_order_submitted_billing",
+			"si.docstatus = 1",
+			"COALESCE(si.is_return, 0) = 0",
+			"COALESCE(item.delivery_note, '') = ''",
+			"_has_direct_sales_order_submitted_billing(linked_sales_orders)",
+			"already been billed directly",
+			"Continue any remaining billing from the Sales Order",
+		):
+			self.assertIn(contract, source)
+
 	def test_quotation_can_invoice_directly_without_hidden_order_or_repricing(self):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (
@@ -91,7 +133,7 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_professional_invoice_reuses_make_sale_stock_context_and_policy(self):
+	def test_professional_invoice_reuses_make_sale_stock_defaults_and_policy(self):
 		dialog = self.read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
 		backend = self.read("professional_sales_invoice.py")
 		for contract in (
@@ -102,8 +144,7 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 			"loadGuidedContext",
 		):
 			self.assertIn(contract, dialog)
-		self.assertIn("_create_simple_sales_invoice_draft(values)", backend)
-		self.assertNotIn("allow_update_stock_edit=True", backend)
+		self.assertIn("create_simple_sales_invoice_draft(values)", backend)
 
 
 	def test_invoice_ui_exposes_flexible_paths_and_no_submit_action(self):

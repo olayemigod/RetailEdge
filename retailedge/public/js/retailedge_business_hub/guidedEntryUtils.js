@@ -1,6 +1,22 @@
 export const BRANCH_WAREHOUSE_METHOD =
 	"retailedge.guided_entry_context.resolve_branch_warehouse_selection";
 
+export const QUICK_ENTRY_MAX_LINES = 10;
+
+export const TRANSACTION_ENTRY_PREFERENCE_METHOD =
+	"retailedge.transaction_entry_preference.get_transaction_entry_preference";
+export const TRANSACTION_ENTRY_PREFERENCE_SAVE_METHOD =
+	"retailedge.transaction_entry_preference.set_transaction_entry_preference";
+export const PERSISTENT_TRANSACTION_PAGES = Object.freeze({
+	"Sales Invoice": "make-sale",
+	"Purchase Invoice": "record-purchase",
+	"Stock Entry": "transfer-stock",
+	"Stock Reconciliation": "stock-adjustment",
+});
+
+let transactionEntryPreferenceCache = null;
+let transactionEntryPreferenceRequest = null;
+
 const PRICING_BATCH_METHODS = {
 	"retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing":
 		"retailedge.guided_pricing_api.get_sales_item_pricing_batch",
@@ -43,11 +59,12 @@ async function normaliseGuidedContext(method, message) {
 	return { ...message, defaults };
 }
 
-function rawCall(method, args = {}) {
+function rawCall(method, args = {}, type = "POST") {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method,
 			args,
+			type,
 			callback: (response) => {
 				const message = response.message || {};
 				Promise.resolve(normaliseGuidedContext(method, message)).then(resolve).catch(reject);
@@ -101,17 +118,58 @@ function queuePricingCall(method, args, batchMethod, values) {
 	});
 }
 
-export function callMethod(method, args = {}) {
+export function callMethod(method, args = {}, type = "POST") {
 	const batchMethod = PRICING_BATCH_METHODS[method];
 	const values = batchMethod ? pricingContext(args) : null;
 	if (batchMethod && values && args.item_code) {
 		return queuePricingCall(method, args, batchMethod, values);
 	}
-	return rawCall(method, args);
+	if (type === "POST") return rawCall(method, args);
+	return rawCall(method, args, type);
 }
 
 export function errorMessage(error, fallback) {
 	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
+}
+
+function elevateFrappeConfirmation(dialog) {
+	if (typeof document === "undefined") return;
+	const returnedWrapper =
+		dialog?.$wrapper?.get?.(0)
+		|| dialog?.$wrapper?.[0]
+		|| null;
+	const frappeModals = Array.from(document.querySelectorAll(".modal"));
+	const wrapper = returnedWrapper || frappeModals[frappeModals.length - 1] || null;
+	if (wrapper?.style) {
+		wrapper.style.setProperty("z-index", "100000", "important");
+		wrapper.setAttribute("data-retailedge-overlay-confirm", "1");
+	}
+
+	const backdrops = Array.from(document.querySelectorAll(".modal-backdrop"));
+	const backdrop = backdrops[backdrops.length - 1];
+	if (backdrop?.style) {
+		backdrop.style.setProperty("z-index", "99990", "important");
+		backdrop.setAttribute("data-retailedge-overlay-confirm-backdrop", "1");
+	}
+}
+
+export function confirmAboveEdgeModal(message, onConfirm, onCancel = null) {
+	const confirmFn = typeof frappe !== "undefined" ? frappe.confirm : null;
+	if (typeof confirmFn !== "function") {
+		const accepted = typeof window !== "undefined" && typeof window.confirm === "function"
+			? window.confirm(String(message || ""))
+			: false;
+		if (accepted) onConfirm?.();
+		else onCancel?.();
+		return null;
+	}
+
+	const dialog = confirmFn(message, onConfirm, onCancel || undefined);
+	const elevate = () => elevateFrappeConfirmation(dialog);
+	elevate();
+	if (typeof requestAnimationFrame === "function") requestAnimationFrame(elevate);
+	if (typeof setTimeout === "function") setTimeout(elevate, 0);
+	return dialog;
 }
 
 export function resolveBranchWarehouse({ company, branch = "", warehouse = "", preference = "default" }) {
@@ -206,4 +264,37 @@ export function quickCreateItem(query, { stockItem = null } = {}) {
 	};
 	if (stockItem !== null) initialValues.is_stock_item = stockItem ? 1 : 0;
 	return quickCreateMaster("Item", itemCode, initialValues);
+}
+
+
+export function persistentTransactionPage(doctype) {
+	return PERSISTENT_TRANSACTION_PAGES[String(doctype || "").trim()] || "";
+}
+
+export async function getTransactionEntryPreference({ force = false } = {}) {
+	if (!force && transactionEntryPreferenceCache) return { ...transactionEntryPreferenceCache };
+	if (!force && transactionEntryPreferenceRequest) return transactionEntryPreferenceRequest;
+	transactionEntryPreferenceRequest = rawCall(TRANSACTION_ENTRY_PREFERENCE_METHOD, {}, "GET")
+		.then((result) => {
+			const value = ["smart", "quick", "full"].includes(result?.value) ? result.value : "smart";
+			transactionEntryPreferenceCache = { ...result, value };
+			return { ...transactionEntryPreferenceCache };
+		})
+		.catch(() => {
+			transactionEntryPreferenceCache = { value: "smart", default: "smart", options: [], scope: "user" };
+			return { ...transactionEntryPreferenceCache };
+		})
+		.finally(() => {
+			transactionEntryPreferenceRequest = null;
+		});
+	return transactionEntryPreferenceRequest;
+}
+
+export async function setTransactionEntryPreference(value) {
+	const result = await rawCall(TRANSACTION_ENTRY_PREFERENCE_SAVE_METHOD, { value }, "POST");
+	transactionEntryPreferenceCache = {
+		...result,
+		value: ["smart", "quick", "full"].includes(result?.value) ? result.value : "smart",
+	};
+	return { ...transactionEntryPreferenceCache };
 }

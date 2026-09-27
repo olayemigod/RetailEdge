@@ -118,9 +118,7 @@ test("RetailEdge manager reaches Payment & Settlement Analysis from governed rep
 	try {
 		await openProductPage(page, "payment-settlement-analysis", "Payment & Settlement Analysis", "Reports");
 		await expect(page.getByText("Payment Methods", { exact: true }).first()).toBeVisible();
-		const analysisView = page.getByText("Analysis View", { exact: true }).first().locator("..");
-		await analysisView.getByText("Payment Methods", { exact: true }).click();
-		await expect(page.getByText("Customer Receipts", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Analysis View", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}

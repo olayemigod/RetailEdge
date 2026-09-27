@@ -115,25 +115,25 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			"SimplePurchaseInvoiceDialog",
 			"SimpleStockTransferDialog",
 			"runTransactionAction(action)",
-			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"])',
+			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry", "Stock Reconciliation"])',
 		):
 			self.assertIn(contract, component)
 
 	def test_sales_and_purchase_invoices_use_edgesuite_while_stock_native_fallback_remains(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
-		self.assertIn('if (action.doctype === "Sales Invoice")', component)
+		self.assertIn("GUIDED_DOCTYPES.has(action.doctype)", component)
+		self.assertIn("persistentPageForAction(action)", component)
+		self.assertIn('if (target && this.entryPreference !== "quick")', component)
+		self.assertIn("this.openQuickTransaction(action)", component)
 		self.assertIn('if (["Sales Invoice", "Sales Order", "Delivery Note"].includes(action?.doctype)) return "professional-selling";', component)
-		self.assertIn('if (action.doctype === "Purchase Invoice")', component)
 		self.assertIn('if (action?.doctype === "Purchase Invoice") return "purchase-register";', component)
-		self.assertIn("frappe.set_route(owner);", component)
 		self.assertIn(':nativeFallbackEnabled="false"', component)
 		self.assertNotIn("openNativePurchaseInvoice", component)
 		self.assertIn("openNativeStockTransfer", component)
 		self.assertIn("if (!this.canUseNativeDesk || !doctype) return;", component)
-		self.assertIn("window.open(`/app/${doctypeSlug(doctype)}/new`", component)
+		self.assertIn('window.open(`/app/${doctypeSlug(doctype)}/new`', component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.client.save", component)
-
 
 	def test_pos_launch_errors_are_user_safe_and_missing_context_is_gated_in_edgesuite(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")

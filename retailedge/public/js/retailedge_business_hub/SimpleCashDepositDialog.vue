@@ -91,6 +91,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.cash_custody.get_cash_deposit_context";
 const SEARCH_METHOD = "retailedge.cash_custody.search_cash_deposit_options";
 const CREATE_METHOD = "retailedge.cash_custody.create_cash_deposit_draft";
@@ -144,7 +145,7 @@ export default {
 	},
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -156,11 +157,15 @@ export default {
 			formContext: {},
 			custody: {},
 			values: emptyValues(),
+			initialValuesSnapshot: "",
 		};
 	},
 	computed: {
 		searchContext() {
 			return { ...this.values };
+		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
 		},
 	},
 	watch: {
@@ -181,6 +186,7 @@ export default {
 			this.formContext = {};
 			this.custody = {};
 			this.values = emptyValues();
+			this.initialValuesSnapshot = "";
 		},
 		async loadContext() {
 			this.loading = true;
@@ -191,6 +197,7 @@ export default {
 				this.formContext = result || {};
 				this.custody = result?.custody || {};
 				this.values = { ...emptyValues(), ...(result?.defaults || {}) };
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Deposit Cash.");
 			} finally {
@@ -214,10 +221,21 @@ export default {
 			return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 		},
 		requestClose() {
-			if (!this.saving) this.$emit("close");
+			if (this.saving) return;
+			if (!this.hasUnsavedChanges) {
+				this.$emit("close");
+				return;
+			}
+			confirmAboveEdgeModal("Discard the unsaved Deposit Cash changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
-			if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
+			if (this.saving || !this.nativeFallbackEnabled) return;
+			const openNative = () => this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
+			if (!this.hasUnsavedChanges) {
+				openNative();
+				return;
+			}
+			confirmAboveEdgeModal("Discard the unsaved Deposit Cash changes and open the full ERPNext form?", openNative);
 		},
 		async saveDraft() {
 			if (this.saving || this.loading) return;

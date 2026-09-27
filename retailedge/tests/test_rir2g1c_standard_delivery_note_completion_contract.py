@@ -18,8 +18,9 @@ def _read(path: Path) -> str:
 def test_service_is_exactly_delivery_note_completion():
 	source = _read(SERVICE)
 	assert 'DELIVERY_NOTE_DOCTYPE = "Delivery Note"' in source
-	assert '"Sales Invoice"' not in source
 	assert 'SUPPORTED_DOCTYPES' not in source
+	assert 'frappe.new_doc("Sales Invoice")' not in source
+	assert 'frappe.get_doc("Sales Invoice", source_sales_invoice)' in source
 
 
 def test_preview_is_persistence_free_and_stock_truth_is_not_reimplemented():
@@ -77,6 +78,34 @@ def test_standard_delivery_requires_one_submitted_matching_sales_order():
 		"source_branch != effective_branch",
 	):
 		assert contract in source
+
+
+
+def test_sales_invoice_sourced_delivery_revalidates_lineage_and_blocks_double_stock():
+	source = _read(SERVICE)
+	for contract in (
+		"against_sales_invoice",
+		"source_sales_invoice",
+		'frappe.get_doc("Sales Invoice", source_sales_invoice)',
+		"Source Sales Invoice Company does not match the Delivery Note",
+		"Source Sales Invoice Customer does not match the Delivery Note",
+		"already posted stock",
+		"cannot mix unlinked or differently linked items",
+	):
+		assert contract in source
+
+
+def test_invoice_linked_delivery_does_not_offer_duplicate_sales_invoice_action():
+	selling = _read(ROOT / "professional_selling.py")
+	dialog = _read(DIALOG)
+	assert 'filters={"parent": name, "parenttype": "Delivery Note", "against_sales_invoice": ["!=", ""]}' in selling
+	assert 'action.get("value") != "create-sales-invoice"' in selling
+	assert 'frappe.get_doc("Delivery Note", name)' in selling
+	assert 'row.get("against_sales_invoice")' in selling
+	assert 'action.get("value") != "create-sales-invoice"' in selling
+	assert '"source_sales_invoice": source_sales_invoice' not in selling
+	assert 'preview.source_sales_invoice ? "Source Sales Invoice" : "Source Sales Order"' in dialog
+	assert "resolved.source_sales_invoice" not in dialog
 
 
 def test_warehouse_context_is_company_branch_and_permission_safe():

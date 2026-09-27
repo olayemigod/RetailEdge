@@ -28,7 +28,9 @@ def test_service_is_purchase_invoice_only_and_preview_is_persistence_free():
 		"_get_purchase_invoice",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
+		"_completion_source_context",
 		"_validate_source_less_context",
+		"_validate_professional_purchasing_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'"persistence": "none"',
@@ -105,6 +107,24 @@ def test_update_stock_is_branch_safe_and_advanced_stock_complexity_fails_closed(
 		assert marker in source
 
 
+
+def test_purchase_invoice_item_access_is_revalidated_in_preview_queue_edit_submit_and_workflow():
+	source = _read(SERVICE)
+	assert "def _validate_purchase_item_access(doc)" in source
+	assert '_assert_read("Item", item_code)' in source
+	for function_name in (
+		"def _build_preview",
+		"def _eligible_queue_row",
+		"def update_standard_purchase_invoice_draft",
+		"def submit_standard_purchase_invoice",
+		"def apply_standard_purchase_invoice_workflow_action",
+	):
+		start = source.index(function_name)
+		end = source.find("\ndef ", start + len(function_name))
+		segment = source[start:end if end >= 0 else len(source)]
+		assert "_validate_purchase_item_access(doc)" in segment
+
+
 def test_direct_submit_locks_stale_checks_revalidates_and_calls_native_submit_only():
 	source = _read(SERVICE)
 	start = source.index("def submit_standard_purchase_invoice")
@@ -115,7 +135,7 @@ def test_direct_submit_locks_stale_checks_revalidates_and_calls_native_submit_on
 		"expected_modified",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_less_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "submit", doc=doc)',
@@ -141,7 +161,7 @@ def test_workflow_action_uses_shared_f3f27_bridge():
 		"FOR UPDATE",
 		"expected_modified",
 		"expected_workflow_state",
-		"_validate_source_less_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		"apply_document_workflow_action(",
@@ -179,6 +199,184 @@ def test_dialog_uses_server_authoritative_submit_and_workflow_actions():
 	):
 		assert marker in source
 	assert 'v-if="canUseNativeDesk && document?.name"' in source
+
+
+def test_professional_purchasing_source_mode_preserves_source_ownership_and_allows_governed_completion():
+	source = _read(SERVICE)
+	for marker in (
+		'SOURCE_MODE_PROFESSIONAL_PURCHASING = "professional_purchasing"',
+		"_validate_professional_purchasing_source_context",
+		'"source_type": source_context.get("source_type") or ""',
+		'"source_name": source_context.get("source_name") or ""',
+		"Standard Professional Purchasing completion supports one source Purchase Receipt at a time",
+		"Standard Professional Purchasing completion supports one source Purchase Order at a time",
+	):
+		assert marker in source
+	assert "Supplier Document Purchase Invoice remains owned by its immutable handoff workflow" in source
+	assert 'not cint(doc.get("update_stock")) or _clean(doc.get("set_warehouse"))' in source
+
+
+
+def test_purchase_invoice_preview_and_draft_edit_revalidate_existing_item_access():
+	service = _read(SERVICE)
+	assert "def _validate_purchase_item_access(doc)" in service
+	assert '_assert_read("Item", item_code)' in service
+	build = service[service.index("def _build_preview"):service.index("def _assert_expected_modified")]
+	assert "_validate_purchase_item_access(doc)" in build
+	update = service[service.index("def update_standard_purchase_invoice_draft"):service.index("def _queue_filters")]
+	assert "_validate_purchase_item_access(doc)" in update
+
+
+def test_purchase_invoice_draft_editor_is_stale_safe_permission_aware_and_source_bounded():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for marker in (
+		"def update_standard_purchase_invoice_draft(",
+		"_lock_purchase_invoice(name)",
+		"_assert_expected_modified(doc, expected_modified)",
+		'frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)',
+		"_standard_invoice_blockers(doc)",
+		"_completion_source_context(doc, source_mode)",
+		"_validate_stock_context(doc",
+		"resolve_purchase_item_pricing(",
+		"Source-linked Purchase Invoice items cannot be added",
+		"Source-linked purchase items cannot be removed",
+		"doc.save()",
+		'result["persistence"] = "draft_update"',
+	):
+		assert marker in service
+	for forbidden in (
+		"ignore_permissions=True",
+		"frappe.db.commit",
+		'frappe.new_doc("GL Entry")',
+		'frappe.new_doc("Stock Ledger Entry")',
+		'frappe.new_doc("Payment Ledger Entry")',
+	):
+		assert forbidden not in service
+
+	for marker in (
+		"update_standard_purchase_invoice_draft",
+		"Edit draft before completion",
+		"Save Draft Changes",
+		"editable_items",
+		"default_warehouse",
+		"allow_new_items",
+		"sourceMode",
+		"expected_modified",
+		"EdgeChildTable",
+	):
+		assert marker in dialog
+
+
+
+def test_purchase_completion_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for marker in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Purchase Invoice draft changes?',
+		'this.preview?.can_edit && !this.completedResult && this.draftDirty',
+	):
+		assert marker in dialog
+
+
+
+def test_purchase_invoice_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for marker in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Purchase Invoice draft changes?',
+	):
+		assert marker in dialog
+
+
+
+def test_purchase_invoice_preview_can_refresh_submitted_outstanding_and_next_actions_read_only():
+	service = _read(SERVICE)
+	assert '"outstanding_amount": flt(doc.get("outstanding_amount"))' in service
+	assert '"next_actions": _submitted_next_actions(doc)' in service
+
+
+
+def test_purchase_preview_separates_edit_blockers_from_submit_permission():
+	source = _read(SERVICE)
+	preview = source[source.index("def _build_preview"):source.index("def _assert_expected_modified")]
+	assert "edit_blockers = list(blockers)" in preview
+	assert '"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers' in preview
+	assert "You do not have permission to submit this Purchase Invoice." in preview
+	assert preview.index("edit_blockers = list(blockers)") < preview.index("You do not have permission to submit this Purchase Invoice.")
+
+
+
+def test_purchase_invoice_editor_requires_saving_dirty_changes_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for contract in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Purchase Invoice draft changes?',
+		'this.preview?.can_edit && !this.completedResult && this.draftDirty',
+	):
+		assert contract in dialog
+	assert "window.EdgeUI" not in dialog
+	assert "window.EdgeSuiteUI" in dialog
+
+
+def test_purchase_invoice_next_actions_hide_debit_note_after_full_return():
+	service = _read(SERVICE)
+	assert "get_returned_qty_map_for_row" in service
+	assert "def _purchase_invoice_has_returnable_items(doc)" in service
+	assert "get_returned_qty_map_for_row(doc.name, supplier, row_name, PURCHASE_INVOICE_DOCTYPE)" in service
+	assert "and _purchase_invoice_has_returnable_items(doc)" in service
+
+
+
+def test_supplier_debit_note_next_action_requires_professional_purchasing_page_access():
+	source = _read(SERVICE)
+	assert 'def _can_open_page(page_name: str) -> bool:' in source
+	assert 'frappe.get_doc("Page", page_name).is_permitted()' in source
+	assert '_can_open_page("professional-purchasing")' in source
+	debit_index = source.index('actions.append({"value": "create-supplier-debit-note"')
+	gate_index = source.rfind('_can_open_page("professional-purchasing")', 0, debit_index)
+	assert gate_index >= 0
+
+
+def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	assert '"value": "pay-supplier"' in service
+	assert '"label": _("Pay Supplier")' in service
+	assert '"value": "create-supplier-debit-note"' in service
+	assert '"label": _("Supplier Debit Note")' in service
+	assert "showNextActions" in dialog
+	assert "emitNextAction" in dialog
+	assert "supplier-payables" in dialog
+	assert "Print & Share" in dialog
+
+
+
+def test_purchase_invoice_next_action_reuses_professional_supplier_debit_note_review():
+	record_purchase = _read(ROOT / "public/js/record_purchase/RecordPurchase.vue")
+	hub = _read(HUB)
+	purchasing = _read(PURCHASING)
+	bundle = _read(ROOT / "public/js/professional_purchasing.bundle.js")
+	for source in (record_purchase, hub):
+		assert '"create-supplier-debit-note"' in source
+		assert 'retailedgeProfessionalPurchasingTarget' in source
+		assert 'user: frappe.session?.user || "Guest"' in source
+		assert 'frappe.set_route("professional-purchasing")' in source
+	assert 'OPEN_PURCHASE_RETURN_REVIEW_EVENT' in purchasing
+	assert 'source_type: "purchase_invoice"' in purchasing
+	assert 'installProfessionalPurchaseReturnOwnership(target)' in bundle
+	assert 'consumeProfessionalPurchasingTarget();' in bundle
+	assert 'delete window.retailedgeProfessionalPurchasingTarget' in bundle
+	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in bundle
 
 
 def test_business_hub_record_purchase_opens_purchase_invoice_completion():

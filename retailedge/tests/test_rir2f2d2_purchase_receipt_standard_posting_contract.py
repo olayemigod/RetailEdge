@@ -72,6 +72,30 @@ def test_edgesuite_post_action_requires_standard_eligibility_and_submit_permissi
 	assert '}, "POST")' in overlay
 
 
+
+def test_submitted_purchase_receipt_can_continue_to_supplier_invoice():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	for contract in (
+		"def _submitted_receipt_next_actions",
+		'_permission("Purchase Invoice", "create")',
+		'"value": "create-purchase-invoice"',
+		'"next_actions": _submitted_receipt_next_actions(receipt)',
+		'"next_actions": _submitted_receipt_next_actions(updated_receipt)',
+	):
+		assert contract in source
+	for contract in (
+		"submitted.next_actions",
+		"runNextAction(action.value)",
+		"prepare_purchase_invoice_from_purchase_receipt",
+		"PURCHASE_INVOICE_READY_EVENT",
+		'v-if="!submitted && preview.workflow_started',
+		'v-if="nativeFallbackEnabled && !submitted"',
+	):
+		assert contract in overlay
+	assert "this.close();" not in overlay[overlay.index("async submitStandardReceipt()"):overlay.index("dispatchLandedCostHandoff", overlay.index("async submitStandardReceipt()"))]
+
+
 def test_advanced_receipt_handoff_remains_separate_from_standard_posting():
 	overlay = _read(OVERLAY)
 	assert "nativeFallbackEnabled" in overlay

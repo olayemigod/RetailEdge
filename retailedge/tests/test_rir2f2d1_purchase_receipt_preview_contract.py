@@ -63,6 +63,7 @@ def test_native_receipt_list_and_draft_handoff_remain_advanced_only():
 	source = _read(CONTROLLER)
 	assert 'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"' in source
 	assert "if (!nativeDeskEnabled()) return;" in source
+	assert "Boolean(access.can_use_native_desk)" in source
 	assert "PREPARE_RECEIPT_METHOD" in source
 	assert 'frappe.set_route("Form", "Purchase Receipt", result.name)' in source
 
@@ -73,6 +74,7 @@ def test_preview_overlay_remains_edgesuite_owned_after_d2():
 	controller = _read(CONTROLLER)
 	assert "EdgeModal" in overlay
 	assert "get_professional_purchase_receipt_preview" in overlay
+	assert "Boolean(access.can_use_native_desk)" in overlay
 	assert "mountRetailEdgeProfessionalPurchaseReceiptPreview" in bundle
 	assert "PURCHASE_RECEIPT_PREVIEW_ASSET" in controller
 	assert "mountRetailEdgeProfessionalPurchaseReceiptPreview" in controller

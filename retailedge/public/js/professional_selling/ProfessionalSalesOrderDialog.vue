@@ -69,10 +69,13 @@
 				/>
 
 				<EdgeLinkField
-					v-if="canSwitchPriceList"
+					v-if="mode === 'new'"
 					:modelValue="values.price_list"
-					label="Price List"
-					placeholder="Choose an assigned Price List"
+					label="Selling Price List"
+					placeholder="Select assigned Price List"
+					description="The effective default follows Price List Governance. Converted Quotations retain their accepted commercial terms."
+					:required="Boolean(pricingContext.selection_required)"
+					:disabled="Boolean(pricingContext.locked) || !Boolean(pricingContext.can_select)"
 					:searcher="searchPriceList"
 					@update:modelValue="setPriceList"
 				/>
@@ -126,7 +129,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Open Full Form</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Advanced: Open in ERPNext</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode === 'quotation' && !sourceQuotation)" @click="saveDraft">{{ saving ? "Saving..." : mode === 'quotation' ? "Create Draft from Quotation" : "Save Draft" }}</button>
@@ -143,6 +146,7 @@ import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 const SOURCE_METHOD = "retailedge.professional_selling_sources.search_professional_selling_sources";
 const PRICING_METHOD = "retailedge.professional_selling.get_professional_selling_item_pricing";
+const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.professional_sales_order.create_professional_sales_order_draft";
 const MAP_METHOD = "retailedge.professional_sales_order.create_sales_order_from_quotation";
 const DOCUMENT = "sales-order";
@@ -155,7 +159,7 @@ function initialValues(context = {}) {
 		branch: context.operating?.branch || "",
 		warehouse: context.operating?.default_stock_location || "",
 		customer: "",
-		price_list: "",
+		price_list: context.pricing?.price_list || "",
 		transaction_date: today,
 		delivery_date: today,
 		shipping_rule: "",
@@ -168,7 +172,7 @@ function initialValues(context = {}) {
 export default {
 	name: "ProfessionalSalesOrderDialog",
 	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
-	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
+	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) }, canUseNativeDesk: { type: Boolean, default: false } },
 	emits: ["close", "saved", "open-native"],
 	data() {
 		return {
@@ -178,8 +182,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
-			pricingSignatures: {},
-			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
+			pricingContext: { ...(this.context.pricing || {}) },
 			values: initialValues(this.context),
 			itemTableField: { label: "Items", description: "Add the products or services included in this order." },
 			itemColumns: [
@@ -190,8 +193,7 @@ export default {
 		};
 	},
 	computed: {
-		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
-		canSwitchPriceList() { return Boolean(this.context.pricing?.can_switch_price_list && this.availablePriceLists.length); },
+		priceListLabel() { return this.pricingContext?.price_list || "Choose Price List"; },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 	},
@@ -200,10 +202,9 @@ export default {
 			if (next) {
 				this.mode = "new";
 				this.sourceQuotation = "";
+				this.pricingContext = { ...(this.context.pricing || {}) };
 				this.values = initialValues(this.context);
-				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
-				this.pricingTokens = {};
-				this.pricingSignatures = {};
+				this.applyRatePermission(this.pricingContext);
 				this.saveError = "";
 			}
 		},
@@ -223,48 +224,51 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		applyRatePermission(pricing = this.pricingContext || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
+			this.itemColumns = this.itemColumns.map((column) =>
+				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+			);
+		},
+		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; this.applyRatePermission(pricing || {}); if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
+		async setPriceList(next) { if (this.pricingContext?.locked || this.mode !== "new") return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Selling Price List."); } },
 		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createCustomer(query) { return quickCreateCustomer(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
-		async refreshPriceListOptions() {
-			const rows = await this.searchPriceList("");
-			this.availablePriceLists = rows.map((row) => row.value || row.label).filter(Boolean);
-			if (this.values.price_list && !this.availablePriceLists.includes(this.values.price_list)) this.values.price_list = "";
-		},
-		setPriceList(next) {
-			this.values.price_list = next || "";
-			this.pricingSignatures = {};
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
-		},
 		setCustomer(next) {
-			const previousCustomer = this.values.customer || "";
-			this.values.customer = next || "";
-			this.pricingSignatures = {};
-			this.refreshPriceListOptions().catch(() => {});
-			if (previousCustomer !== this.values.customer) {
+			const value = next || "";
+			const changed = this.values.customer !== value;
+			this.values.customer = value;
+			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshAllItemPricing();
+				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
 		},
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
-			this.pricingSignatures = {};
 			this.values.warehouse = "";
-			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
-			if (!branch || !this.values.company) return;
+			if (!this.values.company) return;
+			if (!branch) {
+				try {
+					await this.refreshPriceListContext();
+					this.refreshAllItemPricing();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to refresh Selling Price List.");
+				}
+				return;
+			}
 			const token = ++this.cascadeToken;
 			try {
 				const resolved = await resolveBranchWarehouse({ company: this.values.company, branch, preference: "sales" });
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
-				await this.refreshPriceListOptions();
+				await this.refreshPriceListContext();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve Branch Stock Location.");
@@ -273,7 +277,6 @@ export default {
 		async setWarehouse(next) {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
-			this.pricingSignatures = {};
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -289,32 +292,16 @@ export default {
 				}
 			}
 		},
-		pricingSignature(row) {
-			return [
-				this.values.company,
-				this.values.branch,
-				this.values.warehouse,
-				this.values.customer,
-				this.values.price_list,
-				this.values.transaction_date,
-				row?.item_code || "",
-				row?.qty || 1,
-			].join("|");
-		},
 		updateItems(nextRows) {
+			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const normalized = { ...row, item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
-				if (!normalized.item_code) {
-					delete this.pricingSignatures[index];
-					return normalized;
-				}
-				const signature = this.pricingSignature(normalized);
-				if (this.pricingSignatures[index] !== signature) {
+				const prior = previous[index] || {};
+				if (row.item_code && row.item_code !== prior.item_code) {
 					changed.push(index);
-					return { ...normalized, rate: "" };
+					return { ...row, rate: "" };
 				}
-				return normalized;
+				return { ...row };
 			});
 			changed.forEach((index) => this.loadItemPricing(index));
 		},
@@ -327,14 +314,13 @@ export default {
 				const result = await callMethod(PRICING_METHOD, { document: DOCUMENT, item_code: row.item_code, values: { ...this.values, qty: row.qty || 1 } });
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
-				this.pricingSignatures[index] = this.pricingSignature(this.values.items[index]);
-				this.values.items = [...this.values.items];
+				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) }; this.applyRatePermission(this.pricingContext);
+				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
 		refreshAllItemPricing() {
-			this.pricingSignatures = {};
 			if (!this.values.customer) return;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {

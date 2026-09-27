@@ -43,6 +43,14 @@ def test_child_reference_enrichment_does_not_leak_unreadable_rfq_names():
 	assert 'filters={"name": ["in", sorted(linked_rfqs)]}' in source
 
 
+def test_supplier_quotation_history_exposes_purchase_order_create_capability():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	assert '"can_create_purchase_order": bool(frappe.has_permission("Purchase Order", "create"))' in source
+	assert "can_create_purchase_order: false" in overlay
+	assert "Boolean(this.history.can_create_purchase_order)" in overlay
+
+
 def test_supplier_quotation_history_uses_smart_company_branch_supplier_filters():
 	overlay = _read(OVERLAY)
 	assert "EdgeLinkField" in overlay
@@ -72,6 +80,7 @@ def test_native_supplier_quotation_access_is_explicit_advanced_only():
 	overlay = _read(OVERLAY)
 	guard = _read(GUARD)
 	assert 'const ACCESS_MODE = "edgesuite_only"' in overlay
+	assert 'Boolean(access.can_use_native_desk)' in overlay
 	assert "nativeFallbackEnabled" in overlay
 	assert "Advanced: Open in ERPNext" in overlay
 	assert "Advanced: Supplier Quotations in ERPNext" in overlay

@@ -20,10 +20,12 @@ from retailedge.bank_transaction_match_workflow import (
 	get_bank_match_review_queue_summary,
 	preview_bulk_confirm_bank_transaction_matches,
 	run_bank_transaction_auto_match,
+	validate_locked_candidate_from_selected_row,
 )
 from retailedge.bank_transaction_matching import get_bank_transaction_matching_rows
 from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import (
 	RetailEdgeBankTransactionMatch,
+	_resolve_manual_candidate_context,
 )
 from retailedge.retailedge.doctype.retailedge_settings.retailedge_settings import RetailEdgeSettings
 
@@ -380,6 +382,164 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(doc.match_status, "Strong Match")
 		self.assertEqual(doc.risk_level, "Low")
 		self.assertEqual(doc.candidate_type, "Sales Invoice")
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_manual_candidate_context"
+	)
+	def test_persisted_review_hydration_marks_candidate_as_locked(self, mock_resolve):
+		mock_resolve.return_value = {"doc_values": {}, "details": {}, "block_reason": None}
+		doc = SimpleNamespace(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Payment Entry",
+			suggested_document="PE-LOCKED",
+			sales_invoice=None,
+			payment_entry="PE-LOCKED",
+			details_json=None,
+			is_new=lambda: False,
+		)
+		RetailEdgeBankTransactionMatch._hydrate_candidate_context(doc)
+		self.assertTrue(mock_resolve.call_args.kwargs["lock_existing_candidate"])
+		self.assertEqual(mock_resolve.call_args.kwargs["suggested_document"], "PE-LOCKED")
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context",
+		return_value={},
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate",
+		return_value=None,
+	)
+	def test_persisted_review_missing_locked_candidate_never_substitutes_current_best(
+		self, mock_resolve, _mock_bank, mock_source_fallback
+	):
+		context = _resolve_manual_candidate_context(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-LOCKED",
+			sales_invoice="SINV-LOCKED",
+			lock_existing_candidate=True,
+		)
+		self.assertIn("Locked candidate", context["block_reason"])
+		self.assertIn("no alternate candidate was selected", context["block_reason"])
+		self.assertFalse(mock_resolve.call_args.kwargs["allow_fallback"])
+		mock_source_fallback.assert_not_called()
+
+	@patch("retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row")
+	def test_persisted_sales_invoice_reconstructs_locked_payment_row_evidence(self, mock_validate):
+		mock_validate.return_value = {
+			"valid": True,
+			"candidate": {
+				"document_type": "Sales Invoice",
+				"document_name": "SINV-LOCKED",
+			},
+		}
+		locked_doc = SimpleNamespace(
+			bank_transaction="BTN-LOCKED",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-LOCKED",
+			sales_invoice="SINV-LOCKED",
+			payment_entry=None,
+			payment_row_index=2,
+			payment_event_source="Invoice Payment Row",
+			candidate_amount=1090.0,
+			payment_mode="Bank Transfer",
+			payment_account="Moniepoint - PED",
+		)
+		previous = getattr(frappe.flags, "retailedge_active_match_doc", None)
+		frappe.flags.retailedge_active_match_doc = locked_doc
+		try:
+			candidate = _resolve_matching_candidate(
+				bank_transaction_name="BTN-LOCKED",
+				suggested_document_type="Sales Invoice",
+				suggested_document="SINV-LOCKED",
+				sales_invoice="SINV-LOCKED",
+				allow_fallback=False,
+			)
+		finally:
+			frappe.flags.retailedge_active_match_doc = previous
+
+		self.assertEqual(candidate["document_name"], "SINV-LOCKED")
+		locked_row = mock_validate.call_args.args[0]
+		self.assertEqual(locked_row["candidate_name"], "SINV-LOCKED")
+		self.assertEqual(locked_row["payment_row_index"], 2)
+		self.assertEqual(locked_row["payment_event_source"], "Invoice Payment Row")
+		self.assertEqual(locked_row["payment_event_found"], 1)
+		self.assertEqual(locked_row["payment_row_amount"], 1090.0)
+		self.assertEqual(locked_row["payment_mode"], "Bank Transfer")
+		self.assertEqual(locked_row["payment_account"], "Moniepoint - PED")
+
+	@patch(
+		"retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings",
+		return_value={"amount_tolerance": 0.01},
+	)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	def test_locked_invoice_row_uses_base_amount_and_preserves_event_identity(
+		self, mock_get_value, mock_get_all, _mock_settings
+	):
+		def get_value_side_effect(doctype, name_or_filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict(
+					name="BTN-FX",
+					status="Pending",
+					company="Demo Company",
+					bank_account="Demo Bank",
+					date="2026-09-27",
+					deposit=1090.0,
+					withdrawal=0.0,
+					reference_number="TRF-FX",
+					description="Locked FX row",
+				)
+			if doctype == "Sales Invoice":
+				return frappe._dict(
+					name="SINV-FX",
+					docstatus=1,
+					posting_date="2026-09-27",
+					grand_total=10.0,
+					outstanding_amount=0.0,
+					retailedge_branch="Lagos",
+				)
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = [
+			frappe._dict(
+				idx=2,
+				mode_of_payment="Bank Transfer",
+				account="Demo Bank - DC",
+				amount=10.0,
+				base_amount=1090.0,
+				reference_no="TRF-FX",
+			)
+		]
+		result = validate_locked_candidate_from_selected_row(
+			{
+				"bank_transaction": "BTN-FX",
+				"candidate_doctype": "Sales Invoice",
+				"candidate_name": "SINV-FX",
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": "SINV-FX",
+				"payment_event_found": 1,
+				"payment_event_source": "Invoice Payment Row",
+				"payment_row_index": 2,
+				"payment_row_amount": 1090.0,
+				"payment_mode": "Bank Transfer",
+				"payment_account": "Demo Bank - DC",
+			}
+		)
+		self.assertTrue(result["valid"])
+		candidate = result["candidate"]
+		self.assertEqual(candidate["candidate_amount"], 1090.0)
+		self.assertEqual(candidate["payment_row_amount"], 1090.0)
+		self.assertEqual(candidate["payment_event_source"], "Invoice Payment Row")
+		self.assertEqual(candidate["candidate_category"], "invoice_payment_row_match")
+		self.assertEqual(candidate["payment_row_index"], 2)
+		self.assertEqual(candidate["reference_match_exact"], 1)
 
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",

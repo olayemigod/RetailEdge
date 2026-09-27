@@ -26,6 +26,16 @@ MAX_ITEM_SCAN_ROWS = 10000
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
+def _can_create_payment_entry() -> bool:
+	try:
+		return bool(
+			frappe.db.exists("DocType", "Payment Entry")
+			and frappe.has_permission("Payment Entry", "create")
+		)
+	except Exception:
+		return False
+
+
 def _report_context_defaults() -> dict[str, Any]:
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
@@ -70,6 +80,9 @@ def get_purchase_reporting_context() -> dict[str, Any]:
 		"branch_name": defaults.get("branch"),
 		"user_name": frappe.db.get_value("User", user, "full_name") or user,
 		"company_currency": _company_currency(company) if company else "",
+		"capabilities": {
+			"can_pay_supplier": _can_create_payment_entry(),
+		},
 		"limits": {
 			"invoice_scan": MAX_INVOICE_SCAN_ROWS,
 			"item_scan": MAX_ITEM_SCAN_ROWS,

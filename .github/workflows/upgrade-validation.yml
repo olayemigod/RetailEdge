@@ -43,7 +43,7 @@ jobs:
           --health-retries=10
 
     env:
-      PRIOR_RETAILEDGE_SHA: 6a06153742610f38e48b3ffb683f497944999105
+      PRIOR_RETAILEDGE_SHA: e09d0ddb2716112ccbf64ca6d7a78b246b291cdd
       CURRENT_RETAILEDGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
@@ -103,7 +103,7 @@ jobs:
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
 
-      - name: Install frozen pre-MVP RetailEdge baseline
+      - name: Install frozen RetailEdge release predecessor
         working-directory: frappe-bench
         run: |
           git -C apps/retailedge fetch --no-tags "$GITHUB_WORKSPACE" "$PRIOR_RETAILEDGE_SHA"

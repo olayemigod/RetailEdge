@@ -92,6 +92,8 @@ def test_native_rfq_draft_handoff_is_explicit_advanced_only():
 	assert "Advanced: Prepare Draft in ERPNext" in overlay
 	assert "nativeFallbackEnabled" in overlay
 	assert 'const ACCESS_MODE = "edgesuite_only"' in overlay
+	assert 'Boolean(access.can_use_native_desk)' in overlay
+	assert 'Boolean(access.can_use_native_desk)' in bundle
 	assert 'const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced"' in bundle
 	assert "if (!nativeDeskEnabled()) return;" in bundle
 	assert 'type: "POST"' in bundle

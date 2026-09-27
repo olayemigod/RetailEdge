@@ -6,10 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_datetime, getdate
 
+from retailedge.guided_pricing import resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
-from retailedge.professional_draft_items import editable_items, update_draft_items
+from retailedge.professional_draft_items import _validate_warehouse_branch, editable_items, update_draft_items
 from retailedge.professional_quotation import _validate_shipping_rule
-from retailedge.professional_selling import _validate_stored_operational_branch
+from retailedge.professional_selling import _assert_read, _validate_stored_operational_branch
 from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
 
@@ -185,6 +186,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"company": company,
 		"branch": branch,
 		"party": _party_value(doc),
+		"selling_price_list": _clean(doc.get("selling_price_list")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"item_count": len(list(doc.get("items") or [])),
@@ -235,6 +237,38 @@ def get_standard_selling_completion_preview(doctype: str, name: str) -> dict[str
 	"""Return a persistence-free standard completion review for one Quote or Sales Order."""
 	doc = _get_supported_document(doctype, name)
 	return _build_preview(doc)
+
+
+@frappe.whitelist()
+def get_standard_selling_completion_item_pricing(
+	doctype: str,
+	name: str,
+	item_code: str,
+	qty: float = 1,
+	warehouse: str = "",
+	transaction_date: str = "",
+) -> dict[str, Any]:
+	"""Price a new draft row from the stored document Price List."""
+	doc = _get_supported_document(doctype, name)
+	company, branch = _validate_standard_context(doc)
+	if cint(doc.docstatus) != 0 or not frappe.has_permission(doctype, "write", doc=doc):
+		frappe.throw(_("Only editable draft documents can price additional items here."), frappe.PermissionError)
+	item_code = _clean(item_code)
+	_assert_read("Item", item_code)
+	warehouse = _clean(warehouse or doc.get("set_warehouse"))
+	if warehouse:
+		_validate_warehouse_branch(warehouse, company=company, branch=branch)
+	return resolve_sales_item_pricing(
+		item_code=item_code,
+		company=company,
+		customer=_party_value(doc),
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=_clean(transaction_date or doc.get("transaction_date")),
+		qty=flt(qty or 1),
+		document_price_list=_clean(doc.get("selling_price_list")),
+		user=frappe.session.user,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -299,6 +333,7 @@ def update_standard_selling_draft(
 		posting_date=str(transaction_date),
 		default_warehouse=_clean(doc.get("set_warehouse")),
 		default_delivery_date=_clean(doc.get("delivery_date")),
+		selected_price_list=_clean(doc.get("selling_price_list")),
 	)
 
 	doc.save()

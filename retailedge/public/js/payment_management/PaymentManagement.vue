@@ -414,7 +414,10 @@ export default {
 			this.metadataLoading = true;
 			this.metadataError = "";
 			try {
-				const routeInvoice = String(frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
+				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.("payment-management") || {};
+				const routeInvoice = String(handoff.sales_invoice || frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
+				const routeCustomer = String(handoff.customer || "").trim();
+				const routeBranch = String(handoff.branch || "").trim();
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
@@ -422,10 +425,11 @@ export default {
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
 					navigationPromise,
 				]);
-				this.filters.company = receivablesContext.default_filters?.company || "";
-				this.filters.branch = receivablesContext.default_filters?.branch || "";
+				this.filters.company = handoff.company || receivablesContext.default_filters?.company || "";
+				this.filters.branch = routeBranch || receivablesContext.default_filters?.branch || "";
+				this.filters.customer = routeCustomer || "";
 				this.tenantName = receivablesContext.tenant_name || this.filters.company;
-				this.branchName = receivablesContext.branch_name || this.filters.branch;
+				this.branchName = routeBranch || receivablesContext.branch_name || this.filters.branch;
 				this.userName = receivablesContext.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);

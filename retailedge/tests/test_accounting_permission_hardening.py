@@ -66,6 +66,28 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("Purchasing, stock, Budget and accounting controls remain authoritative", source)
 		self.assertNotIn("RetailEdge does not maintain a generic project expense", source)
 
+	def test_stock_manager_company_visibility_is_minimum_read_only_permission(self):
+		patch_source = self.read("patches/ensure_stock_manager_company_read.py")
+		hooks = self.read("hooks.py")
+		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
+		adjustment = self.read("guided_stock_adjustment.py")
+
+		self.assertIn('"Stock Manager"', patch_source)
+		self.assertIn('"RetailEdge Stock Manager"', patch_source)
+		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "read", 1)', patch_source)
+		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "select", 1)', patch_source)
+		for forbidden in (
+			'"write", 1',
+			'"create", 1',
+			'"delete", 1',
+			'"submit", 1',
+			'"cancel", 1',
+		):
+			self.assertNotIn(forbidden, patch_source)
+		self.assertIn("retailedge.patches.ensure_stock_manager_company_read", patches)
+		self.assertIn("retailedge.patches.ensure_stock_manager_company_read.execute", hooks)
+		self.assertIn('_assert_read_permission("Company", company)', adjustment)
+
 	def test_guided_accounting_paths_do_not_directly_write_submitted_accounting_truth(self):
 		for relative in (
 			"professional_sales_invoice.py",

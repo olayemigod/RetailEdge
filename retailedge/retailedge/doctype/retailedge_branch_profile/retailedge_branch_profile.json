@@ -114,6 +114,25 @@
    "options": "Mode of Payment"
   },
   {
+   "fieldname": "pricing_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Pricing Defaults"
+  },
+  {
+   "description": "Branch Selling Price List used when its source is reached by the merchant's Price List Governance policy.",
+   "fieldname": "default_selling_price_list",
+   "fieldtype": "Link",
+   "label": "Default Selling Price List",
+   "options": "Price List"
+  },
+  {
+   "description": "Branch Buying Price List used when its source is reached by the merchant's Price List Governance policy.",
+   "fieldname": "default_buying_price_list",
+   "fieldtype": "Link",
+   "label": "Default Buying Price List",
+   "options": "Price List"
+  },
+  {
    "fieldname": "warehouse_defaults_section",
    "fieldtype": "Section Break",
    "label": "Stock Location Defaults"
@@ -256,25 +275,6 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
-  },
-  {
-   "fieldname": "pricing_defaults_section",
-   "fieldtype": "Section Break",
-   "label": "Pricing Defaults"
-  },
-  {
-   "fieldname": "default_selling_price_list",
-   "fieldtype": "Link",
-   "label": "Default Selling Price List",
-   "options": "Price List",
-   "description": "Optional Branch default used when the active Price List Governance policy reaches Branch."
-  },
-  {
-   "fieldname": "default_buying_price_list",
-   "fieldtype": "Link",
-   "label": "Default Buying Price List",
-   "options": "Price List",
-   "description": "Optional Branch buying default used when the active Price List Governance policy reaches Branch."
   }
  ],
  "index_web_pages_for_search": 1,

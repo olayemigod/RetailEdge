@@ -36,7 +36,7 @@
 							<th><button type="button" class="sort-button" @click="sortBy('total_qty')">Qty {{ sortMark('total_qty') }}</button></th>
 							<th>Branch</th>
 							<th><button type="button" class="sort-button" @click="sortBy('status')">Status {{ sortMark('status') }}</button></th>
-							<th v-if="nativeFallbackEnabled">Advanced</th>
+							<th>Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -48,7 +48,7 @@
 							<td>{{ formatQty(row.total_qty) }}</td>
 							<td>{{ row.branch || '—' }}</td>
 							<td>{{ row.status || 'Submitted' }}</td>
-							<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open in ERPNext</button></td>
+							<td><div class="receipt-history__actions"><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? 'Preparing…' : 'Create Invoice' }}</button><button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open in ERPNext</button></div></td>
 						</tr>
 					</tbody>
 				</table>
@@ -68,11 +68,13 @@
 const HISTORY_METHOD = "retailedge.professional_purchase_receipt.get_professional_purchase_receipt_history";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const OPEN_EVENT = "retailedge-open-professional-purchase-receipt-history";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
+const PREPARE_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_receipt";
 const ACCESS_MODE = "edgesuite_only";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
+function callMethod(method, args = {}, type = "GET") {
+	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
 function comparable(value) { if (value === null || value === undefined) return ""; if (typeof value === "number") return value; return String(value).toLowerCase(); }
@@ -92,13 +94,14 @@ export default {
 			loading: false,
 			loaded: false,
 			error: "",
+			preparingInvoice: "",
 			history: { company: "", branch: "", supplier: "", limit: 50, receipts: [] },
 			filters: { company: "", branch: "", supplier: "" },
 			sort: { key: "posting_date", direction: "desc" },
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		nativeFallbackEnabled() { return Boolean(window.__retailedgeBusinessHubContextCache?.data?.access?.can_use_native_desk); },
 		sortedReceipts() {
 			const rows = [...(this.history.receipts || [])];
 			const { key, direction } = this.sort;
@@ -148,6 +151,18 @@ export default {
 		clearSupplier() { this.filters.supplier = ""; this.loaded = false; this.loadHistory(); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; },
 		sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
+		async prepareInvoice(row) {
+			if (!row?.name || !row.can_prepare_invoice || this.preparingInvoice) return;
+			this.preparingInvoice = row.name; this.error = "";
+			try {
+				const result = await callMethod(PREPARE_INVOICE_METHOD, { purchase_receipt: row.name }, "POST");
+				if (!result?.name) throw new Error("Purchase Invoice draft was not returned.");
+				this.close();
+				window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: result }));
+			} catch (error) {
+				this.error = errorMessage(error, "Unable to prepare the Purchase Invoice from this receipt.");
+			} finally { this.preparingInvoice = ""; }
+		},
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatQty(value) { const number = Number(value || 0); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 3 }) : "0"; },
 		openAdvancedReceipt(name) { if (this.nativeFallbackEnabled && name) frappe.set_route("Form", "Purchase Receipt", name); },
@@ -165,6 +180,8 @@ export default {
 .receipt-history__table td { vertical-align:top; }
 .sort-button { border:0; background:transparent; padding:0; color:inherit; cursor:pointer; font:inherit; text-transform:inherit; letter-spacing:inherit; }
 .edge-small-button { min-height:30px; padding:0 9px; border:1px solid var(--border-color,#d1d8dd); border-radius:.5rem; background:var(--card-bg,#fff); color:inherit; cursor:pointer; white-space:nowrap; }
+.edge-small-button--primary { border-color:var(--edge-primary,#0f766e); background:var(--edge-primary,#0f766e); color:#fff; }
+.receipt-history__actions { display:flex; gap:.4rem; flex-wrap:wrap; }
 .receipt-history__footer { width:100%; display:flex; justify-content:space-between; gap:.75rem; }
 @media (max-width:900px) { .receipt-history__filters { grid-template-columns:1fr 1fr; } }
 @media (max-width:560px) { .receipt-history__filters { grid-template-columns:1fr; } .receipt-history__footer { flex-direction:column; } }

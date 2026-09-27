@@ -19,6 +19,7 @@ TRANSACTION_ACTIONS: tuple[dict[str, str], ...] = (
 	{"key": "purchase-order", "label": "Purchase Order", "doctype": "Purchase Order", "kind": "buy"},
 	{"key": "purchase-receipt", "label": "Purchase Receipt", "doctype": "Purchase Receipt", "kind": "buy"},
 	{"key": "stock-entry", "label": "Stock Transfer", "doctype": "Stock Entry", "kind": "stock"},
+	{"key": "stock-reconciliation", "label": "Stock Adjustment", "doctype": "Stock Reconciliation", "kind": "stock"},
 )
 
 

@@ -17,7 +17,7 @@ class TestProcurementTrackerHandoffUIContract(TestCase):
 			"retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff",
 			component,
 		)
-		self.assertIn('v-if="procurementTracker.available"', component)
+		self.assertIn('v-if="canUseNativeDesk && procurementTracker.available"', component)
 		self.assertIn('@click="openProcurementTracker"', component)
 		self.assertIn(">Procurement Tracker</button>", component)
 		self.assertNotIn("frappe.ui.Dialog", component)
@@ -30,7 +30,7 @@ class TestProcurementTrackerHandoffUIContract(TestCase):
 		method_end = component.index("openPurchaseOrder(name)", method_start)
 		method = component[method_start:method_end]
 
-		self.assertIn("this.procurementTracker?.available", method)
+		self.assertIn("!this.canUseNativeDesk || !this.procurementTracker?.available", method)
 		self.assertIn("frappe.route_options = { company:", method)
 		self.assertIn('frappe.set_route("query-report"', method)
 		self.assertIn('"Procurement Tracker"', method)

@@ -11,11 +11,21 @@
  "owner": "Administrator",
  "page_name": "professional-purchasing",
  "roles": [
-  {"role": "System Manager"},
-  {"role": "Purchase Manager"},
-  {"role": "Purchase User"},
-  {"role": "Accounts Manager"},
-  {"role": "Accounts User"}
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  }
  ],
  "script": null,
  "standard": "Yes",

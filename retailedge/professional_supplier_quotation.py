@@ -220,6 +220,7 @@ def get_supplier_quotation_history(
 		"company": resolved_company,
 		"branch": resolved_branch,
 		"supplier": supplier,
+		"can_create_purchase_order": bool(frappe.has_permission("Purchase Order", "create")),
 		"rows": result_rows,
 		"limit": row_limit,
 		"branch_source": branch_field or "Request for Quotation linkage",

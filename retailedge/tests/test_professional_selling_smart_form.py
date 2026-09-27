@@ -62,10 +62,10 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		):
 			with self.subTest(relative=relative):
 				component = self.read(relative)
-				self.assertIn("pricingSignatures", component)
-				self.assertIn("pricingSignature(row)", component)
-				self.assertIn("this.pricingSignatures[index] !== signature", component)
-				self.assertIn("this.pricingSignatures[index] = this.pricingSignature", component)
+				self.assertIn("pricingTokens", component)
+				self.assertIn("const token =", component)
+				self.assertIn("this.pricingTokens[index] = token", component)
+				self.assertIn("this.pricingTokens[index] !== token", component)
 				self.assertIn("refreshAllItemPricing", component)
 
 	def test_quotation_editor_is_draft_only_with_native_fallback(self):
@@ -74,7 +74,8 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		for contract in (
 			"Save Draft",
 			"create_professional_quotation_draft",
-			"Open Full Form",
+			"Advanced: Open in ERPNext",
+			'v-if="canUseNativeDesk"',
 		):
 			self.assertIn(contract, component)
 		self.assertIn("Guided Quotation", workspace)

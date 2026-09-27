@@ -34,7 +34,7 @@ def test_preview_is_persistence_free_and_erpnext_authoritative():
 		"_get_sales_invoice",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'"persistence": "none"',
@@ -114,6 +114,23 @@ def test_linked_sources_are_submitted_same_company_customer_and_branch():
 		assert contract in source
 
 
+
+def test_sales_invoice_item_access_is_revalidated_in_preview_edit_submit_and_workflow():
+	source = _read(SERVICE)
+	assert "def _validate_sales_item_access(doc)" in source
+	assert '_assert_read("Item", item_code)' in source
+	for function_name in (
+		"def _build_preview",
+		"def update_standard_sales_invoice_draft",
+		"def submit_standard_sales_invoice",
+		"def apply_standard_sales_invoice_workflow_action",
+	):
+		start = source.index(function_name)
+		end = source.find("\ndef ", start + len(function_name))
+		segment = source[start:end if end >= 0 else len(source)]
+		assert "_validate_sales_item_access(doc)" in segment
+
+
 def test_direct_submit_locks_stale_checks_revalidates_then_native_submits():
 	source = _read(SERVICE)
 	start = source.index("def submit_standard_sales_invoice")
@@ -124,7 +141,7 @@ def test_direct_submit_locks_stale_checks_revalidates_then_native_submits():
 		"expected_modified",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'_clean(workflow_readiness.get("source")) == "frappe"',
@@ -240,17 +257,46 @@ def test_tabbed_sales_invoice_exposes_output_and_draft_edit_paths():
 	source = _read(SELLING)
 	assert "window.retailedgeDocumentOutputTarget" in source
 	assert 'frappe.set_route("document-output-sharing")' in source
-	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
+	assert "openSalesInvoiceCompletion(" in source
+	assert 'row.is_return ? "sales_return" : "standard"' in source
 
 
-def test_professional_selling_opens_invoice_completion_except_returns():
+def test_professional_selling_opens_governed_completion_for_invoices_and_returns():
 	source = _read(SELLING)
 	assert 'import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue"' in source
 	assert "handleSalesInvoiceSaved(result)" in source
-	assert "!result?.is_return" in source
-	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name })' in source
+	assert 'result?.is_return ? "sales_return" : "standard"' in source
+	assert ':sourceMode="salesInvoiceCompletionSourceMode"' in source
 	assert ':showNextActions="true"' in source
+	assert "create-return-credit-note" in source
+	assert "create_sales_return_credit_note_draft" in source
 
+
+
+
+def test_sales_return_completion_is_explicit_canonical_and_review_only():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for marker in (
+		'SOURCE_MODE_SALES_RETURN = "sales_return"',
+		"def _validate_sales_return_context(",
+		"erpnext_make_sales_return(source.name)",
+		"Standard Sales Return completion requires negative return quantities",
+		"canonical remaining return quantities",
+		'if source_mode == SOURCE_MODE_SALES_RETURN:',
+		'Sales Return quantities remain owned by ERPNext canonical return mapping.',
+		'"is_return": bool(cint(doc.get("is_return")))',
+		'"return_against": _clean(doc.get("return_against"))',
+	):
+		assert marker in service
+	assert "Return / Credit Note completion requires the governed Sales Return workflow." in service
+	assert "Return / Credit Note dates remain owned by the governed Sales Return workflow." in service
+	for marker in (
+		'sourceMode: { type: String, default: "standard" }',
+		'source_mode: this.sourceMode || "standard"',
+		"Submit Return / Credit Note",
+	):
+		assert marker in dialog
 
 
 def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_items():
@@ -268,6 +314,7 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		'doc.set("company"',
 		'doc.set("customer"',
 		'doc.set("branch"',
+		'doc.set("update_stock"',
 	):
 		assert forbidden not in service[
 			service.index("def update_standard_sales_invoice_draft("):
@@ -292,6 +339,7 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		"refreshDraftItemPricing",
 		"Source-linked items stay attached",
 		"busy || !canOverrideRate",
+		"Stock Location",
 		"ERPNext recalculates taxes, totals",
 	):
 		assert contract in dialog
@@ -300,42 +348,31 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 	assert "ERPNext posting authority" not in dialog
 
 
-def test_edit_preview_exposes_price_list_and_default_stock_context():
+
+
+def test_edit_preview_resolves_price_list_governance_and_default_stock_location():
 	service = _read(SERVICE)
-	dialog = _read(DIALOG)
 	for contract in (
 		"resolve_price_list_context",
 		'"selling_price_list": selling_price_list',
 		'"pricing": {',
+		'"allow_rate_change": bool(pricing.get("allow_rate_change", True))',
 		'"default_warehouse": default_warehouse',
 	):
 		assert contract in service
-	for contract in (
-		"Selling Price List",
-		"get_simple_sales_invoice_item_pricing",
-		"default_warehouse",
-	):
-		assert contract in dialog
 
 
-def test_draft_invoice_can_switch_update_stock_before_submission():
-	service = _read(SERVICE)
+def test_invoice_completion_requires_saving_dirty_editor_before_submit_or_workflow():
 	dialog = _read(DIALOG)
-	helper = _read(ROOT / "professional_draft_items.py")
 	for contract in (
-		'"can_edit_update_stock": bool(',
-		'doc.set("update_stock", cint(values.get("update_stock") or 0))',
-	):
-		assert contract in service
-	for contract in (
-		"draftUpdateStock",
-		">Update Stock</strong>",
-		"update_stock: this.draftUpdateStock ? 1 : 0",
-		"EdgeLinkField",
-		"searchWarehouse",
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Sales Invoice draft changes?',
+		'this.preview?.can_edit && !this.completedResult && this.draftDirty',
 	):
 		assert contract in dialog
-	assert "resolve_branch_warehouse_selection" in helper
 
 
 def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():

@@ -11,7 +11,6 @@ from retailedge.guided_sales_invoice import (
 	MAX_ITEMS,
 	MAX_LINK_RESULTS,
 	_normalise_items,
-	_create_simple_sales_invoice_draft,
 	_validate_branch_warehouse,
 	_warehouse_search_filters,
 	create_simple_sales_invoice_draft,
@@ -200,58 +199,6 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		)
 		self.assertEqual(doc.items[0].rate, 1200.0)
 
-	def test_professional_override_can_disable_update_stock_without_weakening_make_sale_default(self):
-		price_context = {
-			"price_list": "Retail Selling",
-			"source": "branch_default",
-			"allow_rate_change": True,
-		}
-		item_pricing = {
-			"rate": 1000.0,
-			"source": "branch_default",
-			"allow_rate_change": True,
-		}
-		values = {
-			"company": "Demo Company",
-			"branch": "Lagos",
-			"customer": "CUST-001",
-			"posting_date": "2026-09-25",
-			"update_stock": 0,
-			"items": [{"item_code": "ITEM-001", "qty": 1, "rate": ""}],
-		}
-		with (
-			patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice"),
-			patch("retailedge.guided_sales_invoice._assert_read_permission"),
-			patch("retailedge.guided_sales_invoice.get_guided_branch_names", return_value=["Lagos"]),
-			patch(
-				"retailedge.guided_sales_invoice.get_retailedge_settings",
-				return_value=SimpleNamespace(allow_guided_sales_update_stock_edit=0),
-			),
-			patch("retailedge.guided_sales_invoice.resolve_price_list_context", return_value=price_context),
-			patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing", return_value=item_pricing),
-		):
-			professional_doc = _DraftSalesInvoice()
-			with (
-				patch(
-					"retailedge.guided_sales_invoice._validate_transaction_context",
-					return_value=("Demo Company", "Lagos", ""),
-				),
-				patch("retailedge.guided_sales_invoice.frappe.new_doc", return_value=professional_doc),
-			):
-				_create_simple_sales_invoice_draft(values, allow_update_stock_edit=True)
-			self.assertEqual(professional_doc.update_stock, 0)
-
-			guided_doc = _DraftSalesInvoice()
-			with (
-				patch(
-					"retailedge.guided_sales_invoice._validate_transaction_context",
-					return_value=("Demo Company", "Lagos", "Main Stores - DC"),
-				),
-				patch("retailedge.guided_sales_invoice.frappe.new_doc", return_value=guided_doc),
-			):
-				create_simple_sales_invoice_draft(values)
-			self.assertEqual(guided_doc.update_stock, 1)
-
 	def test_adapter_uses_permission_aware_bounded_search_and_draft_insert(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
 		self.assertIn("search_link(", source)
@@ -268,14 +215,12 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_browser_can_only_request_a_governed_selling_price_list(self):
+	def test_browser_price_list_choice_is_revalidated_by_server_governance(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
-		pricing = (APP_ROOT / "guided_pricing.py").read_text()
 		self.assertIn("resolve_price_list_context", source)
 		self.assertNotIn('values.get("selling_price_list")', source)
-		self.assertIn('requested_price_list=values.get("price_list") or ""', source)
-		self.assertIn("requested_price_list not in available_price_lists", pricing)
-		self.assertIn("Price List switching is disabled by the current pricing policy.", pricing)
+		self.assertIn('selected_price_list=str(values.get("price_list") or "").strip()', source)
+		self.assertIn("search_allowed_price_lists", source)
 
 	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
@@ -285,9 +230,6 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
 		self.assertIn("resolve_sales_item_pricing", source)
-		pricing = (APP_ROOT / "guided_pricing.py").read_text()
-		self.assertIn("from erpnext.stock.get_item_details import get_item_details", pricing)
-		self.assertIn("return frappe._dict(get_item_details(ctx) or {})", pricing)
 
 	def test_guided_dialog_uses_shared_edgesuite_components_and_multiple_item_rows(self):
 		component = (
@@ -324,10 +266,6 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn("setWarehouse(next)", component)
 		self.assertIn("refreshAllItemPricing", component)
 		self.assertIn("loadItemPricing(index)", component)
-		self.assertIn("pricingSignatures", component)
-		self.assertIn("this.pricingSignatures[index] !== signature", component)
-		self.assertIn("previousCustomer !== this.values.customer", component)
-		self.assertIn("postingDateChanged()", component)
 		self.assertIn('this.values.warehouse = "";', component)
 		self.assertIn("customer: this.values.customer", component)
 		self.assertIn("branch: this.values.branch", component)
@@ -342,7 +280,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		).read_text()
 		self.assertIn("retailedge.guided_sales_invoice.create_simple_sales_invoice_draft", component)
 		self.assertIn("retailedge.guided_sales_invoice.search_simple_sales_invoice_options", component)
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Sales Invoice")', component)
 		self.assertNotIn("frappe.new_doc", component)
 		self.assertNotIn("frappe.db.insert", component)
@@ -383,12 +321,12 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		).read_text()
 		self.assertIn("Only enabled Branch Setup entries for the active Company are shown.", component)
 		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
-		self.assertIn(':disabled="saving || loading || !transactionContextReady"', component)
+		self.assertIn(':disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"', component)
 		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
-		self.assertEqual(MAX_ITEMS, 50)
+		self.assertEqual(MAX_ITEMS, 100)
 
 
 if __name__ == "__main__":

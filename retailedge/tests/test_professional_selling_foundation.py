@@ -61,9 +61,13 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		loader = self.read("retailedge/page/professional_selling/professional_selling.js")
 		bundle = self.read("public/js/professional_selling.bundle.js")
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		self.assertIn("window.EdgeSuiteUI", component)
+		self.assertNotIn("window.EdgeUI", component)
 		for contract in ("edgeui.bundle.js", "professional_selling.bundle.js"):
 			self.assertIn(contract, loader)
 		self.assertIn("createEdgeApp", bundle)
+		self.assertIn("const edgeUI = window.EdgeSuiteUI;", bundle)
+		self.assertNotIn("window.EdgeUI", bundle)
 		for contract in (
 			"EdgeAppShell",
 			"EdgePageLayout",
@@ -86,6 +90,31 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			'{{ branchName || "No operating branch selected" }}',
 		):
 			self.assertIn(contract, component)
+
+	def test_edgesuite_only_navigation_fails_closed_for_native_targets(self):
+		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		for contract in (
+			'["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk',
+			'item.target_type === "Page"',
+			'frappe.set_route("query-report", item.target)',
+			'frappe.set_route("List", item.target)',
+		):
+			self.assertIn(contract, component)
+
+	def test_guided_selling_dialogs_hide_native_escape_without_explicit_grant(self):
+		for relative in (
+			"public/js/professional_selling/ProfessionalQuotationDialog.vue",
+			"public/js/professional_selling/ProfessionalSalesOrderDialog.vue",
+			"public/js/professional_selling/ProfessionalDeliveryDialog.vue",
+		):
+			source = self.read(relative)
+			self.assertIn("canUseNativeDesk", source)
+			self.assertIn('default: false', source)
+			self.assertIn('v-if="canUseNativeDesk"', source)
+			self.assertIn("Advanced: Open in ERPNext", source)
+			self.assertNotIn("Open Full Form", source)
+		page = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		self.assertGreaterEqual(page.count(':canUseNativeDesk="canUseNativeDesk"'), 6)
 
 	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")

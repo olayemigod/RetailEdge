@@ -70,6 +70,30 @@ def test_submit_is_post_only_locked_stale_safe_and_erpnext_authoritative():
 	assert '"source_of_truth": "ERPNext Purchase Order submit"' in submit
 
 
+
+def test_submitted_purchase_order_exposes_permission_aware_receipt_and_invoice_actions():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	for contract in (
+		"def _submitted_next_actions",
+		'_permission("Purchase Receipt", "create")',
+		'_permission("Purchase Invoice", "create")',
+		'"value": "receive-stock"',
+		'"value": "create-purchase-invoice"',
+		'"next_actions": _submitted_next_actions(doc)',
+		'"next_actions": _submitted_next_actions(current)',
+	):
+		assert contract in source
+	for contract in (
+		"submitted.next_actions",
+		"runNextAction(action.value)",
+		"OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT",
+		"prepare_purchase_invoice_from_purchase_order",
+		"PURCHASE_INVOICE_READY_EVENT",
+	):
+		assert contract in overlay
+
+
 def test_submit_overlay_requires_review_and_stays_inside_edgesuite():
 	overlay = _read(OVERLAY)
 	assert "Review & Submit Purchase Order" in overlay

@@ -71,7 +71,7 @@ def get_active_branch_assignments(
 		order_by="is_primary desc, effective_from desc, branch asc",
 		limit_page_length=200,
 	)
-	return [dict(row) for row in rows]
+	return _attach_assignment_price_lists(rows)
 
 
 def get_assignment_branches(user: str | None = None, company: str | None = None, as_of=None) -> list[str]:
@@ -106,7 +106,7 @@ def get_raw_assignment_price_lists(
 		filters={
 			"parent": ["in", parents],
 			"parenttype": "RetailEdge Branch Assignment",
-			"parentfield": "price_lists",
+			"parentfield": "allowed_price_lists",
 		},
 		fields=["price_list"],
 		order_by="idx asc",
@@ -191,15 +191,14 @@ def get_branch_assignment_context(filters=None, limit: int = 200) -> dict[str, A
 		order_by="effective_from desc, modified desc",
 		limit_page_length=limit,
 	)
-	price_lists_by_assignment = _price_lists_by_assignment([row.get("name") for row in rows if row.get("name")])
 	assignments = []
-	for row in rows:
+	for row in _attach_assignment_price_lists(rows):
 		item = dict(row)
 		item["status"] = _status_for_dates(
 			getdate(item.get("effective_from")),
 			getdate(item.get("effective_to")) if item.get("effective_to") else None,
 		)
-		item["price_lists"] = price_lists_by_assignment.get(item.get("name"), [])
+		item["price_lists"] = list(item.get("allowed_price_lists") or [])
 		assignments.append(item)
 	return {
 		"assignments": assignments,
@@ -221,7 +220,7 @@ def create_branch_assignment(
 	is_primary: int = 0,
 	transfer_reason: str = "",
 	notes: str = "",
-	price_lists=None,
+	allowed_price_lists=None,
 ) -> dict[str, Any]:
 	if not frappe.has_permission("RetailEdge Branch Assignment", "create"):
 		frappe.throw(_("You do not have permission to create Branch Assignments."), frappe.PermissionError)
@@ -235,32 +234,8 @@ def create_branch_assignment(
 	doc.is_primary = int(is_primary or 0)
 	doc.transfer_reason = transfer_reason or ""
 	doc.notes = notes or ""
-	doc.set("price_lists", [{"price_list": name} for name in _normalise_price_lists(price_lists)])
+	_set_assignment_price_lists(doc, allowed_price_lists)
 	doc.insert()
-	return _assignment_response(doc)
-
-
-@frappe.whitelist(methods=["POST"])
-def update_branch_assignment_price_lists(
-	name: str,
-	price_lists=None,
-) -> dict[str, Any]:
-	"""Update only current/future Price List access without rewriting posting history."""
-	doc = frappe.get_doc("RetailEdge Branch Assignment", name)
-	doc.check_permission("write")
-	status = _status_for_dates(
-		getdate(doc.effective_from),
-		getdate(doc.effective_to) if doc.effective_to else None,
-	)
-	if status == "Ended":
-		frappe.throw(
-			_("Ended Branch Assignment history cannot be changed. Create a new assignment if access must be restored."),
-			frappe.ValidationError,
-		)
-	_lock_assignment_user(doc.user)
-	doc.set("price_lists", [{"price_list": value} for value in _normalise_price_lists(price_lists)])
-	doc.flags.controlled_price_list_update = True
-	doc.save()
 	return _assignment_response(doc)
 
 
@@ -273,7 +248,7 @@ def transfer_branch_assignment(
 	branch_role: str = "",
 	reason: str = "",
 	notes: str = "",
-	price_lists=None,
+	allowed_price_lists=None,
 ) -> dict[str, Any]:
 	"""Close one assignment and create the next one without rewriting history."""
 	old = frappe.get_doc("RetailEdge Branch Assignment", name)
@@ -306,10 +281,10 @@ def transfer_branch_assignment(
 	new_doc.is_primary = old.is_primary
 	new_doc.transfer_reason = reason or _("Transferred from {0}").format(old.branch)
 	new_doc.notes = notes or ""
-	requested_price_lists = _normalise_price_lists(price_lists)
-	if price_lists is None:
-		requested_price_lists = [str(row.price_list or "").strip() for row in (old.price_lists or []) if row.price_list]
-	new_doc.set("price_lists", [{"price_list": name} for name in requested_price_lists])
+	_set_assignment_price_lists(
+		new_doc,
+		allowed_price_lists if allowed_price_lists is not None else _assignment_price_list_names(old.name),
+	)
 	new_doc.insert()
 	return {"previous": _assignment_response(old), "current": _assignment_response(new_doc)}
 
@@ -330,8 +305,8 @@ def validate_branch_assignment(doc) -> None:
 	if doc.branch_role not in ROLE_TYPES:
 		frappe.throw(_("Choose a valid Branch Role."))
 
+	# Assignment and Price List history immutability are enforced together.
 	_validate_assignment_immutability(doc)
-	_validate_assignment_price_list_immutability(doc)
 	_validate_assignment_price_lists(doc)
 	_lock_assignment_user(doc.user)
 	start = getdate(doc.effective_from)
@@ -343,6 +318,7 @@ def validate_branch_assignment(doc) -> None:
 		profile = _validate_company_branch(doc.company, doc.branch)
 		doc.branch_setup = profile.name
 	doc.status = _status_for_dates(start, end)
+	_validate_assignment_price_lists(doc)
 	_validate_same_branch_overlap(doc, start, end)
 	if int(doc.is_primary or 0):
 		_validate_primary_overlap(doc, start, end)
@@ -442,6 +418,11 @@ def _validate_assignment_immutability(doc) -> None:
 		new_value = _comparison_value(fieldname, getattr(doc, fieldname, None))
 		if old_value != new_value:
 			changed.append(fieldname)
+	if not getattr(doc.flags, "controlled_assignment_price_list_update", False):
+		stored_price_lists = sorted(_assignment_price_list_names(doc.name))
+		current_price_lists = sorted(_normalise_price_lists(getattr(doc, "allowed_price_lists", []) or []))
+		if stored_price_lists != current_price_lists:
+			changed.append("allowed_price_lists")
 	if changed:
 		frappe.throw(
 			_(
@@ -615,6 +596,140 @@ def _scope_assignment_filters(query_filters: dict[str, Any]) -> dict[str, Any]:
 	return query_filters
 
 
+def _normalise_price_lists(value) -> list[str]:
+	if isinstance(value, str):
+		value = frappe.parse_json(value)
+	if not value:
+		return []
+	if not isinstance(value, list):
+		frappe.throw(_("Allowed Price Lists must be a list."))
+	result: list[str] = []
+	seen: set[str] = set()
+	for row in value:
+		raw_name = row.get("price_list") if isinstance(row, dict) else getattr(row, "price_list", row)
+		name = str(raw_name or "").strip()
+		if not name or name in seen:
+			continue
+		seen.add(name)
+		result.append(name)
+	if len(result) > 50:
+		frappe.throw(_("A Branch Assignment can contain at most 50 Price Lists."))
+	return result
+
+
+def _validate_price_list(name: str) -> None:
+	row = frappe.db.get_value("Price List", name, ["enabled", "selling", "buying"], as_dict=True)
+	if not row:
+		frappe.throw(_("Price List {0} does not exist.").format(name))
+	if not int(row.get("enabled") or 0):
+		frappe.throw(_("Price List {0} is disabled.").format(name))
+	if not (int(row.get("selling") or 0) or int(row.get("buying") or 0)):
+		frappe.throw(_("Price List {0} must be enabled for Selling, Buying, or both.").format(name))
+	if not frappe.has_permission("Price List", "read", doc=name):
+		frappe.throw(_("You do not have permission to assign Price List {0}.").format(name), frappe.PermissionError)
+
+
+def _validate_assignment_price_lists(doc) -> None:
+	names = _normalise_price_lists(getattr(doc, "allowed_price_lists", []) or [])
+	for name in names:
+		_validate_price_list(name)
+
+
+def _set_assignment_price_lists(doc, value) -> None:
+	doc.set("allowed_price_lists", [])
+	for name in _normalise_price_lists(value):
+		_validate_price_list(name)
+		doc.append("allowed_price_lists", {"price_list": name})
+
+
+def _assignment_price_list_names(name: str) -> list[str]:
+	if not name or not frappe.db.exists("DocType", "RetailEdge Branch Assignment Price List"):
+		return []
+	return [
+		str(value or "").strip()
+		for value in frappe.get_all(
+			"RetailEdge Branch Assignment Price List",
+			filters={
+				"parent": name,
+				"parenttype": "RetailEdge Branch Assignment",
+				"parentfield": "allowed_price_lists",
+			},
+			pluck="price_list",
+			order_by="idx asc",
+			limit_page_length=0,
+		)
+		if str(value or "").strip()
+	]
+
+
+def _attach_assignment_price_lists(rows) -> list[dict[str, Any]]:
+	result = [dict(row) for row in rows or []]
+	names = [str(row.get("name") or "").strip() for row in result if row.get("name")]
+	if not names or not frappe.db.exists("DocType", "RetailEdge Branch Assignment Price List"):
+		for row in result:
+			row["allowed_price_lists"] = []
+		return result
+	children = frappe.get_all(
+		"RetailEdge Branch Assignment Price List",
+		filters={
+			"parent": ["in", names],
+			"parenttype": "RetailEdge Branch Assignment",
+			"parentfield": "allowed_price_lists",
+		},
+		fields=["parent", "price_list", "idx"],
+		order_by="parent asc, idx asc",
+		limit_page_length=0,
+	)
+	by_parent: dict[str, list[str]] = {}
+	for child in children:
+		price_list = str(child.get("price_list") or "").strip()
+		if price_list:
+			by_parent.setdefault(str(child.get("parent") or ""), []).append(price_list)
+	for row in result:
+		row["allowed_price_lists"] = by_parent.get(str(row.get("name") or ""), [])
+	return result
+
+
+def get_branch_assignment_price_lists(
+	*,
+	user: str | None = None,
+	company: str | None = None,
+	branch: str | None = None,
+	as_of=None,
+) -> dict[str, Any]:
+	user = user or getattr(frappe.session, "user", None)
+	branch = str(branch or "").strip()
+	rows = get_active_branch_assignments(user=user, company=company, as_of=as_of)
+	if branch:
+		rows = [row for row in rows if str(row.get("branch") or "").strip() == branch]
+	names: list[str] = []
+	for row in rows:
+		for name in row.get("allowed_price_lists") or []:
+			if name and name not in names:
+				names.append(name)
+	return {
+		"names": names,
+		"restricted": bool(names),
+		"assignment_names": [row.get("name") for row in rows if row.get("name")],
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_branch_assignment_price_lists(name: str, allowed_price_lists=None) -> dict[str, Any]:
+	doc = frappe.get_doc("RetailEdge Branch Assignment", name)
+	doc.check_permission("write")
+	status = _status_for_dates(
+		getdate(doc.effective_from),
+		getdate(doc.effective_to) if doc.effective_to else None,
+	)
+	if status == "Ended":
+		frappe.throw(_("Ended Branch Assignment history cannot be changed."))
+	_set_assignment_price_lists(doc, allowed_price_lists)
+	doc.flags.controlled_assignment_price_list_update = True
+	doc.save()
+	return _assignment_response(doc)
+
+
 def _assert_no_open_pos_work(user: str, effective_date) -> None:
 	if getdate(effective_date) > getdate(nowdate()):
 		return
@@ -643,92 +758,10 @@ def _assignment_response(doc) -> dict[str, Any]:
 			getdate(doc.effective_to) if doc.effective_to else None,
 		),
 		"is_primary": int(doc.is_primary or 0),
-		"price_lists": [str(row.price_list or "").strip() for row in (doc.price_lists or []) if row.price_list],
+		"allowed_price_lists": _assignment_price_list_names(doc.name)
+		if getattr(doc, "name", None)
+		else _normalise_price_lists(getattr(doc, "allowed_price_lists", []) or []),
 	}
-
-
-def _normalise_price_lists(values) -> list[str]:
-	if values is None:
-		return []
-	if isinstance(values, str):
-		values = frappe.parse_json(values)
-	if not isinstance(values, (list, tuple)):
-		frappe.throw(_("Allowed Price Lists must be a list."))
-	result = []
-	for value in values:
-		if isinstance(value, dict):
-			value = value.get("price_list") or value.get("value") or value.get("name")
-		name = str(value or "").strip()
-		if name and name not in result:
-			result.append(name)
-	return result
-
-
-def _price_lists_by_assignment(names: list[str]) -> dict[str, list[str]]:
-	result = {str(name): [] for name in names if name}
-	if not result or not frappe.db.exists("DocType", "RetailEdge Branch Assignment Price List"):
-		return result
-	rows = frappe.get_all(
-		"RetailEdge Branch Assignment Price List",
-		filters={
-			"parent": ["in", list(result)],
-			"parenttype": "RetailEdge Branch Assignment",
-			"parentfield": "price_lists",
-		},
-		fields=["parent", "price_list"],
-		order_by="parent asc, idx asc",
-		limit_page_length=0,
-	)
-	for row in rows:
-		parent = str(row.get("parent") or "")
-		name = str(row.get("price_list") or "").strip()
-		if parent in result and name and name not in result[parent]:
-			result[parent].append(name)
-	return result
-
-
-def _validate_assignment_price_lists(doc) -> None:
-	seen = set()
-	for row in doc.price_lists or []:
-		name = str(row.price_list or "").strip()
-		if not name:
-			continue
-		if name in seen:
-			frappe.throw(_("Price List {0} is repeated on this Branch Assignment.").format(name))
-		seen.add(name)
-		values = frappe.db.get_value("Price List", name, ["enabled", "selling", "buying"], as_dict=True)
-		if not values:
-			frappe.throw(_("Price List {0} does not exist.").format(name))
-		if not int(values.get("enabled") or 0):
-			frappe.throw(_("Price List {0} is disabled.").format(name))
-		if not int(values.get("selling") or 0) and not int(values.get("buying") or 0):
-			frappe.throw(_("Price List {0} must be a Selling or Buying Price List.").format(name))
-		if not frappe.has_permission("Price List", "read", doc=name):
-			frappe.throw(_("You do not have permission to assign Price List {0}.").format(name), frappe.PermissionError)
-
-
-def _validate_assignment_price_list_immutability(doc) -> None:
-	if (
-		doc.is_new()
-		or not doc.name
-		or getattr(doc.flags, "controlled_assignment_update", False)
-		or getattr(doc.flags, "controlled_price_list_update", False)
-	):
-		return
-	if getattr(doc.flags, "controlled_branch_setup_relink", False):
-		return
-	stored = frappe.get_all(
-		"RetailEdge Branch Assignment Price List",
-		filters={"parent": doc.name, "parenttype": "RetailEdge Branch Assignment", "parentfield": "price_lists"},
-		pluck="price_list",
-		order_by="idx asc",
-		limit_page_length=0,
-	)
-	current = [str(row.price_list or "").strip() for row in (doc.price_lists or []) if row.price_list]
-	if list(stored or []) != current:
-		frappe.throw(
-			_("Saved Branch Assignment Price List history cannot be rewritten directly. Use Transfer to create a new effective-dated assignment.")
-		)
 
 
 def _assert_master_read(doctype: str, name: str) -> None:

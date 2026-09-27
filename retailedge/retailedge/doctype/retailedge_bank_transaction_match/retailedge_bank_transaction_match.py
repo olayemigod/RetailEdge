@@ -56,12 +56,15 @@ class RetailEdgeBankTransactionMatch(Document):
 		suggested_document = getattr(self, "suggested_document", None)
 		if not suggested_document_type or not suggested_document:
 			return
+		is_new = getattr(self, "is_new", None)
+		lock_existing_candidate = bool(callable(is_new) and not is_new())
 		context = _resolve_manual_candidate_context(
 			bank_transaction=getattr(self, "bank_transaction", None),
 			suggested_document_type=suggested_document_type,
 			suggested_document=suggested_document,
 			sales_invoice=getattr(self, "sales_invoice", None),
 			payment_entry=getattr(self, "payment_entry", None),
+			lock_existing_candidate=lock_existing_candidate,
 		)
 		for fieldname, value in context.get("doc_values", {}).items():
 			if value is not None:
@@ -280,6 +283,7 @@ def _resolve_manual_candidate_context(
 	suggested_document=None,
 	sales_invoice=None,
 	payment_entry=None,
+	lock_existing_candidate=False,
 ):
 	suggested_document_type = cstr(suggested_document_type).strip()
 	suggested_document = cstr(suggested_document or sales_invoice or payment_entry).strip()
@@ -295,6 +299,7 @@ def _resolve_manual_candidate_context(
 			or (suggested_document if suggested_document_type == "Sales Invoice" else None),
 			payment_entry=payment_entry
 			or (suggested_document if suggested_document_type == "Payment Entry" else None),
+			allow_fallback=not lock_existing_candidate,
 		)
 		if candidate and (
 			cstr(candidate.get("document_type")).strip() != suggested_document_type
@@ -302,6 +307,15 @@ def _resolve_manual_candidate_context(
 		):
 			candidate = None
 	bank_context = _build_bank_transaction_context(bank_transaction) if bank_transaction else {}
+	if not candidate and lock_existing_candidate and suggested_document_type != "Journal Entry":
+		return {
+			"doc_values": {},
+			"details": {},
+			"block_reason": (
+				"Locked candidate no longer validates against current accounting data; "
+				"no alternate candidate was selected."
+			),
+		}
 	if not candidate:
 		candidate = _build_source_candidate_context(
 			suggested_document_type, suggested_document, bank_context=bank_context

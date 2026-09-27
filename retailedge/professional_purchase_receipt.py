@@ -14,6 +14,7 @@ from retailedge.professional_purchasing import (
 	_assert_read,
 	_branch_scoped_filters,
 	_document_branch,
+	_permission,
 	_resolve_scope,
 	_transaction_branch_field,
 )
@@ -469,6 +470,14 @@ def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, 
 	}
 
 
+def _submitted_receipt_next_actions(receipt: Any) -> list[dict[str, str]]:
+	if cint(getattr(receipt, "docstatus", 0)) != 1:
+		return []
+	if _permission("Purchase Invoice", "create") and flt(getattr(receipt, "per_billed", 0)) < 99.99:
+		return [{"value": "create-purchase-invoice", "label": _("Create Purchase Invoice")}]
+	return []
+
+
 @frappe.whitelist(methods=["POST"])
 def submit_standard_purchase_receipt(
 	purchase_order: str,
@@ -515,6 +524,7 @@ def submit_standard_purchase_receipt(
 		"branch": str(getattr(receipt, receipt_branch_field, "") or "") if receipt_branch_field else "",
 		"item_count": len(items),
 		"posting_status": "Submitted",
+		"next_actions": _submitted_receipt_next_actions(receipt),
 		"stock_posted_by": "ERPNext Purchase Receipt submit",
 		"landed_cost_handoff": _landed_cost_handoff(receipt.name),
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
@@ -689,6 +699,9 @@ def apply_standard_purchase_receipt_workflow_action(
 			{
 				"name": updated_receipt.name,
 				"docstatus": 1,
+				"company": str(getattr(updated_receipt, "company", "") or ""),
+				"supplier": str(getattr(updated_receipt, "supplier", "") or ""),
+				"next_actions": _submitted_receipt_next_actions(updated_receipt),
 				"landed_cost_handoff": _landed_cost_handoff(updated_receipt.name),
 			}
 		)
@@ -729,6 +742,7 @@ def get_professional_purchase_receipt_history(
 		"supplier_name",
 		"status",
 		"total_qty",
+		"per_billed",
 		"modified",
 	]
 	if branch_field:
@@ -770,6 +784,8 @@ def get_professional_purchase_receipt_history(
 				"supplier_name": str(row.get("supplier_name") or row.get("supplier") or ""),
 				"status": str(row.get("status") or "Submitted"),
 				"total_qty": flt(row.get("total_qty")),
+				"per_billed": flt(row.get("per_billed")),
+				"can_prepare_invoice": bool(_permission("Purchase Invoice", "create") and flt(row.get("per_billed")) < 99.99),
 				"purchase_orders": purchase_orders.get(str(row.get("name") or ""), []),
 			}
 			for row in rows

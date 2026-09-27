@@ -8,8 +8,14 @@ from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.user import get_user_fullname
 
-from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+from erpnext.buying.doctype.purchase_order.purchase_order import (
+	make_purchase_invoice as make_purchase_invoice_from_purchase_order,
+	make_purchase_receipt,
+)
 from erpnext.stock.doctype.material_request.material_request import make_request_for_quotation
+from erpnext.stock.doctype.purchase_receipt.purchase_receipt import (
+	make_purchase_invoice as make_purchase_invoice_from_purchase_receipt,
+)
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
@@ -404,6 +410,7 @@ def get_professional_purchasing_context(
 		limit_page_length=row_limit,
 	)
 	can_create_receipt = _permission(PURCHASE_RECEIPT_DOCTYPE, "create")
+	can_create_purchase_invoice = _permission("Purchase Invoice", "create")
 	server_today = nowdate()
 	result_rows = []
 	for row in rows:
@@ -415,6 +422,13 @@ def get_professional_purchasing_context(
 			can_create_receipt
 			and cint(row.get("docstatus")) == 1
 			and per_received < 100
+			and not cint(row.get("is_subcontracted"))
+			and status not in {"Closed", "Completed", "Cancelled"}
+		)
+		can_prepare_invoice = bool(
+			can_create_purchase_invoice
+			and cint(row.get("docstatus")) == 1
+			and per_billed < 100 - ATTENTION_TOLERANCE
 			and not cint(row.get("is_subcontracted"))
 			and status not in {"Closed", "Completed", "Cancelled"}
 		)
@@ -434,6 +448,7 @@ def get_professional_purchasing_context(
 			"branch": row_branch,
 			"is_subcontracted": bool(cint(row.get("is_subcontracted"))),
 			"can_prepare_receipt": can_prepare_receipt,
+			"can_prepare_invoice": can_prepare_invoice,
 			"route": f"/app/purchase-order/{row.get('name')}",
 		}
 		result.update(_classify_purchase_order_attention(result, today=server_today))
@@ -468,6 +483,7 @@ def get_professional_purchasing_context(
 			"can_create_purchase_order": _permission(PURCHASE_ORDER_DOCTYPE, "create"),
 			"can_read_purchase_receipt": _permission(PURCHASE_RECEIPT_DOCTYPE, "read"),
 			"can_create_purchase_receipt": can_create_receipt,
+			"can_create_purchase_invoice": can_create_purchase_invoice,
 			"can_read_material_request": _permission(MATERIAL_REQUEST_DOCTYPE, "read"),
 			"can_read_request_for_quotation": _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "read"),
 			"can_create_request_for_quotation": _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "create"),
@@ -696,6 +712,255 @@ def prepare_purchase_receipt_draft(purchase_order: str) -> dict[str, Any]:
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 		"route": f"/app/purchase-receipt/{receipt.name}",
 	}
+
+
+
+def _lock_purchase_source(doctype: str, name: str) -> None:
+	if doctype not in {PURCHASE_ORDER_DOCTYPE, PURCHASE_RECEIPT_DOCTYPE}:
+		frappe.throw(_("Unsupported Purchase Invoice source."), frappe.ValidationError)
+	table = f"tab{doctype}"
+	rows = frappe.db.sql(f"SELECT name FROM `{table}` WHERE name = %s FOR UPDATE", (name,))
+	if not rows:
+		frappe.throw(_("{0} {1} no longer exists.").format(doctype, name))
+
+
+def _validate_purchase_invoice_source(source) -> str:
+	if cint(source.docstatus) != 1:
+		frappe.throw(_("Only submitted {0} can create a Purchase Invoice.").format(source.doctype))
+	if cint(source.get("is_return")):
+		frappe.throw(_("Purchase Return billing requires Advanced ERPNext review."))
+	if cint(source.get("is_subcontracted")):
+		frappe.throw(_("Subcontracted purchasing requires Advanced ERPNext billing review."))
+	if str(source.get("status") or "") in {"Closed", "Completed", "Cancelled", "Stopped"}:
+		frappe.throw(_("{0} {1} is not open for billing.").format(source.doctype, source.name))
+
+	company = str(source.get("company") or "").strip()
+	if not company:
+		frappe.throw(_("{0} {1} has no Company.").format(source.doctype, source.name))
+	_assert_read("Company", company)
+
+	operating = get_operating_context() or {}
+	operating_company = str(operating.get("company") or "").strip()
+	operating_branch = str(operating.get("branch") or "").strip()
+	if operating_company and operating_company != company:
+		frappe.throw(
+			_("{0} {1} belongs to another Company. Change Operating Context before billing it.").format(
+				source.doctype, source.name
+			),
+			frappe.PermissionError,
+		)
+
+	branch = _document_branch(source)
+	if branch:
+		validate_operating_branch(
+			company=company,
+			branch=branch,
+			user=frappe.session.user,
+			throw=True,
+		)
+	if operating_branch and branch and operating_branch != branch:
+		frappe.throw(
+			_("{0} {1} does not belong to the current Operating Branch.").format(source.doctype, source.name),
+			frappe.PermissionError,
+		)
+	return branch
+
+
+def _source_invoice_field(source_doctype: str) -> str:
+	if source_doctype == PURCHASE_ORDER_DOCTYPE:
+		return "purchase_order"
+	if source_doctype == PURCHASE_RECEIPT_DOCTYPE:
+		return "purchase_receipt"
+	frappe.throw(_("Unsupported Purchase Invoice source."), frappe.ValidationError)
+	return ""
+
+
+def _existing_source_purchase_invoice(source_doctype: str, source_name: str):
+	fieldname = _source_invoice_field(source_doctype)
+	rows = frappe.db.sql(
+		f"""
+		SELECT DISTINCT pi.name
+		FROM `tabPurchase Invoice` pi
+		INNER JOIN `tabPurchase Invoice Item` item ON item.parent = pi.name
+		WHERE pi.docstatus = 0 AND item.`{fieldname}` = %s
+		ORDER BY pi.creation ASC
+		LIMIT 3
+		""",
+		(source_name,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Purchase Invoices already reference {0} {1}. Review them before creating another invoice.").format(
+				source_doctype, source_name
+			)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Purchase Invoice", rows[0].name)
+	if not frappe.has_permission("Purchase Invoice", "read", doc=doc):
+		frappe.throw(
+			_("A draft Purchase Invoice already exists for this source, but you do not have permission to read it."),
+			frappe.PermissionError,
+		)
+	linked = {
+		str(row.get(fieldname) or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get(fieldname) or "").strip()
+	}
+	if linked != {source_name}:
+		frappe.throw(
+			_("The existing draft Purchase Invoice combines multiple source documents. Use Advanced ERPNext review.")
+		)
+	if source_doctype == PURCHASE_ORDER_DOCTYPE:
+		receipt_links = {
+			str(row.get("purchase_receipt") or "").strip()
+			for row in list(doc.get("items") or [])
+			if str(row.get("purchase_receipt") or "").strip()
+		}
+		if receipt_links:
+			frappe.throw(
+				_("A draft Purchase Invoice for this Purchase Order is owned by Purchase Receipt billing. Continue from the Purchase Receipt instead.")
+			)
+	return doc
+
+
+def _lock_receipt_purchase_orders(source) -> set[str]:
+	"""Serialize Receipt billing with direct PO billing for the same source chain."""
+	purchase_orders = sorted(
+		{
+			str(row.get("purchase_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("purchase_order") or "").strip()
+		}
+	)
+	for purchase_order in purchase_orders:
+		_lock_purchase_source(PURCHASE_ORDER_DOCTYPE, purchase_order)
+	return set(purchase_orders)
+
+
+def _direct_po_draft_invoice_conflicts(purchase_orders: set[str]) -> list[str]:
+	"""Return direct PO-owned draft Purchase Invoices that can overlap receipt billing."""
+	purchase_orders = {str(name or "").strip() for name in purchase_orders if str(name or "").strip()}
+	if not purchase_orders:
+		return []
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT pi.name
+		FROM `tabPurchase Invoice` pi
+		INNER JOIN `tabPurchase Invoice Item` item ON item.parent = pi.name
+		WHERE pi.docstatus = 0
+			AND item.purchase_order IN %(purchase_orders)s
+			AND COALESCE(item.purchase_receipt, '') = ''
+		ORDER BY pi.creation ASC
+		LIMIT 10
+		""",
+		{"purchase_orders": tuple(purchase_orders)},
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
+
+
+def _prepare_source_purchase_invoice(source_doctype: str, source_name: str) -> dict[str, Any]:
+	source_name = str(source_name or "").strip()
+	if not source_name:
+		frappe.throw(_("{0} is required.").format(source_doctype))
+	_assert_read(source_doctype, source_name)
+	_assert_create("Purchase Invoice")
+	_lock_purchase_source(source_doctype, source_name)
+	source = frappe.get_doc(source_doctype, source_name)
+	branch = _validate_purchase_invoice_source(source)
+
+	existing = _existing_source_purchase_invoice(source_doctype, source.name)
+	if existing:
+		return {
+			"doctype": existing.doctype,
+			"name": existing.name,
+			"docstatus": cint(existing.docstatus),
+			"company": str(existing.company or ""),
+			"supplier": str(existing.supplier or ""),
+			"branch": _document_branch(existing),
+			"source_type": source_doctype,
+			"source_name": source.name,
+			"source_mode": "professional_purchasing",
+			"existing": True,
+			"route": f"/app/purchase-invoice/{existing.name}",
+		}
+
+	if source_doctype == PURCHASE_RECEIPT_DOCTYPE:
+		linked_purchase_orders = _lock_receipt_purchase_orders(source)
+		conflicts = _direct_po_draft_invoice_conflicts(linked_purchase_orders)
+		if conflicts:
+			frappe.throw(
+				_(
+					"Purchase Receipt {0} cannot prepare another Purchase Invoice while direct Purchase Order draft invoice(s) {1} remain open. Complete or cancel the PO-owned draft first."
+				).format(source.name, ", ".join(conflicts))
+			)
+
+	if source_doctype == PURCHASE_ORDER_DOCTYPE:
+		if flt(source.get("per_billed")) >= 100 - ATTENTION_TOLERANCE:
+			frappe.throw(_("Purchase Order {0} is already fully billed.").format(source.name))
+		target = make_purchase_invoice_from_purchase_order(source.name)
+	elif source_doctype == PURCHASE_RECEIPT_DOCTYPE:
+		if flt(source.get("per_billed")) >= 100 - ATTENTION_TOLERANCE:
+			frappe.throw(_("Purchase Receipt {0} is already fully billed.").format(source.name))
+		target = make_purchase_invoice_from_purchase_receipt(source.name)
+	else:
+		frappe.throw(_("Unsupported Purchase Invoice source."), frappe.ValidationError)
+
+	if not target or getattr(target, "doctype", None) != "Purchase Invoice":
+		frappe.throw(_("ERPNext could not prepare a Purchase Invoice from {0} {1}.").format(source_doctype, source.name))
+	if cint(getattr(target, "docstatus", 0)) != 0:
+		frappe.throw(_("ERPNext returned a non-draft Purchase Invoice mapping; creation was stopped."))
+	if str(getattr(target, "company", "") or "") != str(source.company or ""):
+		frappe.throw(_("Mapped Purchase Invoice Company does not match the source document."))
+	if str(getattr(target, "supplier", "") or "") != str(source.supplier or ""):
+		frappe.throw(_("Mapped Purchase Invoice Supplier does not match the source document."))
+
+	fieldname = _source_invoice_field(source_doctype)
+	items = [row for row in list(getattr(target, "items", None) or []) if flt(getattr(row, "qty", 0)) > 0]
+	if not items:
+		frappe.throw(_("{0} {1} has no remaining billable quantities.").format(source_doctype, source.name))
+	if any(str(getattr(row, fieldname, "") or "") != source.name for row in items):
+		frappe.throw(_("Mapped Purchase Invoice contains items outside {0} {1}.").format(source_doctype, source.name))
+
+	invoice_branch_field = _transaction_branch_field("Purchase Invoice")
+	if branch and invoice_branch_field:
+		setattr(target, invoice_branch_field, branch)
+	elif branch and not invoice_branch_field:
+		frappe.throw(
+			_("Purchase Invoice Branch attribution is unavailable. Run site migration before using Branch-scoped billing.")
+		)
+
+	# ERPNext's native mapper remains authoritative for quantities, rates, taxes,
+	# source links, payable defaults and payment terms. RetailEdge inserts only a
+	# draft and then hands it to the governed Purchase Invoice completion service.
+	target.insert()
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": cint(target.docstatus),
+		"company": str(target.company or ""),
+		"supplier": str(target.supplier or ""),
+		"branch": getattr(target, invoice_branch_field, "") if invoice_branch_field else "",
+		"source_type": source_doctype,
+		"source_name": source.name,
+		"source_mode": "professional_purchasing",
+		"existing": False,
+		"route": f"/app/purchase-invoice/{target.name}",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_purchase_invoice_from_purchase_order(purchase_order: str) -> dict[str, Any]:
+	"""Create or reuse one ERPNext-mapped draft Purchase Invoice from a submitted Purchase Order."""
+	return _prepare_source_purchase_invoice(PURCHASE_ORDER_DOCTYPE, purchase_order)
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_purchase_invoice_from_purchase_receipt(purchase_receipt: str) -> dict[str, Any]:
+	"""Create or reuse one ERPNext-mapped draft Purchase Invoice from a submitted Purchase Receipt."""
+	return _prepare_source_purchase_invoice(PURCHASE_RECEIPT_DOCTYPE, purchase_receipt)
 
 
 @frappe.whitelist()

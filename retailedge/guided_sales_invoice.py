@@ -17,14 +17,18 @@ from retailedge.guided_entry_context import (
 	resolve_guided_default_branch,
 	validate_guided_branch_warehouse,
 )
-from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_sales_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
 from retailedge.utils.settings import get_retailedge_settings
 
 ACTION_KEY = "new-sales-invoice"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
@@ -106,7 +110,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"posting_date": nowdate(),
 			"warehouse": warehouse,
 			"customer": "",
-			"price_list": "",
+			"price_list": pricing.get("price_list") or "",
 			"update_stock": 1,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
@@ -150,6 +154,15 @@ def search_simple_sales_invoice_options(
 			page_length=limit,
 			reference_doctype=SALES_INVOICE_DOCTYPE,
 			link_fieldname="customer",
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_sales_item": 1}
@@ -229,6 +242,7 @@ def get_simple_sales_invoice_item_pricing(
 		warehouse=warehouse,
 		posting_date=values.get("posting_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
 		requested_price_list=values.get("price_list") or "",
 	)
@@ -276,9 +290,11 @@ def _create_simple_sales_invoice_draft(
 		company=company,
 		branch=branch,
 		party=customer,
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
-		requested_price_list=values.get("price_list") or "",
 	)
+	if pricing_context.get("selection_required"):
+		frappe.throw(_("Choose a Selling Price List assigned to you for this Branch before saving."))
 
 	doc = frappe.new_doc(SALES_INVOICE_DOCTYPE)
 	doc.company = company
@@ -304,6 +320,7 @@ def _create_simple_sales_invoice_draft(
 			warehouse=warehouse,
 			posting_date=str(doc.posting_date),
 			qty=item["qty"],
+			selected_price_list=pricing_context.get("price_list") or "",
 			user=user,
 			requested_price_list=values.get("price_list") or "",
 		)
@@ -331,13 +348,14 @@ def _create_simple_sales_invoice_draft(
 			row["warehouse"] = warehouse
 		doc.append("items", row)
 
-	# The effective Price List and rates are re-resolved on the server from the
-	# governed party/POS/Branch/assignment policy. A browser-selected Price List
-	# is accepted only when it is allowed by the active Branch Assignment policy.
+	# The effective Price List is resolved and revalidated by Price List Governance.
+	# ERPNext's pricing engine remains authoritative for item pricing, while browser
+	# input cannot bypass a governed Price List or POS rate lock.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"customer": doc.customer,
 		"company": doc.company,
@@ -357,7 +375,7 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	if not items:
 		frappe.throw(_("Add at least one invoice item."))
 	if len(items) > MAX_ITEMS:
-		frappe.throw(_("A Simple Sales Invoice can contain at most {0} items.").format(MAX_ITEMS))
+		frappe.throw(_("A Sales Invoice can contain at most {0} items in this guided entry flow.").format(MAX_ITEMS))
 
 	normalised: list[dict[str, Any]] = []
 	for index, item in enumerate(items, start=1):
