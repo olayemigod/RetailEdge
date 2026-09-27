@@ -184,6 +184,14 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		self.assertIn("def _document_price_list_context(", pricing)
 		self.assertIn('source="document_price_list"', pricing)
 
+	def test_saved_sales_draft_rate_lock_uses_pos_policy_without_replacing_document_price_list(self):
+		pricing = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
+		draft_items = (APP_ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
+		self.assertIn('context["rate_policy_source"] = "pos_profile"', pricing)
+		self.assertIn('document_price_list=selected_price_list', draft_items)
+		self.assertIn('pricing.get("rate_policy_source") == "pos_profile"', draft_items)
+		self.assertNotIn('pricing.get("source") == "pos_profile"', draft_items)
+
 	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
 		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
 		receipt = (APP_ROOT / "professional_purchase_receipt.py").read_text(encoding="utf-8")
