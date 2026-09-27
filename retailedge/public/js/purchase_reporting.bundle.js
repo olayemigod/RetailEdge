@@ -11,6 +11,16 @@ const PURCHASE_VERIFICATION_COLUMNS = Object.freeze([
 	{ fieldname: "review_reason", label: "Review Reason", fieldtype: "Data", width: 260, sortable: false },
 ]);
 const PURCHASE_REPORT_PROVIDERS = Object.freeze({
+	purchase_analysis: {
+		key: "purchase-analysis",
+		pageMethod: "retailedge.purchase_analysis.get_purchase_analysis",
+		maxDatasetRows: 10000,
+	},
+	supplier_performance: {
+		key: "supplier-performance",
+		pageMethod: "retailedge.supplier_performance.get_supplier_performance",
+		maxDatasetRows: 2000,
+	},
 	purchase_register: {
 		key: "purchase-register",
 		pageMethod: "retailedge.purchase_reporting.get_purchase_register",
@@ -114,7 +124,8 @@ function mountPurchaseReportingPage(target, options = {}) {
 	const app = edgeUI.createEdgeApp(PurchaseReportingReport, {
 		reportType: options.reportType || "purchase_register",
 	});
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

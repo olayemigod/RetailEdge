@@ -29,8 +29,6 @@ BANK_TRANSACTION_MATCHING_ROLES = {
 	"RetailEdgeManager",
 	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
-	"RetailEdgeAuditor",
 }
 
 ACTIVE_CONFIRMED_MATCH_STATUS = "Confirmed"

@@ -80,14 +80,21 @@ These are intentional 1.0 boundaries, not release defects:
 - System Manager-only Branch Assignment/setup governance;
 - advanced ERPNext detail/form access for explicitly authorised Native Desk users.
 
-## QA status
+## QA and promotion status
 
-RetailEdge 1.0.0 is **not yet released**.
+RetailEdge 1.0.0 is **not yet tagged or published**, but the governed MVP candidate has completed its audit and acceptance sequence.
 
-Business Hub QA is still in progress. The automated browser runs recorded during PR #56 hardening are regression evidence only and must not be treated as completed Business Hub QA or full RetailEdge MVP RC3 acceptance.
+Authoritative release-hardening evidence:
 
-Full MVP QA remains required after Business Hub acceptance, including selling, purchasing/Receive Stock, payments/cash/banking, expenses, stock operations, Action Centre, receivables/payables, reporting, role/persona access, Branch isolation, workflow behaviour, and ERPNext accounting/stock safety.
+- PR #58 frozen head: `85c1834aedf5a934458a04a706cdc4d10ea0f02f`
+- Business Hub → reporting audit: **FROZEN / COMPLETE**
+- Theme Compatibility: **PASS**
+- Linters / Semgrep / dependency audit: **PASS**
+- clean Frappe v16 CI: **PASS**
+- EdgeSuite UI Candidate Compatibility: **PASS**
+- Upgrade Validation: **PASS**, including double migration and submitted accounting-truth verification
+- formal Browser RC3: **31/31 PASS**
 
-PR #56 was merged to `version-16` before QA completion. That merge represents code integration only; it does **not** represent product acceptance or permission to tag `v1.0.0`.
+Blocker-only findings discovered during the audit/RC3 sequence were corrected and revalidated on the frozen head. Customer Receivables remains a controlled, Company/Branch-scoped RetailEdge view for permitted Sales roles without granting raw Sales Invoice Desk access, while Payment Management remains restricted to accounting-authorised roles because it performs native Payment Entry work.
 
-No release tag or GitHub Release should be created until the complete QA sequence is finished and frozen.
+The remaining step is final promotion approval. No `v1.0.0` tag or GitHub Release should be created until that decision is made. Any code change after the frozen head requires exact-head revalidation before promotion.

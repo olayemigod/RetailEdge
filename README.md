@@ -1,10 +1,10 @@
-# RetailEdge
+# ProcessEdge Retail
 
-RetailEdge is a retail operations app for Frappe / ERPNext v16 that is designed to work alongside POSNext. It provides a clean foundation for POS control, sales audit, payment verification, branch workflows, and future retail intelligence capabilities without modifying Frappe, ERPNext, or POSNext core files.
+ProcessEdge Retail is a retail operations app for Frappe / ERPNext v16 that is designed to work alongside POSNext. The internal Frappe app/package identifier remains `retailedge` for compatibility. It provides a clean foundation for POS control, sales audit, payment verification, branch workflows, and future retail intelligence capabilities without modifying Frappe, ERPNext, or POSNext core files.
 
-## RetailEdge 1.0.0
+## ProcessEdge Retail 1.0.0
 
-RetailEdge 1.0.0 is the governed MVP release target. The product is still in QA. Business Hub QA is currently in progress, and the full RetailEdge MVP persona/workflow QA has not yet been completed. Automated browser and CI runs are regression evidence only and must not be treated as release acceptance. No 1.0.0 tag or release should be created until Business Hub QA is completed and the remaining MVP QA gates are executed and accepted.
+ProcessEdge Retail 1.0.0 is the governed MVP release target. The second MVP audit, Business Hub → reporting audit, blocker-only corrections, upgrade validation and formal RC3 browser/persona acceptance are complete on frozen PR #58 head `85c1834aedf5a934458a04a706cdc4d10ea0f02f`. All six governed exact-head gates are green, including RC3 at 31/31. The release is now in final 1.0.0 promotion hardening; no `v1.0.0` tag or GitHub Release should be created until the final promotion decision is approved.
 
 ### 1.0 MVP coverage
 

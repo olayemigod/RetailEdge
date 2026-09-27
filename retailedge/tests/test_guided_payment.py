@@ -45,10 +45,14 @@ class _DraftPaymentEntry(SimpleNamespace):
 class TestGuidedPayment(unittest.TestCase):
 	def test_payment_intents_map_to_native_erpnext_directions(self):
 		receive = PAYMENT_INTENTS["receive-customer-payment"]
+		order_advance = PAYMENT_INTENTS["receive-sales-order-payment"]
 		pay = PAYMENT_INTENTS["pay-supplier"]
 		self.assertEqual(receive["payment_type"], "Receive")
 		self.assertEqual(receive["party_type"], "Customer")
 		self.assertEqual(receive["reference_doctype"], "Sales Invoice")
+		self.assertEqual(order_advance["payment_type"], "Receive")
+		self.assertEqual(order_advance["party_type"], "Customer")
+		self.assertEqual(order_advance["reference_doctype"], "Sales Order")
 		self.assertEqual(pay["payment_type"], "Pay")
 		self.assertEqual(pay["party_type"], "Supplier")
 		self.assertEqual(pay["reference_doctype"], "Purchase Invoice")
@@ -248,6 +252,25 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertIn('v-if="modeDetails.reference_required"', component)
 		self.assertIn("allocatedTotal", component)
 		self.assertIn("unallocatedAmount", component)
+
+	def test_sales_order_customer_advance_uses_erpnext_reference_engine(self):
+		source = (APP_ROOT / "guided_payment.py").read_text()
+		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()
+		for contract in (
+			'"receive-sales-order-payment"',
+			'"reference_doctype": "Sales Order"',
+			"get_reference_details(",
+			'if reference_doctype == "Sales Invoice":',
+			"Available for advance",
+		):
+			self.assertIn(contract, source)
+		for contract in (
+			'"receive-sales-order-payment"',
+			"one Sales Order advance",
+			"Reference Allocation",
+			"Order Payment Available",
+		):
+			self.assertIn(contract, component)
 
 	def test_payment_dialog_loads_reference_details_on_demand_and_keeps_native_fallback(self):
 		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()

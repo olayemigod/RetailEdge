@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="customer-opportunity-fallback">
 		<strong>Customer Retention & Opportunity Intelligence could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -65,7 +65,7 @@
 				<span v-if="scope.current_from_date && scope.current_to_date">Current: {{ formatDate(scope.current_from_date) }} to {{ formatDate(scope.current_to_date) }}</span>
 				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ formatDate(scope.prior_from_date) }} to {{ formatDate(scope.prior_to_date) }}</span>
 				<span>Threshold: {{ scope.change_threshold_percent || filters.change_threshold_percent }}%</span>
-				<span>Signals describe observed comparable-period behaviour; RetailEdge does not call these customers churned</span>
+				<span>Signals describe observed comparable-period behaviour; these customers are not automatically labelled as churned.</span>
 				<span>Outstanding and overdue values are current ERPNext receivable exposure</span>
 			</template>
 		</EdgeReportShell>
@@ -131,7 +131,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Customer Retention & Opportunity Intelligence",
-				filename: `RetailEdge Customer Retention Opportunity ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Customer Retention Opportunity ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,

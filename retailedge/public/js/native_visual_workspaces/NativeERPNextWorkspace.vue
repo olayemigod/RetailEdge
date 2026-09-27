@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="native-workspace-fallback">
-		<strong>{{ title || "RetailEdge control workspace" }} could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<strong>{{ title || "Business control workspace" }} could not start.</strong>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -23,10 +23,10 @@
 					<p>{{ description }}</p>
 				</div>
 				<div class="native-control-badges" aria-label="Workspace authority">
-					<span>EdgeSuite workspace</span>
-					<span>{{ sourceOfTruth }} source of truth</span>
-					<span v-if="canUseNativeDesk">Native lifecycle handoff</span>
-					<span v-else>Read-only EdgeSuite view</span>
+					<span>Business workspace</span>
+					<span>{{ sourceOfTruth }} authoritative data</span>
+					<span v-if="canUseNativeDesk">ERPNext workflow available</span>
+					<span v-else>Read-only overview</span>
 				</div>
 			</section>
 
@@ -34,7 +34,7 @@
 			<div v-else-if="error" class="native-control-state native-control-error">
 				<strong>Unable to load this workspace.</strong>
 				<span>{{ error }}</span>
-				<button class="edge-secondary-button" type="button" @click="loadWorkspace">Retry</button>
+				<button class="edge-button edge-button--secondary" type="button" @click="loadWorkspace">Retry</button>
 			</div>
 			<template v-else>
 				<section class="native-control-section">
@@ -54,7 +54,7 @@
 							<div class="native-control-card-actions">
 								<button
 									v-if="source.kind === 'page' || canUseNativeDesk"
-									class="edge-primary-button"
+									class="edge-button edge-button--primary"
 									type="button"
 									@click="openSource(source)"
 								>
@@ -62,7 +62,7 @@
 								</button>
 								<button
 									v-if="canUseNativeDesk && source.kind === 'doctype' && source.can_create"
-									class="edge-secondary-button"
+									class="edge-button edge-button--secondary"
 									type="button"
 									@click="createSource(source)"
 								>
@@ -79,10 +79,10 @@
 							<h3>{{ source.label }}</h3>
 							<p>
 								{{ source.preview_label }} permission-filtered ERPNext records.
-								{{ canUseNativeDesk ? "Open a row for the authoritative document." : "Read-only preview in EdgeSuite." }}
+								{{ canUseNativeDesk ? "Open a row for the authoritative document." : "Read-only preview." }}
 							</p>
 						</div>
-						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openSource(source)">View all</button>
+						<button v-if="canUseNativeDesk" class="edge-button edge-button--secondary" type="button" @click="openSource(source)">View all</button>
 					</div>
 					<div v-if="source.rows.length" class="native-control-table-wrap">
 						<table class="native-control-table">
@@ -113,7 +113,7 @@
 				<section class="native-control-note">
 					<strong>Accounting and workflow safety</strong>
 					<p>
-						This EdgeSuite surface is read-only. Creation and changes continue through ERPNext's permitted native document and report workflows; RetailEdge does not create a second ledger, lifecycle, commission engine, or budget engine here.
+						This overview is read-only. Creation and changes continue through permitted ERPNext documents and reports. No duplicate ledger, lifecycle, commission engine, or budget engine is created here.
 					</p>
 				</section>
 			</template>
@@ -155,7 +155,7 @@ export default {
 			missingComponents: [],
 			loading: true,
 			error: "",
-			title: "RetailEdge Control",
+			title: "Business Control",
 			eyebrow: "Operational Control",
 			description: "",
 			company: "",
@@ -209,7 +209,7 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) {
 				this.canUseNativeDesk = false;
-				this.error = errorMessage(error, "Failed to load the RetailEdge control workspace.");
+				this.error = errorMessage(error, "Failed to load this business workspace.");
 			} finally {
 				this.loading = false;
 			}
@@ -217,7 +217,7 @@ export default {
 		kindLabel(kind) {
 			if (kind === "doctype") return "ERPNext records";
 			if (kind === "report") return "ERPNext report";
-			if (kind === "page") return "EdgeSuite workspace";
+			if (kind === "page") return "Workspace";
 			return "Workspace";
 		},
 		openSource(source) {

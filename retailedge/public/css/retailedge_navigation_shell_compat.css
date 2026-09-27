@@ -1,0 +1,277 @@
+/* RetailEdge compatibility for EdgeSuite Navigation Shell V2.
+   Mirrors the proven VetEdge navigation contract: EdgeSuite UI owns menu
+   presentation and the selected EdgeTheme/Appearance owns all menu colors.
+   RetailEdge supplies menu data, routes and product identity only. */
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar {
+	background: var(--edge-color-surface);
+	border-right: 1px solid var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+/* Brand presentation follows the active theme. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand {
+	background: var(--edge-color-surface);
+	border-bottom-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__mark,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__mark {
+	background: var(--edge-color-brand-50);
+	border-color: var(--edge-color-brand-100);
+	color: var(--edge-color-brand-600);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy strong,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy strong {
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy small,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy small {
+	color: var(--edge-color-ink-500);
+}
+
+/* Group headers are navigation labels, not selected cards. Expanded groups and
+   groups containing the active page remain transparent; only their icon picks
+   up the theme accent. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	color: var(--edge-color-ink-700);
+	font-size: .76rem;
+	font-weight: 680;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:hover:not(:disabled),
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:hover:not(:disabled) {
+	background: var(--edge-color-surface-muted);
+	border-color: transparent;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:first-child {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-ink-500);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle > .edge-icon:first-child,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle > .edge-icon:first-child {
+	color: var(--edge-color-brand-600);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:last-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:last-child {
+	color: var(--edge-color-ink-400);
+}
+
+/* Leaf navigation follows the same active treatment as VetEdge. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item {
+	background: transparent;
+	border: 0;
+	color: var(--edge-color-ink-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:hover,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:hover {
+	background: var(--edge-color-surface-muted);
+	border-color: transparent;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"],
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-50) 78%, var(--edge-color-surface));
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--edge-color-brand-600);
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item > .edge-icon {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-ink-500);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-100) 65%, transparent);
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:focus-visible,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:focus-visible,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:focus-visible,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--edge-color-brand-500) 25%, transparent);
+	outline-offset: 2px;
+}
+
+/* Dark appearance: keep selection restrained and readable. The selected
+   EdgeTheme still supplies brand and surface tokens. */
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"],
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 22%, var(--edge-color-surface));
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 18%, var(--edge-color-surface));
+	color: var(--edge-color-brand-text, var(--edge-color-info));
+}
+
+
+/* Working Branch switcher: use a body-level popover so Branch choices cannot be
+   clipped by the shared top bar, page shell, or sidebar overflow. */
+.retailedge-topbar-branch-switcher {
+	width: auto;
+	min-width: 0;
+	max-width: min(22rem, 44vw);
+}
+
+.retailedge-topbar-branch-trigger {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	min-width: 11rem;
+	max-width: min(22rem, 44vw);
+	min-height: 2.65rem;
+	padding: .42rem .7rem;
+	border: 1px solid var(--edge-color-border-strong, var(--border-color));
+	border-radius: 999px;
+	background: var(--edge-color-surface-muted, var(--control-bg));
+	color: var(--edge-color-ink-900, var(--text-color));
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.retailedge-topbar-branch-trigger:hover:not(:disabled),
+.retailedge-topbar-branch-trigger:focus-visible {
+	border-color: var(--edge-color-brand-500, var(--primary));
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--edge-color-brand-500, var(--primary)) 12%, transparent);
+	outline: none;
+}
+
+.retailedge-topbar-branch-trigger:disabled { cursor: default; opacity: .82; }
+.retailedge-topbar-branch-trigger__icon { flex: 0 0 auto; color: var(--edge-color-brand-700, var(--primary)); font-size: .85rem; }
+.retailedge-topbar-branch-trigger__copy { display: grid; min-width: 0; line-height: 1.08; }
+.retailedge-topbar-branch-trigger__copy small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .62rem; font-weight: 650; text-transform: uppercase; letter-spacing: .035em; }
+.retailedge-topbar-branch-trigger__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+.retailedge-topbar-branch-trigger__chevron { margin-left: auto; flex: 0 0 auto; color: var(--edge-color-ink-500, var(--text-muted)); }
+
+.retailedge-branch-popover {
+	position: fixed;
+	z-index: 2200;
+	display: grid;
+	gap: .65rem;
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: .75rem;
+	border: 1px solid var(--edge-color-border-strong, var(--border-color));
+	border-radius: .9rem;
+	background: var(--edge-color-surface, var(--card-bg, #fff));
+	color: var(--edge-color-ink-950, var(--text-color));
+	box-shadow: 0 18px 48px rgb(15 23 42 / 18%);
+}
+
+.retailedge-branch-popover__header {
+	display: grid;
+	gap: .15rem;
+	padding: .15rem .2rem .55rem;
+	border-bottom: 1px solid var(--edge-color-border, var(--border-color));
+}
+.retailedge-branch-popover__header strong { font-size: .9rem; }
+.retailedge-branch-popover__header small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .72rem; }
+
+.retailedge-branch-popover__list { display: grid; gap: .3rem; }
+.retailedge-branch-popover__option {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .8rem;
+	width: 100%;
+	min-height: 2.7rem;
+	padding: .55rem .65rem;
+	border: 1px solid transparent;
+	border-radius: .65rem;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.retailedge-branch-popover__option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; font-weight: 680; }
+.retailedge-branch-popover__option small { flex: 0 0 auto; color: var(--edge-color-ink-500, var(--text-muted)); font-size: .68rem; }
+.retailedge-branch-popover__option:hover,
+.retailedge-branch-popover__option:focus-visible {
+	border-color: var(--edge-color-brand-100, var(--border-color));
+	background: var(--edge-color-brand-50, var(--control-bg));
+	outline: none;
+}
+.retailedge-branch-popover__option.is-active {
+	border-color: var(--edge-color-brand-300, var(--primary));
+	background: var(--edge-color-brand-50, var(--control-bg));
+}
+.retailedge-branch-popover__option.is-active small { color: var(--edge-color-brand-700, var(--primary)); font-weight: 700; }
+
+
+/* Smart Date uses a wide anchored popout. The shared shell clips horizontal
+   overflow by default, so release that clip only while the picker is open. */
+body.edge-suite-product-retailedge .edge-shell-main:has(.edge-smart-date.is-open),
+[data-edge-product="retailedge"] .edge-shell-main:has(.edge-smart-date.is-open) {
+	overflow-x: visible;
+}
+
+@media (max-width: 720px) {
+	.retailedge-topbar-branch-switcher { max-width: 54vw; }
+	.retailedge-topbar-branch-trigger { min-width: 0; max-width: 54vw; }
+	.retailedge-topbar-branch-trigger__copy small { display: none; }
+}

@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Profitability Intelligence could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -50,8 +50,7 @@
 						@select="onBranchSelected"
 						@clear="clearBranch"
 					/>
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -91,7 +90,7 @@
 					</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Margin Leakage" description="Negative and low-margin items requiring owner review. Evidence opens only for the selected item.">
+				<EdgeDashboardSection v-if="filters.focus !== 'missing_cost'" title="Margin Leakage" description="Negative and low-margin items requiring owner review. Evidence opens only for the selected item.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
 							<thead><tr><th>Item</th><th>Net Sales</th><th>Cost</th><th>Profit</th><th>Margin</th><th></th></tr></thead>
@@ -107,7 +106,7 @@
 					</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Missing Recorded Cost" description="Sold items with positive net sales but no recorded incoming cost. Treat their transactional margin as incomplete until cost is corrected.">
+				<EdgeDashboardSection v-if="!['negative_margin', 'low_margin'].includes(filters.focus)" title="Missing Recorded Cost" description="Sold items with positive net sales but no recorded incoming cost. Treat their transactional margin as incomplete until cost is corrected.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
 							<thead><tr><th>Item</th><th>Net Sales</th><th>Recorded Cost</th><th></th></tr></thead>
@@ -149,7 +148,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "profitability-intelligence";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
@@ -165,7 +164,8 @@ export default {
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
 			summary: [], topContributors: [], marginLeakage: [], missingCostRows: [], dimensions: {}, comparison: {}, reconciliation: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "", canUseNativeDesk: false,
-			filters: { company: "", branch: "", from_date: "", to_date: "" },
+			smartDate: {}, smartDateReference: "",
+			filters: { company: "", branch: "", from_date: "", to_date: "", focus: "" },
 		};
 	},
 	computed: {
@@ -202,6 +202,8 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("profitability-intelligence") || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -220,8 +222,16 @@ export default {
 				]);
 				this.summary = result.summary || [];
 				this.topContributors = result.top_contributors || [];
-				this.marginLeakage = result.margin_leakage || [];
-				this.missingCostRows = (result.rows || []).filter((row) => row.missing_recorded_cost).slice(0, 25);
+				const allRows = result.rows || [];
+				const threshold = Number(result.metadata?.low_margin_threshold_percent ?? 10);
+				if (this.filters.focus === "negative_margin") {
+					this.marginLeakage = allRows.filter((row) => Number(row.net_sales || 0) > 0 && Number(row.gross_profit || 0) < 0).slice(0, 25);
+				} else if (this.filters.focus === "low_margin") {
+					this.marginLeakage = allRows.filter((row) => Number(row.net_sales || 0) > 0 && Number(row.gross_margin_percent || 0) < threshold).slice(0, 25);
+				} else {
+					this.marginLeakage = result.margin_leakage || [];
+				}
+				this.missingCostRows = allRows.filter((row) => row.missing_recorded_cost).slice(0, 25);
 				this.dimensions = result.dimensions || {};
 				this.comparison = result.comparison || {};
 				this.reconciliation = result.reconciliation || {};
@@ -243,6 +253,16 @@ export default {
 		},
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";

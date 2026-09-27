@@ -90,18 +90,18 @@ class TestPrereportingStockMovementReadScope(unittest.TestCase):
 	def test_branch_search_is_limited_to_active_assignment_branches(self):
 		with (
 			patch.object(stock_movement_filters, "_assert_company_read"),
-			patch.object(stock_movement_filters, "has_field", return_value=True),
 			patch.object(
 				stock_movement_filters,
-				"get_operational_branch_scope",
-				return_value={"restricted": True, "allowed_branches": ["Branch A"]},
-			),
+				"get_allowed_operating_branches",
+				return_value=["Branch A"],
+			) as allowed_branches,
 			patch.object(stock_movement_filters.frappe, "get_list", return_value=[["Branch A"]]) as get_list,
 		):
 			rows = stock_movement_filters.branch_query(
 				"Branch", "", "name", 0, 20, {"company": "Scope Co"}
 			)
 
+		allowed_branches.assert_called_once_with(company="Scope Co", user=frappe.session.user)
 		self.assertEqual(rows, [["Branch A"]])
 		query_filters = get_list.call_args.kwargs["filters"]
 		self.assertIn(["Branch", "name", "in", ["Branch A"]], query_filters)

@@ -53,8 +53,9 @@ class TestCustomerPortalContract(unittest.TestCase):
 		source = (APP_ROOT / "customer_portal_download.py").read_text(encoding="utf-8")
 		self.assertIn("get_preferred_print_format(doctype)", source)
 		self.assertIn('return "Standard"', source)
-		self.assertIn('str(row.get("module") or "") == "RetailEdge"', source)
+		self.assertIn('owned = MANAGED_MARKER in str(row.get("html") or "")', source)
 		self.assertIn("MANAGED_MARKER", source)
+		self.assertNotIn('str(row.get("module") or "") == "RetailEdge"', source)
 		self.assertIn("cint(row.get(\"disabled\"))", source)
 		self.assertNotIn("frappe.form_dict.get(\"print_format\")", source)
 

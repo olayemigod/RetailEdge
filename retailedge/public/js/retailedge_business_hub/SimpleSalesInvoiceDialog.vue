@@ -59,7 +59,7 @@
 
 				<label class="guided-field">
 					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required />
+					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
 				</label>
 
 				<EdgeLinkField
@@ -71,6 +71,16 @@
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
+				/>
+
+				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					description="Only Price Lists permitted by your active Branch Assignment are available. The configured pricing policy still controls precedence."
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
 				/>
 
 				<EdgeLinkField
@@ -96,7 +106,7 @@
 				/>
 				<span>
 					<strong>Update Stock</strong>
-					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by RetailEdge settings for Make a Sale." }}</small>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings for Make a Sale." }}</small>
 				</span>
 			</label>
 
@@ -177,6 +187,7 @@ function emptyValues() {
 		posting_date: "",
 		warehouse: "",
 		customer: "",
+		price_list: "",
 		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -187,7 +198,9 @@ function sourceLabel(source) {
 	return {
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
+		assigned_choice: "Assigned Price List choice",
 		pos_profile: "Assigned POS Profile",
+		branch_default: "Branch default",
 		party_default: "Customer default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Selling",
@@ -200,6 +213,7 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeLinkField: runtimeComponents.EdgeLinkField,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
@@ -217,6 +231,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			pricingSignatures: {},
 			pricingCache: new Map(),
 			formContext: {},
 			values: emptyValues(),
@@ -270,6 +285,9 @@ export default {
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
+		canSwitchPriceList() {
+			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length);
+		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item default";
 		},
@@ -299,6 +317,7 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.pricingCache.clear();
+			this.pricingSignatures = {};
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -351,6 +370,26 @@ export default {
 		searchWarehouse(query) {
 			return this.searchOptions("warehouse", query);
 		},
+		searchPriceList(query) {
+			return this.searchOptions("price_list", query);
+		},
+		async refreshPriceListOptions() {
+			const options = await this.searchPriceList("");
+			const names = options.map((option) => option.value || option.label).filter(Boolean);
+			this.formContext.pricing = {
+				...(this.formContext.pricing || {}),
+				available_price_lists: names,
+				can_switch_price_list: names.length > 1,
+			};
+			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.pricingCache.clear();
+			this.pricingSignatures = {};
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		searchLineLink(column, query) {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
@@ -369,10 +408,12 @@ export default {
 			return column?.fieldname === "item_code" ? "Create Item" : "Create new";
 		},
 		setCustomer(next) {
-			const changed = Boolean(this.values.customer && this.values.customer !== next);
+			const previousCustomer = this.values.customer || "";
 			this.values.customer = next || "";
 			this.pricingCache.clear();
-			if (changed) {
+			this.pricingSignatures = {};
+			this.refreshPriceListOptions().catch(() => {});
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
 			}
@@ -381,8 +422,10 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
+			this.pricingSignatures = {};
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -394,6 +437,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
@@ -405,6 +449,7 @@ export default {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
 			this.pricingCache.clear();
+			this.pricingSignatures = {};
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -426,15 +471,19 @@ export default {
 			}
 		},
 		updateItems(nextRows) {
-			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) {
-					changed.push(index);
-					return { ...row, rate: "" };
+				const normalized = { ...row, item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				if (!normalized.item_code) {
+					delete this.pricingSignatures[index];
+					return normalized;
 				}
-				return { ...row };
+				const signature = this.pricingCacheKey(normalized);
+				if (this.pricingSignatures[index] !== signature) {
+					changed.push(index);
+					return { ...normalized, rate: "" };
+				}
+				return normalized;
 			});
 			for (const index of changed) this.loadItemPricing(index);
 		},
@@ -444,6 +493,7 @@ export default {
 				this.values.branch,
 				this.values.warehouse,
 				this.values.customer,
+				this.values.price_list,
 				this.values.posting_date,
 				row.item_code,
 				row.qty || 1,
@@ -465,6 +515,7 @@ export default {
 							branch: this.values.branch,
 							warehouse: this.values.warehouse,
 							customer: this.values.customer,
+							price_list: this.values.price_list,
 							posting_date: this.values.posting_date,
 							qty: row.qty || 1,
 						},
@@ -475,6 +526,8 @@ export default {
 				if (result?.rate !== null && result?.rate !== undefined) {
 					this.values.items[index] = { ...this.values.items[index], rate: result.rate };
 				}
+				this.pricingSignatures[index] = this.pricingCacheKey(this.values.items[index]);
+				this.values.items = [...this.values.items];
 				this.formContext.pricing = {
 					...(this.formContext.pricing || {}),
 					price_list: result?.price_list || this.formContext.pricing?.price_list || "",
@@ -487,6 +540,7 @@ export default {
 			}
 		},
 		refreshAllItemPricing() {
+			this.pricingSignatures = {};
 			if (!this.values.customer) return;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {
@@ -494,6 +548,12 @@ export default {
 					this.loadItemPricing(index);
 				}
 			});
+		},
+		postingDateChanged() {
+			this.pricingCache.clear();
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;

@@ -25,6 +25,8 @@ EDITABLE_FIELDS = (
 	"default_pos_profile",
 	"default_pos_opening_cash_account",
 	"default_cash_mode_of_payment",
+	"default_selling_price_list",
+	"default_buying_price_list",
 	"default_warehouse",
 	"default_source_warehouse",
 	"default_target_warehouse",
@@ -266,6 +268,9 @@ def search_branch_setup_options(
 
 	search_config = {
 		"default_pos_profile": ("POS Profile", {"company": company, "disabled": 0}),
+		"default_selling_price_list": ("Price List", {"enabled": 1, "selling": 1}),
+		"default_buying_price_list": ("Price List", {"enabled": 1, "buying": 1}),
+
 		"default_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),
 		"default_source_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),
 		"default_target_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),

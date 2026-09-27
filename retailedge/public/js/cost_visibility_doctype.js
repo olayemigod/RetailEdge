@@ -44,6 +44,16 @@
 		}, 500);
 	}
 
+	frappe.ui.form.on("Item Price", {
+		setup(frm) {
+			frm.set_query("price_list", function () {
+				return {
+					query: "retailedge.pricing_promotions_workspace.allowed_price_list_query",
+				};
+			});
+		},
+	});
+
 	COST_VISIBILITY_DOCTYPES.forEach(function (doctype) {
 		frappe.ui.form.on(doctype, {
 			refresh(frm) {

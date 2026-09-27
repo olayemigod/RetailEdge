@@ -133,10 +133,10 @@
 					<p v-if="standardReview.advanced_only && !canUseNativeDesk">An accounting manager with Advanced ERPNext access must handle this payment shape.</p>
 				</div>
 				<div v-if="canSubmitStandard" class="standard-submit-bar">
-					<span>This draft passes the existing standard RetailEdge review contract.</span>
+					<span>This draft passes the existing standard review contract.</span>
 					<button class="edge-primary-button" type="button" :disabled="submitting" @click="submitStandardDraft">{{ submitting ? "Submitting…" : "Submit Standard Payment" }}</button>
 				</div>
-				<div v-else-if="Number(paymentDetail.docstatus) !== 0" class="read-only-note">Submitted and cancelled payments are inspect-only here. RetailEdge does not mutate posted accounting documents.</div>
+				<div v-else-if="Number(paymentDetail.docstatus) !== 0" class="read-only-note">Submitted and cancelled payments are inspect-only here. Posted accounting documents are not mutated.</div>
 			</template>
 		</section>
 	</section>

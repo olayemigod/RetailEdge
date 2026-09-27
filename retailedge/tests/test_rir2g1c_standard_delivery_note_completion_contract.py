@@ -84,10 +84,12 @@ def test_warehouse_context_is_company_branch_and_permission_safe():
 	for contract in (
 		'_assert_read("Warehouse", warehouse)',
 		'frappe.db.get_value("Warehouse", warehouse, "company")',
-		"resolve_branch_from_warehouse",
+		"resolve_branch_warehouse_selection",
+		'preference="sales"',
 		"_validate_stored_operational_branch",
 		"resolved_branches",
 		"multiple operational Branches",
+		"enabled Branch Setup",
 	):
 		assert contract in source
 
@@ -145,6 +147,27 @@ def test_backend_never_writes_stock_or_accounting_truth_directly():
 		assert forbidden not in source
 
 
+def test_delivery_draft_editor_allows_safe_item_edits_and_additions():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"def update_standard_delivery_draft(",
+		"update_draft_items(",
+		'"editable_items": editable_items(doc)',
+		'"can_edit": bool(',
+	):
+		assert contract in service
+	for contract in (
+		"Edit draft before completion",
+		"Save Draft Changes",
+		"Additional Items",
+		"EdgeChildTable",
+		"EdgeLinkField",
+		"update_standard_delivery_draft",
+	):
+		assert contract in dialog
+
+
 def test_delivery_dialog_uses_only_server_authoritative_completion_actions():
 	source = _read(DIALOG)
 	for contract in (
@@ -154,7 +177,11 @@ def test_delivery_dialog_uses_only_server_authoritative_completion_actions():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Print",
+		"PDF",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
+		'emitNextAction(action)',
 	):
 		assert contract in source
 	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
@@ -170,22 +197,20 @@ def test_workspace_opens_delivery_completion_after_saved_delivery():
 	assert "deliveryCompletionDocument" in source
 
 
-def test_recent_delivery_completion_is_separate_from_g1b_commitment_completion():
+def test_tabbed_delivery_completion_is_separate_from_quote_order_and_invoice():
 	source = _read(WORKSPACE)
-	assert '["quotation", "sales-order"].includes(this.recentDocument?.key)' in source
-	assert "canReviewDeliveryCompletion(row)" in source
-	assert 'this.recentDocument?.key === "delivery-note"' in source
-	assert "openRecentDeliveryCompletion(row)" in source
-	assert 'doctype: "Delivery Note"' in source
+	assert 'if (document.key === "delivery-note")' in source
+	assert 'this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });' in source
+	assert 'this.openStandardCompletion({ doctype: "Quotation", name: row.name });' in source
+	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
 
 
-def test_sales_invoice_does_not_receive_g1c_completion_controls():
-	source = _read(WORKSPACE)
-	start = source.index("canReviewDeliveryCompletion(row)")
-	end = source.index("openDeliveryCompletion", start)
-	method = source[start:end]
-	assert "delivery-note" in method
-	assert "sales-invoice" not in method
+def test_delivery_completion_exposes_post_submit_invoice_and_output_actions():
+	dialog = _read(DIALOG)
+	assert "get_professional_selling_record_actions" in dialog
+	assert "completedResult.next_actions" in dialog
+	assert "Print & Send" in dialog
+	assert 'this.$emit("next-action"' in dialog
 
 
 def test_existing_delivery_creation_remains_native_mapper_and_draft_only():

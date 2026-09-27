@@ -33,7 +33,7 @@ def get_guided_cashier_expense_context() -> dict[str, Any]:
 	return {
 		"title": _("Record Cashier Expense"),
 		"subtitle": _(
-			"Record a controlled cash expense against the current RetailEdge cashier context."
+			"Record a cashier expense against the current operating shift. Accounting follows the merchant posting policy after submission."
 		),
 		"submit_label": _("Save Draft"),
 		"full_form_doctype": EXPENSE_DOCTYPE,
@@ -61,6 +61,8 @@ def get_guided_cashier_expense_context() -> dict[str, Any]:
 		},
 		"capabilities": {
 			"allow_expense_date_edit": bool(settings.get("allow_cashier_expense_date_edit")),
+			"posting_mode": settings.get("cashier_expense_posting_mode") or "Controlled Posting",
+			"pos_integration_enabled": bool(settings.get("enable_cashier_expense_pos_integration")),
 			"native_form_fallback": True,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS},

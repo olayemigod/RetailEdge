@@ -51,7 +51,15 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 	sections = {
 		"sales": _safe_section("Sales", lambda: get_sales_invoice_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/sales-invoice-register"),
 		"profitability": _safe_section("Profitability", lambda: get_profitability_summary(filters=common), "/app/profitability-intelligence", isolate_validation=True),
-		"expenses": _safe_section("Expenses", lambda: get_expense_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/expense-register"),
+		"expenses": _safe_section(
+			"Expenses",
+			lambda: get_expense_register(
+				filters={**common, "view_mode": "consolidated", "include_unposted_cashier_expenses": 1},
+				page=1,
+				page_size=DEFAULT_PAGE_SIZE,
+			),
+			"/app/expense-register",
+		),
 		"cash": _safe_section("Cash Movement", lambda: get_cash_movement(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/cash-movement"),
 		"receivables": _safe_section("Receivables", lambda: get_customer_receivables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/customer-receivables", time_basis="current"),
 		"payables": _safe_section("Payables", lambda: get_supplier_payables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/supplier-payables", time_basis="current"),
@@ -108,7 +116,7 @@ def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any
 		("profitability", "Accounting Gross Profit", "Gross Profit"),
 		("profitability", "Accounting Net Profit", "Net Profit"),
 		("profitability", "Transactional Gross Profit", "Sales Margin Contribution"),
-		("expenses", "Total Expenses", "Expenses"),
+		("expenses", "Posted Expenses", "Expenses"),
 		("receivables", "Total Receivables", "Receivables"),
 		("payables", "Total Payables", "Payables"),
 		("stock", "Stock Value", "Stock Value"),

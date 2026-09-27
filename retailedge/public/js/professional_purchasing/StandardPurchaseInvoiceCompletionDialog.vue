@@ -21,7 +21,7 @@
 
 				<div class="invoice-accounting-note">
 					<strong>ERPNext posting authority</strong>
-					<p>RetailEdge does not create payable, General Ledger, Payment Ledger, Stock Ledger, valuation or outstanding entries directly. Native Purchase Invoice submission remains authoritative.</p>
+					<p>This workflow does not create payable, General Ledger, Payment Ledger, Stock Ledger, valuation or outstanding entries directly. Native Purchase Invoice submission remains authoritative.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="invoice-completion-items">

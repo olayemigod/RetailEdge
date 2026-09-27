@@ -58,6 +58,15 @@
 				/>
 
 				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Receiving Stock Location"
 					placeholder="Search receiving stock location"
@@ -127,6 +136,7 @@ function emptyValues() {
 		branch: "",
 		warehouse: "",
 		supplier: "",
+		price_list: "",
 		transaction_date: "",
 		schedule_date: "",
 		terms: "",
@@ -138,6 +148,8 @@ function sourceLabel(source) {
 	return {
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
+		assigned_choice: "Assigned Price List choice",
+		branch_default: "Branch default",
 		party_default: "Supplier default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Buying",
@@ -181,7 +193,8 @@ export default {
 		branchEnabled() { return Boolean(this.formContext.capabilities?.branch_enabled); },
 		canCreateSupplier() { return Boolean(this.formContext.capabilities?.can_create_supplier); },
 		canCreateItem() { return Boolean(this.formContext.capabilities?.can_create_item); },
-		pricingLabel() { return this.formContext.pricing?.price_list || "Item buying fallback"; },
+		canSwitchPriceList() { return (this.formContext.pricing?.available_price_lists || []).length > 1; },
+		pricingLabel() { return this.values.price_list || this.formContext.pricing?.price_list || "Item buying fallback"; },
 		pricingSourceLabel() { return sourceLabel(this.formContext.pricing?.source); },
 		searchContext() {
 			return {
@@ -228,14 +241,31 @@ export default {
 		searchSupplier(query) { return this.searchOptions("supplier", query); },
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
+		searchPriceList(query) { return this.searchOptions("price_list", query); },
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createSupplier(query) { return quickCreateSupplier(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		async refreshPriceListOptions() {
+			const rows = await this.searchPriceList("");
+			const names = rows.map((row) => row.value || row.label).filter(Boolean);
+			this.formContext.pricing = {
+				...(this.formContext.pricing || {}),
+				available_price_lists: names,
+				can_switch_price_list: names.length > 1,
+			};
+			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		setSupplier(next) {
 			const changed = Boolean(this.values.supplier && this.values.supplier !== next);
 			this.values.supplier = next || "";
+			this.refreshPriceListOptions().catch(() => {});
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
@@ -245,6 +275,7 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -252,6 +283,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve the Branch receiving Stock Location.");
@@ -301,7 +333,7 @@ export default {
 			try {
 				const result = await callMethod(PRICING_METHOD, {
 					item_code: row.item_code,
-					values: { ...this.searchContext, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
+					values: { ...this.searchContext, price_list: this.values.price_list, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
 				});
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };

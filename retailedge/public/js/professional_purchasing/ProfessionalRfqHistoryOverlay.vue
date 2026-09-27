@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="capture.active ? 'Record Supplier Quotation' : 'Request for Quotation History'"
-		:subtitle="capture.active ? 'Record a supplier response against the submitted RFQ using ERPNext quotation truth.' : 'Review RFQs within your permitted Company and Branch scope without leaving RetailEdge.'"
+		:subtitle="capture.active ? 'Record a supplier response against the submitted RFQ using ERPNext quotation truth.' : 'Review RFQs within your permitted Company and Branch scope without leaving this workspace.'"
 		size="xl"
 		@close="close"
 	>
@@ -33,7 +33,7 @@
 					<div v-if="capture.loading" class="quote-capture__notice">Refreshing mapped RFQ details...</div>
 					<div v-if="capture.error" class="quote-capture__error" role="alert">{{ capture.error }}</div>
 					<div v-if="(capture.preview.blockers || []).length" class="quote-capture__blockers" role="alert">
-						<strong>This quotation cannot use the standard RetailEdge path:</strong>
+						<strong>This quotation cannot use the standard guided path:</strong>
 						<ul><li v-for="message in capture.preview.blockers" :key="message">{{ message }}</li></ul>
 					</div>
 
@@ -54,7 +54,7 @@
 
 					<div class="quote-capture__safety">
 						<strong>Standard RFQ response only.</strong>
-						<span>RetailEdge uses ERPNext's RFQ → Supplier Quotation mapper, preserves RFQ item lineage, inserts the native quotation and calls normal ERPNext submit. It does not post GL or Stock Ledger. Ad-hoc quotations, subcontracting, active approval Workflows, extra items, or special tax/currency edits remain Advanced ERPNext.</span>
+						<span>This workflow uses ERPNext's RFQ → Supplier Quotation mapper, preserves RFQ item lineage, inserts the native quotation and calls normal ERPNext submit. It does not post GL or Stock Ledger. Ad-hoc quotations, subcontracting, active approval Workflows, extra items, or special tax/currency edits remain Advanced ERPNext.</span>
 					</div>
 				</template>
 			</div>

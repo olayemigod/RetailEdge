@@ -45,6 +45,13 @@ class TestNativeVisualWorkspaceContract(TestCase):
 		self.assertIn("frappe.new_doc(source.target)", component)
 		self.assertIn('frappe.set_route("Form", source.target, row.name)', component)
 
+	def test_shared_workspace_buttons_use_edgesuite_button_contract(self):
+		component = (APP_ROOT / "public" / "js" / "native_visual_workspaces" / "NativeERPNextWorkspace.vue").read_text()
+		self.assertIn("edge-button edge-button--primary", component)
+		self.assertIn("edge-button edge-button--secondary", component)
+		self.assertNotIn('class="edge-primary-button"', component)
+		self.assertNotIn('class="edge-secondary-button"', component)
+
 	def test_workspace_backend_is_read_only_and_permission_aware(self):
 		source = (APP_ROOT / "native_visual_workspaces.py").read_text()
 		self.assertIn('frappe.has_permission(doctype, "read")', source)

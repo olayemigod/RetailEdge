@@ -24,6 +24,55 @@ function renderLoadError(wrapper, error) {
 	const title = document.createElement("strong"); title.textContent = __(`${PAGE_TITLE} failed to load`);
 	const detail = document.createElement("div"); detail.textContent = error?.message || __("Unknown page load error"); errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
 }
+
+function refreshPendingBusinessHubHandoff(wrapper) {
+	if (!wrapper._retailedgePageHasShown) {
+		wrapper._retailedgePageHasShown = true;
+		return;
+	}
+	const routeOptions = frappe.route_options || {};
+	const handoff = window.__retailedgeBusinessHubRouteHandoff || {};
+	const routeOptionMatches = Boolean(
+		routeOptions.retailedge_business_hub_handoff
+		&& String(routeOptions.retailedge_business_hub_target || "") === PAGE_ROUTE
+	);
+	const handoffMatches = Boolean(
+		handoff
+		&& String(handoff.target || "") === PAGE_ROUTE
+		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
+	);
+	if (!routeOptionMatches && !handoffMatches) return;
+	const component = wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?.__retailedgeRootComponent || wrapper._retailedgeVueApp?._instance?.proxy;
+	if (!component || typeof component.fetchMetadata !== "function") return;
+	if (wrapper._retailedgeBusinessHubHandoffRefreshPromise) return;
+	wrapper._retailedgeBusinessHubHandoffRefreshPromise = Promise.resolve(component.fetchMetadata())
+		.catch((error) => {
+			console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
+		})
+		.finally(() => {
+			wrapper._retailedgeBusinessHubHandoffRefreshPromise = null;
+		});
+}
+
+
+function bindBusinessHubHandoffRouteRefresh(wrapper) {
+	if (wrapper._retailedgeBusinessHubHandoffRouteRefresh) return;
+	const refresh = () => {
+		const route = frappe.get_route?.();
+		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	const refreshFromHandoff = (event) => {
+		if (String(event?.detail?.target || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	wrapper._retailedgeBusinessHubHandoffEventRefresh = refreshFromHandoff;
+	document.addEventListener("page-change", refresh);
+	frappe.router?.on?.("change", refresh);
+	window.addEventListener("retailedge:business-hub-handoff", refreshFromHandoff);
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div"); bootLoading.className = "edge-boot-loading p-6 text-center text-muted"; bootLoading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(bootLoading);
@@ -31,7 +80,13 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true }); wrapper.page = page; hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(PURCHASE_REPORTING_ASSET); if (typeof window.mountPurchaseReportingPage !== "function") throw new Error("Purchase reporting bundle is unavailable.");
-		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-purchase-report-root"; page.body.append(root); await window.mountPurchaseReportingPage(root, { reportType: REPORT_TYPE });
+		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-purchase-report-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountPurchaseReportingPage(root, { reportType: REPORT_TYPE });
+		wrapper._retailedgeVueComponent = wrapper._retailedgeVueApp?.__retailedgeRootComponent || root.__vue_app__?._instance?.proxy || wrapper._retailedgeVueApp?._instance?.proxy || null;
+		wrapper._retailedgePageHasShown = true;
+		bindBusinessHubHandoffRouteRefresh(wrapper);
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
-frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) { hideNativePageSidebar(wrapper); };
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativePageSidebar(wrapper);
+	refreshPendingBusinessHubHandoff(wrapper);
+};

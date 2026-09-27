@@ -66,7 +66,8 @@ function mountCashMovement(target) {
 	if (!target) throw new Error("Cash Movement mount target is required.");
 	registerCashMovementProvider(window);
 	const app = edgeUI.createEdgeApp(CashMovement);
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

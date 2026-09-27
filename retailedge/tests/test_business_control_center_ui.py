@@ -101,7 +101,7 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn("Follow-up is tracking, not resolution", source)
 		self.assertIn("authoritative ERPNext record/report", source)
-		self.assertIn("separate RetailEdge Action Follow Up record", source)
+		self.assertIn("separate Action Follow Up record", source)
 
 
 if __name__ == "__main__":

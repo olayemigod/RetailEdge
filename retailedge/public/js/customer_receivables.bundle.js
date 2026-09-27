@@ -67,7 +67,8 @@ function mountCustomerReceivablesPage(target) {
 	if (!target) throw new Error("Customer Receivables mount target is required.");
 	registerCustomerReceivablesProvider(window);
 	const app = edgeUI.createEdgeApp(CustomerReceivablesReport);
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

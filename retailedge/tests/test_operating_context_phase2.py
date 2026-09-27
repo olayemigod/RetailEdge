@@ -45,6 +45,32 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_selected_branch_is_persisted_in_the_authenticated_frappe_session(self):
+		source = self.read("operating_context.py")
+		for contract in (
+			'OPERATING_CONTEXT_SESSION_KEY = "retailedge_operating_context"',
+			"def _read_session_context(",
+			"def _write_session_context(",
+			"def _clear_session_context(",
+			'getattr(frappe.session, "data", None)',
+			"data[OPERATING_CONTEXT_SESSION_KEY] = payload",
+			"session_obj.update(force=True)",
+			"persisted = _read_session_context()",
+			"cached = persisted or _read_cached_context(user=user)",
+		):
+			self.assertIn(contract, source)
+
+		switch_start = source.index("def switch_operating_context(")
+		switch_end = source.index("\n\n@frappe.whitelist()\ndef clear_operating_context", switch_start)
+		switch_source = source[switch_start:switch_end]
+		self.assertLess(switch_source.index("_write_session_context(context)"), switch_source.index("_write_cached_context(context"))
+
+		clear_start = source.index("def clear_operating_context(")
+		clear_end = source.index("\n\ndef get_effective_operating_context", clear_start)
+		clear_source = source[clear_start:clear_end]
+		self.assertIn("_clear_session_context()", clear_source)
+		self.assertIn("_clear_cached_context(user=user)", clear_source)
+
 	def test_primary_branch_assignment_can_anchor_global_initial_context_without_restricting_scope(self):
 		source = self.read("operating_context.py")
 		fallback_start = source.index("def _resolve_fallback_context(")
@@ -197,12 +223,36 @@ class TestOperatingContextPhase2(unittest.TestCase):
 			'"label": "Operating Context"',
 			'"target": "operating-context"',
 			"_can_open_operating_context_page",
-			'frappe.has_permission("Page", "read", doc=target)',
+			'frappe.get_doc("Page", target).is_permitted()',
 			'"company": operating.get("company")',
 			'"branch": operating.get("branch")',
 			'feature_flags["operating_branch_context"] = "phase2_active"',
 		):
 			self.assertIn(contract, source)
+
+	def test_global_shell_branch_switcher_tracks_authoritative_business_hub_context(self):
+		shell = self.read("public/js/retailedge_shell_context.js")
+		hub = self.read("public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue")
+
+		for contract in (
+			'host.setAttribute("aria-label", "Working branch")',
+			"current.branch_options",
+			"current.active_branch",
+			"current.can_switch_branch",
+			"retailedgeSyncShellIdentity",
+			"switch_operating_context",
+			"userErrorMessage",
+		):
+			self.assertIn(contract, shell)
+
+		for contract in (
+			'window.retailedgeSyncShellIdentity({',
+			'active_company: this.context.company || ""',
+			'active_branch: this.context.branch || ""',
+			"branch_options: Array.isArray(this.context.branch_options)",
+			"can_switch_branch: Boolean(this.context.can_switch_branch)",
+		):
+			self.assertIn(contract, hub)
 
 	def test_operating_context_page_is_edgesuite_and_preserves_switch_contract(self):
 		loader = self.read("retailedge/page/operating_context/operating_context.js")

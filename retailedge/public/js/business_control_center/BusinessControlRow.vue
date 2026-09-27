@@ -37,7 +37,7 @@ export default {
 	computed: {
 		followUp() { return this.item.follow_up || { status: "Open", effective_status: "Open" }; },
 		followUpStatus() { return this.followUp.effective_status || this.followUp.status || "Open"; },
-		workflowTitle() { if (!this.canOpen) return "Advanced Native Desk access is required for this workflow"; return this.item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open RetailEdge workflow"; },
+		workflowTitle() { if (!this.canOpen) return "Advanced Native Desk access is required for this workflow"; return this.item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open guided workflow"; },
 	},
 	methods: {
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },

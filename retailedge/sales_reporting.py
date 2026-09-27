@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 	resolve_branch_from_warehouse,
 )
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.stock_movement_filters import branch_query, warehouse_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -57,6 +58,7 @@ def _report_context_defaults() -> dict[str, Any]:
 @frappe.whitelist()
 def get_sales_reporting_context() -> dict[str, Any]:
 	"""Return compact defaults shared by RetailEdge sales reporting pages."""
+	require_report_view_access("sales-invoice-register")
 	defaults = _report_context_defaults()
 	user = frappe.session.user
 	company = defaults.get("company")
@@ -86,6 +88,7 @@ def search_sales_reporting_options(
 	to_date: str = "",
 ) -> list[dict[str, str]]:
 	"""Permission-aware, bounded Link searches for Sales reporting pages."""
+	require_report_view_access("sales-invoice-register")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
@@ -266,6 +269,74 @@ def _search_salespeople(txt: str, invoice_filters: dict[str, Any]) -> list[dict[
 	return [{"value": row.name, "label": row.name} for row in salespeople]
 
 
+def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return compact permission-aware sales aggregates for dashboard visualisation."""
+	filters = _coerce_filters(filters)
+	_validate_filters(filters)
+	_assert_report_access(filters)
+	branch_field, branch_condition = _invoice_branch_scope(filters)
+	query_filters: dict[str, Any] = {
+		"docstatus": 1,
+		"company": filters.company,
+		"posting_date": ["between", [filters.from_date, filters.to_date]],
+	}
+	if branch_field and branch_condition is not None:
+		query_filters[branch_field] = branch_condition
+
+	trend_rows = frappe.get_list(
+		"Sales Invoice",
+		filters=query_filters,
+		fields=[
+			"posting_date",
+			"is_return",
+			{"SUM": "base_grand_total", "as": "grand_total"},
+			{"COUNT": "name", "as": "transactions"},
+		],
+		group_by="posting_date, is_return",
+		order_by="posting_date asc",
+		limit_page_length=800,
+	)
+	trend = [
+		{
+			"posting_date": row.posting_date,
+			"net_sales": -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total),
+			"transactions": cint(row.transactions),
+		}
+		for row in trend_rows
+	]
+
+	branch_mix: list[dict[str, Any]] = []
+	if not filters.get("branch") and branch_field:
+		mix_rows = frappe.get_list(
+			"Sales Invoice",
+			filters=query_filters,
+			fields=[
+				branch_field,
+				"is_return",
+				{"SUM": "base_grand_total", "as": "grand_total"},
+			],
+			group_by=f"{branch_field}, is_return",
+			order_by=f"{branch_field} asc",
+			limit_page_length=500,
+		)
+		aggregated: dict[str, float] = defaultdict(float)
+		for row in mix_rows:
+			label = str(row.get(branch_field) or _("Unattributed")).strip() or _("Unattributed")
+			value = -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total)
+			aggregated[label] += value
+		branch_mix = [
+			{"branch": label, "net_sales": value}
+			for label, value in sorted(aggregated.items(), key=lambda item: (-item[1], item[0]))
+		]
+
+	return {
+		"trend": trend,
+		"branch_mix": branch_mix,
+		"branch_mix_supported": bool(branch_field),
+		"company_currency": _company_currency(filters.company),
+	}
+
+
 @frappe.whitelist()
 def get_sales_by_item(
 	filters: dict[str, Any] | str | None = None,
@@ -330,6 +401,7 @@ def _build_sales_by_item_dataset(filters: frappe._dict) -> dict[str, Any]:
 				"item_code": item_code,
 				"item_name": row.item_name or item_code,
 				"item_group": row.item_group or "",
+				"brand": row.brand or "",
 				"stock_uom": row.stock_uom or "",
 				"sold_qty": 0.0,
 				"returned_qty": 0.0,
@@ -545,6 +617,7 @@ def _get_invoice_items(invoice_names: list[str], filters: frappe._dict) -> list[
 			"item_code",
 			"item_name",
 			"item_group",
+			"brand",
 			"stock_uom",
 			"qty",
 			"base_net_amount",
@@ -696,6 +769,7 @@ def _sales_invoice_branch_field() -> str | None:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
+	require_report_view_access("sales-invoice-register")
 	if not frappe.has_permission("Sales Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Sales Invoices."), frappe.PermissionError)
 	_assert_named_read("Company", filters.company)

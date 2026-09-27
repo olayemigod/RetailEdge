@@ -54,6 +54,20 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		self.assertNotIn('label="Warehouse"', component)
 		self.assertNotIn(">Warehouse<", component)
 
+	def test_professional_selling_rate_refresh_does_not_depend_on_mutated_child_rows(self):
+		for relative in (
+			"public/js/professional_selling/ProfessionalQuotationDialog.vue",
+			"public/js/professional_selling/ProfessionalSalesOrderDialog.vue",
+			"public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue",
+		):
+			with self.subTest(relative=relative):
+				component = self.read(relative)
+				self.assertIn("pricingSignatures", component)
+				self.assertIn("pricingSignature(row)", component)
+				self.assertIn("this.pricingSignatures[index] !== signature", component)
+				self.assertIn("this.pricingSignatures[index] = this.pricingSignature", component)
+				self.assertIn("refreshAllItemPricing", component)
+
 	def test_quotation_editor_is_draft_only_with_native_fallback(self):
 		component = self.read("public/js/professional_selling/ProfessionalQuotationDialog.vue")
 		workspace = self.read("public/js/professional_selling/ProfessionalSelling.vue")

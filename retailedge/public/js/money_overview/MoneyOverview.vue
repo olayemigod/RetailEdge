@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Money Overview could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -41,7 +41,7 @@
 			</template>
 
 			<EdgeDashboardGrid minColumnWidth="20rem">
-				<EdgeDashboardSection v-if="attention.length" title="Attention Required" description="Working-capital exceptions from the existing RetailEdge receivable and payable reports." span="2">
+				<EdgeDashboardSection v-if="attention.length" title="Attention Required" description="Working-capital exceptions from the existing receivable and payable reports." span="2">
 					<div class="money-attention-list">
 						<button v-for="item in attention" :key="`${item.section}-${item.metric}`" type="button" class="money-attention-item" @click="openRoute(item.route)">
 							<span><strong>{{ item.label }}</strong><small>{{ item.metric }}</small></span>
@@ -123,7 +123,7 @@ export default {
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); }, openSection(section) { this.openRoute(section?.route); },
-		sectionDescription() { return "Summary from the existing RetailEdge source report."; },
+		sectionDescription() { return "Summary from the existing source report."; },
 		formatCard(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},
 };

@@ -8,6 +8,7 @@ const USERS = {
 	cashier: "browser-cashier@example.com",
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
+	purchasing: "browser-purchasing@example.com",
 };
 
 async function login(context, user) {
@@ -80,6 +81,101 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
 		await openProductPage(page, "action-center", "Action Centre", "Review & Approvals");
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+		const search = page.getByRole("searchbox", { name: "Find a report" });
+		await expect(search).toBeVisible();
+		await search.fill("cash");
+		const catalogue = page.locator(".reports-centre");
+		await expect(catalogue.getByText("Cash Movement", { exact: true }).first()).toBeVisible();
+		await expect(catalogue.getByText("Cash Commitments", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.cashier);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+		const catalogue = page.locator(".reports-centre");
+		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge manager reaches Payment & Settlement Analysis from governed reporting", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "payment-settlement-analysis", "Payment & Settlement Analysis", "Reports");
+		await expect(page.getByText("Payment Methods", { exact: true }).first()).toBeVisible();
+		const analysisView = page.getByText("Analysis View", { exact: true }).first().locator("..");
+		await analysisView.getByText("Payment Methods", { exact: true }).click();
+		await expect(page.getByText("Customer Receipts", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("Accounts User reaches Purchase Analysis with governed presets", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.accounts);
+	try {
+		await openProductPage(page, "purchase-analysis", "Purchase Analysis", "Reports");
+		await expect(page.getByText("Purchase Trend", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("Purchase User reaches Supplier Performance with evidence-backed measures", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.purchasing);
+	try {
+		await openProductPage(page, "supplier-performance", "Supplier Performance", "Reports");
+		await expect(page.getByText("Current Outstanding", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Payables Basis", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText(/Current outstanding ·/).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("Accounts User reaches Expense Analysis with governed presets", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.accounts);
+	try {
+		await openProductPage(page, "expense-analysis", "Expense Analysis", "Reports");
+		await expect(page.getByText("Expense Trend", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.cashier);
+	try {
+		await page.goto(`${BASE_URL}/app/payment-settlement-analysis`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		const titleVisible = await page
+			.getByRole("heading", { name: "Payment & Settlement Analysis", exact: true })
+			.first()
+			.isVisible()
+			.catch(() => false);
+		expect(titleVisible).toBeFalsy();
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
 	} finally {
 		await context.close().catch(() => {});
 	}

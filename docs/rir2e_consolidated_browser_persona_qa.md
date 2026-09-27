@@ -1,5 +1,23 @@
 # RetailEdge MVP RC3 — Consolidated exact-head browser/persona QA
 
+## Current PR #58 authority — accepted 2026-09-22
+
+This section supersedes the historical PR #56 authority/status record retained below.
+
+- **Authoritative PR:** #58
+- **PR base:** `version-16`
+- **Frozen exact head:** `85c1834aedf5a934458a04a706cdc4d10ea0f02f`
+- **Stage:** formal RC3 acceptance after Business Hub → reporting audit freeze
+- **Execution status:** **COMPLETE / PASS**
+- **Browser workflow:** RetailEdge Browser Persona Smoke run **#981**
+- **Result:** **31/31 PASS**
+- **Companion gates on the same head:** Theme ✅ Linters/Semgrep ✅ CI ✅ EdgeSuite compatibility ✅ Upgrade Validation ✅
+- **Release status:** RC3 accepted; final 1.0.0 promotion/tag decision remains pending
+
+The accepted RC3 head includes blocker-only corrections discovered during the Business Hub/reporting audit and browser validation. Any code change after this head invalidates this exact-head acceptance and requires the governed gate set to be rerun.
+
+## Historical PR #56 runbook and evidence
+
 ## Authority and status
 
 - **Authoritative PR:** #56

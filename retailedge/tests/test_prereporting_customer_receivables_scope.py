@@ -181,6 +181,79 @@ class TestPrereportingCustomerReceivablesScope(unittest.TestCase):
 			with self.assertRaises(RuntimeError):
 				customer_receivables._invoice_branch_scope(frappe._dict(company="Scope Co", branch=""))
 
+
+	def test_controlled_sales_user_read_requires_active_branch_scope(self):
+		with (
+			patch.object(customer_receivables.frappe, "get_roles", return_value=["Sales User"]),
+			patch.object(
+				customer_receivables,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+			),
+			patch.object(customer_receivables, "_sales_invoice_branch_field", return_value="retailedge_branch"),
+		):
+			customer_receivables._assert_controlled_sales_invoice_scope(
+				frappe._dict(company="Scope Co", branch="")
+			)
+
+	def test_controlled_sales_user_read_fails_closed_without_branch_authority(self):
+		with (
+			patch.object(customer_receivables.frappe, "get_roles", return_value=["Sales User"]),
+			patch.object(
+				customer_receivables,
+				"get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": [], "source": "unrestricted_legacy"},
+			),
+			patch.object(customer_receivables.frappe, "throw", side_effect=frappe.PermissionError("denied")),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				customer_receivables._assert_controlled_sales_invoice_scope(
+					frappe._dict(company="Scope Co", branch="")
+				)
+
+	def test_controlled_manager_read_can_be_company_wide_without_raw_sales_invoice_role(self):
+		with (
+			patch.object(customer_receivables.frappe, "get_roles", return_value=["RetailEdgeManager"]),
+			patch.object(
+				customer_receivables,
+				"get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": [], "source": "global"},
+			),
+		):
+			customer_receivables._assert_controlled_sales_invoice_scope(
+				frappe._dict(company="Scope Co", branch="")
+			)
+
+	def test_controlled_sales_invoice_query_uses_bounded_server_query_only_without_native_read(self):
+		with (
+			patch.object(customer_receivables, "_has_native_sales_invoice_read", return_value=False),
+			patch.object(customer_receivables, "_assert_controlled_sales_invoice_query_scope") as assert_scope,
+			patch.object(customer_receivables.frappe, "get_all", return_value=[]) as get_all,
+			patch.object(customer_receivables.frappe, "get_list") as get_list,
+		):
+			customer_receivables._sales_invoice_rows(
+				filters={"company": "Scope Co", "retailedge_branch": "Branch A"},
+				fields=["name", "outstanding_amount"],
+				limit_page_length=10,
+			)
+		assert_scope.assert_called_once_with({"company": "Scope Co", "retailedge_branch": "Branch A"})
+		get_all.assert_called_once()
+		get_list.assert_not_called()
+
+	def test_controlled_query_rejects_company_only_filter_for_restricted_reader(self):
+		with (
+			patch.object(customer_receivables.frappe, "get_roles", return_value=["Sales User"]),
+			patch.object(
+				customer_receivables,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+			),
+			patch.object(customer_receivables, "_sales_invoice_branch_field", return_value="retailedge_branch"),
+			patch.object(customer_receivables.frappe, "throw", side_effect=frappe.PermissionError("denied")),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				customer_receivables._assert_controlled_sales_invoice_query_scope({"company": "Scope Co"})
+
 	def test_branch_options_use_hardened_operational_query(self):
 		source = inspect.getsource(customer_receivables.search_customer_receivables_options)
 		self.assertIn("branch_query", source)

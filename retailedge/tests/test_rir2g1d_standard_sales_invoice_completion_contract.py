@@ -184,11 +184,63 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Print",
+		"PDF",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
+		'emitNextAction(action)',
 	):
 		assert contract in source
 	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
 		assert forbidden not in source
+
+
+def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"def update_standard_sales_invoice_dates(",
+		"expected_modified",
+		'frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)',
+		"getdate(due_text) if due_text else None",
+		"due_value < posting_value",
+		"Due Date cannot be before Posting Date.",
+		'doc.set("posting_date", posting_value)',
+		'doc.set("due_date", due_value)',
+		"def _sync_manual_due_date_with_payment_schedule",
+		'len(schedule) == 1 and not _clean(doc.get("payment_terms_template"))',
+		"schedule[0].due_date = due_value",
+		"Due Date is controlled by this invoice's Payment Terms schedule.",
+		"def _assert_saved_invoice_dates",
+		"doc.save()",
+		"doc.reload()",
+	):
+		assert contract in service
+	for contract in (
+		"update_standard_sales_invoice_draft",
+		'Save Draft Changes',
+		'<EdgeInput',
+		'id="invoice-posting-date"',
+		'id="invoice-due-date"',
+		'id="invoice-po-number"',
+		'id="invoice-remarks"',
+		'type="date"',
+		':min="draftPostingDate || undefined"',
+		"draftValid()",
+		"draftItems",
+		'expected_modified: this.preview.modified',
+		'}, "POST");',
+	):
+		assert contract in dialog
+	assert '<input id="invoice-posting-date"' not in dialog
+	assert '<input id="invoice-due-date"' not in dialog
+
+
+def test_tabbed_sales_invoice_exposes_output_and_draft_edit_paths():
+	source = _read(SELLING)
+	assert "window.retailedgeDocumentOutputTarget" in source
+	assert 'frappe.set_route("document-output-sharing")' in source
+	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
 
 
 def test_professional_selling_opens_invoice_completion_except_returns():
@@ -197,8 +249,108 @@ def test_professional_selling_opens_invoice_completion_except_returns():
 	assert "handleSalesInvoiceSaved(result)" in source
 	assert "!result?.is_return" in source
 	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name })' in source
-	assert "canReviewSalesInvoiceCompletion(row)" in source
-	assert 'this.recentDocument?.key === "sales-invoice"' in source
+	assert ':showNextActions="true"' in source
+
+
+
+def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_items():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	helper = _read(ROOT / "professional_draft_items.py")
+	for contract in (
+		"def update_standard_sales_invoice_draft(",
+		"update_draft_items(",
+		'"editable_items": editable_items(doc)',
+		"doc.save()",
+	):
+		assert contract in service
+	for forbidden in (
+		'doc.set("company"',
+		'doc.set("customer"',
+		'doc.set("branch"',
+	):
+		assert forbidden not in service[
+			service.index("def update_standard_sales_invoice_draft("):
+			service.index("def update_standard_sales_invoice_dates(")
+		]
+	for contract in (
+		'doc.append("items"',
+		"Existing item identity cannot be replaced here.",
+		"Source-linked item",
+		"resolve_sales_item_pricing",
+		'pricing.get("source") == "pos_profile"',
+		'not pricing.get("allow_rate_change", True)',
+		"_validate_warehouse_branch",
+	):
+		assert contract in helper
+	for contract in (
+		"Edit draft before completion",
+		"Customer PO / Reference",
+		"Selling Price List",
+		"addDraftItem",
+		"removeDraftItem",
+		"refreshDraftItemPricing",
+		"Source-linked items stay attached",
+		"busy || !canOverrideRate",
+		"ERPNext recalculates taxes, totals",
+	):
+		assert contract in dialog
+	assert "Additional Items" not in dialog
+	assert "EdgeChildTable" not in dialog
+	assert "ERPNext posting authority" not in dialog
+
+
+def test_edit_preview_exposes_price_list_and_default_stock_context():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"resolve_price_list_context",
+		'"selling_price_list": selling_price_list',
+		'"pricing": {',
+		'"default_warehouse": default_warehouse',
+	):
+		assert contract in service
+	for contract in (
+		"Selling Price List",
+		"get_simple_sales_invoice_item_pricing",
+		"default_warehouse",
+	):
+		assert contract in dialog
+
+
+def test_draft_invoice_can_switch_update_stock_before_submission():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	helper = _read(ROOT / "professional_draft_items.py")
+	for contract in (
+		'"can_edit_update_stock": bool(',
+		'doc.set("update_stock", cint(values.get("update_stock") or 0))',
+	):
+		assert contract in service
+	for contract in (
+		"draftUpdateStock",
+		">Update Stock</strong>",
+		"update_stock: this.draftUpdateStock ? 1 : 0",
+		"EdgeLinkField",
+		"searchWarehouse",
+	):
+		assert contract in dialog
+	assert "resolve_branch_warehouse_selection" in helper
+
+
+def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
+	dialog = _read(DIALOG)
+	for contract in (
+		">Print</button>",
+		">PDF</button>",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
+		"Print & Send",
+		'this.$emit("next-action"',
+		"completedResult",
+	):
+		assert contract in dialog
+	assert "Advanced: Open in ERPNext" not in dialog
 
 
 def test_business_hub_simple_invoice_opens_same_completion_review():

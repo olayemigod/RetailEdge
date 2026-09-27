@@ -188,6 +188,20 @@ def search_professional_purchase_order_options(
 				link_fieldname="item_code",
 			)
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="buying",
+			company=company,
+			branch=branch,
+			party=supplier,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_search_filters(company=company, branch=branch, user=frappe.session.user)
 		if filters is None:
@@ -245,6 +259,7 @@ def get_professional_purchase_order_item_pricing(
 		posting_date=values.get("transaction_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
 		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
@@ -273,6 +288,7 @@ def create_professional_purchase_order_draft(values: dict | str | None = None) -
 		branch=branch,
 		party=supplier,
 		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc(PURCHASE_ORDER_DOCTYPE)
@@ -300,6 +316,7 @@ def create_professional_purchase_order_draft(values: dict | str | None = None) -
 			posting_date=str(transaction_date),
 			qty=item["qty"],
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		manual_rate = item.get("rate")
 		resolved_rate = resolved.get("rate")

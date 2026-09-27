@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from retailedge.liquidity_control import _build_liquidity_control
 
@@ -9,7 +10,8 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class RetailEdgeLiquidityControlTests(unittest.TestCase):
-	def test_liquidity_distinguishes_balance_due_items_and_period_flow(self):
+	@patch("retailedge.liquidity_control.nowdate", return_value="2026-08-22")
+	def test_liquidity_distinguishes_balance_due_items_and_period_flow(self, _nowdate):
 		position = {
 			"current_position": [
 				{"label": "Cash & Bank Balance", "value": 5000, "available": True},

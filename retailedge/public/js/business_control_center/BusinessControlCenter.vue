@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Business Control Centre could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -108,7 +108,7 @@
 				<EdgeDashboardSection title="Control rules" description="Management follow-up never changes the accounting or operational truth." span="2">
 					<div class="control-note">
 						<strong>Follow-up is tracking, not resolution.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze update only the separate RetailEdge Action Follow Up record. Resolve the underlying condition in its owning RetailEdge workflow or authoritative ERPNext record/report. Authorised Advanced Native Desk users can open retained ERPNext/Frappe drill-through in a new tab.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the separate Action Follow Up record. Resolve the underlying condition in its owning workflow or authoritative ERPNext record/report. Authorised advanced users can open retained ERPNext/Frappe drill-through in a new tab.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -132,7 +132,7 @@ const FILE_SCOPE_KEY = "business-control-center";
 const FILE_CAPABILITY_KEY = "owner-dashboard";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 
 export default {
 	name: "RetailEdgeBusinessControlCenter",
@@ -295,7 +295,7 @@ export default {
 				await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values });
 				await this.fetchData();
 			} catch (error) {
-				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "RetailEdge could not update this follow-up record."), indicator: "red" });
+				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "This follow-up record could not be updated."), indicator: "red" });
 			} finally { this.mutatingFingerprint = ""; }
 		},
 		handleFollowUp(item, action) {

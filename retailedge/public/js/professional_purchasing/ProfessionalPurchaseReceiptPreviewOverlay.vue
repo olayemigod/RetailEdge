@@ -20,7 +20,7 @@
 
 			<div v-if="preview.blockers?.length" class="receipt-preview__warning" role="alert">
 				<strong>Advanced handling required</strong>
-				<p>This receipt contains stock controls that RetailEdge will not simplify or bypass.</p>
+				<p>This receipt contains stock controls that this workflow will not simplify or bypass.</p>
 				<ul><li v-for="(blocker, index) in preview.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ blocker.label }}</li></ul>
 			</div>
 			<div v-else class="receipt-preview__ready">

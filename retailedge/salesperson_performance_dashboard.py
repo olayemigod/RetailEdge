@@ -7,6 +7,7 @@ from frappe.utils import cstr, getdate
 from retailedge.branch_context import has_field
 
 from retailedge.branch_performance import assert_can_access_branch_performance
+from retailedge.operating_context import get_allowed_operating_branches
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.reporting.date_ranges import get_preset_dates
 from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS
@@ -197,18 +198,20 @@ def _search_doctype(
 
 
 def _search_branches(like: str, company: str, scope: dict | None = None) -> list[dict]:
-	scope = scope or resolve_salesperson_performance_read_scope(
+	resolve_salesperson_performance_read_scope(
 		{"company": company}, user=frappe.session.user
 	)
-	allowed = list(scope.get("_allowed_branches") or [])
-	if scope.get("_branch_scope_restricted") and not allowed:
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if not allowed:
 		return []
-	filters: list[list] = [["Branch", "name", "like", like]]
-	if scope.get("_branch_scope_restricted"):
-		filters.append(["Branch", "name", "in", allowed])
-	if frappe.get_meta("Branch").has_field("company"):
-		filters.append(["Branch", "company", "=", company])
-	return _search_doctype("Branch", like.strip("%"), filters=filters)
+	return _search_doctype(
+		"Branch",
+		like.strip("%"),
+		filters=[
+			["Branch", "name", "like", like],
+			["Branch", "name", "in", allowed],
+		],
+	)
 
 
 def _salesperson_option_invoice_filters(

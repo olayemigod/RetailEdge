@@ -81,11 +81,11 @@
 	frappe.pages[PAGE_NAME].on_page_load = function onPageLoad(wrapper) {
 		const edge = runtime();
 		if (!edge?.createEdgeApp || !edge?.Vue) {
-			global.frappe.throw(t("EdgeSuite UI runtime is required for Banking Setup & Readiness."));
+			global.frappe.throw(t("Required interface components are unavailable for Banking Setup & Readiness."));
 		}
 		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeDropdown", "EdgeStatCard", "EdgeStatusBadge", "EdgeLoadingState", "EdgeEmptyState", "EdgeErrorState"];
 		const missing = required.filter((name) => !edge.getComponent(name));
-		if (missing.length) global.frappe.throw(t("EdgeSuite UI is missing required readiness components: {0}", [missing.join(", ")]));
+		if (missing.length) global.frappe.throw(t("Required readiness components are unavailable. Refresh the page or contact your administrator."));
 
 		const page = global.frappe.ui.make_app_page({
 			parent: wrapper,
@@ -242,7 +242,7 @@
 				}, {
 					default: () => h(EdgePageLayout, { class: "retailedge-banking-readiness-shell" }, {
 						header: () => h(EdgePageHeader, {
-							eyebrow: t("RetailEdge Banking"),
+							eyebrow: t("Banking"),
 							title: t("Banking Setup & Readiness"),
 							subtitle: t("Verify ERPNext Bank Account, GL, company and supporting payment context before matching or reconciliation."),
 						}, {

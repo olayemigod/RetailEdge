@@ -6,6 +6,10 @@ import frappe
 from frappe import _
 
 from retailedge.operating_context import get_operating_context
+from retailedge.purchase_analysis import (
+	get_purchase_analysis as _base_get_purchase_analysis,
+	get_purchase_analysis_export as _base_get_purchase_analysis_export,
+)
 from retailedge.purchase_reporting import (
 	get_purchase_register as _base_get_purchase_register,
 	get_purchase_register_export as _base_get_purchase_register_export,
@@ -19,6 +23,10 @@ from retailedge.replenishment_handoff import (
 	get_replenishment_material_request_handoff as _base_replenishment_material_request_handoff,
 )
 from retailedge.reporting_scope import constrain_report_filters, get_report_branch_scope, validate_report_scope
+from retailedge.sales_analysis import (
+	get_sales_analysis as _base_get_sales_analysis,
+	get_sales_analysis_export as _base_get_sales_analysis_export,
+)
 from retailedge.sales_reporting import (
 	get_sales_by_item as _base_get_sales_by_item,
 	get_sales_by_item_export as _base_get_sales_by_item_export,
@@ -32,6 +40,10 @@ from retailedge.stock_position import (
 	get_stock_position_context as _base_stock_position_context,
 	get_stock_position_export as _base_get_stock_position_export,
 	search_stock_position_options as _base_search_stock_position_options,
+)
+from retailedge.supplier_performance import (
+	get_supplier_performance as _base_get_supplier_performance,
+	get_supplier_performance_export as _base_get_supplier_performance_export,
 )
 from retailedge.supplier_payables import get_supplier_payables_export as _base_current_supplier_payables_export
 
@@ -146,11 +158,37 @@ def search_sales_reporting_options(kind: str, txt: str = "", company: str = "", 
 
 
 @frappe.whitelist()
-def search_purchase_reporting_options(kind: str, txt: str = "", company: str = "", branch: str = "", item_group: str = ""):
+def search_purchase_reporting_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+	item_group: str = "",
+	supplier_group: str = "",
+	report_type: str = "purchase_register",
+	from_date: str = "",
+	to_date: str = "",
+	as_of_date: str = "",
+	invoice_kind: str = "All",
+	status: str = "",
+):
 	branch, assigned = _constrain_search_scope(kind, company, branch)
 	if str(kind or "").strip().lower() == "warehouse" and assigned and not branch:
 		return []
-	rows = _base_search_purchase_reporting_options(kind=kind, txt=txt, company=company, branch=branch, item_group=item_group)
+	rows = _base_search_purchase_reporting_options(
+		kind=kind,
+		txt=txt,
+		company=company,
+		branch=branch,
+		item_group=item_group,
+		supplier_group=supplier_group,
+		report_type=report_type,
+		from_date=from_date,
+		to_date=to_date,
+		as_of_date=as_of_date,
+		invoice_kind=invoice_kind,
+		status=status,
+	)
 	return _filter_branch_options(rows, assigned) if str(kind or "").strip().lower() == "branch" else rows
 
 
@@ -174,6 +212,21 @@ def get_sales_by_item_export(filters=None):
 
 
 @frappe.whitelist()
+def get_sales_analysis(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_sales_analysis(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_sales_analysis_export(filters=None):
+	return _base_get_sales_analysis_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
 def get_sales_invoice_register(filters=None, page=1, page_size=50):
 	return _base_get_sales_invoice_register(filters=_constrain_report_filters(filters), page=page, page_size=page_size)
 
@@ -181,6 +234,36 @@ def get_sales_invoice_register(filters=None, page=1, page_size=50):
 @frappe.whitelist()
 def get_sales_invoice_register_export(filters=None):
 	return _base_get_sales_invoice_register_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
+def get_purchase_analysis(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_purchase_analysis(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_purchase_analysis_export(filters=None):
+	return _base_get_purchase_analysis_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
+def get_supplier_performance(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_supplier_performance(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_supplier_performance_export(filters=None):
+	return _base_get_supplier_performance_export(filters=_constrain_report_filters(filters))
 
 
 @frappe.whitelist()

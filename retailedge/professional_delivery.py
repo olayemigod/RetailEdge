@@ -5,6 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_delivery_note as erpnext_make_delivery_note_from_invoice
 from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note as erpnext_make_delivery_note
 
 from retailedge.branch_context import resolve_branch_from_warehouse
@@ -22,25 +23,109 @@ def _source_branch(doc) -> str:
 
 
 def _validate_source_against_operating_context(source) -> tuple[str, str]:
+	source_label = str(getattr(source, "doctype", "") or "Selling Document").strip()
 	company = str(source.get("company") or "").strip()
 	if not company:
-		frappe.throw(_("The Sales Order has no Company."))
+		frappe.throw(_("The {0} has no Company.").format(source_label))
 	_assert_read("Company", company)
 
 	branch = _validate_stored_operational_branch(
 		company=company,
 		branch=_source_branch(source),
-		label=_("Submitted Sales Order"),
+		label=_("Submitted {0}").format(source_label),
 	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
 	operating_branch = str(operating.get("branch") or "").strip()
 	if operating_company and operating_company != company:
-		frappe.throw(_("The Sales Order belongs to another Company. Change Operating Context before creating its Delivery Note."))
+		frappe.throw(
+			_(
+				"The {0} belongs to another Company. Change Operating Context before creating its Delivery Note."
+			).format(source_label)
+		)
 	if operating_branch and branch and operating_branch != branch:
-		frappe.throw(_("The Sales Order Branch does not match the current Operating Branch."))
+		frappe.throw(_("{0} Branch does not match the current Operating Branch.").format(source_label))
 	return company, branch
+
+
+def _lock_sales_invoice(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Sales Invoice {0} no longer exists.").format(name))
+
+
+def _existing_delivery_for_invoice(sales_invoice: str):
+	"""Return the first Delivery Note ever created directly from this Sales Invoice.
+
+	Professional Selling treats direct Sales Invoice -> Delivery Note conversion as
+	one idempotent workflow. A second click must reopen the existing Delivery Note,
+	not create another one. If that Delivery Note was cancelled, normal ERPNext
+	Amend is the safe continuation path so document lineage remains intact.
+	"""
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT dn.name, dn.docstatus
+		FROM `tabDelivery Note` dn
+		INNER JOIN `tabDelivery Note Item` item ON item.parent = dn.name
+		WHERE item.against_sales_invoice = %s
+		ORDER BY dn.creation ASC
+		LIMIT 1
+		""",
+		(sales_invoice,),
+		as_dict=True,
+	)
+	if not rows:
+		return None
+
+	name = str(rows[0].name or "").strip()
+	if not name:
+		return None
+
+	doc = frappe.get_doc("Delivery Note", name)
+	if not frappe.has_permission("Delivery Note", "read", doc=doc):
+		frappe.throw(
+			_(
+				"A Delivery Note already exists for this Sales Invoice, but you do not have permission to open it."
+			),
+			frappe.PermissionError,
+		)
+	if int(doc.docstatus or 0) == 2:
+		frappe.throw(
+			_(
+				"Sales Invoice {0} already created Delivery Note {1}. That Delivery Note is cancelled; "
+				"open it and use Amend instead of creating another Delivery Note."
+			).format(sales_invoice, doc.name)
+		)
+	return doc
+
+
+def _delivery_response(
+	target,
+	*,
+	branch: str,
+	source_sales_invoice: str = "",
+	source_sales_order: str = "",
+	existing: bool = False,
+) -> dict[str, Any]:
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": target.docstatus,
+		"customer": target.customer,
+		"company": target.company,
+		"branch": target.get("branch") or target.get("retailedge_branch") or branch,
+		"shipping_rule": target.get("shipping_rule") or "",
+		"grand_total": target.grand_total,
+		"currency": target.currency,
+		"source_sales_invoice": source_sales_invoice,
+		"source_sales_order": source_sales_order,
+		"existing": existing,
+		"route": f"/app/delivery-note/{target.name}",
+	}
 
 
 def _validate_mapped_delivery_stock_context(target, *, company: str, source_branch: str) -> str:
@@ -68,7 +153,12 @@ def _validate_mapped_delivery_stock_context(target, *, company: str, source_bran
 			resolved_branches.add(warehouse_branch)
 
 	if len(resolved_branches) > 1:
-		frappe.throw(_("The mapped Delivery Note spans Stock Locations from multiple Branches. Use the native Delivery Note workflow to split the delivery safely."))
+		frappe.throw(
+			_(
+				"The mapped Delivery Note spans Stock Locations from multiple Branches. "
+				"Use the native Delivery Note workflow to split the delivery safely."
+			)
+		)
 	mapped_branch = next(iter(resolved_branches), "") or _source_branch(target) or source_branch
 	if operating_branch and mapped_branch and operating_branch != mapped_branch:
 		frappe.throw(_("The mapped Delivery Stock Location does not match the current Operating Branch."))
@@ -117,16 +207,64 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 	# Draft insertion only. No stock ledger entry is created until normal ERPNext
 	# submission by an authorised user.
 	target.insert()
-	return {
-		"doctype": target.doctype,
-		"name": target.name,
-		"docstatus": target.docstatus,
-		"customer": target.customer,
-		"company": target.company,
-		"branch": target.get("branch") or target.get("retailedge_branch") or mapped_branch,
-		"shipping_rule": target.get("shipping_rule") or "",
-		"grand_total": target.grand_total,
-		"currency": target.currency,
-		"source_sales_order": source.name,
-		"route": f"/app/delivery-note/{target.name}",
-	}
+	return _delivery_response(target, branch=mapped_branch, source_sales_order=source.name)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any]:
+	"""Create or reopen the single Delivery Note directly linked to a Sales Invoice.
+
+	ERPNext's native Sales Invoice mapper owns invoice-item linkage and remaining
+	delivery quantities. Professional Selling adds a source-level lock and an
+	idempotency check so repeated clicks cannot create duplicate direct Delivery
+	Notes from the same Sales Invoice.
+	"""
+	if not _permission("Delivery Note", "create"):
+		frappe.throw(_("You do not have permission to create Delivery Note."), frappe.PermissionError)
+
+	sales_invoice = str(sales_invoice or "").strip()
+	_assert_read("Sales Invoice", sales_invoice)
+	source = frappe.get_doc("Sales Invoice", sales_invoice)
+	if source.docstatus != 1:
+		frappe.throw(_("Submit the Sales Invoice before creating a Delivery Note from it."))
+	if source.get("is_return"):
+		frappe.throw(_("Return / Credit Note invoices cannot create a Delivery Note."))
+	if source.get("update_stock"):
+		frappe.throw(
+			_(
+				"This Sales Invoice already posted stock. Creating another Delivery Note would duplicate stock movement."
+			)
+		)
+
+	company, source_branch = _validate_source_against_operating_context(source)
+	_lock_sales_invoice(source.name)
+	existing = _existing_delivery_for_invoice(source.name)
+	if existing:
+		existing_branch = _source_branch(existing) or source_branch
+		return _delivery_response(
+			existing,
+			branch=existing_branch,
+			source_sales_invoice=source.name,
+			existing=True,
+		)
+
+	target = erpnext_make_delivery_note_from_invoice(source.name)
+	if not target or target.doctype != "Delivery Note":
+		frappe.throw(_("ERPNext could not prepare a Delivery Note from this Sales Invoice."))
+	if target.docstatus != 0:
+		frappe.throw(_("ERPNext returned a non-draft Delivery Note mapping; creation was stopped."))
+	if not target.get("items"):
+		frappe.throw(_("There are no remaining deliverable quantities on this Sales Invoice."))
+	if str(target.get("company") or "") != company:
+		frappe.throw(_("The mapped Delivery Note Company does not match the Sales Invoice."))
+
+	mapped_branch = _validate_mapped_delivery_stock_context(
+		target,
+		company=company,
+		source_branch=source_branch,
+	)
+	if target.get("shipping_rule"):
+		_validate_shipping_rule(target.shipping_rule, company=company)
+
+	target.insert()
+	return _delivery_response(target, branch=mapped_branch, source_sales_invoice=source.name)

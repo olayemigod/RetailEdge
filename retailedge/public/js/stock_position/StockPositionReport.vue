@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="stock-position-fallback">
 		<strong>Stock Position could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -111,7 +111,7 @@
 				<span v-if="scan.reorder_rows !== undefined">{{ scan.reorder_rows }} direct reorder rule{{ scan.reorder_rows === 1 ? "" : "s" }} scanned</span>
 				<span v-if="canUseNativeDesk && canCreateMaterialRequest">Select a Reorder Due status to open a prefilled native Material Request.</span>
 				<span v-if="handoffError" class="stock-position-handoff-error">{{ handoffError }}</span>
-				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
+				<span v-if="!showCosts">Cost values hidden by cost-visibility settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} export-row cap</span>
 			</template>
@@ -227,7 +227,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Stock Position",
-				filename: `RetailEdge Stock Position ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Stock Position ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -248,7 +248,7 @@ export default {
 			return [
 				{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 				{ label: "Warehouse Scope", value: this.scopeLabel },
-				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
+				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by cost-visibility settings" },
 			].concat(this.showCosts && this.companyCurrency ? [{ label: "Company Currency", value: this.companyCurrency }] : []);
 		},
 	},
@@ -393,7 +393,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite Stock Position provider is unavailable.";
+				this.error = "The Stock Position reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;
@@ -440,7 +440,7 @@ export default {
 				metadata: [
 					{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 					{ label: "Warehouse Scope", value: this.scopeLabel },
-					{ label: "Cost Visibility", value: Number(result.show_costs) ? "Included" : "Hidden by RetailEdge settings" },
+					{ label: "Cost Visibility", value: Number(result.show_costs) ? "Included" : "Hidden by cost-visibility settings" },
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),
 			};
 		},

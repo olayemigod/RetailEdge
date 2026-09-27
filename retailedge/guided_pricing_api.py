@@ -51,6 +51,7 @@ def get_sales_item_pricing_batch(
 			posting_date=values.get("posting_date") or nowdate(),
 			qty=row["qty"],
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		results.append({"index": row["index"], **pricing})
 
@@ -85,6 +86,7 @@ def get_purchase_item_pricing_batch(
 			posting_date=values.get("posting_date") or nowdate(),
 			qty=row["qty"],
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		results.append({"index": row["index"], **pricing})
 

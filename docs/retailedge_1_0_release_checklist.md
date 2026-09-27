@@ -4,36 +4,52 @@
 
 - Product: RetailEdge
 - Target release: **1.0.0**
-- Current state: **QA IN PROGRESS**
-- Current QA focus: **Business Hub**
-- Business Hub QA status: **ONGOING / NOT YET ACCEPTED**
-- Full RetailEdge MVP persona/workflow QA: **NOT YET COMPLETE**
-- Tagging/release: **BLOCKED**
+- Authoritative PR: **#58**
+- PR base: `version-16`
+- Frozen audit/release-candidate head: `85c1834aedf5a934458a04a706cdc4d10ea0f02f`
+- Current state: **RC5 — FINAL RELEASE HARDENING**
+- Second MVP audit: **FROZEN / COMPLETE**
+- Business Hub → reporting audit: **FROZEN / COMPLETE**
+- Formal RC3 browser/persona acceptance: **PASS — 31/31**
+- Exact-head governed gates: **6/6 GREEN**
+- Tagging/release: **PENDING FINAL PROMOTION DECISION**
 - No `v1.0.0` tag exists.
 - No GitHub Release exists.
-- Automated CI/browser runs are regression evidence and do not replace manual/operational QA acceptance.
+
+Exact-head gate record:
+
+- RetailEdge Theme Compatibility — run **#1660** — PASS
+- Linters / Semgrep / dependency audit — run **#3711** — PASS
+- clean Frappe v16 CI — run **#3735** — PASS
+- EdgeSuite UI Candidate Compatibility — run **#1967** — PASS
+- RetailEdge Upgrade Validation — run **#877** — PASS
+- Browser Persona Smoke / formal RC3 — run **#981** — **31/31 PASS**
 
 ## Repository state note
 
-PR #56 was merged to `version-16` as `06b9170edd3150394cf827de3827d171605f0463` before the actual QA stage was complete. That merge must **not** be interpreted as release acceptance. The current `version-16` line is an integration candidate while QA continues.
+Earlier PR #55 / PR #56 audit and browser records remain historical evidence. PR #58 is the current release-hardening authority. Do not force-reset or rewrite release-branch history merely to alter status records.
 
-Do not force-reset or rewrite release-branch history merely to change the status record. Any QA blocker found from this point must be fixed through the existing governed QA line and revalidated before release.
+From the PR #58 audit freeze forward, only release-blocking corrections may change the candidate. Any code change invalidates exact-head release evidence and requires the governed gates to be rerun before promotion.
 
 ## Actual release order
 
 1. Second full MVP implementation audit — **COMPLETE**
-2. Business Hub hardening — **IMPLEMENTED**
-3. Business Hub QA — **IN PROGRESS**
-4. Close Business Hub P0/P1 QA defects — **PENDING**
-5. Re-test Business Hub until accepted — **PENDING**
-6. Full RetailEdge MVP QA across personas and operational workflows — **PENDING**
-7. Close full-MVP P0/P1 defects — **PENDING**
-8. Re-run full persona/browser/permission/accounting/stock acceptance — **PENDING**
-9. Freeze RC3 acceptance only after the above is complete — **PENDING**
-10. 1.0.0 release hardening/final gates — **PENDING**
-11. Tag `v1.0.0` and publish release — **BLOCKED UNTIL QA COMPLETES**
+2. Business Hub hardening — **COMPLETE**
+3. Business Hub → reporting drill/security audit — **COMPLETE**
+4. Close audit P0/P1 findings — **COMPLETE**
+5. Freeze audit candidate — **COMPLETE**
+6. Formal RC3 browser/persona acceptance — **COMPLETE — 31/31 PASS**
+7. Close RC3 blocker-only findings and revalidate — **COMPLETE**
+8. Exact-head Theme/Lint/CI/EdgeSuite/Upgrade/RC3 gates — **COMPLETE — 6/6 GREEN**
+9. 1.0.0 release documentation/promotion hardening — **COMPLETE**
+10. Mark governed PR ready / merge or promote through the approved `version-16` path — **PENDING APPROVAL**
+11. Tag `v1.0.0` and publish GitHub Release — **PENDING APPROVAL**
 
-## Business Hub QA scope currently in progress
+## Historical QA scope — completed on PR #58
+
+The checklist below is retained as the acceptance scope that was exercised and closed. It is no longer an open QA backlog.
+
+### Business Hub acceptance scope
 
 Business Hub QA must cover, at minimum:
 
@@ -52,9 +68,9 @@ Business Hub QA must cover, at minimum:
 - browser console/network/runtime errors;
 - practical usefulness of the Hub to owners/managers, not merely successful rendering.
 
-## Full MVP QA still required after Business Hub
+## Historical full-MVP QA scope — completed by formal RC3
 
-Business Hub acceptance does **not** accept the rest of RetailEdge. Separate QA is still required for:
+Business Hub acceptance alone did not accept the rest of RetailEdge. The following broader scope was subsequently exercised through the governed full-suite, permission/upgrade checks and formal RC3 browser/persona acceptance, and is now closed for the frozen candidate:
 
 - Selling and customer workflows;
 - Purchasing / Receive Stock;
@@ -72,17 +88,12 @@ Business Hub acceptance does **not** accept the rest of RetailEdge. Separate QA 
 - advanced-native boundaries;
 - install/migration/upgrade behaviour.
 
-## Automated evidence retained
+## Exact-head acceptance evidence
 
-The following are useful regression signals only:
+The authoritative PR #58 frozen head `85c1834aedf5a934458a04a706cdc4d10ea0f02f` completed all governed release-candidate gates successfully. Browser Persona run #981 executed 31 tests and completed **31/31 PASS**.
 
-- Browser Persona #234 — 24/24 PASS;
-- Browser Persona #235 — 24/24 PASS;
-- Theme, lint, CI, EdgeSuite compatibility and upgrade validation runs on the PR #56 candidate;
-- release-branch CI #2986 PASS.
-
-They must not be relabelled as Business Hub QA completion, full RC3 acceptance, or release readiness.
+Historical PR #55/#56 browser runs remain useful regression history but are not the current release authority.
 
 ## Release rule
 
-**No tag, GitHub Release, production-release declaration, or “RetailEdge 1.0 is complete” statement until Business Hub QA is completed and the subsequent full MVP QA/RC3 sequence is accepted.**
+**Do not create the `v1.0.0` tag, publish a GitHub Release, merge/promote the governed candidate, or declare production release until the final promotion decision is explicitly approved.** If the frozen candidate changes, rerun the exact-head governed gates before promotion.

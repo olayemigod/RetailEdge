@@ -1,5 +1,7 @@
 const COMPANY_DEPENDENT_FIELDS = [
 	"default_pos_profile",
+	"default_selling_price_list",
+	"default_buying_price_list",
 	"default_warehouse",
 	"default_source_warehouse",
 	"default_target_warehouse",
@@ -95,6 +97,8 @@ function setBranchQuery(frm) {
 function setCompanyDependentQueries(frm) {
 	setBranchQuery(frm);
 	frm.set_query("default_pos_profile", () => companyFilters(frm, { disabled: 0 }));
+	frm.set_query("default_selling_price_list", () => ({ filters: { enabled: 1, selling: 1 } }));
+	frm.set_query("default_buying_price_list", () => ({ filters: { enabled: 1, buying: 1 } }));
 
 	WAREHOUSE_FIELDS.forEach((fieldname) => {
 		frm.set_query(fieldname, () => companyFilters(frm, { is_group: 0, disabled: 0 }));

@@ -72,7 +72,7 @@
 
 		<article class="detail-panel detail-panel--wide">
 			<header class="detail-header">
-				<div><strong>Budget & Spend Governance</strong><small>Submitted ERPNext Budget plus RetailEdge expense actuals and burn-rate signals.</small></div>
+				<div><strong>Budget & Spend Governance</strong><small>Submitted ERPNext Budget plus posted expense actuals and burn-rate signals.</small></div>
 			</header>
 			<div v-if="budget?.available === false" class="detail-empty">{{ budget.reason || "Budget governance is unavailable for this scope." }}</div>
 			<template v-else>

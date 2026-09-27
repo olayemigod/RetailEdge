@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="basket-affinity-fallback">
 		<strong>Basket & Product Affinity could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -87,7 +87,7 @@ export default {
 	},
 	computed: {
 		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: this.canUseNativeDesk && ["item_a", "item_b"].includes(column.fieldname), sortable: false })); },
-		exportDataset() { return { title: "Basket & Product Affinity", filename: `RetailEdge Basket Affinity ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
+		exportDataset() { return { title: "Basket & Product Affinity", filename: `ProcessEdge Retail Basket Affinity ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Product Group Anchor", item_code: "Product Anchor", minimum_pair_count: "Minimum Times Together" }; return Object.entries(labels).map(([key, label]) => ({ label, value: this.filters[key] })).filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined); },
 		exportMetadata() { return [ { label: "Sales Source", value: this.metadata.sales_truth || "Submitted non-return ERPNext Sales Invoice" }, { label: "Pair Definition", value: this.metadata.pair_definition || "Distinct products on the same sale invoice" }, { label: "Returns", value: this.metadata.returns || "Return invoices do not create pairs" }, { label: "Interpretation", value: "Explainable association only; no recommendation claim" } ]; },
 	},

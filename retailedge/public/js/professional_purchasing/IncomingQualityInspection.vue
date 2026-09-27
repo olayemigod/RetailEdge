@@ -5,7 +5,7 @@
 				<div>
 					<span class="quality-kicker">Receiving quality control</span>
 					<h3>Incoming Quality Inspection</h3>
-					<p>Review the inspection readings required by ERPNext and submit standard incoming Quality Inspections without leaving RetailEdge.</p>
+					<p>Review the inspection readings required by ERPNext and submit standard incoming Quality Inspections without leaving this workspace.</p>
 				</div>
 				<button v-if="nativeFallbackEnabled && context.purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openReceipt">Open Purchase Receipt</button>
 			</div>
@@ -85,7 +85,7 @@
 
 				<div v-if="review.blockers && review.blockers.length" class="quality-blockers" role="alert">
 					<strong>Advanced handling required</strong>
-					<p>RetailEdge will not approximate this inspection.</p>
+					<p>This workflow will not approximate this inspection.</p>
 					<ul><li v-for="(blocker, index) in review.blockers" :key="`${blocker.key}-${index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : "" }}{{ blocker.label }}</li></ul>
 				</div>
 
@@ -301,7 +301,7 @@ export default {
 				}, "POST");
 				this.workflowInspections = Array.isArray(result?.inspections) ? result.inspections : [];
 				this.workflowSourceModified = result?.source_modified || "";
-				this.notice = `${result?.created_count || this.workflowInspections.length} Quality Inspection approval${(result?.created_count || this.workflowInspections.length) === 1 ? "" : "s"} ready in EdgeSuite.`;
+				this.notice = `${result?.created_count || this.workflowInspections.length} Quality Inspection approval${(result?.created_count || this.workflowInspections.length) === 1 ? "" : "s"} ready for review.`;
 				this.review = null;
 				this.readingValues = {};
 				this.selected = {};

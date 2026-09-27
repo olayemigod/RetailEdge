@@ -66,8 +66,8 @@ class TestPrereportingExpenseRegisterReadScope(unittest.TestCase):
 	def test_restricted_context_preserves_valid_candidate(self):
 		with patch.object(
 			register,
-			"get_operational_branch_scope",
-			return_value={"restricted": True, "allowed_branches": ["Branch A", "Branch B"]},
+			"get_allowed_operating_branches",
+			return_value=["Branch A", "Branch B"],
 		):
 			result = register._resolve_context_branch(
 				company="Scope Co", candidate="Branch B", user="reader@example.com"
@@ -83,44 +83,54 @@ class TestPrereportingExpenseRegisterReadScope(unittest.TestCase):
 			with self.subTest(allowed=allowed):
 				with patch.object(
 					register,
-					"get_operational_branch_scope",
-					return_value={"restricted": True, "allowed_branches": allowed},
+					"get_allowed_operating_branches",
+					return_value=allowed,
 				):
 					result = register._resolve_context_branch(
 						company="Scope Co", candidate="Stale Branch", user="reader@example.com"
 					)
 				self.assertEqual(result, expected)
 
-	def test_unrestricted_context_preserves_legacy_default_branch(self):
+	def test_context_preserves_valid_default_branch_from_central_authority(self):
 		with patch.object(
 			register,
-			"get_operational_branch_scope",
-			return_value={"restricted": False, "allowed_branches": []},
+			"get_allowed_operating_branches",
+			return_value=["Default Branch", "Branch B"],
 		):
 			result = register._resolve_context_branch(
 				company="Scope Co", candidate="Default Branch", user="reader@example.com"
 			)
 		self.assertEqual(result, "Default Branch")
 
-	def test_branch_search_uses_restricted_assignment_union(self):
+	def test_branch_search_uses_central_company_branch_authority(self):
 		with (
-			patch.object(register.frappe, "get_meta") as get_meta,
+			patch.object(
+				register,
+				"get_allowed_operating_branches",
+				return_value=["Branch A", "Branch B"],
+			) as allowed_branches,
 			patch.object(register.frappe, "get_list", return_value=[]) as get_list,
 		):
-			get_meta.return_value.has_field.return_value = True
 			register._search_branches(
 				txt="Branch",
 				company="Scope Co",
-				scope={"restricted": True, "allowed_branches": ["Branch A", "Branch B"]},
+				scope={"restricted": True, "allowed_branches": ["stale"]},
 			)
 
+		allowed_branches.assert_called_once_with(company="Scope Co", user=frappe.session.user)
 		self.assertEqual(
 			get_list.call_args.kwargs["filters"],
-			{"company": "Scope Co", "name": ["in", ["Branch A", "Branch B"]]},
+			[
+				["Branch", "name", "like", "%Branch%"],
+				["Branch", "name", "in", ["Branch A", "Branch B"]],
+			],
 		)
 
 	def test_restricted_zero_branch_search_fails_closed(self):
-		with patch.object(register.frappe, "get_list") as get_list:
+		with (
+			patch.object(register, "get_allowed_operating_branches", return_value=[]),
+			patch.object(register.frappe, "get_list") as get_list,
+		):
 			result = register._search_branches(
 				txt="",
 				company="Scope Co",
@@ -130,19 +140,25 @@ class TestPrereportingExpenseRegisterReadScope(unittest.TestCase):
 		self.assertEqual(result, [])
 		get_list.assert_not_called()
 
-	def test_unrestricted_branch_search_is_not_interpreted_as_zero_access(self):
+	def test_unrestricted_branch_search_still_uses_central_company_branch_authority(self):
 		with (
-			patch.object(register.frappe, "get_meta") as get_meta,
+			patch.object(
+				register,
+				"get_allowed_operating_branches",
+				return_value=["Branch A", "Branch B"],
+			),
 			patch.object(register.frappe, "get_list", return_value=[]) as get_list,
 		):
-			get_meta.return_value.has_field.return_value = False
 			register._search_branches(
 				txt="",
 				company="Scope Co",
 				scope={"restricted": False, "allowed_branches": []},
 			)
 
-		self.assertEqual(get_list.call_args.kwargs["filters"], {})
+		self.assertIn(
+			["Branch", "name", "in", ["Branch A", "Branch B"]],
+			get_list.call_args.kwargs["filters"],
+		)
 
 	def test_non_company_search_requires_company_before_master_read(self):
 		with (

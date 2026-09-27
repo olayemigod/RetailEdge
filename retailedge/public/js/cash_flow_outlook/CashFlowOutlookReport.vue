@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="outlook-fallback">
 		<strong>13-Week Cash Commitments could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -177,7 +177,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite 13-Week Cash Commitments provider is unavailable.";
+				this.error = "The 13-Week Cash Commitments reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;

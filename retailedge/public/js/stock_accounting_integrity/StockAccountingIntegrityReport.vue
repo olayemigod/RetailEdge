@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="integrity-fallback">
 		<strong>Stock & Accounting Integrity could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -184,7 +184,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Stock & Accounting Integrity",
-				filename: `RetailEdge Stock Accounting Integrity ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Stock Accounting Integrity ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -204,7 +204,7 @@ export default {
 			return [
 				{ label: "Source", value: "ERPNext Stock and Account Value Comparison" },
 				{ label: "Scope", value: "Company-wide accounting control" },
-				{ label: "Correction Mode", value: "Read-only in RetailEdge" },
+				{ label: "Correction Mode", value: "Read-only here" },
 			].concat(this.companyCurrency ? [{ label: "Company Currency", value: this.companyCurrency }] : []);
 		},
 	},
@@ -308,7 +308,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company || !this.filters.from_date || !this.filters.as_on_date) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite Stock & Accounting Integrity provider is unavailable.";
+				this.error = "The Stock & Accounting Integrity reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;
@@ -360,7 +360,7 @@ export default {
 				metadata: [
 					{ label: "Source", value: "ERPNext Stock and Account Value Comparison" },
 					{ label: "Scope", value: "Company-wide accounting control" },
-					{ label: "Correction Mode", value: "Read-only in RetailEdge" },
+					{ label: "Correction Mode", value: "Read-only here" },
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),
 			};
 		},

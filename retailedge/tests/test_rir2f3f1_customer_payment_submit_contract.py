@@ -51,7 +51,7 @@ def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex
 	assert "Pay or Internal Transfer" in source
 	assert "Multi-currency Payment Entries require Advanced ERPNext review" in source
 	assert "Payments allocated to multiple documents require Advanced ERPNext review" in source
-	assert "Only a single Sales Invoice allocation is supported" in source
+	assert "Only a single Sales Invoice or Sales Order allocation is supported by standard EdgeSuite submission" in source
 	assert "Return Sales Invoices require Advanced ERPNext review" in source
 	assert "Payments with deductions or exchange differences require Advanced ERPNext review" in source
 	assert "Separate party-account advances require Advanced ERPNext review" in source
@@ -110,3 +110,25 @@ def test_context_changes_clear_draft_review_and_submission_refreshes_authoritati
 	assert "await this.loadDraftPayments()" in page
 	assert "await this.loadSettlementInvoice(result.sales_invoice)" in page
 	assert "await this.loadAdvances()" in page
+
+
+def test_standard_customer_payment_accepts_one_sales_invoice_or_sales_order_reference():
+	source = _read(BACKEND)
+	for contract in (
+		'SALES_ORDER_DOCTYPE = "Sales Order"',
+		'reference_doctype not in {SALES_INVOICE_DOCTYPE, SALES_ORDER_DOCTYPE}',
+		"get_reference_details(",
+		'"sales_order": reference_name',
+		'"reference_doctype": reference_doctype',
+		'"reference_outstanding_amount": outstanding',
+		'"payment_kind": ("Invoice Receipt" if reference.get("sales_invoice") else "Sales Order Advance")',
+	):
+		assert contract in source
+
+	for forbidden in (
+		'frappe.db.set_value("Sales Order"',
+		'frappe.db.set_value("Sales Invoice"',
+		'frappe.new_doc("GL Entry")',
+		'frappe.new_doc("Payment Ledger Entry")',
+	):
+		assert forbidden not in source

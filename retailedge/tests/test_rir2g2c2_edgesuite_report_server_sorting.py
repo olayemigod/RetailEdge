@@ -10,14 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 BUNDLES = (
 	"cash_flow_outlook.bundle.js", "cash_movement.bundle.js", "cash_shift_verification.bundle.js",
 	"customer_receivables.bundle.js", "daily_sales_audit.bundle.js", "expense_register.bundle.js",
-	"expense_review.bundle.js", "purchase_reporting.bundle.js", "sales_reporting.bundle.js",
+	"expense_review.bundle.js", "payment_settlement_analysis.bundle.js", "purchase_reporting.bundle.js", "sales_reporting.bundle.js",
 	"stock_accounting_integrity.bundle.js", "stock_position.bundle.js",
 )
 VIEWS = (
 	"cash_flow_outlook/CashFlowOutlookReport.vue", "cash_movement/CashMovementReport.vue",
 	"cash_shift_verification/CashShiftVerificationReport.vue", "customer_receivables/CustomerReceivablesReport.vue",
 	"daily_sales_audit/DailySalesAuditReport.vue", "expense_register/ExpenseRegisterReport.vue",
-	"expense_review/ExpenseReviewReport.vue", "purchase_reporting/PurchaseReportingReport.vue",
+	"expense_review/ExpenseReviewReport.vue", "payment_settlement_analysis/PaymentSettlementAnalysis.vue", "purchase_reporting/PurchaseReportingReport.vue",
 	"sales_reporting/SalesReportingReport.vue", "stock_accounting_integrity/StockAccountingIntegrityReport.vue",
 	"stock_position/StockPositionReport.vue",
 )
@@ -25,7 +25,29 @@ VIEWS = (
 
 class TestRIR2G2C2EdgeReportServerSorting(TestCase):
 	def test_report_sort_registry_is_explicit(self):
-		self.assertEqual(len(REPORT_SORT_FIELDS), 13)
+		self.assertEqual(
+			set(REPORT_SORT_FIELDS),
+			{
+				"cash-flow-outlook",
+				"cash-movement",
+				"cash-shift-verification",
+				"customer-receivables",
+				"daily-sales-audit",
+				"expense-analysis",
+				"expense-register",
+				"expense-review",
+				"payment-settlement-analysis",
+				"purchase-analysis",
+				"purchase-register",
+				"supplier-performance",
+				"supplier-payables",
+				"sales-analysis",
+				"sales-by-item",
+				"sales-invoice-register",
+				"stock-accounting-integrity",
+				"stock-position",
+			},
+		)
 
 	def test_invalid_sort_is_rejected(self):
 		self.assertIsNone(normalise_report_sort({"field": "drop table", "direction": "asc"}, "stock-position"))

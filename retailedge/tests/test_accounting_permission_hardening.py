@@ -49,7 +49,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		source = self.read("guided_payment.py")
 		self.assertIn("BRANCH_FIELD_CANDIDATES", source)
 		self.assertIn("get_first_existing_field", source)
-		self.assertIn('branch_field = get_first_existing_field(config["reference_doctype"], BRANCH_FIELD_CANDIDATES)', source)
+		self.assertIn('branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)', source)
 		self.assertIn("filters[branch_field] = branch", source)
 		self.assertIn('reference_branch = str(row.get(branch_field) or "").strip() if branch_field else ""', source)
 		self.assertIn("resolve_operational_branch(", source)

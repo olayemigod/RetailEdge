@@ -4,12 +4,14 @@
 	const PAGE_NAME = "retailedge-business-hub";
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
+	const PRODUCT_STYLE_ID = "retailedge-business-hub-vue-style";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
 	const FRAPPE_REQUIRE_POLL_MS = 50;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
+	let productStyleRefreshPromise = null;
 	let activeWrapper = null;
 
 	function isBusinessHubRoute() {
@@ -36,17 +38,15 @@
 		wrapper.on_page_show = function onPageShow(currentWrapper) {
 			ensurePage(currentWrapper);
 			bootProductMenu();
-			if (!currentWrapper._retailedgeBusinessHub) {
-				return bootBusinessHub(currentWrapper);
-			}
-
-			const component = getMountedComponent(currentWrapper);
-			if (component && typeof component.refreshContext === "function") {
-				return component.refreshContext().finally(() => {
-					enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
-				});
-			}
-			return undefined;
+			return bootBusinessHub(currentWrapper).then(() => {
+				const component = getMountedComponent(currentWrapper);
+				if (component && typeof component.refreshContext === "function") {
+					return component.refreshContext().finally(() => {
+						enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
+					});
+				}
+				return undefined;
+			});
 		};
 
 		return true;
@@ -87,9 +87,11 @@
 		const mountedComponent = getMountedComponent(wrapper);
 		const mountedRoot = wrapper._retailedgeBusinessHubRoot?.[0];
 		if (mountedComponent && mountedRoot?.isConnected) {
-			suppressNativePageChrome(wrapper);
-			enforceCreateVisibility(mountedRoot);
-			return Promise.resolve(wrapper._retailedgeBusinessHub);
+			return refreshProductBundleStyle().then(() => {
+				suppressNativePageChrome(wrapper);
+				enforceCreateVisibility(mountedRoot);
+				return wrapper._retailedgeBusinessHub;
+			});
 		}
 		if (mountedComponent || mountedRoot) {
 			const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
@@ -114,9 +116,7 @@
 			}
 			assertEdgeSuiteUIRuntime();
 
-			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-				await requireAsset(PRODUCT_ASSET);
-			}
+			await refreshProductBundleStyle();
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
 			}
@@ -294,6 +294,50 @@
 			attemptRequire();
 		});
 	}
+
+	function evictProductAssetExecution() {
+		const executed = global.frappe?.assets?._executed;
+		if (!Array.isArray(executed)) return;
+		const resolver = global.frappe?.assets?.bundled_asset;
+		const resolved = typeof resolver === "function"
+			? resolver.call(global.frappe.assets, PRODUCT_ASSET)
+			: PRODUCT_ASSET;
+		global.frappe.assets._executed = executed.filter(
+			(path) => path !== PRODUCT_ASSET && path !== resolved
+		);
+	}
+
+	function refreshProductBundleStyle() {
+		if (productStyleRefreshPromise) return productStyleRefreshPromise;
+
+		productStyleRefreshPromise = (async () => {
+			const beforeStyles = new Set(global.document?.querySelectorAll?.("style") || []);
+			const previousTagged = Array.from(
+				global.document?.querySelectorAll?.('[data-retailedge-business-hub-style="1"]') || []
+			);
+			evictProductAssetExecution();
+			await requireAsset(PRODUCT_ASSET);
+
+			const newStyles = Array.from(global.document?.querySelectorAll?.("style") || [])
+				.filter((style) => !beforeStyles.has(style));
+			const injected = newStyles.length ? newStyles[newStyles.length - 1] : null;
+			if (!injected) {
+				throw new Error(__("Business Hub interface bundle did not inject its presentation styles."));
+			}
+
+			injected.id = PRODUCT_STYLE_ID;
+			injected.dataset.retailedgeBusinessHubStyle = "1";
+			for (const stale of previousTagged) {
+				if (stale !== injected) stale.remove();
+			}
+			return injected;
+		})().finally(() => {
+			productStyleRefreshPromise = null;
+		});
+
+		return productStyleRefreshPromise;
+	}
+
 
 	function assertEdgeSuiteUIRuntime() {
 		const runtime = global.EdgeSuiteUI;

@@ -128,6 +128,22 @@ class TestExpenseRegister(unittest.TestCase):
 		mock_roles.return_value = ["RetailEdge Branch Manager"]
 		self.assertTrue(_can_view_other_cashiers("manager@example.com"))
 
+	@patch("retailedge.expense_register.can_view_consolidated_business_expenses", return_value=True)
+	@patch("retailedge.expense_register._find_expense_accounts")
+	@patch("retailedge.expense_register.frappe.get_list")
+	def test_consolidated_category_search_includes_expense_account_labels(self, mock_get_list, mock_accounts, _mock_consolidated):
+		mock_get_list.return_value = []
+		mock_accounts.return_value = [frappe._dict(name="Office Rent - DC", account_name="Office Rent")]
+		from retailedge.expense_register import _search_categories
+		options = _search_categories(
+			txt="Office",
+			company="Demo Company",
+			include_expense_accounts=True,
+		)
+		self.assertEqual(options[0]["value"], "Office Rent - DC")
+		self.assertEqual(options[0]["label"], "Office Rent")
+		self.assertIn("Expense Account", options[0]["description"])
+
 	def test_performance_limits_are_explicit(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_PAGE_SIZE, 100)
@@ -157,7 +173,8 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertIn("EdgeLinkField", component)
 		self.assertIn("EdgeExportMenu", component)
 		self.assertIn("search_expense_register_options", component)
-		self.assertIn('const REPORT_KEY = "expense-register"', component)
+		self.assertIn('providerKey: "expense-register"', component)
+		self.assertIn('default: "expense_register"', component)
 		self.assertIn("reportProvider.load", component)
 		self.assertIn(':pageSizes="[25, 50, 100]"', component)
 		self.assertIn("Expense Category", component)
@@ -177,15 +194,17 @@ class TestExpenseRegister(unittest.TestCase):
 		bundle = (APP_ROOT / "public" / "js" / "expense_register.bundle.js").read_text()
 		self.assertIn('ExpenseRegisterReport from "./expense_register/ExpenseRegisterReport.vue"', bundle)
 		self.assertIn('const REPORT_PRODUCT = "RetailEdge"', bundle)
-		self.assertIn('const REPORT_KEY = "expense-register"', bundle)
+		self.assertIn('key: "expense-register"', bundle)
+		self.assertIn('pageMethod: "retailedge.expense_register.get_expense_register"', bundle)
 		self.assertIn("createPaginatedReportProvider", bundle)
-		self.assertIn("registerProvider(REPORT_PRODUCT, REPORT_KEY", bundle)
+		self.assertIn("registerProvider(REPORT_PRODUCT, config.key", bundle)
 		self.assertIn("defaultPageLength: 50", bundle)
 		self.assertIn("maxPageLength: 100", bundle)
 		self.assertIn("get_expense_register", bundle)
 		self.assertIn("retailedge.reporting_actions.get_report_export_data", bundle)
 		self.assertNotIn('EXPORT_METHOD = "retailedge.expense_register.get_expense_register_export"', bundle)
-		self.assertIn("createEdgeApp(ExpenseRegisterReport)", bundle)
+		self.assertIn("createEdgeApp(ExpenseRegisterReport, {", bundle)
+		self.assertIn('reportType: options.reportType || "expense_register"', bundle)
 		self.assertNotIn("for (let page", bundle)
 		self.assertNotIn("setInterval(", bundle)
 

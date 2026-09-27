@@ -68,7 +68,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		loading.remove();
 		const block = document.createElement("div");
 		block.className = "alert alert-danger p-6";
-		block.textContent = error?.message || __("Business Expenses failed to load.");
+		block.textContent = window.retailedge?.userErrorMessage?.(error, __("Business Expenses failed to load.")) || __("Business Expenses failed to load.");
 		wrapper.appendChild(block);
 	}
 };

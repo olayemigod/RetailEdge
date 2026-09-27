@@ -22,7 +22,7 @@
 
 			<div v-if="review.blockers?.length" class="return-review__warning" role="alert">
 				<strong>Advanced handling required</strong>
-				<p>RetailEdge will not simplify or bypass ERPNext stock controls for this return.</p>
+				<p>This workflow will not simplify or bypass ERPNext stock controls for this return.</p>
 				<ul>
 					<li v-for="(blocker, index) in review.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">
 						{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ blocker.label }}

@@ -6,6 +6,9 @@ function setBranchQuery(frm) {
 		query: CONFIGURED_BRANCH_QUERY,
 		filters: { company: frm.doc.company || "" },
 	}));
+	frm.set_query("price_list", "price_lists", () => ({
+		filters: { enabled: 1 },
+	}));
 	frm.toggle_enable("branch", Boolean(frm.doc.company));
 }
 

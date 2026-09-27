@@ -35,7 +35,7 @@ def _pos_capabilities() -> SimpleNamespace:
 
 class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 	def test_primary_and_compact_fallback_routes_use_reconciliation_page(self):
-		base = _base_item("money", "Bank Matching")
+		base = _base_item("review-approvals", "Bank Match Reviews")
 		fallback = _fallback_item("Bank Matching")
 
 		self.assertEqual((base["target_type"], base["target"]), ("Page", "bank-matching-reconciliation"))
@@ -78,8 +78,8 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 				pos_capabilities=_pos_capabilities(),
 			)
 
-		money = next(group for group in groups if group["key"] == "money")
-		bank_matching = next(item for item in money["items"] if item["label"] == "Bank Matching")
+		review = next(group for group in groups if group["key"] == "review-approvals")
+		bank_matching = next(item for item in review["items"] if item["label"] == "Bank Match Reviews")
 		self.assertEqual(bank_matching["target_type"], "Page")
 		self.assertEqual(bank_matching["target"], "bank-matching-reconciliation")
 
@@ -95,8 +95,8 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 				pos_capabilities=_pos_capabilities(),
 			)
 
-		money = next(group for group in groups if group["key"] == "money")
-		self.assertNotIn("Bank Matching", {item["label"] for item in money["items"]})
+		review = next(group for group in groups if group["key"] == "review-approvals")
+		self.assertNotIn("Bank Match Reviews", {item["label"] for item in review["items"]})
 
 	def test_legacy_matching_report_remains_available_as_advanced_fallback_asset(self):
 		path = (

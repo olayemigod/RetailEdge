@@ -11,11 +11,13 @@ C16 previously delivered permission-aware native discoverability for the six ERP
 ## Scope
 
 - Add `pricing-promotions-control` as the primary Pricing & Promotions destination.
-- Reuse the existing C27 `native_visual_workspaces` EdgeSuite composition and shared `NativeERPNextWorkspace.vue` surface.
-- Show only native capabilities the current user may read.
-- Show bounded recent records for permitted DocTypes.
-- Preserve native create/list/form handoffs for advanced master maintenance.
-- Keep all six original native destinations in navigation as advanced/fallback routes.
+- Replace the generic overview with a dedicated Pricing & Promotions workspace.
+- Use horizontal tabs for Price Lists, Item Prices, Pricing Rules, Promotional Schemes, Coupon Codes and Loyalty Programs.
+- Show permission-aware list views with search, context filters, bounded paging and customer-facing labels.
+- Expose Create only when the current user has create permission.
+- Expose Edit only when the current user has write permission; otherwise show View.
+- Keep the authoritative master form lifecycle for record creation/editing and do not duplicate pricing logic.
+- When the workspace Page is available, collapse the normal sidebar to the single Pricing & Promotions entry; native peers remain fallback architecture if the Page is unavailable.
 
 ## ERPNext authority
 
@@ -42,8 +44,11 @@ C28 does not calculate an alternative selling price, promotion result, coupon el
 
 ## Files
 
-- `retailedge/native_visual_workspaces.py`
+- `retailedge/pricing_promotions_workspace.py`
+- `retailedge/public/js/pricing_promotions/PricingPromotionsWorkspace.vue`
+- `retailedge/public/js/pricing_promotions_workspace.bundle.js`
 - `retailedge/edgesuite_ui.py`
+- `retailedge/master_experience.py`
 - `retailedge/retailedge/page/pricing_promotions_control/pricing_promotions_control.js`
 - `retailedge/retailedge/page/pricing_promotions_control/pricing_promotions_control.json`
 - `retailedge/retailedge/page/pricing_promotions_control/pricing_promotions_control.py`

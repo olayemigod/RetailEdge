@@ -106,6 +106,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		branch=branch,
 		party=customer,
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc("Sales Order")
@@ -136,6 +137,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 			posting_date=str(transaction_date),
 			qty=item["qty"],
 			user=frappe.session.user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
@@ -181,6 +183,17 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 	target = erpnext_make_sales_order(source.name)
 	if not target or target.doctype != "Sales Order":
 		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
+
+	# ERPNext requires a header and item Delivery Date before validating the
+	# mapped draft. Use the Quotation validity date when it is still current,
+	# otherwise today; users can edit the draft before submission.
+	delivery_date = getdate(target.get("delivery_date") or source.get("valid_till") or nowdate())
+	if delivery_date < getdate(nowdate()):
+		delivery_date = getdate(nowdate())
+	target.delivery_date = delivery_date
+	for item in target.get("items") or []:
+		if item.meta.has_field("delivery_date") and not item.get("delivery_date"):
+			item.delivery_date = delivery_date
 	if target.docstatus != 0:
 		frappe.throw(_("ERPNext returned a non-draft Sales Order mapping; creation was stopped."))
 	_preserve_source_quotation_context(source, target)

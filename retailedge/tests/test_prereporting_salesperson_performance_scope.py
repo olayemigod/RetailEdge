@@ -114,7 +114,15 @@ class TestPrereportingSalespersonPerformanceReadScope(unittest.TestCase):
 		get_list.assert_not_called()
 
 	def test_dashboard_branch_search_returns_no_options_for_restricted_zero_scope(self):
-		with patch.object(dashboard, "_search_doctype") as search:
+		with (
+			patch.object(
+				dashboard,
+				"resolve_salesperson_performance_read_scope",
+				return_value=frappe._dict(_branch_scope_restricted=True, _allowed_branches=[]),
+			),
+			patch.object(dashboard, "get_allowed_operating_branches", return_value=[]),
+			patch.object(dashboard, "_search_doctype") as search,
+		):
 			result = dashboard._search_branches(
 				"%%",
 				"Scope Co",
@@ -124,24 +132,35 @@ class TestPrereportingSalespersonPerformanceReadScope(unittest.TestCase):
 		self.assertEqual(result, [])
 		search.assert_not_called()
 
-	def test_dashboard_branch_search_uses_assignment_union(self):
+	def test_dashboard_branch_search_uses_central_company_branch_authority(self):
 		with (
-			patch.object(dashboard.frappe, "get_meta") as get_meta,
+			patch.object(
+				dashboard,
+				"resolve_salesperson_performance_read_scope",
+				return_value=frappe._dict(
+					_branch_scope_restricted=True,
+					_allowed_branches=["Branch A", "Branch B"],
+				),
+			),
+			patch.object(
+				dashboard,
+				"get_allowed_operating_branches",
+				return_value=["Branch A", "Branch B"],
+			) as allowed_branches,
 			patch.object(dashboard, "_search_doctype", return_value=[]) as search,
 		):
-			get_meta.return_value.has_field.return_value = True
 			dashboard._search_branches(
 				"%Branch%",
 				"Scope Co",
 				frappe._dict(
 					_branch_scope_restricted=True,
-					_allowed_branches=["Branch A", "Branch B"],
+					_allowed_branches=["stale"],
 				),
 			)
 
+		allowed_branches.assert_called_once_with(company="Scope Co", user=frappe.session.user)
 		query_filters = search.call_args.kwargs["filters"]
 		self.assertIn(["Branch", "name", "in", ["Branch A", "Branch B"]], query_filters)
-		self.assertIn(["Branch", "company", "=", "Scope Co"], query_filters)
 
 	def test_non_company_search_validates_company_scope_before_master_read(self):
 		with (

@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="customer-sales-intelligence-fallback">
 		<strong>Customer & Sales Intelligence could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -71,7 +71,7 @@
 				<span v-if="scope.from_date && scope.to_date">Sales period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span>New/returning uses first submitted sale in the same permitted company/branch scope</span>
 				<span>Outstanding values are current ERPNext receivable exposure, not historical period-end balances</span>
-				<span v-if="!showProfitability">Profitability hidden by RetailEdge cost-visibility settings</span>
+				<span v-if="!showProfitability">Profitability hidden by cost-visibility settings</span>
 				<span v-else>Profitability uses the R8 transactional cost contract</span>
 			</template>
 		</EdgeReportShell>
@@ -158,7 +158,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Customer & Sales Intelligence",
-				filename: `RetailEdge Customer Sales Intelligence ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Customer Sales Intelligence ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -184,7 +184,7 @@ export default {
 				{ label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" },
 				{ label: "Customer Status", value: this.metadata.customer_status_truth || "Earliest submitted non-return sale in permitted scope" },
 				{ label: "Receivables", value: this.metadata.receivable_truth || "Current ERPNext outstanding balances" },
-				{ label: "Profitability", value: this.showProfitability ? (this.metadata.profitability_truth || "R8 transactional profitability") : "Hidden by RetailEdge cost-visibility settings" },
+				{ label: "Profitability", value: this.showProfitability ? (this.metadata.profitability_truth || "Transactional profitability") : "Hidden by cost-visibility settings" },
 			];
 		},
 	},

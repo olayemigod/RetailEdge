@@ -75,6 +75,69 @@ def test_restricted_branch_scope_fails_closed_for_unattributed_accounting_rows()
 	assert "1 = 0" in clauses
 
 
+def test_category_master_without_account_mapping_excludes_ledger_instead_of_broadening():
+	with patch.object(consolidated.frappe.db, "exists", return_value=True), patch.object(
+		consolidated.frappe,
+		"has_permission",
+		return_value=True,
+	), patch.object(
+		consolidated.frappe.db,
+		"get_value",
+		return_value=frappe._dict(company="Demo Company", is_active=1, expense_account=""),
+	):
+		resolved = consolidated._resolve_category_filter(category="Travel", company="Demo Company")
+	assert resolved["kind"] == "category"
+	assert resolved["ledger_account"] == ""
+	assert resolved["ledger_filter_active"] is True
+
+	with patch.object(consolidated, "_available_accounting_voucher_types", return_value=["Purchase Invoice"]):
+		where, values, voucher_types = consolidated._build_ledger_where_sql(
+			company="Demo Company",
+			from_date=None,
+			to_date=None,
+			category_account="",
+			category_filter_active=True,
+			status="",
+			source_type="",
+			branch_scope={"global_access": True, "effective_branches": []},
+			branch_expression="''",
+		)
+	assert where == ""
+	assert values == []
+	assert voucher_types == []
+
+
+def test_ledger_account_label_is_a_valid_consolidated_category_filter():
+	with patch.object(consolidated.frappe.db, "exists", return_value=False), patch.object(
+		consolidated,
+		"_find_expense_accounts",
+		return_value=[frappe._dict(name="Office Rent - DC", account_name="Office Rent")],
+	):
+		resolved = consolidated._resolve_category_filter(category="Office Rent", company="Demo Company")
+	assert resolved == {
+		"kind": "account",
+		"operational_category": "",
+		"ledger_account": "Office Rent - DC",
+		"ledger_filter_active": True,
+	}
+
+
+def test_ambiguous_ledger_account_label_fails_closed():
+	with patch.object(consolidated.frappe.db, "exists", return_value=False), patch.object(
+		consolidated,
+		"_find_expense_accounts",
+		return_value=[
+			frappe._dict(name="Office Rent - A", account_name="Office Rent"),
+			frappe._dict(name="Office Rent - B", account_name="Office Rent"),
+		],
+	):
+		try:
+			consolidated._resolve_category_filter(category="Office Rent", company="Demo Company")
+		except frappe.ValidationError:
+			return
+		assert False, "Ambiguous account labels must fail closed"
+
+
 def test_expense_register_ui_exposes_consolidated_and_cashier_only_modes():
 	source = COMPONENT.read_text(encoding="utf-8")
 	assert "Consolidated business expenses" in source

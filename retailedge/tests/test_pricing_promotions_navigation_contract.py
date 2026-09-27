@@ -44,13 +44,44 @@ class TestPricingPromotionsNavigationContract(TestCase):
 		self.assertTrue((page_dir / "pricing_promotions_control.json").exists())
 		page = (page_dir / "pricing_promotions_control.js").read_text()
 		self.assertIn('"edgeui.bundle.js"', page)
-		self.assertIn('"native_visual_workspaces.bundle.js"', page)
-		self.assertIn('"pricing-promotions"', page)
-		self.assertIn("mountNativeERPNextWorkspace", page)
+		self.assertIn('"pricing_promotions_workspace.bundle.js"', page)
+		self.assertIn("mountPricingPromotionsWorkspace", page)
 		self.assertNotIn("window.EdgeUI", page)
 		self.assertNotIn("frappe.ui.Dialog", page)
 		self.assertNotIn("frappe.prompt", page)
 		self.assertNotIn("frappe.msgprint", page)
+
+	def test_pricing_promotions_workspace_has_tabs_lists_filters_and_create_actions(self):
+		workspace = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "pricing_promotions"
+			/ "PricingPromotionsWorkspace.vue"
+		).read_text()
+		backend = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+		bundle = (APP_ROOT / "public" / "js" / "pricing_promotions_workspace.bundle.js").read_text()
+		master = (APP_ROOT / "master_experience.py").read_text()
+
+		for label in APPROVED_NATIVE_TARGETS:
+			self.assertIn(label, backend)
+		for contract in (
+			"pricing-tabs",
+			"Create {{ singularLabel(activeArea.label) }}",
+			'activeArea.can_write ? "Edit" : "View"',
+			"Clear filters",
+			"Load more",
+			"pricing-sort",
+			"sort_by",
+			"get_pricing_promotions_records",
+		):
+			self.assertIn(contract, workspace)
+		self.assertNotIn("ERPNext records", workspace)
+		self.assertNotIn("ERPNext authoritative", workspace)
+		self.assertIn("mountPricingPromotionsWorkspace", bundle)
+		self.assertIn("_promote_pricing_promotions_ownership", master)
+		self.assertIn('"pricing_promotions_ownership"] = "application_workspace"', master)
+
 
 	def test_pricing_promotions_remains_permission_aware_and_erpnext_authoritative(self):
 		navigation_source = (APP_ROOT / "edgesuite_ui.py").read_text()

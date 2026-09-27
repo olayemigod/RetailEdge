@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="purchase-report-fallback">
 		<strong>Purchase reporting could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -41,34 +41,40 @@
 			<template #filters>
 				<div class="purchase-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
-					<template v-if="reportType === 'purchase_register'">
-						<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
-						<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
-					</template>
+					<EdgeSmartDateRange v-if="reportType !== 'supplier_payables'" v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div v-else class="edge-field">
 						<span class="edge-field-label">Balance Basis</span>
 						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(filters.as_of_date, "Today") }}</div>
 					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
+					<div v-if="config.supplierPerformance" class="edge-field">
+						<span class="edge-field-label">Payables Basis</span>
+						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(payablesAgeingDate, "Today") }}</div>
+					</div>
 					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
+					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.overdue_only" :options="[{ value: 0, label: 'All open bills' }, { value: 1, label: 'Overdue only' }]" label="Due Status" />
+					<EdgeDropdown v-if="config.analysis" v-model="analysisPreset" :options="analysisPresets" label="Analysis View" @change="onAnalysisPresetChange" />
+					<EdgeDropdown v-if="config.analysis" v-model="filters.group_by" :options="groupByOptions" label="Group By" @change="onAnalysisGroupChange" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="purchase-filter-grid advanced-grid">
 						<EdgeLinkField v-model="filters.supplier_group" label="Supplier Group" placeholder="All supplier groups" :searcher="supplierGroupSearch" @select="onSupplierGroupSelected" @clear="clearSupplierGroup" />
-						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
-						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
-						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="filters.warehouse = ''" />
-						<EdgeDropdown v-if="reportType === 'purchase_register'" v-model="filters.invoice_kind" :options="['All', 'Purchases', 'Returns']" label="Invoice Type" @change="onSupplierFacetChange" />
-						<EdgeDropdown v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" @change="onSupplierFacetChange" />
+						<EdgeLinkField v-if="reportType !== 'supplier_payables' && !config.supplierPerformance" v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
+						<EdgeLinkField v-if="reportType !== 'supplier_payables' && !config.supplierPerformance" v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
+						<EdgeLinkField v-if="reportType !== 'supplier_payables' && !config.supplierPerformance" v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="filters.warehouse = ''" />
+						<EdgeDropdown v-if="reportType !== 'supplier_payables' && !config.supplierPerformance" v-model="filters.invoice_kind" :options="['All', 'Purchases', 'Returns']" label="Invoice Type" @change="onSupplierFacetChange" />
+						<EdgeDropdown v-if="!config.supplierPerformance" v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" @change="onSupplierFacetChange" />
 					</div>
 				</details>
 			</template>
 			<template #resultMeta>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
+				<span v-if="config.supplierPerformance && scan.purchase_invoices !== undefined">{{ scan.purchase_invoices }} period invoice{{ scan.purchase_invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ formatDate(payablesAgeingDate || filters.as_of_date, "today") }}</span>
+				<span v-if="config.supplierPerformance">Period purchases · current payables aged at {{ formatDate(payablesAgeingDate, "today") }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
@@ -90,9 +96,23 @@
 <script>
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
+	purchase_analysis: {
+		title: "Purchase Analysis",
+		subtitle: "Group submitted purchases and returns by time, item, category, supplier, Branch or warehouse.",
+		providerKey: "purchase-analysis",
+		route: "/app/purchase-analysis",
+		analysis: true,
+	},
+	supplier_performance: {
+		title: "Supplier Performance",
+		subtitle: "Compare period purchasing, returns and current payable exposure by supplier without inventing a supplier score.",
+		providerKey: "supplier-performance",
+		route: "/app/supplier-performance",
+		supplierPerformance: true,
+	},
 	purchase_register: {
 		title: "Purchase Register",
 		subtitle: "A clear invoice-level view of submitted purchases, returns, taxes, due dates, and outstanding balances.",
@@ -125,7 +145,11 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", companyCurrency: "",
 			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
-			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", page_size: 50 },
+			smartDate: {}, smartDateReference: "",
+			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", overdue_only: 0, group_by: "Month", page_size: 50 },
+			analysisPreset: "Purchase Trend",
+			analysisPresets: ["Purchase Trend", "Purchases by Item", "Purchases by Category", "Purchases by Supplier", "Purchases by Supplier Group", "Purchases by Branch", "Purchases by Warehouse", "Daily Purchases", "Weekly Purchases", "Quarterly Purchases", "Yearly Purchases", "Custom"],
+			groupByOptions: ["Day", "Week", "Month", "Quarter", "Year", "Item", "Item Group", "Supplier", "Supplier Group", "Branch", "Warehouse"],
 			currentPage: 1,
 			canUseNativeDesk: false,
 			supplierPaymentOpen: false,
@@ -170,6 +194,8 @@ export default {
 					? window.retailedgeConsumeBusinessHubRouteOptions?.("supplier-payables") || {}
 					: {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				if (this.reportType !== "supplier_payables") this.syncSmartDateFromFilters();
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
@@ -180,12 +206,50 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.purchase_reporting.search_purchase_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, supplier_group: this.filters.supplier_group, report_type: this.reportType, from_date: this.filters.from_date, to_date: this.filters.to_date, as_of_date: this.filters.as_of_date, invoice_kind: this.filters.invoice_kind, status: this.filters.status }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.purchase_reporting.search_purchase_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, supplier_group: this.filters.supplier_group, report_type: ["purchase_analysis", "supplier_performance"].includes(this.reportType) ? "purchase_register" : this.reportType, from_date: this.filters.from_date, to_date: this.filters.to_date, as_of_date: this.filters.as_of_date, invoice_kind: this.filters.invoice_kind, status: this.filters.status }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, supplierSearch(txt) { return this.searchOptions("supplier", txt); }, supplierGroupSearch(txt) { return this.searchOptions("supplier_group", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = ""; this.currentPage = 1; },
 		onBranchSelected(option) { this.filters.branch = option.value; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.currentPage = 1; },
-		onPurchaseDateChange() { this.clearSupplier(); this.currentPage = 1; },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.clearSupplier();
+			this.currentPage = 1;
+		},
+		onAnalysisPresetChange() {
+			const groups = {
+				"Purchase Trend": "Month",
+				"Purchases by Item": "Item",
+				"Purchases by Category": "Item Group",
+				"Purchases by Supplier": "Supplier",
+				"Purchases by Supplier Group": "Supplier Group",
+				"Purchases by Branch": "Branch",
+				"Purchases by Warehouse": "Warehouse",
+				"Daily Purchases": "Day",
+				"Weekly Purchases": "Week",
+				"Quarterly Purchases": "Quarter",
+				"Yearly Purchases": "Year",
+			};
+			if (groups[this.analysisPreset]) this.filters.group_by = groups[this.analysisPreset];
+			this.currentPage = 1;
+		},
+		onAnalysisGroupChange() {
+			const presets = {
+				Month: "Purchase Trend", Item: "Purchases by Item", "Item Group": "Purchases by Category",
+				Supplier: "Purchases by Supplier", "Supplier Group": "Purchases by Supplier Group",
+				Branch: "Purchases by Branch", Warehouse: "Purchases by Warehouse", Day: "Daily Purchases",
+				Week: "Weekly Purchases", Quarter: "Quarterly Purchases", Year: "Yearly Purchases",
+			};
+			this.analysisPreset = presets[this.filters.group_by] || "Custom";
+			this.currentPage = 1;
+		},
 		onSupplierFacetChange() { this.clearSupplier(); this.currentPage = 1; },
 		onSupplierGroupSelected(option) { this.filters.supplier_group = option?.value || ""; this.clearSupplier(); this.currentPage = 1; },
 		clearSupplierGroup() { this.filters.supplier_group = ""; this.clearSupplier(); this.currentPage = 1; },
@@ -194,9 +258,9 @@ export default {
 		onItemSelected(option) { this.filters.item_code = option.value; this.itemLabel = option.label || option.value; if (!this.filters.item_group && option.raw?.item_group) this.filters.item_group = option.raw.item_group; this.currentPage = 1; }, clearItem() { this.filters.item_code = ""; this.itemLabel = ""; this.currentPage = 1; },
 		async onWarehouseSelected(option) { this.filters.warehouse = option.value; this.currentPage = 1; if (!this.filters.company) return; const previousBranch = this.filters.branch; try { const resolved = await callMethod("retailedge.guided_entry_context.resolve_branch_warehouse_selection", { company: this.filters.company, branch: this.filters.branch, warehouse: this.filters.warehouse, preference: "default" }); if (resolved.branch) { this.filters.branch = resolved.branch; this.branchName = resolved.branch; if (resolved.branch !== previousBranch) this.clearSupplier(); } } catch (error) { this.filters.warehouse = ""; this.error = errorMessage(error, "The selected Warehouse is not valid for this purchase context."); } },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
-		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; if (this.reportType === "supplier_payables") { delete filters.from_date; delete filters.to_date; delete filters.item_code; delete filters.item_group; delete filters.warehouse; delete filters.invoice_kind; } else { delete filters.as_of_date; delete filters.ageing_bucket; } return filters; },
+		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; if (this.reportType === "supplier_payables") { delete filters.from_date; delete filters.to_date; delete filters.item_code; delete filters.item_group; delete filters.warehouse; delete filters.invoice_kind; delete filters.group_by; } else if (this.config.supplierPerformance) { delete filters.as_of_date; delete filters.ageing_bucket; delete filters.item_code; delete filters.item_group; delete filters.warehouse; delete filters.invoice_kind; delete filters.status; delete filters.group_by; } else { delete filters.as_of_date; delete filters.ageing_bucket; if (!this.config.analysis) delete filters.group_by; } return filters; },
 		async fetchData() {
-			if (!this.requiredReady) return; if (!this.reportProvider?.load) { this.error = `The shared EdgeSuite ${this.config.title} provider is unavailable.`; return; }
+			if (!this.requiredReady) return; if (!this.reportProvider?.load) { this.error = `The ${this.config.title} reporting service is unavailable.`; return; }
 			this.loading = true; this.error = "";
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize);
@@ -205,7 +269,7 @@ export default {
 				this.rows = this.reportType === "supplier_payables"
 					? providerRows.map((row) => ({ ...row, payment_action: "Pay Supplier" }))
 					: providerRows;
-				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || this.payablesAgeingDate;
+				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || result.metadata?.payables_ageing_date || this.payablesAgeingDate;
 				const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); if (this.currentPage > totalPages) this.currentPage = totalPages;
 				this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, `${this.config.title} failed to load.`); }
@@ -214,7 +278,7 @@ export default {
 		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
-		rowKey(row, index) { return row.invoice || `${this.reportType}:${index}`; },
+		rowKey(row, index) { return row.group_key || row.supplier || row.invoice || `${this.reportType}:${index}`; },
 		openSupplierPayment(row) {
 			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
 			this.supplierPaymentContext = {
@@ -241,7 +305,7 @@ export default {
 			else if (column.fieldname === "supplier") frappe.set_route("Form", "Supplier", value);
 		},
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
-		formatValue(value, fieldtype, currency) { if (value === null || value === undefined || value === "") return "—"; if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (fieldtype === "Float") { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : String(value); } if (fieldtype === "Int") return Number(value).toLocaleString(); if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
+		formatValue(value, fieldtype, currency) { if (value === null || value === undefined || value === "") return "—"; if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (fieldtype === "Float") { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : String(value); } if (fieldtype === "Int") return Number(value).toLocaleString(); if (fieldtype === "Percent") { const number = Number(value); return Number.isFinite(number) ? `${number.toLocaleString(undefined, { maximumFractionDigits: 2 })}%` : String(value); } if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},
 };
 </script>

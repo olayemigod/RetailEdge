@@ -228,7 +228,7 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			"resolve_branch_warehouse_selection",
 			':pageSizes="[25, 50, 100]"',
 			":hideNativeSidebar=\"true\"",
-			"Cost values hidden by RetailEdge settings",
+			"Cost values hidden by cost-visibility settings",
 		):
 			self.assertIn(contract, component)
 		for forbidden in ("new Blob", "createObjectURL", "text/csv", "application/vnd", "window.print"):

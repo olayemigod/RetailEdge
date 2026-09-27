@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-labelledby="title">
+  <title id="title">ProcessEdge Retail — Structured for Scale</title>
+  <defs>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#39C875"/><stop offset=".55" stop-color="#1C9C5D"/><stop offset="1" stop-color="#087744"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16A4F2"/><stop offset=".52" stop-color="#0056A6"/><stop offset="1" stop-color="#003E73"/></linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#E9EEF3"/><stop offset="1" stop-color="#BCC9D4"/></linearGradient>
+  </defs>
+  <g transform="translate(28 25) scale(.57)">
+    <path d="M82 142 215 72v356L82 360Z" fill="url(#green)"/>
+    <path d="M215 72 337 133c47 23 77 63 77 111 0 62-43 106-108 111l-62-34v-68l61 31c26-3 41-18 41-40 0-18-11-31-34-43l-97-49Z" fill="url(#blue)"/>
+    <path d="M244 321 414 408v71L244 392Z" fill="url(#blue)"/>
+    <path d="M215 151 274 181v238l-59-31Z" fill="url(#silver)"/>
+    <path d="M82 211 215 281M82 281 215 351" stroke="#fff" stroke-width="16"/>
+  </g>
+  <line x1="330" y1="55" x2="330" y2="305" stroke="#5E7387" stroke-width="3"/>
+  <text x="380" y="142" font-family="Montserrat,Arial,sans-serif" font-size="78" font-weight="800" fill="#FFFFFF">Process<tspan fill="#087CE6">EDGE</tspan></text>
+  <text x="380" y="225" font-family="Montserrat,Arial,sans-serif" font-size="82" font-weight="800" fill="#1C9C5D">Retail</text>
+  <text x="384" y="286" font-family="Montserrat,Arial,sans-serif" font-size="30" font-weight="600" letter-spacing="10" fill="#E5E7EB">STRUCTURED FOR SCALE.</text>
+</svg>

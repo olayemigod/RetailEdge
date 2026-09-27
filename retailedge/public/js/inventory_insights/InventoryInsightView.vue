@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="inventory-insight-fallback">
 		<strong>{{ config.title }} could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -257,7 +257,7 @@ export default {
 		exportDataset() {
 			return {
 				title: this.config.title,
-				filename: `RetailEdge ${this.config.title} ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail ${this.config.title} ${this.filters.company || ""}`.trim(),
 				columns: this.columns,
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -289,7 +289,7 @@ export default {
 		},
 		exportMetadata() {
 			const entries = [
-				{ label: "Inventory Truth", value: "ERPNext stock and RetailEdge bounded inventory intelligence" },
+				{ label: "Inventory Truth", value: "ERPNext stock with bounded inventory intelligence" },
 				{ label: "Dataset Scope", value: "All filtered records within the bounded server-side service" },
 			];
 			if (this.isAgeingView) entries.push({ label: "Ageing Truth", value: "ERPNext v16 Stock Ageing FIFO semantics" });

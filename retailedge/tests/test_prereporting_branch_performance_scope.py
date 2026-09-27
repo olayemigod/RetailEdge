@@ -206,32 +206,24 @@ class TestPrereportingBranchPerformanceReadScope(unittest.TestCase):
 
 		self.assertTrue(sales_where.call_args.kwargs["include_branch_filter"])
 
-	def test_dashboard_branch_picker_is_limited_to_assignment_scope(self):
+	def test_dashboard_branch_picker_is_limited_to_central_company_branch_authority(self):
 		with (
 			patch.object(
 				dashboard,
-				"get_operational_branch_scope",
-				return_value={
-					"restricted": True,
-					"allowed_branches": ["Branch A", "Branch B"],
-				},
-			),
-			patch.object(dashboard.frappe, "get_meta") as get_meta,
+				"get_allowed_operating_branches",
+				return_value=["Branch A", "Branch B"],
+			) as allowed_branches,
 			patch.object(dashboard.frappe, "get_list", return_value=[]) as get_list,
 		):
-			get_meta.return_value.has_field.return_value = True
 			dashboard._search_branches("%Branch%", "Scope Co")
 
+		allowed_branches.assert_called_once_with(company="Scope Co", user=frappe.session.user)
 		query_filters = get_list.call_args.kwargs["filters"]
 		self.assertIn(["Branch", "name", "in", ["Branch A", "Branch B"]], query_filters)
 
 	def test_dashboard_branch_picker_returns_no_options_for_restricted_zero_scope(self):
 		with (
-			patch.object(
-				dashboard,
-				"get_operational_branch_scope",
-				return_value={"restricted": True, "allowed_branches": []},
-			),
+			patch.object(dashboard, "get_allowed_operating_branches", return_value=[]),
 			patch.object(dashboard.frappe, "get_list") as get_list,
 		):
 			self.assertEqual(dashboard._search_branches("%%", "Scope Co"), [])

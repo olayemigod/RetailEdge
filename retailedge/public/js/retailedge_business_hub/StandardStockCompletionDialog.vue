@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="dialogTitle"
-		subtitle="Review the saved ERPNext stock draft and complete the standard operation without leaving RetailEdge."
+		subtitle="Review the saved ERPNext stock draft and complete the standard operation without leaving this workspace."
 		size="lg"
 		@close="requestClose"
 	>
@@ -29,7 +29,7 @@
 				<div class="stock-authority-note">
 					<strong>ERPNext stock authority</strong>
 					<p>
-						Completion uses ERPNext native submission. RetailEdge does not write Stock Ledger,
+						Completion uses ERPNext native submission. This workflow does not write Stock Ledger,
 						valuation, or accounting entries directly.
 					</p>
 				</div>
@@ -48,7 +48,7 @@
 				</div>
 
 				<div v-if="preview.blockers?.length" class="stock-completion-blockers">
-					<strong>Standard EdgeSuite completion is blocked</strong>
+					<strong>Standard completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
 					</ul>

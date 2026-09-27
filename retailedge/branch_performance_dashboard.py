@@ -7,7 +7,7 @@ from frappe.utils import cstr
 from retailedge.branch_context import resolve_branch_from_pos_profile
 from retailedge.branch_performance import _coerce_filters, assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
-from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
+from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope, validate_operating_branch
 from retailedge.reporting.date_ranges import get_preset_dates
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	execute as execute_branch_performance_report,
@@ -79,6 +79,13 @@ def get_branch_performance_dashboard_data(filters=None) -> dict:
 	assert_can_access_branch_performance()
 	filters = _filters(filters)
 	_assert_company(filters.get("company"))
+	if filters.get("branch"):
+		validate_operating_branch(
+			company=filters.get("company"),
+			branch=filters.get("branch"),
+			user=frappe.session.user,
+			throw=True,
+		)
 	require_dashboard_action(
 		DASHBOARD_KEY,
 		"view",
@@ -120,18 +127,15 @@ def _search_companies(like: str) -> list[dict]:
 
 
 def _search_branches(like: str, company: str) -> list[dict]:
-	scope = get_operational_branch_scope(company, user=frappe.session.user)
-	allowed = list(scope.get("allowed_branches") or [])
-	if scope.get("restricted") and not allowed:
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if not allowed:
 		return []
-	filters: list[list] = [["Branch", "name", "like", like]]
-	if scope.get("restricted"):
-		filters.append(["Branch", "name", "in", allowed])
-	if company and frappe.get_meta("Branch").has_field("company"):
-		filters.append(["Branch", "company", "=", company])
 	rows = frappe.get_list(
 		"Branch",
-		filters=filters,
+		filters=[
+			["Branch", "name", "like", like],
+			["Branch", "name", "in", allowed],
+		],
 		fields=["name"],
 		order_by="name asc",
 		limit_page_length=MAX_LINK_RESULTS,
