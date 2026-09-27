@@ -68,7 +68,7 @@ class TestPriceListGovernanceMigration(unittest.TestCase):
 
 		migration._migrate_legacy_price_list_settings()
 
-		values = {args[0]: args[1] for args, _kwargs in (entry for entry in mock_set.call_args_list)}
+		values = {entry.args[0]: entry.args[1] for entry in mock_set.call_args_list}
 		self.assertEqual(values["enable_assigned_price_list_switching"], "0")
 		for fieldname in (
 			"allow_price_list_switch_from_party_default",
