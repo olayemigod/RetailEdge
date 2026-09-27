@@ -2075,6 +2075,22 @@ def _resolve_matching_candidate(
 				"reference_number": getattr(doc, "reference_number", None)
 				or getattr(doc, "payment_reference", None),
 			}
+			# Persisted Sales Invoice reviews keep the locked payment-row identity
+			# (row index + event source) and original candidate amount, but the
+			# selected-report transport fields payment_event_found/payment_row_amount
+			# are not DocType fields. Reconstruct only that missing validation
+			# evidence from the persisted locked record. Never discover or select a
+			# different row here.
+			locked_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
+			if locked_type == "Sales Invoice":
+				if (
+					row.get("payment_event_found") in (None, "")
+					and row.get("payment_row_index") not in (None, "")
+					and cstr(row.get("payment_event_source")).strip()
+				):
+					row["payment_event_found"] = 1
+				if row.get("payment_row_amount") in (None, ""):
+					row["payment_row_amount"] = getattr(doc, "candidate_amount", None)
 		else:
 			row = {
 				"bank_transaction": bank_transaction_name,
