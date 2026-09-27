@@ -2067,6 +2067,9 @@ def _resolve_matching_candidate(
 	if (getattr(frappe.flags, "retailedge_fast_validation", False) or not allow_fallback) and explicit_target:
 		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
 		if doc:
+			payment_row_index = getattr(doc, "payment_row_index", None)
+			payment_event_source = getattr(doc, "payment_event_source", None)
+			candidate_amount = getattr(doc, "candidate_amount", None)
 			row = {
 				"bank_transaction": doc.bank_transaction or bank_transaction_name,
 				"suggested_document_type": doc.suggested_document_type or explicit_type,
@@ -2075,12 +2078,18 @@ def _resolve_matching_candidate(
 				"candidate_name": doc.suggested_document or explicit_target,
 				"sales_invoice": doc.sales_invoice or sales_invoice,
 				"payment_entry": doc.payment_entry or payment_entry,
-				"payment_row_index": getattr(doc, "payment_row_index", None),
-				"payment_row_amount": getattr(doc, "payment_row_amount", None),
+				"candidate_amount": candidate_amount,
+				"payment_row_index": payment_row_index,
+				# Payment-row amount/event-found were historically transient report
+				# fields. Persisted review records retain the same identity through
+				# candidate_amount + payment_row_index + payment_event_source.
+				"payment_row_amount": getattr(doc, "payment_row_amount", None)
+				or (candidate_amount if payment_row_index else None),
 				"payment_mode": getattr(doc, "payment_mode", None) or getattr(doc, "mode_of_payment", None),
 				"payment_account": getattr(doc, "payment_account", None),
-				"payment_event_found": getattr(doc, "payment_event_found", None),
-				"payment_event_source": getattr(doc, "payment_event_source", None),
+				"payment_event_found": getattr(doc, "payment_event_found", None)
+				or (1 if payment_row_index or payment_event_source else 0),
+				"payment_event_source": payment_event_source,
 				"reference_number": getattr(doc, "reference_number", None)
 				or getattr(doc, "payment_reference", None),
 			}
