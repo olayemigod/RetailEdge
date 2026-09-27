@@ -126,10 +126,8 @@ def _as_bool(value, *, default: bool) -> bool:
 	return str(value).strip().lower() not in {"0", "false", "no", "off"}
 
 
-def _table_exists(doctype_or_table: str) -> bool:
-	table = doctype_or_table if doctype_or_table.startswith("tab") else f"tab{doctype_or_table}"
-	rows = frappe.db.sql("SHOW TABLES LIKE %s", (table,))
-	return bool(rows)
+def _table_exists(doctype: str) -> bool:
+	return bool(frappe.db.table_exists(doctype, cached=False))
 
 
 def _persisted_docfield_exists(parent: str, fieldname: str) -> bool:
