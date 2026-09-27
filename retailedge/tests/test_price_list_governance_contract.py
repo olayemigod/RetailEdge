@@ -189,8 +189,8 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		draft_items = (APP_ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
 		self.assertIn('context["rate_policy_source"] = "pos_profile"', pricing)
 		self.assertIn('document_price_list=selected_price_list', draft_items)
-		self.assertIn('pricing.get("rate_policy_source") == "pos_profile"', draft_items)
-		self.assertNotIn('pricing.get("source") == "pos_profile"', draft_items)
+		self.assertIn('pricing.get("rate_policy_source") or pricing.get("source")', draft_items)
+		self.assertIn('rate_policy_source == "pos_profile"', draft_items)
 
 	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
 		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
