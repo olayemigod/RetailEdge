@@ -175,6 +175,41 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["source"], "user_selected")
 		self.assertEqual(result["resolved_default"], "Branch Retail")
 
+	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="Branch Retail")
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_explicitly_selected_governed_default_returns_normal_default_context(
+		self, mock_policy, mock_assignment, mock_default, mock_context, _mock_branch
+	):
+		mock_policy.return_value = policy(allow_switch_from_branch_default=False)
+		mock_assignment.return_value = {
+			"names": ["Wholesale"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		mock_default.return_value = {
+			"price_list": "Branch Retail",
+			"source": "branch_default",
+			"allow_rate_change": True,
+		}
+		mock_context.return_value = {
+			"price_list": "Branch Retail",
+			"source": "branch_default",
+		}
+		result = uncached_price_list_resolver()(
+			mode="selling",
+			company="Demo Company",
+			branch="Lagos",
+			selected_price_list="Branch Retail",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Branch Retail")
+		self.assertEqual(result["source"], "branch_default")
+		self.assertTrue(result["locked"])
+		self.assertFalse(result["can_select"])
+
 	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
 	@patch("retailedge.guided_pricing._assignment_price_list_scope")
 	@patch("retailedge.guided_pricing._price_list_governance_policy")
@@ -224,11 +259,12 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
 
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict(rate=1250, price_list_rate=1250))
+	@patch("retailedge.guided_pricing._resolve_user_pos_profile", return_value=None)
 	@patch("retailedge.guided_pricing._document_price_list_context")
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_existing_draft_pricing_uses_server_document_price_list_not_current_governance(
-		self, _mock_read, mock_governance, mock_document_context, _mock_details
+		self, _mock_read, mock_governance, mock_document_context, _mock_pos, _mock_details
 	):
 		mock_document_context.return_value = {
 			"price_list": "Legacy Retail",
@@ -251,6 +287,36 @@ class TestGuidedPricing(unittest.TestCase):
 			mode="selling",
 			user="sales@example.com",
 		)
+
+	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict(rate=1250, price_list_rate=1250))
+	@patch(
+		"retailedge.guided_pricing._resolve_user_pos_profile",
+		return_value=frappe._dict(name="Lagos POS", allow_rate_change=0),
+	)
+	@patch("retailedge.guided_pricing._document_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
+	def test_existing_draft_preserves_document_price_list_and_current_pos_rate_lock(
+		self, _mock_read, mock_document_context, _mock_pos, _mock_details
+	):
+		mock_document_context.return_value = {
+			"price_list": "Legacy Retail",
+			"source": "document_price_list",
+			"selection_required": False,
+			"allow_rate_change": True,
+		}
+		result = resolve_sales_item_pricing(
+			item_code="ITEM-001",
+			company="Demo Company",
+			customer="CUST-001",
+			branch="Lagos",
+			document_price_list="Legacy Retail",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Legacy Retail")
+		self.assertEqual(result["source"], "document_price_list")
+		self.assertEqual(result["pos_profile"], "Lagos POS")
+		self.assertFalse(result["allow_rate_change"])
+		self.assertEqual(result["rate_policy_source"], "pos_profile")
 
 	@patch("retailedge.guided_pricing._erpnext_item_details")
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
