@@ -125,34 +125,30 @@ def resolve_price_list_context(
 		else ([default_name] if default_name else [])
 	)
 
-	if selected_price_list:
-		if default_name and selected_price_list == default_name:
-			selected_price_list = ""
-		elif not switch_allowed or selected_price_list not in assigned_price_lists:
+	if selected_price_list and not (default_name and selected_price_list == default_name):
+		if not switch_allowed or selected_price_list not in assigned_price_lists:
 			frappe.throw(
 				_("Price List {0} is not selectable under the current Price List Governance policy.").format(
 					frappe.bold(selected_price_list)
 				),
 				frappe.PermissionError,
 			)
-		else:
-			context = _price_context(selected_price_list, mode=mode, source="user_selected")
-			context.update(
-				{
-					"branch_default": _branch_default_price_list(
-						mode=mode, company=company, branch=branch, user=user
-					),
-					"resolved_default": default_name,
-					"resolved_default_source": default_source,
-					"locked": False,
-					"can_select": True,
-					"selection_required": False,
-					"allowed_price_lists": selectable,
-					"governance": _public_governance_context(policy),
-				}
-			)
-			return context
-		return None
+		context = _price_context(selected_price_list, mode=mode, source="user_selected")
+		context.update(
+			{
+				"branch_default": _branch_default_price_list(
+					mode=mode, company=company, branch=branch, user=user
+				),
+				"resolved_default": default_name,
+				"resolved_default_source": default_source,
+				"locked": False,
+				"can_select": True,
+				"selection_required": False,
+				"allowed_price_lists": selectable,
+				"governance": _public_governance_context(policy),
+			}
+		)
+		return context
 
 	if default_candidate:
 		context = _price_context(default_name, mode=mode, source=default_source)
@@ -581,6 +577,16 @@ def resolve_sales_item_pricing(
 			user=user,
 		)
 	)
+	if document_price_list:
+		# Preserve the server-loaded draft's commercial Price List while carrying
+		# forward the current permitted POS Profile rate-edit policy. The POS
+		# profile may lock rate editing, but it never replaces the stored draft
+		# Price List on this path.
+		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
+		if pos:
+			context["pos_profile"] = str(pos.get("name") or "").strip()
+			context["allow_rate_change"] = bool(pos.get("allow_rate_change"))
+			context["rate_policy_source"] = "pos_profile"
 	if context.get("selection_required"):
 		frappe.throw(_("Choose a Selling Price List before pricing items."))
 	details = _erpnext_item_details(
