@@ -523,6 +523,27 @@ def test_standard_selling_completion_requires_edgesuite_runtime_only():
 	assert "window.EdgeUI" not in source
 
 
+def test_quick_sale_reprices_quantity_and_posting_date_changes():
+	source = (
+		ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleSalesInvoiceDialog.vue"
+	).read_text(encoding="utf-8")
+	assert '@change="postingDateChanged"' in source
+	assert "const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);" in source
+	assert "if (row.item_code && (itemChanged || quantityChanged))" in source
+
+	date_start = source.index("\t\tpostingDateChanged()")
+	date_end = source.index("\n\t\t", date_start + len("\t\tpostingDateChanged()"))
+	date_block = source[date_start:date_end]
+	assert "this.pricingCache.clear();" in date_block
+	assert "this.refreshAllItemPricing();" in date_block
+
+	update_start = source.index("\t\tupdateItems(nextRows)")
+	update_end = source.index("\n\t\tpricingCacheKey", update_start)
+	update_block = source[update_start:update_end]
+	assert 'return { ...row, rate: "" };' in update_block
+	assert "this.loadItemPricing(index)" in update_block
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
