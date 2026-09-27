@@ -98,6 +98,20 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		self.assertIn("priorityOption(field, source)", settings_vue)
 		self.assertIn("movePriority(field.fieldname, index, -1)", settings_vue)
 
+	def test_retail_settings_exposes_only_v2_price_list_governance_controls(self):
+		settings_page = (
+			APP_ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
+		).read_text(encoding="utf-8")
+		self.assertEqual(settings_page.count('"label": "Price List Governance"'), 1)
+		self.assertIn('"key": "pricing-governance"', settings_page)
+		self.assertNotIn('"key": "price-list-governance"', settings_page)
+		for legacy_field in (
+			'"selling_price_list_policy"',
+			'"buying_price_list_policy"',
+			'"allow_price_list_switch"',
+		):
+			self.assertNotIn(legacy_field, settings_page)
+
 	def test_all_primary_sales_and_purchase_entry_surfaces_expose_price_list_selection(self):
 		surfaces = {
 			"Quick Sale": APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleSalesInvoiceDialog.vue",
