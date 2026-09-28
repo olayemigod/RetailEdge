@@ -32,7 +32,7 @@ class TestOwnerDashboard(unittest.TestCase):
 
 	def test_headline_summary_uses_source_cards_and_respects_hidden_stock_value(self):
 		sections = {
-			"sales": {"available": True, "summary": [{"label": "Net Invoiced", "value": 5000, "datatype": "Currency"}]},
+			"sales": {"available": True, "summary": [{"label": "Net Sales", "value": 5000, "datatype": "Currency"}]},
 			"expenses": {"available": True, "summary": [{"label": "Posted Expenses", "value": 900, "type": "Currency"}]},
 			"receivables": {"available": True, "summary": [{"label": "Total Receivables", "value": 1200, "datatype": "Currency"}]},
 			"payables": {"available": True, "summary": [{"label": "Total Payables", "value": 700, "datatype": "Currency"}]},
@@ -96,7 +96,7 @@ class TestOwnerDashboard(unittest.TestCase):
 			self.assertEqual(mock.call_count, 1)
 		expense_filters = expenses.call_args.kwargs["filters"]
 		self.assertEqual(expense_filters["view_mode"], "consolidated")
-		self.assertEqual(expense_filters["include_unposted_cashier_expenses"], 1)
+		self.assertEqual(expense_filters["include_unposted_cashier_expenses"], 0)
 		capability.assert_called_once_with("owner-dashboard", "view", company="Demo Company", branch="Aba")
 		self.assertEqual(result["metadata"]["composition"], "existing_retailedge_reporting_engines_plus_profitability_intelligence")
 

@@ -594,7 +594,7 @@ def _business_indices(
 			label=_("Sales"),
 			route="/app/sales-invoice-register",
 			route_filters=sales_route_filters,
-			headline=_summary_card(sales, "Net Invoiced"),
+			headline=_summary_card(sales, "Net Sales"),
 			signal=sales_signal,
 			recommendation=_("Review sales invoices and returns for the selected period."),
 			action_label=_("Review Sales"),
@@ -780,7 +780,7 @@ def _today_section(owner: dict[str, Any]) -> dict[str, Any]:
 	sections = (owner.get("payload") or {}).get("sections") or {}
 	summary: list[dict[str, Any]] = []
 	for section_key, metric, label in (
-		("sales", "Net Invoiced", _("Sales")),
+		("sales", "Net Sales", _("Sales")),
 		("cash", "Money In", _("Money In")),
 		("cash", "Money Out", _("Money Out")),
 		("expenses", "Posted Expenses", _("Expenses")),
