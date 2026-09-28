@@ -3,6 +3,7 @@
 
 	const PAGE_NAME = "retailedge-business-hub";
 	const RUNTIME_ASSET = "edgeui.bundle.js";
+const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
 	const PRODUCT_STYLE_ID = "retailedge-business-hub-vue-style";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
@@ -61,6 +62,18 @@
 		pageHead.hide();
 	}
 
+	function installRestrictedOperationalGuard() {
+		if (typeof global.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
+			throw new Error(__("RetailEdge EdgeSuite-only operational guard is unavailable."));
+		}
+		global.retailedgeInstallEdgesuiteOnlyOperationalGuard({
+			pageRoute: PAGE_NAME,
+			rootSelector: ".retailedge-business-hub-root",
+			nativeDoctypes: ["Customer", "Supplier", "Item"],
+			nativePathSlugs: ["customer", "supplier", "item"],
+		});
+	}
+
 	function ensurePage(wrapper) {
 		if (wrapper.page && wrapper._retailedgeBusinessHubTarget) {
 			suppressNativePageChrome(wrapper);
@@ -89,6 +102,7 @@
 		if (mountedComponent && mountedRoot?.isConnected) {
 			return refreshProductBundleStyle().then(() => {
 				suppressNativePageChrome(wrapper);
+				installRestrictedOperationalGuard();
 				enforceCreateVisibility(mountedRoot);
 				return wrapper._retailedgeBusinessHub;
 			});
@@ -116,6 +130,8 @@
 			}
 			assertEdgeSuiteUIRuntime();
 
+			await requireAsset(RESTRICTED_GUARD_ASSET);
+			installRestrictedOperationalGuard();
 			await refreshProductBundleStyle();
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
