@@ -449,7 +449,7 @@ def _build_summary(
 	current_filters: dict[str, Any],
 ) -> list[dict[str, Any]]:
 	sales_value = _summary_value(sales, "Net Sales")
-	posted_expenses = _summary_value(expenses, "Posted Expenses")
+	posted_expenses = _summary_value(expenses, "Total Expenses")
 	margin = _summary_value(profitability, "Transactional Gross Profit")
 	missing_cost = _summary_value(profitability, "Items Missing Recorded Cost")
 	customer_receipts, receipt_exceptions = _payment_entry_customer_receipts(payments)
@@ -943,7 +943,7 @@ def _build_health(
 		)
 
 	net_sales = _summary_value(sales, "Net Sales")
-	posted_expenses = _summary_value(expenses, "Posted Expenses")
+	posted_expenses = _summary_value(expenses, "Total Expenses")
 	if net_sales not in (None, 0) and posted_expenses is not None:
 		ratio = flt(posted_expenses) / abs(flt(net_sales)) * 100.0
 		rows.append(
