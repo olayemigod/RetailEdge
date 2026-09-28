@@ -45,7 +45,18 @@ class TestWarrantyServiceNavigationContract(TestCase):
 			/ "retailedge_business_hub"
 			/ "RetailEdgeBusinessHub.vue"
 		).read_text()
-		self.assertIn("frappe.new_doc(action.doctype);", component)
+		self.assertIn("await openNativeCreateSurface(action.doctype);", component)
+		generic_block_start = component.index("if (!this.nativeFallbackEnabled)")
+		generic_block_end = component.index("notifyGuidedDraftSaved", generic_block_start)
+		generic_block = component[generic_block_start:generic_block_end]
+		self.assertNotIn("allowRestricted: true", generic_block)
+		self.assertIn("edgeUI?.openCreateSurface", component)
+		self.assertIn("frappe.new_doc(doctype, defaults)", component)
+		self.assertNotIn("frappe.ui.form.make_quick_entry", component)
+
+		permission_gate = component.index('if (!this.nativeFallbackEnabled)')
+		native_create = component.index("await openNativeCreateSurface(action.doctype);")
+		self.assertLess(permission_gate, native_create)
 
 	def test_retailedge_does_not_wrap_native_service_lifecycle(self):
 		source = (APP_ROOT / "edgesuite_ui.py").read_text()
