@@ -143,6 +143,18 @@ function errorMessage(error, fallback) {
 	return error?.message || error?.exc || error?.exception || fallback;
 }
 
+function openCreateSurface(doctype, defaults = {}) {
+	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+	if (typeof openCreate !== "function") {
+		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		return Promise.resolve(false);
+	}
+	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
+		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		return false;
+	});
+}
+
 export default {
 	name: "NativeERPNextWorkspace",
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
@@ -228,7 +240,14 @@ export default {
 		},
 		createSource(source) {
 			if (!this.canUseNativeDesk || source.kind !== "doctype" || !source.can_create) return;
-			frappe.new_doc(source.target);
+			const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+			if (typeof openCreate !== "function") {
+				frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+				return;
+			}
+			Promise.resolve(openCreate(source.target)).catch((error) => {
+				frappe.show_alert?.({ message: error?.message || __("Unable to create this record."), indicator: "red" }, 7);
+			});
 		},
 		openRow(source, row) {
 			if (!this.canUseNativeDesk || source.kind !== "doctype" || !row?.name) return;
