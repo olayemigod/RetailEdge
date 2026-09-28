@@ -456,13 +456,10 @@ const runtimeComponents =
 
 function openNativeCreateSurface(doctype, defaults = {}, { allowRestricted = false } = {}) {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
-	if (typeof edgeUI?.openCreateSurface === "function") {
-		return edgeUI.openCreateSurface(doctype, { defaults, allowRestricted });
+	if (typeof edgeUI?.openCreateSurface !== "function") {
+		return Promise.reject(new Error("EdgeSuite create navigation is unavailable."));
 	}
-	if (typeof frappe?.new_doc !== "function") {
-		return Promise.reject(new Error("ERPNext document creation is unavailable."));
-	}
-	return Promise.resolve(frappe.new_doc(doctype, defaults));
+	return edgeUI.openCreateSurface(doctype, { defaults, allowRestricted });
 }
 
 function readSharedContext() {
