@@ -226,5 +226,7 @@ class TestR12ScenarioUI(FrappeTestCase):
 		source = (APP_DIR / "public" / "js" / "forecasting_planning" / "ForecastingPlanning.vue").read_text()
 		self.assertIn("canCreateScenario", source)
 		self.assertIn("frappe.model?.can_create", source)
-		self.assertIn('frappe.new_doc("RetailEdge Planning Scenario", {', source)
+		self.assertIn('return openCreateSurface("RetailEdge Planning Scenario", {', source)
+		self.assertIn("window.EdgeSuiteUI?.openCreateSurface", source)
+		self.assertNotIn('frappe.new_doc("RetailEdge Planning Scenario", {', source)
 		self.assertNotIn("frappe.route_options = { company: this.filters.company", source)
