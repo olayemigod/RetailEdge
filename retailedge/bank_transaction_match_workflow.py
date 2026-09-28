@@ -2068,8 +2068,22 @@ def _resolve_matching_candidate(
 		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
 		if doc:
 			payment_row_index = getattr(doc, "payment_row_index", None)
-			payment_event_source = getattr(doc, "payment_event_source", None)
+			payment_event_source = cstr(getattr(doc, "payment_event_source", None)).strip() or None
 			candidate_amount = getattr(doc, "candidate_amount", None)
+			payment_row_amount = getattr(doc, "payment_row_amount", None)
+			payment_event_found = getattr(doc, "payment_event_found", None)
+			if (
+				payment_row_amount in (None, "")
+				and payment_row_index not in (None, "")
+				and payment_event_source
+			):
+				payment_row_amount = candidate_amount
+			if (
+				payment_event_found in (None, "")
+				and payment_row_index not in (None, "")
+				and payment_event_source
+			):
+				payment_event_found = 1
 			row = {
 				"bank_transaction": doc.bank_transaction or bank_transaction_name,
 				"suggested_document_type": doc.suggested_document_type or explicit_type,
@@ -2083,12 +2097,10 @@ def _resolve_matching_candidate(
 				# Payment-row amount/event-found were historically transient report
 				# fields. Persisted review records retain the same identity through
 				# candidate_amount + payment_row_index + payment_event_source.
-				"payment_row_amount": getattr(doc, "payment_row_amount", None)
-				or (candidate_amount if payment_row_index else None),
+				"payment_row_amount": payment_row_amount,
 				"payment_mode": getattr(doc, "payment_mode", None) or getattr(doc, "mode_of_payment", None),
 				"payment_account": getattr(doc, "payment_account", None),
-				"payment_event_found": getattr(doc, "payment_event_found", None)
-				or (1 if payment_row_index and payment_event_source else 0),
+				"payment_event_found": payment_event_found or 0,
 				"payment_event_source": payment_event_source,
 				"reference_number": getattr(doc, "reference_number", None)
 				or getattr(doc, "payment_reference", None),
@@ -2107,7 +2119,11 @@ def _resolve_matching_candidate(
 					and cstr(row.get("payment_event_source")).strip()
 				):
 					row["payment_event_found"] = 1
-				if row.get("payment_row_amount") in (None, ""):
+				if (
+					row.get("payment_row_amount") in (None, "")
+					and row.get("payment_row_index") not in (None, "")
+					and cstr(row.get("payment_event_source")).strip()
+				):
 					row["payment_row_amount"] = getattr(doc, "candidate_amount", None)
 		else:
 			row = {
