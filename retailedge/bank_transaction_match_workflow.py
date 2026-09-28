@@ -2107,7 +2107,11 @@ def _resolve_matching_candidate(
 					and cstr(row.get("payment_event_source")).strip()
 				):
 					row["payment_event_found"] = 1
-				if row.get("payment_row_amount") in (None, ""):
+				if (
+					row.get("payment_row_amount") in (None, "")
+					and row.get("payment_row_index") not in (None, "")
+					and cstr(row.get("payment_event_source")).strip()
+				):
 					row["payment_row_amount"] = getattr(doc, "candidate_amount", None)
 		else:
 			row = {
