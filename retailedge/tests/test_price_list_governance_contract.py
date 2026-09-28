@@ -97,6 +97,14 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		self.assertIn('"fieldtype": "PriorityList"', settings_page)
 		self.assertIn("priorityOption(field, source)", settings_vue)
 		self.assertIn("movePriority(field.fieldname, index, -1)", settings_vue)
+		self.assertEqual(settings_page.count('"label": "Price List Governance"'), 1)
+		self.assertNotIn('"key": "price-list-governance"', settings_page)
+		for legacy_field in (
+			'"selling_price_list_policy"',
+			'"buying_price_list_policy"',
+			'"allow_price_list_switch"',
+		):
+			self.assertNotIn(legacy_field, settings_page)
 
 	def test_all_primary_sales_and_purchase_entry_surfaces_expose_price_list_selection(self):
 		surfaces = {
