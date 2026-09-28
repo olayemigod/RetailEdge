@@ -2068,7 +2068,7 @@ def _resolve_matching_candidate(
 		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
 		if doc:
 			payment_row_index = getattr(doc, "payment_row_index", None)
-			payment_event_source = getattr(doc, "payment_event_source", None)
+			payment_event_source = cstr(getattr(doc, "payment_event_source", None)).strip() or None
 			candidate_amount = getattr(doc, "candidate_amount", None)
 			row = {
 				"bank_transaction": doc.bank_transaction or bank_transaction_name,
