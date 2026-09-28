@@ -42,7 +42,9 @@ class TestNativeVisualWorkspaceContract(TestCase):
 
 		component = (APP_ROOT / "public" / "js" / "native_visual_workspaces" / "NativeERPNextWorkspace.vue").read_text()
 		self.assertIn("<EdgeAppShell", component)
-		self.assertIn("frappe.new_doc(source.target)", component)
+		self.assertIn("window.EdgeSuiteUI?.openCreateSurface", component)
+		self.assertIn("return openCreateSurface(source.target);", component)
+		self.assertNotIn("frappe.new_doc(source.target)", component)
 		self.assertIn('frappe.set_route("Form", source.target, row.name)', component)
 
 	def test_shared_workspace_buttons_use_edgesuite_button_contract(self):
