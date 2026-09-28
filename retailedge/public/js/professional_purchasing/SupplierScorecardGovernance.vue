@@ -114,6 +114,18 @@ function errorMessage(error, fallback) {
 	return error?.message || error?.exc_type || error?._server_messages || fallback;
 }
 
+function openCreateSurface(doctype, defaults = {}) {
+	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+	if (typeof openCreate !== "function") {
+		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		return Promise.resolve(false);
+	}
+	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
+		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		return false;
+	});
+}
+
 export default {
 	name: "SupplierScorecardGovernance",
 	components: {
@@ -197,7 +209,7 @@ export default {
 		},
 		newScorecard() {
 			if (this.capability.can_create_scorecard && this.supplier && !this.summary.scorecard_exists) {
-				frappe.new_doc("Supplier Scorecard", { supplier: this.supplier });
+				return openCreateSurface("Supplier Scorecard", { supplier: this.supplier });
 			}
 		},
 		formatScore(value) {
