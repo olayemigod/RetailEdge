@@ -155,6 +155,20 @@ function guidedCreateSection(quickActions) {
 	};
 }
 
+function globalCreateAction(quickActions) {
+	const actions = Array.isArray(quickActions) ? quickActions : [];
+	if (!actions.length) return null;
+	return {
+		label: "Create",
+		description: "Start a permission-aware RetailEdge entry.",
+		icon: "plus",
+		link_type: "Action",
+		link_to: GUIDED_CREATE_ACTION,
+		route: "",
+		visible: true,
+	};
+}
+
 function buildSections(groups, quickActions = []) {
 	const sections = (Array.isArray(groups) ? groups : [])
 		.map((group) => {
@@ -286,6 +300,7 @@ async function installProductMenu({ force = false } = {}) {
 			product: PRODUCT,
 			subtitle: "Retail operations, actions, reports, and controls",
 			sections,
+			global_action: globalCreateAction(data.quick_actions),
 			profile: profileFromContext(data.context),
 			menu_source: "retailedge_navigation_registry",
 			navigate,
