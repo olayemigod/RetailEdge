@@ -51,7 +51,8 @@ class TestWarrantyServiceNavigationContract(TestCase):
 		generic_block = component[generic_block_start:generic_block_end]
 		self.assertNotIn("allowRestricted: true", generic_block)
 		self.assertIn("edgeUI?.openCreateSurface", component)
-		self.assertIn("frappe.new_doc(doctype, defaults)", component)
+		self.assertIn("EdgeSuite create navigation is unavailable.", component)
+		self.assertNotIn("frappe.new_doc(doctype, defaults)", component)
 		self.assertNotIn("frappe.ui.form.make_quick_entry", component)
 
 		permission_gate = component.index('if (!this.nativeFallbackEnabled)')
