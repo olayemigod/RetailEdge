@@ -54,7 +54,7 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 		"expenses": _safe_section(
 			"Expenses",
 			lambda: get_expense_register(
-				filters={**common, "view_mode": "consolidated", "include_unposted_cashier_expenses": 1},
+				filters={**common, "view_mode": "consolidated", "include_unposted_cashier_expenses": 0},
 				page=1,
 				page_size=DEFAULT_PAGE_SIZE,
 			),
