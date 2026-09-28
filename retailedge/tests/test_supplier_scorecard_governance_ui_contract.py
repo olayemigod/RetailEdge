@@ -30,7 +30,9 @@ class TestSupplierScorecardGovernanceUIContract(TestCase):
 		self.assertIn("retailedge.supplier_scorecard_governance.get_supplier_scorecard_summary", component)
 		self.assertIn('frappe.set_route("Form", "Supplier Scorecard", this.summary.scorecard.name)', component)
 		self.assertIn('frappe.set_route("List", "Supplier Scorecard")', component)
-		self.assertIn('frappe.new_doc("Supplier Scorecard", { supplier: this.supplier })', component)
+		self.assertIn("window.EdgeSuiteUI?.openCreateSurface", component)
+		self.assertIn('return openCreateSurface("Supplier Scorecard", { supplier: this.supplier });', component)
+		self.assertNotIn('frappe.new_doc("Supplier Scorecard", { supplier: this.supplier })', component)
 		self.assertIn("Native ERPNext permission required.", component)
 		self.assertIn("ERPNext standings remain authoritative", component)
 		self.assertNotIn("v-model", component)
@@ -39,7 +41,7 @@ class TestSupplierScorecardGovernanceUIContract(TestCase):
 		self.assertNotIn("frappe.ui.Dialog", component)
 		self.assertNotIn("frappe.prompt", component)
 		self.assertNotIn("frappe.msgprint", component)
-		self.assertNotIn("frappe.show_alert", component)
+		self.assertIn("EdgeSuite create navigation is unavailable.", component)
 		self.assertNotIn("window.EdgeUI", component)
 
 	def test_backend_is_permission_scoped_bounded_and_passive(self):
