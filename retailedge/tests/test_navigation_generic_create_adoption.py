@@ -11,6 +11,7 @@ GENERIC_CREATE_SURFACES = {
 	"setup": ROOT / "public/js/retailedge_setup/RetailEdgeSetup.vue",
 	"forecasting_planning": ROOT / "public/js/forecasting_planning/ForecastingPlanning.vue",
 	"supplier_scorecard": ROOT / "public/js/professional_purchasing/SupplierScorecardGovernance.vue",
+	"project_operations": ROOT / "public/js/project_operations/ProjectOperations.vue",
 }
 
 
@@ -67,6 +68,16 @@ def test_supplier_scorecard_create_preserves_supplier_default_and_permission_cap
 	assert "this.capability.can_create_scorecard && this.supplier && !this.summary.scorecard_exists" in source
 	assert 'return openCreateSurface("Supplier Scorecard", { supplier: this.supplier });' in source
 	assert 'frappe.new_doc("Supplier Scorecard"' not in source
+
+
+def test_project_task_and_budget_creation_use_shared_contract_but_native_spend_escape_stays_explicit():
+	source = GENERIC_CREATE_SURFACES["project_operations"].read_text(encoding="utf-8")
+	assert 'return openCreateSurface("Task", { project: this.project });' in source
+	assert 'return openCreateSurface("Budget", { budget_against: "Project", project: this.project, company: this.context.company });' in source
+	assert 'frappe.new_doc("Task"' not in source
+	assert 'frappe.new_doc("Budget"' not in source
+	assert 'primary_action_label: __("Open Native Entry")' in source
+	assert "frappe.new_doc(route.doctype, route.defaults || {});" in source
 
 
 def test_guided_advanced_transaction_escapes_remain_outside_generic_create_contract():
