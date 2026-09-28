@@ -424,7 +424,7 @@ import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import BusinessHubChartCard from "./BusinessHubChartCard.vue";
-import { callMethod, getTransactionEntryPreference, openQuickEntryMaster, persistentTransactionPage } from "./guidedEntryUtils";
+import { callMethod, getTransactionEntryPreference, persistentTransactionPage } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
@@ -444,7 +444,7 @@ const MAKE_SALE_HANDOFF_PREFIX = "retailedge:make-sale:handoff:";
 const RECORD_PURCHASE_HANDOFF_PREFIX = "retailedge:record-purchase:handoff:";
 const TRANSFER_STOCK_HANDOFF_PREFIX = "retailedge:transfer-stock:handoff:";
 const STOCK_ADJUSTMENT_HANDOFF_PREFIX = "retailedge:stock-adjustment:handoff:";
-const QUICK_ENTRY_MASTER_ACTIONS = Object.freeze({
+const GENERIC_MASTER_CREATE_ACTIONS = Object.freeze({
 	"new-customer": "Customer",
 	"new-supplier": "Supplier",
 	"new-item": "Item",
@@ -453,6 +453,17 @@ const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
 		: {};
+
+function openNativeCreateSurface(doctype, defaults = {}, { allowRestricted = false } = {}) {
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
+	if (typeof edgeUI?.openCreateSurface === "function") {
+		return edgeUI.openCreateSurface(doctype, { defaults, allowRestricted });
+	}
+	if (typeof frappe?.new_doc !== "function") {
+		return Promise.reject(new Error("ERPNext document creation is unavailable."));
+	}
+	return Promise.resolve(frappe.new_doc(doctype, defaults));
+}
 
 function readSharedContext() {
 	const cache = window.__retailedgeBusinessHubContextCache;
@@ -1073,29 +1084,30 @@ export default {
 				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
-			const quickEntryDoctype = QUICK_ENTRY_MASTER_ACTIONS[action.key];
-			if (quickEntryDoctype) {
-				openQuickEntryMaster(quickEntryDoctype)
-					.then((created) => {
-						if (!created?.value) return;
-						frappe.show_alert?.({
-							message: `${created.label || created.value} created`,
-							indicator: "green",
-						});
-					})
-					.catch((error) => {
-						frappe.show_alert?.({
-							message: error?.message || `Unable to create ${quickEntryDoctype}.`,
-							indicator: "red",
-						}, 7);
-					});
+			const masterCreateDoctype = GENERIC_MASTER_CREATE_ACTIONS[action.key];
+			if (masterCreateDoctype) {
+				try {
+					await openNativeCreateSurface(masterCreateDoctype, {}, { allowRestricted: true });
+				} catch (error) {
+					frappe.show_alert?.({
+						message: error?.message || `Unable to create ${masterCreateDoctype}.`,
+						indicator: "red",
+					}, 7);
+				}
 				return;
 			}
 			if (!this.nativeFallbackEnabled) {
 				frappe.show_alert?.({ message: "This account is limited to guided operational pages.", indicator: "orange" });
 				return;
 			}
-			frappe.new_doc(action.doctype);
+			try {
+				await openNativeCreateSurface(action.doctype);
+			} catch (error) {
+				frappe.show_alert?.({
+					message: error?.message || `Unable to create ${action.doctype}.`,
+					indicator: "red",
+				}, 7);
+			}
 		},
 		notifyGuidedDraftSaved(result, fallbackDoctype, label, { stayInEdgeSuite = false } = {}) {
 			if (!result?.name) return;

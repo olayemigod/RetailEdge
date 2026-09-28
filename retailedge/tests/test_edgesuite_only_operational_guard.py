@@ -32,6 +32,9 @@ class EdgeSuiteOnlyOperationalGuardTests(unittest.TestCase):
 			/ "professional_purchasing"
 			/ "professional_purchasing.js"
 		).read_text()
+		self.business_hub_page = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js"
+		).read_text()
 
 	def test_guard_is_boot_mode_driven_and_does_not_change_permissions(self):
 		self.assertIn('const ACCESS_BOOT_KEY = "edgesuite_ui_access"', self.guard)
@@ -129,6 +132,19 @@ class EdgeSuiteOnlyOperationalGuardTests(unittest.TestCase):
 		self.assertIn("installGuidedPurchaseOrderTrigger(wrapper, root);", self.purchasing_page)
 		self.assertNotIn("ignore_permissions", self.purchasing_page)
 		self.assertNotIn("frappe.db.commit", self.purchasing_page)
+
+	def test_business_hub_guard_contains_generic_master_full_form_escape(self):
+		asset = 'retailedge_edgesuite_only_operational_guard.bundle.js'
+		self.assertIn(f'RESTRICTED_GUARD_ASSET = "{asset}"', self.business_hub_page)
+		self.assertIn("await requireAsset(RESTRICTED_GUARD_ASSET)", self.business_hub_page)
+		self.assertIn("installRestrictedOperationalGuard();", self.business_hub_page)
+		self.assertIn('pageRoute: PAGE_NAME', self.business_hub_page)
+		self.assertIn('rootSelector: ".retailedge-business-hub-root"', self.business_hub_page)
+		for doctype in ("Customer", "Supplier", "Item"):
+			self.assertIn(f'"{doctype}"', self.business_hub_page)
+		for slug in ("customer", "supplier", "item"):
+			self.assertIn(f'"{slug}"', self.business_hub_page)
+		self.assertNotIn('"Warranty Claim"', self.business_hub_page)
 
 	def test_page_show_reapplies_guard_without_rewriting_business_logic(self):
 		self.assertGreaterEqual(self.selling_page.count("installRestrictedOperationalGuard();"), 2)

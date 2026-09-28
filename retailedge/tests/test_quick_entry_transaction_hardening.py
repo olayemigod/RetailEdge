@@ -112,7 +112,7 @@ def test_quick_entry_scope_keeps_only_small_or_bounded_work_in_modals():
 	assert 'action.doctype === "RetailEdge Business Expense" || action.target === "business-expenses"' in hub
 	assert "this.simpleCashierExpenseOpen = true" in hub
 
-	# Only genuinely simple masters are promoted to native ERPNext Quick Entry.
+	# Generic master creation delegates to the native ERPNext/Frappe create surface; Frappe decides Quick Entry vs full Form.
 	for doctype in ("Customer", "Supplier", "Item"):
 		assert f'"doctype": "{doctype}"' in master
 	for complex_doctype in ("Warehouse", "Bank Account", "RetailEdge Expense Category"):

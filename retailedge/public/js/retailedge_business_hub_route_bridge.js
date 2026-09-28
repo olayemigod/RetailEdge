@@ -5,7 +5,7 @@
 	const MAX_ATTEMPTS = 40;
 	const RETRY_MS = 150;
 	const GUIDED_CREATE_EVENT = "retailedge-open-guided-create";
-	const SIMPLE_MASTER_DOCTYPES = new Set(["Customer", "Supplier", "Item"]);
+	const GENERIC_MASTER_CREATE_DOCTYPES = new Set(["Customer", "Supplier", "Item"]);
 	const state = {
 		attempts: 0,
 		booted: false,
@@ -195,50 +195,52 @@
 		return true;
 	}
 
-	function launchMasterQuickEntry(action) {
+	function launchMasterCreateSurface(action) {
 		const doctype = action?.doctype;
-		if (!SIMPLE_MASTER_DOCTYPES.has(doctype)) return false;
-		if (!global.frappe?.ui?.form?.make_quick_entry || !global.frappe?.model?.get_new_doc) {
+		if (!GENERIC_MASTER_CREATE_DOCTYPES.has(doctype)) return false;
+		const openCreate = global.EdgeSuiteUI?.openCreateSurface;
+		try {
+			if (typeof openCreate === "function") {
+				Promise.resolve(openCreate(doctype, { allowRestricted: true })).catch((error) => {
+					global.frappe?.show_alert?.({
+						message: error?.message || `Unable to create ${doctype}.`,
+						indicator: "red",
+					}, 7);
+				});
+				return true;
+			}
 			global.frappe?.new_doc?.(doctype);
 			return true;
+		} catch (error) {
+			global.frappe?.show_alert?.({
+				message: error?.message || `Unable to create ${doctype}.`,
+				indicator: "red",
+			}, 7);
+			return false;
 		}
-		const doc = global.frappe.model.get_new_doc(doctype, null, null, true);
-		global.frappe.ui.form.make_quick_entry(
-			doctype,
-			(created) => {
-				if (created?.name) {
-					global.frappe.show_alert?.({
-						message: `${action.label || doctype} ${created.name} created`,
-						indicator: "green",
-					});
-				}
-			},
-			null,
-			doc,
-			true
-		);
-		return true;
 	}
 
-	function installMasterQuickEntryBridge(wrapper) {
+	function installMasterCreateBridge(wrapper) {
 		const proxy = getMountedProxy(wrapper);
-		if (!proxy || proxy.__retailedgeMasterQuickEntryBridge) return Boolean(proxy);
+		if (!proxy || proxy.__retailedgeMasterCreateBridge) return Boolean(proxy);
 		const originalRunQuickAction = proxy.runQuickAction?.bind(proxy);
 		const originalActionModeLabel = proxy.actionModeLabel?.bind(proxy);
 		if (typeof originalRunQuickAction !== "function") return false;
 
 		proxy.runQuickAction = (action) => {
-			if (action?.master_entry && SIMPLE_MASTER_DOCTYPES.has(action.doctype)) {
+			if (action?.master_entry && GENERIC_MASTER_CREATE_DOCTYPES.has(action.doctype)) {
 				proxy.closeCreatePicker?.();
-				return launchMasterQuickEntry(action);
+				return launchMasterCreateSurface(action);
 			}
 			return originalRunQuickAction(action);
 		};
 		proxy.actionModeLabel = (action) => {
-			if (action?.master_entry && SIMPLE_MASTER_DOCTYPES.has(action.doctype)) return "Quick entry";
+			if (action?.master_entry && GENERIC_MASTER_CREATE_DOCTYPES.has(action.doctype)) {
+				return "Quick / Full form";
+			}
 			return typeof originalActionModeLabel === "function" ? originalActionModeLabel(action) : "Full form";
 		};
-		proxy.__retailedgeMasterQuickEntryBridge = true;
+		proxy.__retailedgeMasterCreateBridge = true;
 		return true;
 	}
 
@@ -287,7 +289,7 @@
 			global.retailedgeBootProductMenu?.();
 			const pending = global.retailedgeBootBusinessHubPage?.(wrapper);
 			Promise.resolve(pending).finally(() => {
-				installMasterQuickEntryBridge(wrapper);
+				installMasterCreateBridge(wrapper);
 				installGuidedCreateSearch(wrapper);
 				openPendingGuidedCreate(wrapper);
 			});
