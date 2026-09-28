@@ -298,6 +298,11 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 		order_by="posting_date asc",
 		limit_page_length=MAX_VISUAL_TREND_ROWS + 1,
 	)
+	if len(trend_rows) > MAX_VISUAL_TREND_ROWS:
+		frappe.throw(
+			_("Sales trend is too large to load safely. Narrow the date range or add filters."),
+			frappe.ValidationError,
+		)
 	trend = [
 		{
 			"posting_date": row.posting_date,
@@ -321,6 +326,11 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 			order_by=f"{branch_field} asc",
 			limit_page_length=MAX_VISUAL_BRANCH_ROWS + 1,
 		)
+		if len(mix_rows) > MAX_VISUAL_BRANCH_ROWS:
+			frappe.throw(
+				_("Branch sales mix is too large to load safely. Narrow the scope or select a Branch."),
+				frappe.ValidationError,
+			)
 		aggregated: dict[str, float] = defaultdict(float)
 		for row in mix_rows:
 			label = str(row.get(branch_field) or _("Unattributed")).strip() or _("Unattributed")
