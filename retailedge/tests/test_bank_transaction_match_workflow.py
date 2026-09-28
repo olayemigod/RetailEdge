@@ -582,7 +582,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(row["payment_event_source"], "Invoice Payment Row")
 
 	@patch("retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row")
-	def test_persisted_sales_invoice_review_does_not_invent_missing_event_source(self, mock_validate):
+	def test_persisted_sales_invoice_review_does_not_invent_blank_event_source(self, mock_validate):
 		mock_validate.return_value = {"valid": False, "candidate": None}
 		active_doc = SimpleNamespace(
 			bank_transaction="BTN-PARTIAL-LOCK",
@@ -592,7 +592,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			payment_entry=None,
 			candidate_amount=1090,
 			payment_row_index="2",
-			payment_event_source=None,
+			payment_event_source="   ",
 			payment_mode="Bank Transfer",
 			payment_account="Moniepoint - PE",
 		)
