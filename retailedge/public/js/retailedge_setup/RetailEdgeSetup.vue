@@ -112,6 +112,18 @@ function doctypeSlug(doctype) {
 		.replace(/^-|-$/g, "");
 }
 
+function openCreateSurface(doctype, defaults = {}) {
+	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+	if (typeof openCreate !== "function") {
+		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		return Promise.resolve(false);
+	}
+	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
+		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		return false;
+	});
+}
+
 export default {
 	name: "RetailEdgeSetup",
 	components: {
@@ -245,7 +257,7 @@ export default {
 				return;
 			}
 			if (!this.canUseNativeDesk) return;
-			window.open(`/app/${doctypeSlug(resource.doctype)}/new`, "_blank", "noopener,noreferrer");
+			return openCreateSurface(resource.doctype);
 		},
 		openOperatingContext() {
 			frappe.set_route("operating-context");

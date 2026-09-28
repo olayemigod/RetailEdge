@@ -213,10 +213,10 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 		):
 			self.assertIn(contract, source)
 
-		self.assertIn(
-			'frappe.route_options = { price_list: this.priceListOptions[0].value }',
-			source,
-		)
+		self.assertIn("defaults.price_list = this.priceListOptions[0].value;", source)
+		self.assertIn("return openCreateSurface(this.activeArea.doctype, defaults);", source)
+		self.assertIn("window.EdgeSuiteUI?.openCreateSurface", source)
+		self.assertNotIn("frappe.route_options = { price_list:", source)
 
 	def test_legacy_generic_pricing_preview_is_closed(self):
 		source = (APP_ROOT / "native_visual_workspaces.py").read_text()
