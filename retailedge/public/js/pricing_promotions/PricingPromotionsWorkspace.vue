@@ -192,6 +192,18 @@ function doctypeSlug(doctype) {
 	return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+function openCreateSurface(doctype, defaults = {}) {
+	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+	if (typeof openCreate !== "function") {
+		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		return Promise.resolve(false);
+	}
+	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
+		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		return false;
+	});
+}
+
 export default {
 	name: "PricingPromotionsWorkspace",
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
@@ -368,10 +380,11 @@ export default {
 		},
 		createRecord() {
 			if (!this.activeArea?.can_create) return;
+			const defaults = {};
 			if (this.activeArea.doctype === "Item Price" && this.priceListOptions.length === 1) {
-				frappe.route_options = { price_list: this.priceListOptions[0].value };
+				defaults.price_list = this.priceListOptions[0].value;
 			}
-			frappe.new_doc(this.activeArea.doctype);
+			return openCreateSurface(this.activeArea.doctype, defaults);
 		},
 		editRecord(row) {
 			if (!this.activeArea?.doctype || !row?.name) return;
