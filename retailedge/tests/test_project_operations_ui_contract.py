@@ -73,7 +73,9 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("Tasks & Milestones", component)
 		self.assertIn("Open Tasks", component)
 		self.assertIn("New Task", component)
-		self.assertIn('frappe.new_doc("Task", { project: this.project })', component)
+		self.assertIn('return openCreateSurface("Task", { project: this.project });', component)
+		self.assertIn("window.EdgeSuiteUI?.openCreateSurface", component)
+		self.assertNotIn('frappe.new_doc("Task", { project: this.project })', component)
 		self.assertIn('frappe.set_route("List", "Task", { project: this.project })', component)
 		self.assertIn('filters={"project": project, "is_template": 0}', source)
 		self.assertIn('"is_milestone"', source)
@@ -89,9 +91,10 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("Open Budgets", component)
 		self.assertIn("New Budget", component)
 		self.assertIn(
-			'frappe.new_doc("Budget", { budget_against: "Project", project: this.project, company: this.context.company })',
+			'return openCreateSurface("Budget", { budget_against: "Project", project: this.project, company: this.context.company });',
 			component,
 		)
+		self.assertNotIn('frappe.new_doc("Budget", { budget_against: "Project"', component)
 		self.assertIn('budget_against: "Project"', component)
 		self.assertIn(
 			'filters={"budget_against": "Project", "project": project, "company": doc.company, "docstatus": ["<", 2]}',
