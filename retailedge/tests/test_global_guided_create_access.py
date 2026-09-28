@@ -23,8 +23,11 @@ def test_product_menu_exposes_permission_aware_global_create_action():
     source = PRODUCT_MENU.read_text(encoding="utf-8")
     assert 'const GUIDED_CREATE_ACTION = "guided-create"' in source
     assert "guidedCreateSection(quickActions)" in source
+    assert "globalCreateAction(quickActions)" in source
     assert "buildSections(data.navigation_groups, data.quick_actions)" in source
+    assert "global_action: globalCreateAction(data.quick_actions)" in source
     assert 'label: "+ Create"' in source
+    assert 'label: "Create"' in source
     assert 'link_type: "Action"' in source
     assert "requestGuidedCreate()" in source
     assert "__retailedgeOpenGuidedCreate = true" in source
