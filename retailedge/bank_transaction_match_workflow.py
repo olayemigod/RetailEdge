@@ -2084,11 +2084,11 @@ def _resolve_matching_candidate(
 				# fields. Persisted review records retain the same identity through
 				# candidate_amount + payment_row_index + payment_event_source.
 				"payment_row_amount": getattr(doc, "payment_row_amount", None)
-				or (candidate_amount if payment_row_index else None),
+				or (candidate_amount if payment_row_index and payment_event_source else None),
 				"payment_mode": getattr(doc, "payment_mode", None) or getattr(doc, "mode_of_payment", None),
 				"payment_account": getattr(doc, "payment_account", None),
 				"payment_event_found": getattr(doc, "payment_event_found", None)
-				or (1 if payment_row_index or payment_event_source else 0),
+				or (1 if payment_row_index and payment_event_source else 0),
 				"payment_event_source": payment_event_source,
 				"reference_number": getattr(doc, "reference_number", None)
 				or getattr(doc, "payment_reference", None),
