@@ -113,6 +113,18 @@ function components() { return window.EdgeSuiteUI?.components || {}; }
 function call(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (r) => resolve(r.message ?? {}), error: reject })); }
 function message(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
 
+function openCreateSurface(doctype, defaults = {}) {
+	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
+	if (typeof openCreate !== "function") {
+		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		return Promise.resolve(false);
+	}
+	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
+		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		return false;
+	});
+}
+
 export default {
 	name: "ForecastingPlanning",
 	props: { pageMethod: { type: String, required: true }, exportMethod: { type: String, required: true } },
@@ -169,7 +181,7 @@ export default {
 		async fetchPerformance() { if (!this.scenarioName) return; this.performanceLoading = true; this.performanceError = ""; try { const result = await call("retailedge.scenario_performance.get_scenario_performance", { scenario: this.scenarioName }); this.performanceRows = result.rows || []; this.performanceSummary = result.summary || []; } catch (e) { this.performanceError = message(e, "Failed to load forecast-vs-actual performance."); } finally { this.performanceLoading = false; } },
 		newScenario() {
 			if (!this.canUseNativeDesk || !this.canCreateScenario || !this.filters.company) return;
-			frappe.new_doc("RetailEdge Planning Scenario", {
+			return openCreateSurface("RetailEdge Planning Scenario", {
 				company: this.filters.company,
 				branch: this.filters.branch,
 				as_of_date: this.filters.as_of_date,
