@@ -199,17 +199,20 @@
 		const doctype = action?.doctype;
 		if (!GENERIC_MASTER_CREATE_DOCTYPES.has(doctype)) return false;
 		const openCreate = global.EdgeSuiteUI?.openCreateSurface;
+		if (typeof openCreate !== "function") {
+			global.frappe?.show_alert?.({
+				message: "EdgeSuite create navigation is unavailable.",
+				indicator: "red",
+			}, 7);
+			return false;
+		}
 		try {
-			if (typeof openCreate === "function") {
-				Promise.resolve(openCreate(doctype, { allowRestricted: true })).catch((error) => {
-					global.frappe?.show_alert?.({
-						message: error?.message || `Unable to create ${doctype}.`,
-						indicator: "red",
-					}, 7);
-				});
-				return true;
-			}
-			global.frappe?.new_doc?.(doctype);
+			Promise.resolve(openCreate(doctype, { allowRestricted: true })).catch((error) => {
+				global.frappe?.show_alert?.({
+					message: error?.message || `Unable to create ${doctype}.`,
+					indicator: "red",
+				}, 7);
+			});
 			return true;
 		} catch (error) {
 			global.frappe?.show_alert?.({
