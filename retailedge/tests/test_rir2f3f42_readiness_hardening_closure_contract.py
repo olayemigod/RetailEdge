@@ -93,8 +93,9 @@ def test_business_hub_maps_generic_master_create_actions_to_fixed_doctypes():
 		("new-item", "Item"),
 	):
 		assert f'"{key}": "{doctype}"' in source
-	assert "openQuickEntryMaster" in source
-	assert "QUICK_ENTRY_MASTER_ACTIONS[action.key]" in source
+	assert "openNativeCreateSurface" in source
+	assert "openQuickEntryMaster" not in source
+	assert "GENERIC_MASTER_CREATE_ACTIONS[action.key]" in source
 
 
 def test_generic_master_create_surface_uses_product_contained_restricted_mode():
@@ -103,7 +104,7 @@ def test_generic_master_create_surface_uses_product_contained_restricted_mode():
 	native_block_index = source.index("if (!this.nativeFallbackEnabled)", mapping_index)
 	assert mapping_index < native_block_index
 	block = source[mapping_index:native_block_index]
-	assert "openQuickEntryMaster" in block
+	assert "await openNativeCreateSurface(masterCreateDoctype, {}, { allowRestricted: true });" in block
 	assert "action.doctype" not in block
 
 
@@ -114,7 +115,7 @@ def test_unknown_native_actions_still_fail_closed_without_native_desk():
 	assert "await openNativeCreateSurface(action.doctype);" in source\n\tassert "frappe.new_doc(action.doctype)" not in source
 
 
-def test_guided_entry_utils_exposes_blank_permission_aware_quick_entry_helper():
+def test_guided_entry_utils_keeps_inline_master_creation_inside_guided_dialogs():
 	source = GUIDED_UTILS.read_text(encoding="utf-8")
 	assert "export function openQuickEntryMaster(doctype, initialValues = {})" in source
 	assert "frappe.model.get_new_doc(doctype" in source
