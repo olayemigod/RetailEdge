@@ -6,7 +6,8 @@ function mountOwnerDashboard(target) {
 	if (!edgeUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime compatibility error: createEdgeApp is missing");
 	if (!target) throw new Error("Financial Dashboard mount target is required");
 	const app = edgeUI.createEdgeApp(OwnerDashboard);
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 
