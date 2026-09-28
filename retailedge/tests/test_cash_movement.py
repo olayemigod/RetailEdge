@@ -110,6 +110,19 @@ class TestCashMovement(unittest.TestCase):
 			order_by="gle.posting_date DESC, gle.creation DESC, gle.name DESC",
 		)
 
+	def test_summary_and_visual_totals_follow_movement_classification(self):
+		source = (APP_ROOT / "cash_movement.py").read_text()
+		self.assertGreaterEqual(
+			source.count("WHEN ({query[\"movement_expression\"]}) = 'Money In' THEN gle.debit"),
+			2,
+		)
+		self.assertGreaterEqual(
+			source.count("WHEN ({query[\"movement_expression\"]}) = 'Money Out' THEN gle.credit"),
+			2,
+		)
+		self.assertIn("WHEN gle.voucher_type = 'Journal Entry' THEN 'Adjustment'", source)
+		self.assertIn("AND {payment_type_expression} = 'Internal Transfer' THEN 'Transfer'", source)
+
 	def test_limits_are_explicit(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_PAGE_SIZE, 100)
