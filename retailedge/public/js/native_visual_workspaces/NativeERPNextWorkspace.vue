@@ -240,14 +240,7 @@ export default {
 		},
 		createSource(source) {
 			if (!this.canUseNativeDesk || source.kind !== "doctype" || !source.can_create) return;
-			const openCreate = window.EdgeSuiteUI?.openCreateSurface;
-			if (typeof openCreate !== "function") {
-				frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
-				return;
-			}
-			Promise.resolve(openCreate(source.target)).catch((error) => {
-				frappe.show_alert?.({ message: error?.message || __("Unable to create this record."), indicator: "red" }, 7);
-			});
+			return openCreateSurface(source.target);
 		},
 		openRow(source, row) {
 			if (!this.canUseNativeDesk || source.kind !== "doctype" || !row?.name) return;
