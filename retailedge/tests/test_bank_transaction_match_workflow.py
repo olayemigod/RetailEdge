@@ -581,6 +581,43 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(row["payment_event_found"], 1)
 		self.assertEqual(row["payment_event_source"], "Invoice Payment Row")
 
+	@patch("retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row")
+	def test_persisted_sales_invoice_review_does_not_invent_missing_event_source(self, mock_validate):
+		mock_validate.return_value = {"valid": False, "candidate": None}
+		active_doc = SimpleNamespace(
+			bank_transaction="BTN-PARTIAL-LOCK",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-PARTIAL-LOCK",
+			sales_invoice="SINV-PARTIAL-LOCK",
+			payment_entry=None,
+			candidate_amount=1090,
+			payment_row_index="2",
+			payment_event_source=None,
+			payment_mode="Bank Transfer",
+			payment_account="Moniepoint - PE",
+		)
+		old_doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
+		old_fast = getattr(frappe.flags, "retailedge_fast_validation", False)
+		try:
+			frappe.flags.retailedge_active_match_doc = active_doc
+			frappe.flags.retailedge_fast_validation = True
+			candidate = _resolve_matching_candidate(
+				bank_transaction_name="BTN-PARTIAL-LOCK",
+				suggested_document_type="Sales Invoice",
+				suggested_document="SINV-PARTIAL-LOCK",
+				sales_invoice="SINV-PARTIAL-LOCK",
+				allow_fallback=False,
+			)
+		finally:
+			frappe.flags.retailedge_active_match_doc = old_doc
+			frappe.flags.retailedge_fast_validation = old_fast
+		self.assertIsNone(candidate)
+		row = mock_validate.call_args.args[0]
+		self.assertEqual(row["payment_row_index"], "2")
+		self.assertIsNone(row["payment_event_source"])
+		self.assertEqual(row["payment_event_found"], 0)
+		self.assertIsNone(row["payment_row_amount"])
+
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[],
