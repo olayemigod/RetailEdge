@@ -90,7 +90,7 @@
 							@update:modelValue="setCustomer"
 						/>
 
-						<EdgeInput v-model="values.posting_date" id="make-sale-posting-date" label="Posting Date" type="date" required />
+						<EdgeInput :modelValue="values.posting_date" id="make-sale-posting-date" label="Posting Date" type="date" required @update:modelValue="postingDateChanged" />
 
 						<EdgeLinkField
 							v-if="branchEnabled"
@@ -771,6 +771,13 @@ export default {
 				this.saveError = errorMessage(error, "Unable to use the selected Selling Price List.");
 			}
 		},
+		postingDateChanged(next) {
+			const value = next || "";
+			if (this.values.posting_date === value) return;
+			this.values.posting_date = value;
+			this.pricingCache.clear();
+			this.refreshAllItemPricing();
+		},
 		searchLineLink(column, query) {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
@@ -861,7 +868,9 @@ export default {
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) {
+				const itemChanged = row.item_code !== prior.item_code;
+				const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);
+				if (row.item_code && (itemChanged || quantityChanged)) {
 					changed.push(index);
 					return { ...row, rate: "" };
 				}

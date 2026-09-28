@@ -544,6 +544,28 @@ def test_quick_sale_reprices_quantity_and_posting_date_changes():
 	assert "this.loadItemPricing(index)" in update_block
 
 
+def test_persistent_sales_and_purchase_pages_reprice_quantity_and_posting_date_changes():
+	contracts = {
+		ROOT / "public" / "js" / "make_sale" / "MakeSale.vue": (
+			'make-sale-posting-date',
+			'postingDateChanged',
+		),
+		ROOT / "public" / "js" / "record_purchase" / "RecordPurchase.vue": (
+			'record-purchase-posting-date',
+			'postingDateChanged',
+		),
+	}
+	for path, (date_id, date_handler) in contracts.items():
+		source = path.read_text(encoding="utf-8")
+		assert f'id="{date_id}"' in source
+		assert f'@update:modelValue="{date_handler}"' in source
+		assert "const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);" in source
+		assert "itemChanged || quantityChanged" in source
+		assert "this.pricingCache.clear();" in source
+		assert "this.refreshAllItemPricing();" in source
+		assert 'return { ...row, rate: "" };' in source
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
