@@ -213,6 +213,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "insights", "label": "Insights", "icon": "chart", "items": (
+			{"label": "Financial Dashboard", "target_type": "Page", "target": "owner-dashboard", "icon": "chart"},
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
 			{"label": "Sales Forecast", "target_type": "Page", "target": "sales-forecast", "icon": "trending-up"},
 			{"label": "Forecasting & Planning", "target_type": "Page", "target": "forecasting-planning", "icon": "calendar"},
