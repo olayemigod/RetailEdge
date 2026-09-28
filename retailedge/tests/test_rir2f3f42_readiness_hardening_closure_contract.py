@@ -112,7 +112,8 @@ def test_unknown_native_actions_still_fail_closed_without_native_desk():
 	source = BUSINESS_HUB.read_text(encoding="utf-8")
 	assert 'if (!this.nativeFallbackEnabled)' in source
 	assert "This account is limited to EdgeSuite operational pages." in source
-	assert "await openNativeCreateSurface(action.doctype);" in source\n\tassert "frappe.new_doc(action.doctype)" not in source
+	assert "await openNativeCreateSurface(action.doctype);" in source
+	assert "frappe.new_doc(action.doctype)" not in source
 
 
 def test_guided_entry_utils_keeps_inline_master_creation_inside_guided_dialogs():
