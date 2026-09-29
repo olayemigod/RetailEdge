@@ -613,9 +613,49 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			frappe.flags.retailedge_fast_validation = old_fast
 		self.assertIsNone(candidate)
 		row = mock_validate.call_args.args[0]
+		self.assertEqual(row["candidate_amount"], 1090)
 		self.assertEqual(row["payment_row_index"], "2")
 		self.assertEqual(row["payment_event_found"], 0)
 		self.assertIsNone(row["payment_event_source"])
+		self.assertIsNone(row["payment_row_amount"])
+
+	@patch("retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row")
+	def test_persisted_sales_invoice_review_blank_event_source_stays_fail_closed(self, mock_validate):
+		mock_validate.return_value = {"valid": False, "reason": "missing payment event"}
+		active_doc = SimpleNamespace(
+			bank_transaction="BTN-BLANK-SOURCE",
+			suggested_document_type="Sales Invoice",
+			suggested_document="SINV-BLANK-SOURCE",
+			sales_invoice="SINV-BLANK-SOURCE",
+			payment_entry=None,
+			candidate_amount=1090,
+			payment_row_index="2",
+			payment_event_source="   ",
+			payment_mode="Bank Transfer",
+			payment_account="Moniepoint - PE",
+		)
+		old_doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
+		old_fast = getattr(frappe.flags, "retailedge_fast_validation", False)
+		try:
+			frappe.flags.retailedge_active_match_doc = active_doc
+			frappe.flags.retailedge_fast_validation = True
+			candidate = _resolve_matching_candidate(
+				bank_transaction_name="BTN-BLANK-SOURCE",
+				suggested_document_type="Sales Invoice",
+				suggested_document="SINV-BLANK-SOURCE",
+				sales_invoice="SINV-BLANK-SOURCE",
+				allow_fallback=False,
+			)
+		finally:
+			frappe.flags.retailedge_active_match_doc = old_doc
+			frappe.flags.retailedge_fast_validation = old_fast
+		self.assertIsNone(candidate)
+		row = mock_validate.call_args.args[0]
+		self.assertEqual(row["candidate_amount"], 1090)
+		self.assertEqual(row["payment_row_index"], "2")
+		self.assertEqual(row["payment_event_found"], 0)
+		self.assertIsNone(row["payment_event_source"])
+		self.assertIsNone(row["payment_row_amount"])
 
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
