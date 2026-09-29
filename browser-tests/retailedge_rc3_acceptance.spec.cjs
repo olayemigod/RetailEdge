@@ -140,6 +140,28 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 	}
 });
 
+test("RC3 persistent Global Create is visible on non-hub pages and opens the canonical picker", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "cash-movement", "Cash Movement");
+
+		const host = page.locator("#edge-product-menu-host");
+		const menuTrigger = host.locator("#edge-product-menu-trigger");
+		const globalCreate = host.locator("#edge-product-global-action");
+
+		await expect(menuTrigger).toBeVisible();
+		await expect(globalCreate).toBeVisible();
+		await expect(globalCreate).toHaveAttribute("aria-label", "Create");
+		expect(await globalCreate.evaluate((button) => button.parentElement?.id)).toBe("edge-product-menu-host");
+
+		await globalCreate.click();
+		await expect(page).toHaveURL(/\/app\/retailedge-business-hub/);
+		await expect(page.getByRole("searchbox", { name: "Search permitted Create entries" })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 waffle opens the permission-aware EdgeSuite product menu", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
