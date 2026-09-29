@@ -111,6 +111,7 @@ jobs:
           bench get-app \
             --skip-assets \
             "$GITHUB_WORKSPACE/edgesuite-ui-source"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "0c00dd8b4418a37b6c48c4def7721ba7a58e1adc"
 
           bench get-app \
             --skip-assets \
