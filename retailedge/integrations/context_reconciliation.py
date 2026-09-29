@@ -35,7 +35,11 @@ def get_context_reconciliation_rows(company: str | None = None) -> list[dict]:
 		branch = str(profile.get("branch") or "").strip()
 		if not profile_company or not branch:
 			continue
-		selected.setdefault((profile_company, branch), profile)
+
+		key = (profile_company, branch)
+		current = selected.get(key)
+		if current is None or _profile_priority(profile) > _profile_priority(current):
+			selected[key] = profile
 
 	rows = []
 	for (profile_company, branch), profile in sorted(selected.items()):
@@ -75,3 +79,11 @@ def _get_branch_identity(branch: str) -> dict:
 		"label": str(label).strip(),
 		"code": str(values.get("branch_code") or "").strip(),
 	}
+
+
+def _profile_priority(profile: dict) -> tuple[int, str, str]:
+	return (
+		1 if cint(profile.get("enabled")) else 0,
+		str(profile.get("modified") or ""),
+		str(profile.get("name") or ""),
+	)
