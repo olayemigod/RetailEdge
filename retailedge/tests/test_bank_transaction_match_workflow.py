@@ -613,6 +613,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			frappe.flags.retailedge_fast_validation = old_fast
 		self.assertIsNone(candidate)
 		row = mock_validate.call_args.args[0]
+		self.assertEqual(row["candidate_amount"], 1090)
 		self.assertEqual(row["payment_row_index"], "2")
 		self.assertEqual(row["payment_event_found"], 0)
 		self.assertIsNone(row["payment_event_source"])
@@ -650,6 +651,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			frappe.flags.retailedge_fast_validation = old_fast
 		self.assertIsNone(candidate)
 		row = mock_validate.call_args.args[0]
+		self.assertEqual(row["candidate_amount"], 1090)
 		self.assertEqual(row["payment_row_index"], "2")
 		self.assertEqual(row["payment_event_found"], 0)
 		self.assertIsNone(row["payment_event_source"])
