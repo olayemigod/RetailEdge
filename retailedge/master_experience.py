@@ -1011,7 +1011,6 @@ def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | N
 	target_type = str(item.get("target_type") or "")
 	target = str(item.get("target") or "")
 	label = str(item.get("label") or "")
-	label_lower = label.lower()
 	target_lower = target.lower()
 
 	# Detailed reports belong in Reports Centre, not in everyday operational menus.
