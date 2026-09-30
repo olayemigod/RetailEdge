@@ -30,71 +30,97 @@ class WorkspaceHomeItem:
 
 
 # Native Frappe workspace is a compact fallback. The EdgeSuite Business Hub is the
-# primary shell and carries the role-aware Home and Accounting groups.
+# primary shell and carries the full role-aware navigation.
 HOME_SECTIONS: tuple[str, ...] = (
 	"Home",
-	"Sell",
-	"Buy",
+	"Point of Sale",
+	"Sales",
+	"Purchases",
 	"Stock",
-	"Money",
+	"Money & Banking",
 	"Expenses",
 	"Customers",
 	"Suppliers & Payables",
-	"Insights",
-	"Review & Approvals",
-	"Setup",
+	"Operations Review",
+	"Banking & Reconciliation",
+	"Insights & Dashboards",
+	"Reports",
+	"Selling Setup",
+	"Stock Setup",
+	"Finance Setup",
+	"Business Setup",
 )
 
 HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Business Hub", "Page", "retailedge-business-hub", "Home", 10, "all", "Business Workspace", "Blue"),
-	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Sell", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
-	WorkspaceHomeItem("POS Opening", "DocType", POSNEXT_OPENING_SHIFT, "Sell", 20, "cashier", "POS Runtime"),
-	WorkspaceHomeItem("POS Closing", "DocType", POSNEXT_CLOSING_SHIFT, "Sell", 30, "cashier", "POS Runtime"),
-	WorkspaceHomeItem("Sales Invoices", "DocType", "Sales Invoice", "Sell", 40, "operations", "ERPNext Link"),
-	WorkspaceHomeItem("Sales Orders", "DocType", "Sales Order", "Sell", 50, "operations", "ERPNext Link"),
-	WorkspaceHomeItem("Delivery Notes", "DocType", "Delivery Note", "Sell", 60, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Purchase Invoices", "DocType", "Purchase Invoice", "Buy", 10, "purchasing", "ERPNext Link"),
-	WorkspaceHomeItem("Purchase Orders", "DocType", "Purchase Order", "Buy", 20, "purchasing", "ERPNext Link"),
-	WorkspaceHomeItem("Purchase Receipts", "DocType", "Purchase Receipt", "Buy", 30, "purchasing", "ERPNext Link"),
-	WorkspaceHomeItem("Products", "DocType", "Item", "Stock", 10, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Locations", "DocType", "Warehouse", "Stock", 20, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Movement History", "Report", "RetailEdge Stock Movement History", "Stock", 30, "stock", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Stock Balance", "Report", "Stock Balance", "Stock", 40, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Transfers", "DocType", "Stock Entry", "Stock", 50, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Count", "DocType", "Stock Reconciliation", "Stock", 60, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Reorder Requests", "DocType", "Material Request", "Stock", 70, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Ledger", "Report", "Stock Ledger", "Stock", 80, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Projected Stock", "Report", "Stock Projected Qty", "Stock", 90, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Stock Ageing", "Report", "Stock Ageing", "Stock", 100, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Payments", "DocType", "Payment Entry", "Money", 10, "bank_ops", "ERPNext Link"),
-	WorkspaceHomeItem("Bank Transactions", "DocType", "Bank Transaction", "Money", 20, "bank_ops", "ERPNext Link"),
-	WorkspaceHomeItem("Import Bank Statement", "DocType", "RetailEdge Payment Statement Import", "Money", 30, "bank_ops", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Bank Matching", "Page", "bank-matching-reconciliation", "Money", 40, "bank_ops", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Cashier Expenses", "Page", "cashier-expenses", "Expenses", 10, "cashier", "Business Workspace", "Green"),
+
+	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Point of Sale", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
+	WorkspaceHomeItem("POS Opening Shift", "DocType", POSNEXT_OPENING_SHIFT, "Point of Sale", 20, "cashier", "POS Runtime"),
+	WorkspaceHomeItem("POS Closing Shift", "DocType", POSNEXT_CLOSING_SHIFT, "Point of Sale", 30, "cashier", "POS Runtime"),
+
+	WorkspaceHomeItem("Sales Invoices", "DocType", "Sales Invoice", "Sales", 10, "operations", "ERPNext Link"),
+	WorkspaceHomeItem("Sales Orders", "DocType", "Sales Order", "Sales", 20, "operations", "ERPNext Link"),
+	WorkspaceHomeItem("Delivery Notes", "DocType", "Delivery Note", "Sales", 30, "stock", "ERPNext Link"),
+
+	WorkspaceHomeItem("Purchase Operations", "Page", "professional-purchasing", "Purchases", 5, "purchasing", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Purchase Orders", "DocType", "Purchase Order", "Purchases", 10, "purchasing", "ERPNext Link"),
+	WorkspaceHomeItem("Purchase Receipts", "DocType", "Purchase Receipt", "Purchases", 20, "purchasing", "ERPNext Link"),
+	WorkspaceHomeItem("Purchase Invoices", "DocType", "Purchase Invoice", "Purchases", 30, "purchasing", "ERPNext Link"),
+
+	WorkspaceHomeItem("Stock Position", "Page", "stock-position", "Stock", 10, "stock", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Stock Transfers", "DocType", "Stock Entry", "Stock", 20, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Stock Count", "DocType", "Stock Reconciliation", "Stock", 30, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Reorder Requests", "DocType", "Material Request", "Stock", 40, "stock", "ERPNext Link"),
+
+	WorkspaceHomeItem("Payments", "DocType", "Payment Entry", "Money & Banking", 10, "bank_ops", "ERPNext Link"),
+	WorkspaceHomeItem("Cash Movement", "Page", "cash-movement", "Money & Banking", 20, "accounts", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Bank Transactions", "DocType", "Bank Transaction", "Money & Banking", 30, "bank_ops", "ERPNext Link"),
+	WorkspaceHomeItem("Import Bank Statement", "DocType", "RetailEdge Payment Statement Import", "Money & Banking", 40, "bank_ops", "Business Workspace", "Blue"),
+
+	WorkspaceHomeItem("Business Expenses", "Page", "business-expenses", "Expenses", 10, "operations", "Business Workspace", "Green"),
+	WorkspaceHomeItem("Cashier Expenses", "Page", "cashier-expenses", "Expenses", 20, "cashier", "Business Workspace", "Green"),
+
 	WorkspaceHomeItem("Customers", "DocType", "Customer", "Customers", 10, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Customer Receivables", "Page", "customer-receivables", "Customers", 20, "accounts", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Accounts Receivable (Detailed)", "Report", "Accounts Receivable", "Customers", 30, "accounts", "ERPNext Link"),
+
 	WorkspaceHomeItem("Suppliers", "DocType", "Supplier", "Suppliers & Payables", 10, "operations", "ERPNext Link"),
-	WorkspaceHomeItem("Payables", "Report", "Accounts Payable", "Suppliers & Payables", 20, "accounts", "ERPNext Link"),
-	WorkspaceHomeItem("Branch Performance", "Page", "branch-performance-dashboard", "Insights", 10, "manager", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Salesperson Performance", "Page", "salesperson-performance-dashboard", "Insights", 20, "manager", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Bank Match Reviews", "DocType", "RetailEdge Bank Transaction Match", "Review & Approvals", 10, "reviewer", "Business Review", "Blue"),
-	WorkspaceHomeItem("Daily Sales Audit", "DocType", "RetailEdge Daily Sales Audit", "Review & Approvals", 20, "operations", "Business Workspace", "Green"),
-	WorkspaceHomeItem("Cashier Expense Review", "Page", "expense-review", "Review & Approvals", 30, "approver", "Business Workspace", "Green"),
-	WorkspaceHomeItem("Cash Shift Verification", "Report", "RetailEdge Cash Shift Verification", "Review & Approvals", 40, "reviewer", "Business Workspace", "Green"),
-	WorkspaceHomeItem("Invoice Payment Audit", "Report", "RetailEdge Invoice Payment Audit", "Review & Approvals", 50, "reviewer", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("POS Closing Variance vs Expenses", "Report", "POS Closing Variance vs Expenses", "Review & Approvals", 60, "manager", "Business Workspace", "Green"),
-	WorkspaceHomeItem("Unmatched Bank Transactions", "Report", "RetailEdge Unmatched Bank Transactions", "Review & Approvals", 70, "bank_ops", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Unmatched Bank Payments", "Report", "RetailEdge Unmatched Bank Payment Events", "Review & Approvals", 80, "bank_ops", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Reconciliation Readiness", "Report", "RetailEdge Bank Match Reconciliation Readiness", "Review & Approvals", 90, "reviewer", "Business Review", "Blue"),
-	WorkspaceHomeItem("Reconciliation Handoff", "Report", "RetailEdge Reconciliation Handoff", "Review & Approvals", 100, "reviewer", "Business Review", "Blue"),
-	WorkspaceHomeItem("Daily Sales Audit Register", "Report", "RetailEdge Daily Sales Audit Register", "Review & Approvals", 110, "manager", "Business Workspace", "Blue"),
-	WorkspaceHomeItem("Settings", "DocType", "RetailEdge Settings", "Setup", 10, "admin", "Business Workspace"),
-	WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile", "Setup", 20, "admin", "Business Workspace"),
-	WorkspaceHomeItem("Expense Categories", "DocType", "RetailEdge Expense Category", "Setup", 30, "admin", "Business Workspace"),
-	WorkspaceHomeItem("Bank Accounts", "DocType", "Bank Account", "Setup", 40, "admin", "ERPNext Link"),
-	WorkspaceHomeItem("Modes of Payment", "DocType", "Mode of Payment", "Setup", 50, "admin", "ERPNext Link"),
-	WorkspaceHomeItem("Bank Statement Mapping", "DocType", "RetailEdge Statement Mapping Template", "Setup", 60, "admin", "Business Workspace"),
+	WorkspaceHomeItem("Supplier Payables", "Page", "supplier-payables", "Suppliers & Payables", 20, "accounts", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Payment Orders", "DocType", "Payment Order", "Suppliers & Payables", 30, "accounts", "ERPNext Link"),
+
+	WorkspaceHomeItem("Daily Sales Audit", "Page", "daily-sales-audit", "Operations Review", 10, "operations", "Business Workspace", "Green"),
+	WorkspaceHomeItem("Cashier Expense Review", "Page", "expense-review", "Operations Review", 20, "approver", "Business Workspace", "Green"),
+	WorkspaceHomeItem("Cash Shift Verification", "Page", "cash-shift-verification", "Operations Review", 30, "reviewer", "Business Workspace", "Green"),
+	WorkspaceHomeItem("POS Closing Variance & Expenses", "Page", "pos-closing-variance", "Operations Review", 40, "manager", "Business Workspace", "Green"),
+
+	WorkspaceHomeItem("Bank Matching & Reconciliation", "Page", "bank-matching-reconciliation", "Banking & Reconciliation", 10, "bank_ops", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Banking Readiness", "Page", "banking-readiness", "Banking & Reconciliation", 20, "reviewer", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Unmatched Bank Transactions", "Page", "unmatched-bank-transactions", "Banking & Reconciliation", 30, "bank_ops", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Unmatched Bank Payments", "Page", "unmatched-bank-payments", "Banking & Reconciliation", 40, "bank_ops", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Reconciliation Handoff", "Page", "reconciliation-handoff", "Banking & Reconciliation", 50, "reviewer", "Business Workspace", "Blue"),
+
+	WorkspaceHomeItem("Financial Dashboard", "Page", "owner-dashboard", "Insights & Dashboards", 10, "manager", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Branch Performance", "Page", "branch-performance-dashboard", "Insights & Dashboards", 20, "manager", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Salesperson Performance", "Page", "salesperson-performance-dashboard", "Insights & Dashboards", 30, "manager", "Business Workspace", "Blue"),
+
+	WorkspaceHomeItem("Reports Centre", "Page", "reports-centre", "Reports", 10, "all", "Business Workspace", "Blue"),
+
+	WorkspaceHomeItem("Sales Team & Targets", "Page", "sales-team-control", "Selling Setup", 10, "manager", "Business Workspace", "Blue"),
+	WorkspaceHomeItem("Sales People", "DocType", "Sales Person", "Selling Setup", 20, "manager", "ERPNext Link"),
+	WorkspaceHomeItem("Sales Partners", "DocType", "Sales Partner", "Selling Setup", 30, "manager", "ERPNext Link"),
+
+	WorkspaceHomeItem("Products", "DocType", "Item", "Stock Setup", 10, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Stock Locations", "DocType", "Warehouse", "Stock Setup", 20, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Batches", "DocType", "Batch", "Stock Setup", 30, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Serial Numbers", "DocType", "Serial No", "Stock Setup", 40, "stock", "ERPNext Link"),
+
+	WorkspaceHomeItem("Bank Accounts", "DocType", "Bank Account", "Finance Setup", 10, "admin", "ERPNext Link"),
+	WorkspaceHomeItem("Modes of Payment", "DocType", "Mode of Payment", "Finance Setup", 20, "admin", "ERPNext Link"),
+	WorkspaceHomeItem("Cost Centers", "DocType", "Cost Center", "Finance Setup", 30, "admin", "ERPNext Link"),
+	WorkspaceHomeItem("Bank Statement Mapping", "DocType", "RetailEdge Statement Mapping Template", "Finance Setup", 40, "admin", "Business Workspace"),
+
+	WorkspaceHomeItem("Settings", "DocType", "RetailEdge Settings", "Business Setup", 10, "admin", "Business Workspace"),
+	WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile", "Business Setup", 20, "admin", "Business Workspace"),
+	WorkspaceHomeItem("Expense Categories", "DocType", "RetailEdge Expense Category", "Business Setup", 30, "admin", "Business Workspace"),
 )
 
 
@@ -125,7 +151,7 @@ def target_exists(item: WorkspaceHomeItem, cache: dict[tuple[str, str], bool] | 
 
 
 def _resolve_runtime_item(item: WorkspaceHomeItem, *, pos_capabilities=None) -> WorkspaceHomeItem | None:
-	if item.section != "Sell":
+	if item.section != "Point of Sale":
 		return item
 
 	if pos_capabilities is None:
@@ -146,7 +172,7 @@ def _resolve_runtime_item(item: WorkspaceHomeItem, *, pos_capabilities=None) -> 
 			return None
 		return replace(
 			item,
-			label=pos_capabilities.opening_doctype,
+			label="POS Opening Shift",
 			link_to=pos_capabilities.opening_doctype,
 			source="POSNext Link" if pos_capabilities.provider == "posnext" else "ERPNext Link",
 			url=None,
@@ -157,7 +183,7 @@ def _resolve_runtime_item(item: WorkspaceHomeItem, *, pos_capabilities=None) -> 
 			return None
 		return replace(
 			item,
-			label=pos_capabilities.closing_doctype,
+			label="POS Closing Shift",
 			link_to=pos_capabilities.closing_doctype,
 			source="POSNext Link" if pos_capabilities.provider == "posnext" else "ERPNext Link",
 			url=None,
