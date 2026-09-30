@@ -27,10 +27,10 @@ from retailedge.workspace_home import (
 BUSINESS_HUB_PAGE = "retailedge-business-hub"
 BUSINESS_HUB_LABEL = "Business Hub"
 DASHBOARD_SECTION_LABEL = "Dashboard"
-SALES_POS_SECTION_LABEL = "Sales & POS"
+POS_SECTION_LABEL = "Point of Sale"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
 STOCK_MOVEMENT_LABEL = "Stock Movement History"
-REPORTS_SECTION_LABEL = "Reports & Insights"
+REPORTS_SECTION_LABEL = "Reports"
 
 
 def sync_retailedge_workspace_layout():
@@ -58,7 +58,7 @@ def sync_retailedge_workspace_layout():
 		workspace_shortcuts,
 	)
 	workspace_links = _normalise_links(build_home_workspace_links(workspace_data))
-	workspace_links = _ensure_workspace_business_hub_link(_ensure_workspace_report_link(workspace_links))
+	workspace_links = _ensure_workspace_business_hub_link(workspace_links)
 	workspace.links = []
 	for row in workspace_links:
 		workspace.append("links", row)
@@ -76,7 +76,7 @@ def sync_retailedge_workspace_layout():
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
 	sidebar_items = _ensure_sidebar_pos_shift_links(sidebar_items)
-	sidebar_items = _ensure_sidebar_business_hub_link(_ensure_sidebar_report_link(sidebar_items))
+	sidebar_items = _ensure_sidebar_business_hub_link(sidebar_items)
 	for row in sidebar_items:
 		sidebar.append("items", row)
 	sidebar.save(ignore_permissions=True)
@@ -179,7 +179,7 @@ def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
 	if row is None:
 		return items
 
-	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	section_index = _find_section_index(items, POS_SECTION_LABEL)
 	if section_index is None:
 		return items
 	items.insert(section_index + 1, row)
@@ -222,7 +222,7 @@ def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
 	if not shift_doctypes:
 		return items
 
-	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	section_index = _find_section_index(items, POS_SECTION_LABEL)
 	if section_index is None:
 		return items
 
@@ -345,93 +345,17 @@ def _ensure_sidebar_business_hub_link(items: list[dict]) -> list[dict]:
 
 
 def _ensure_workspace_report_link(links: list[dict]) -> list[dict]:
-	"""Keep the report in the Reports & Insights workspace card."""
-	if not _report_exists() or any(
-		row.get("type") == "Link" and row.get("link_to") == STOCK_MOVEMENT_REPORT for row in links
-	):
-		return _recount_workspace_links(links)
+	"""Compatibility no-op.
 
-	section_index = _find_section_index(links, REPORTS_SECTION_LABEL)
-	if section_index is None:
-		links.append(
-			{
-				"hidden": 0,
-				"is_query_report": 0,
-				"label": REPORTS_SECTION_LABEL,
-				"link_count": 0,
-				"link_type": "Report",
-				"onboard": 0,
-				"type": "Card Break",
-				"close": 1,
-			}
-		)
-		insert_at = len(links)
-	else:
-		insert_at = _find_section_end(links, section_index)
-		for index in range(section_index + 1, insert_at):
-			if links[index].get("type") == "Link" and links[index].get("link_to") == "Stock Ledger":
-				insert_at = index + 1
-				break
-
-	links.insert(
-		insert_at,
-		{
-			"hidden": 0,
-			"is_query_report": 1,
-			"label": STOCK_MOVEMENT_LABEL,
-			"link_count": 0,
-			"link_to": STOCK_MOVEMENT_REPORT,
-			"link_type": "Report",
-			"onboard": 0,
-			"type": "Link",
-		},
-	)
+	Detailed reports now live in Reports Centre. Keep this helper callable for
+	older patches/tests without re-inserting Stock Movement History into daily
+	workspace navigation.
+	"""
 	return _recount_workspace_links(links)
 
 
 def _ensure_sidebar_report_link(items: list[dict]) -> list[dict]:
-	"""Keep the report in the generated RetailEdge sidebar."""
-	if not _report_exists() or any(
-		row.get("type") == "Link" and row.get("link_to") == STOCK_MOVEMENT_REPORT for row in items
-	):
-		return items
-
-	section_index = _find_section_index(items, REPORTS_SECTION_LABEL)
-	if section_index is None:
-		items.append(
-			{
-				"child": 0,
-				"collapsible": 1,
-				"indent": 1,
-				"keep_closed": 1,
-				"label": REPORTS_SECTION_LABEL,
-				"link_type": "DocType",
-				"show_arrow": 0,
-				"type": "Section Break",
-			}
-		)
-		insert_at = len(items)
-	else:
-		insert_at = _find_section_end(items, section_index)
-		for index in range(section_index + 1, insert_at):
-			if items[index].get("type") == "Link" and items[index].get("link_to") == "Stock Ledger":
-				insert_at = index + 1
-				break
-
-	items.insert(
-		insert_at,
-		{
-			"child": 1,
-			"collapsible": 0,
-			"indent": 0,
-			"keep_closed": 0,
-			"label": STOCK_MOVEMENT_LABEL,
-			"link_to": STOCK_MOVEMENT_REPORT,
-			"link_type": "Report",
-			"show_arrow": 0,
-			"type": "Link",
-		},
-	)
+	"""Compatibility no-op; detailed reports are centralised in Reports Centre."""
 	return items
 
 
