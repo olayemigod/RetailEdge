@@ -260,6 +260,42 @@ class CoreEdgeQuotaAdapterTests(unittest.TestCase):
 			],
 		)
 
+	def test_invalid_quota_requests_fail_before_transport(self):
+		with patch(
+			"retailedge.integrations.quota.get_remote_service_status",
+			return_value=self._enabled_status(),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				reserve_usage(
+					"RETAILEDGE_SALES_TRANSACTIONS",
+					0,
+					idempotency_key="zero-units",
+					client=self.client,
+				)
+			with self.assertRaises(frappe.ValidationError):
+				reserve_usage(
+					"RETAILEDGE_SALES_TRANSACTIONS",
+					1,
+					idempotency_key="contains spaces",
+					client=self.client,
+				)
+			with self.assertRaises(frappe.ValidationError):
+				reserve_usage(
+					"RETAILEDGE_SALES_TRANSACTIONS",
+					1,
+					idempotency_key="ttl-too-long",
+					expires_in_seconds=3601,
+					client=self.client,
+				)
+			with self.assertRaises(frappe.ValidationError):
+				submit_usage_snapshot(
+					"RETAILEDGE_USERS",
+					-1,
+					idempotency_key="negative-snapshot",
+					client=self.client,
+				)
+		self.assertEqual(self.calls, [])
+
 	def test_disabled_quota_integration_fails_closed_before_transport(self):
 		with patch(
 			"retailedge.integrations.quota.get_remote_service_status",
@@ -277,6 +313,42 @@ class CoreEdgeQuotaAdapterTests(unittest.TestCase):
 					client=self.client,
 				)
 		self.assertEqual(self.calls, [])
+
+
+class RetailEdgeQuotaIntegrationBoundaryTests(unittest.TestCase):
+	def test_client_foundation_does_not_hook_sales_invoice_submission(self):
+		from pathlib import Path
+
+		import retailedge
+
+		app_root = Path(retailedge.__file__).resolve().parent
+		hooks = (app_root / "hooks.py").read_text()
+		sales_event = (app_root / "events" / "sales_invoice.py").read_text()
+		self.assertNotIn("integrations.quota", hooks)
+		self.assertNotIn("integrations.quota", sales_event)
+		self.assertNotIn("reserve_usage(", sales_event)
+		self.assertNotIn("finalize_usage(", sales_event)
+
+	def test_settings_schema_contains_no_remote_credentials(self):
+		from pathlib import Path
+
+		import retailedge
+
+		settings_path = (
+			Path(retailedge.__file__).resolve().parent
+			/ "retailedge"
+			/ "doctype"
+			/ "retailedge_settings"
+			/ "retailedge_settings.json"
+		)
+		content = settings_path.read_text().lower()
+		for forbidden in (
+			'"coreedge_service_api_key"',
+			'"coreedge_service_api_secret"',
+			'"coreedge_service_password"',
+			'"coreedge_service_token"',
+		):
+			self.assertNotIn(forbidden, content)
 
 
 class RetailEdgeSettingsRemoteCoreEdgeTests(unittest.TestCase):
