@@ -13,7 +13,7 @@ class TestStockMovementMenu(unittest.TestCase):
 		links = [
 			{
 				"type": "Card Break",
-				"label": "Reports & Insights",
+				"label": "Reports",
 				"link_type": "Report",
 				"link_count": 1,
 			},
@@ -42,7 +42,7 @@ class TestStockMovementMenu(unittest.TestCase):
 		items = [
 			{
 				"type": "Section Break",
-				"label": "Reports & Insights",
+				"label": "Reports",
 			},
 			{
 				"type": "Link",
@@ -64,8 +64,8 @@ class TestStockMovementMenu(unittest.TestCase):
 
 	@patch.object(workspace_sync.frappe.db, "exists", return_value=True)
 	def test_runtime_menu_registration_is_idempotent(self, _exists):
-		links = [{"type": "Card Break", "label": "Reports & Insights", "link_count": 0}]
-		items = [{"type": "Section Break", "label": "Reports & Insights"}]
+		links = [{"type": "Card Break", "label": "Reports", "link_count": 0}]
+		items = [{"type": "Section Break", "label": "Reports"}]
 
 		for _ in range(2):
 			links = workspace_sync._ensure_workspace_report_link(links)
