@@ -105,6 +105,54 @@
 					</div>
 				</section>
 
+				<section v-if="hasWorkflowActions || actionError" class="detail-section workflow-section">
+					<div class="workflow-heading">
+						<div>
+							<h4>Workflow Actions</h4>
+							<small>{{ workflowHelper }}</small>
+						</div>
+						<span v-if="actions.posting_mode" class="workflow-mode">{{ actions.posting_mode }}</span>
+					</div>
+
+					<div v-if="actionError" class="workflow-error" role="alert">{{ actionError }}</div>
+
+					<div v-if="reviewAction" class="workflow-editor">
+						<strong>{{ reviewActionTitle }}</strong>
+						<label>
+							<span>Remarks{{ reviewRemarksRequired ? " *" : "" }}</span>
+							<textarea
+								v-model="reviewRemarks"
+								class="form-control"
+								rows="3"
+								:placeholder="reviewRemarksRequired ? 'Reason is required' : 'Optional review note'"
+							></textarea>
+						</label>
+						<div class="workflow-editor-actions">
+							<button type="button" class="edge-button" :disabled="actionBusy" @click="cancelReviewAction">Cancel</button>
+							<button
+								type="button"
+								class="edge-button edge-button--primary"
+								:disabled="actionBusy || (reviewRemarksRequired && !reviewRemarks.trim())"
+								@click="submitReviewAction"
+							>
+								{{ actionBusy ? "Working..." : reviewActionSubmitLabel }}
+							</button>
+						</div>
+					</div>
+
+					<div v-else class="workflow-buttons">
+						<button v-if="actions.can_approve" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="beginReviewAction('approve')">Approve</button>
+						<button v-if="actions.can_reject" type="button" class="edge-button" :disabled="actionBusy" @click="beginReviewAction('reject')">Reject</button>
+						<button v-if="actions.can_reopen" type="button" class="edge-button" :disabled="actionBusy" @click="beginReviewAction('reopen')">Reopen</button>
+						<button v-if="actions.can_refresh_posting" type="button" class="edge-button" :disabled="actionBusy" @click="refreshPostingReadiness">
+							{{ actionBusy ? "Working..." : "Refresh Posting Readiness" }}
+						</button>
+						<button v-if="actions.can_post_to_accounts" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="requestPostToAccounts">
+							Post to Accounts
+						</button>
+					</div>
+				</section>
+
 				<div class="detail-actions">
 					<button
 						v-if="canUseNativeDesk"
@@ -122,17 +170,27 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const DETAIL_METHOD = "retailedge.cashier_expense_detail.get_cashier_expense_detail";
+const REVIEW_METHODS = Object.freeze({
+	approve: "retailedge.api.approve_cashier_expense",
+	reject: "retailedge.api.reject_cashier_expense",
+	reopen: "retailedge.api.reopen_cashier_expense",
+});
+const REFRESH_POSTING_METHOD = "retailedge.api.refresh_cashier_expense_posting_readiness";
+const POST_TO_ACCOUNTS_METHOD = "retailedge.cashier_expense_accounting.post_cashier_expense_to_accounts";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
 		: {};
 
-function callMethod(method, args = {}) {
+function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method,
 			args,
+			type,
 			callback: (response) => resolve(response.message || {}),
 			error: reject,
 		});
@@ -142,7 +200,6 @@ function callMethod(method, args = {}) {
 function errorMessage(error, fallback) {
 	return window.retailedge?.userErrorMessage?.(error, fallback)
 		|| error?.message
-		|| error?.exc
 		|| fallback;
 }
 
@@ -160,13 +217,18 @@ export default {
 		branch: { type: String, default: "" },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close"],
+	emits: ["close", "changed"],
 	data() {
 		return {
 			loading: false,
 			error: "",
 			detail: null,
+			actions: {},
 			loadToken: 0,
+			actionBusy: false,
+			actionError: "",
+			reviewAction: "",
+			reviewRemarks: "",
 		};
 	},
 	computed: {
@@ -187,6 +249,38 @@ export default {
 				|| this.detail.review_remarks
 				|| "";
 		},
+		hasWorkflowActions() {
+			return Boolean(
+				this.actions.can_approve
+				|| this.actions.can_reject
+				|| this.actions.can_reopen
+				|| this.actions.can_refresh_posting
+				|| this.actions.can_post_to_accounts
+			);
+		},
+		workflowHelper() {
+			if (this.actions.can_post_to_accounts) return "This expense is ready for ERPNext Journal Entry posting.";
+			if (this.actions.posting_enabled && this.detail?.posting_block_reason) return this.detail.posting_block_reason;
+			if (this.actions.posting_enabled) return "Review status and posting readiness remain governed by RetailEdge and ERPNext permissions.";
+			return "Accounting posting is disabled in RetailEdge Settings.";
+		},
+		reviewActionTitle() {
+			return {
+				approve: "Approve Cashier Expense",
+				reject: "Reject Cashier Expense",
+				reopen: "Reopen Cashier Expense",
+			}[this.reviewAction] || "Cashier Expense Review";
+		},
+		reviewActionSubmitLabel() {
+			return {
+				approve: "Approve",
+				reject: "Reject",
+				reopen: "Reopen",
+			}[this.reviewAction] || "Apply";
+		},
+		reviewRemarksRequired() {
+			return this.reviewAction === "reject";
+		},
 	},
 	watch: {
 		open(next) {
@@ -203,6 +297,11 @@ export default {
 			this.loading = false;
 			this.error = "";
 			this.detail = null;
+			this.actions = {};
+			this.actionBusy = false;
+			this.actionError = "";
+			this.reviewAction = "";
+			this.reviewRemarks = "";
 		},
 		async loadDetail() {
 			const expenseName = String(this.expenseName || "").trim();
@@ -218,6 +317,7 @@ export default {
 				});
 				if (token !== this.loadToken) return;
 				this.detail = result.expense || null;
+				this.actions = result.actions || {};
 				if (!this.detail) this.error = "Cashier Expense details were not returned.";
 			} catch (error) {
 				if (token !== this.loadToken) return;
@@ -250,6 +350,71 @@ export default {
 			try { return frappe.datetime.str_to_user(value); }
 			catch (_error) { return String(value); }
 		},
+		beginReviewAction(action) {
+			if (!REVIEW_METHODS[action]) return;
+			this.actionError = "";
+			this.reviewAction = action;
+			this.reviewRemarks = "";
+		},
+		cancelReviewAction() {
+			if (this.actionBusy) return;
+			this.reviewAction = "";
+			this.reviewRemarks = "";
+			this.actionError = "";
+		},
+		async submitReviewAction() {
+			const action = this.reviewAction;
+			const method = REVIEW_METHODS[action];
+			if (!method || !this.detail?.name || this.actionBusy) return;
+			const remarks = String(this.reviewRemarks || "").trim();
+			if (action === "reject" && !remarks) {
+				this.actionError = "A rejection reason is required.";
+				return;
+			}
+			await this.runWorkflowAction(action, method, {
+				expense_name: this.detail.name,
+				remarks,
+			});
+		},
+		async refreshPostingReadiness() {
+			if (!this.actions.can_refresh_posting || !this.detail?.name || this.actionBusy) return;
+			await this.runWorkflowAction("refresh-posting", REFRESH_POSTING_METHOD, {
+				expense_name: this.detail.name,
+			});
+		},
+		requestPostToAccounts() {
+			if (!this.actions.can_post_to_accounts || !this.detail?.name || this.actionBusy) return;
+			confirmAboveEdgeModal(
+				"Create and submit the ERPNext Journal Entry for this Cashier Expense?",
+				() => this.postToAccounts()
+			);
+		},
+		async postToAccounts() {
+			if (!this.actions.can_post_to_accounts || !this.detail?.name || this.actionBusy) return;
+			await this.runWorkflowAction("post-to-accounts", POST_TO_ACCOUNTS_METHOD, {
+				expense_name: this.detail.name,
+				expected_modified: this.detail.modified || null,
+			});
+		},
+		async runWorkflowAction(action, method, args) {
+			this.actionBusy = true;
+			this.actionError = "";
+			try {
+				const result = await callMethod(method, args, "POST");
+				this.reviewAction = "";
+				this.reviewRemarks = "";
+				await this.loadDetail();
+				this.$emit("changed", {
+					action,
+					expense_name: this.detail?.name || args.expense_name,
+					result,
+				});
+			} catch (error) {
+				this.actionError = errorMessage(error, "Cashier Expense workflow action failed.");
+			} finally {
+				this.actionBusy = false;
+			}
+		},
 		openNativeRecord() {
 			if (!this.canUseNativeDesk || !this.detail?.name) return;
 			this.$emit("close");
@@ -276,7 +441,7 @@ export default {
 .detail-note { display:grid; gap:.25rem; padding-top:.2rem; }
 .detail-note p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .evidence-link { width:max-content; max-width:100%; overflow-wrap:anywhere; font-weight:600; }
-.detail-actions { display:flex; justify-content:flex-end; gap:.6rem; flex-wrap:wrap; }
+.workflow-section{gap:.8rem}.workflow-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem}.workflow-heading>div{display:grid;gap:.2rem}.workflow-heading small{color:var(--text-muted);font-size:.76rem}.workflow-mode{padding:.25rem .5rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:999px;color:var(--text-muted);font-size:.72rem;white-space:nowrap}.workflow-error{padding:.65rem .75rem;border:1px solid var(--red-400,#f04438);border-radius:.5rem;background:var(--red-50,#fef3f2);color:var(--red-700,#b42318)}.workflow-buttons,.workflow-editor-actions{display:flex;gap:.55rem;flex-wrap:wrap}.workflow-editor{display:grid;gap:.7rem;padding:.75rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:.6rem;background:var(--edge-surface-subtle,var(--subtle-fg))}.workflow-editor label{display:grid;gap:.35rem}.workflow-editor label span{font-size:.76rem;color:var(--text-muted)}.workflow-editor-actions{justify-content:flex-end}.detail-actions { display:flex; justify-content:flex-end; gap:.6rem; flex-wrap:wrap; }
 @media (max-width:900px) {
 	.detail-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
 	.detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
