@@ -265,7 +265,7 @@ class SalesQuotaOperationTests(FrappeTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		frappe.db.delete(OPERATION_DOCTYPE, {"source_name": ["like", "quota-test-%"]})
+		frappe.db.delete(OPERATION_DOCTYPE, {"operation_key": ["like", "quota-operation-%"]})
 		super().tearDown()
 
 	def _operation(self, suffix="one"):
@@ -308,6 +308,13 @@ class SalesQuotaOperationTests(FrappeTestCase):
 		)
 		with self.assertRaises(frappe.PermissionError):
 			doc.insert(ignore_permissions=True)
+
+	def test_engine_cannot_rewrite_operation_identity(self):
+		doc = self._operation("immutable")
+		doc.reservation_reference = "CEUR-rewritten"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		with self.assertRaises(frappe.ValidationError):
+			doc.save(ignore_permissions=True)
 
 	def test_operation_is_engine_updated_and_non_deletable(self):
 		doc = self._operation("protected")
