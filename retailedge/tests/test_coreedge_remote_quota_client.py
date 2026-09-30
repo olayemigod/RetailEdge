@@ -36,6 +36,11 @@ class CoreEdgeRemoteClientTests(unittest.TestCase):
 		values.update(overrides)
 		return CoreEdgeRemoteConfig(**values)
 
+	def test_config_repr_never_contains_credentials(self):
+		config_repr = repr(self._config())
+		self.assertNotIn("api-key-test", config_repr)
+		self.assertNotIn("api-secret-test", config_repr)
+
 	def test_transport_uses_frappe_token_auth_and_bound_site_identifier(self):
 		captured = {}
 
