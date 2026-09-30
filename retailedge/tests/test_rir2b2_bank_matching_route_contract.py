@@ -36,7 +36,7 @@ def _pos_capabilities() -> SimpleNamespace:
 class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 	def test_primary_and_compact_fallback_routes_use_reconciliation_page(self):
 		base = _base_item("review-approvals", "Bank Match Reviews")
-		fallback = _fallback_item("Bank Matching")
+		fallback = _fallback_item("Bank Matching & Reconciliation")
 
 		self.assertEqual((base["target_type"], base["target"]), ("Page", "bank-matching-reconciliation"))
 		self.assertEqual((fallback.link_type, fallback.link_to), ("Page", "bank-matching-reconciliation"))
@@ -110,11 +110,12 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 		self.assertEqual(report["name"], "RetailEdge Bank Transaction Matching")
 		self.assertEqual(report["report_type"], "Script Report")
 
-	def test_stock_movement_history_is_not_promoted_by_b2(self):
+	def test_stock_movement_history_stays_report_authority_without_direct_compact_link(self):
 		base = _base_item("stock", "Stock Movement History")
-		fallback = _fallback_item("Stock Movement History")
+		fallback_targets = {(item.link_type, item.link_to) for item in HOME_WORKSPACE_ITEMS}
 		self.assertEqual((base["target_type"], base["target"]), ("Report", "RetailEdge Stock Movement History"))
-		self.assertEqual((fallback.link_type, fallback.link_to), ("Report", "RetailEdge Stock Movement History"))
+		self.assertNotIn(("Report", "RetailEdge Stock Movement History"), fallback_targets)
+		self.assertIn(("Page", "reports-centre"), fallback_targets)
 
 
 if __name__ == "__main__":
