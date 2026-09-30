@@ -134,6 +134,10 @@ def get_remote_usage_readiness() -> dict:
 	return get_remote_usage_config().sanitized()
 
 
+def get_remote_usage_client() -> "CoreEdgeRemoteUsageClient":
+	return CoreEdgeRemoteUsageClient(get_remote_usage_config())
+
+
 class CoreEdgeRemoteUsageClient:
 	def __init__(
 		self,
