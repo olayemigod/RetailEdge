@@ -53,7 +53,7 @@ def test_cashier_expense_lists_use_shared_edgesuite_detail_viewer():
 	assert ':canUseNativeDesk="canUseNativeDesk"' in register
 	assert ':canUseNativeDesk="canUseNativeDesk"' in review
 	assert "apply_expense_review_action" not in detail
-	assert "save" not in detail.lower()
+	assert "frappe.set_route(\"Form\", \"RetailEdge Cashier Expense\"" in detail
 
 
 def test_nested_quick_entry_confirmations_use_elevated_shared_helper():
@@ -69,3 +69,55 @@ def test_nested_quick_entry_confirmations_use_elevated_shared_helper():
 		assert "confirmAboveEdgeModal(" in source, filename
 		assert "frappe.confirm(" not in source, filename
 		assert "confirmAboveEdgeModal" in source.split("</script>", 1)[0], filename
+
+
+def test_cashier_expense_detail_exposes_server_derived_workflow_actions():
+	source = _read(CASHIER_DETAIL)
+	for expected in (
+		"def _workflow_actions(",
+		'"can_approve"',
+		'"can_reject"',
+		'"can_reopen"',
+		'"can_refresh_posting"',
+		'"can_post_to_accounts"',
+		"get_cashier_expense_posting_settings",
+		"CONTROLLED_POSTING_ROLES",
+		"POSTING_REFRESH_ROLES",
+		'frappe.has_permission("Journal Entry", "create")',
+		'frappe.has_permission("Journal Entry", "submit")',
+	):
+		assert expected in source
+	assert '"actions": _workflow_actions(expense)' in source
+	assert "ignore_permissions" not in source
+
+
+def test_edgesuite_cashier_detail_owns_review_and_accounting_actions():
+	detail = _read(DETAIL_COMPONENT)
+	for expected in (
+		"Workflow Actions",
+		"Approve",
+		"Reject",
+		"Reopen",
+		"Refresh Posting Readiness",
+		"Post to Accounts",
+		"retailedge.api.approve_cashier_expense",
+		"retailedge.api.reject_cashier_expense",
+		"retailedge.api.reopen_cashier_expense",
+		"retailedge.api.refresh_cashier_expense_posting_readiness",
+		"retailedge.cashier_expense_accounting.post_cashier_expense_to_accounts",
+		"expected_modified: this.detail.modified",
+		"confirmAboveEdgeModal(",
+		'reviewAction === "reject"',
+	):
+		assert expected in detail
+	assert "frappe.prompt(" not in detail
+	assert "frappe.confirm(" not in detail
+
+
+def test_cashier_workflow_actions_refresh_edgesuite_reports_in_place():
+	register = _read(REGISTER_COMPONENT)
+	review = _read(REVIEW_COMPONENT)
+	for source in (register, review):
+		assert '@changed="handleCashierExpenseChanged"' in source
+		assert "handleCashierExpenseChanged" in source
+		assert "await this.fetchData()" in source
