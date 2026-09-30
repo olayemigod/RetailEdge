@@ -91,8 +91,8 @@ MAKE_SALE_ITEM: dict[str, Any] = {
 }
 
 RECORD_PURCHASE_ITEM: dict[str, Any] = {
-	"label": "Record Purchase",
-	"description": "Create larger or multi-item Purchase Invoices in a resilient full-page workspace.",
+	"label": "Direct Purchase",
+	"description": "Create a direct supplier Purchase Invoice only when the standard Purchase Order / Receipt path does not apply.",
 	"target_type": "Page",
 	"target": "record-purchase",
 	"icon": "shopping-bag",
@@ -125,8 +125,8 @@ PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 SELLING_NATIVE_PEER_DOCTYPES = {"Sales Invoice", "Sales Order", "Delivery Note"}
 
 PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
-	"label": "Professional Purchasing",
-	"description": "Operate Purchase Orders and prepare draft Purchase Receipts through ERPNext buying truth.",
+	"label": "Purchase Operations",
+	"description": "Follow ERPNext purchasing truth: Purchase Order → Purchase Receipt → Purchase Invoice → Payment.",
 	"target_type": "Page",
 	"target": "professional-purchasing",
 	"icon": "shopping-bag",
@@ -544,15 +544,9 @@ def _promote_professional_purchasing(navigation_groups: list[dict[str, Any]]) ->
 				and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"]
 			)
 		]
-		purchase_invoice_index = next(
-			(
-				index
-				for index, item in enumerate(items)
-				if item.get("target_type") == "DocType" and item.get("target") == PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE
-			),
-			0,
-		)
-		items.insert(purchase_invoice_index, deepcopy(existing_page or PROFESSIONAL_PURCHASING_ITEM))
+		# Purchase Operations is the canonical everyday entry. Direct Purchase remains
+		# available as an explicit shortcut but must not outrank the ERPNext PO → Receipt → Invoice path.
+		items.insert(0, deepcopy(existing_page or PROFESSIONAL_PURCHASING_ITEM))
 		group["items"] = items
 		return
 
