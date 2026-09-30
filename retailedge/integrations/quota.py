@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import frappe
 
 from retailedge.integrations.coreedge_remote import (
@@ -14,6 +16,7 @@ _RESERVE_METHOD = "coreedge.api.v1.service_entitlement_usage.reserve_usage"
 _FINALIZE_METHOD = "coreedge.api.v1.service_entitlement_usage.finalize_usage"
 _RELEASE_METHOD = "coreedge.api.v1.service_entitlement_usage.release_usage"
 _SNAPSHOT_METHOD = "coreedge.api.v1.service_entitlement_usage.submit_usage_snapshot"
+_SAFE_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
 def is_quota_integration_enabled() -> bool:
@@ -51,7 +54,7 @@ def get_usage_status(
 		_STATUS_METHOD,
 		{
 			"entitlement_key": _entitlement_key(entitlement_key),
-			"requested_units": int(requested_units or 0),
+			"requested_units": _non_negative_int(requested_units, "Requested Units"),
 			"request_id": request_id,
 			"correlation_id": correlation_id,
 			"source_path": "retailedge.integrations.quota.get_usage_status",
@@ -75,9 +78,9 @@ def reserve_usage(
 		_RESERVE_METHOD,
 		{
 			"entitlement_key": _entitlement_key(entitlement_key),
-			"units": int(units),
+			"units": _positive_int(units, "Units"),
 			"idempotency_key": _idempotency_key(idempotency_key),
-			"expires_in_seconds": int(expires_in_seconds or 900),
+			"expires_in_seconds": _reservation_ttl(expires_in_seconds),
 			"reference_doctype": _safe_reference(reference_doctype),
 			"reference_name": _safe_reference(reference_name),
 			"request_id": request_id,
@@ -148,7 +151,7 @@ def submit_usage_snapshot(
 		_SNAPSHOT_METHOD,
 		{
 			"entitlement_key": _entitlement_key(entitlement_key),
-			"usage_value": int(usage_value),
+			"usage_value": _non_negative_int(usage_value, "Usage Value"),
 			"idempotency_key": _idempotency_key(idempotency_key),
 			"reference_doctype": _safe_reference(reference_doctype),
 			"reference_name": _safe_reference(reference_name),
@@ -173,6 +176,42 @@ def _idempotency_key(value: str) -> str:
 	if not resolved or len(resolved) > 140:
 		raise frappe.ValidationError(
 			"CoreEdge quota idempotency key must contain between 1 and 140 characters."
+		)
+	if not _SAFE_KEY_PATTERN.match(resolved):
+		raise frappe.ValidationError(
+			"CoreEdge quota idempotency key may contain only letters, numbers, "
+			"dots, underscores, colons and hyphens."
+		)
+	return resolved
+
+
+def _positive_int(value, label: str) -> int:
+	resolved = _non_negative_int(value, label)
+	if resolved <= 0:
+		raise frappe.ValidationError(f"{label} must be greater than zero.")
+	return resolved
+
+
+def _non_negative_int(value, label: str) -> int:
+	try:
+		resolved = int(value or 0)
+	except (TypeError, ValueError) as exc:
+		raise frappe.ValidationError(f"{label} must be a whole number.") from exc
+	if resolved < 0:
+		raise frappe.ValidationError(f"{label} cannot be negative.")
+	return resolved
+
+
+def _reservation_ttl(value) -> int:
+	try:
+		resolved = int(value or 900)
+	except (TypeError, ValueError) as exc:
+		raise frappe.ValidationError(
+			"CoreEdge quota reservation expiry must be a whole number of seconds."
+		) from exc
+	if resolved < 60 or resolved > 3600:
+		raise frappe.ValidationError(
+			"CoreEdge quota reservation expiry must be between 60 and 3600 seconds."
 		)
 	return resolved
 
