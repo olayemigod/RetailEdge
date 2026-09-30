@@ -21,7 +21,9 @@ from retailedge.integrations.quota import (
 
 
 _DOCTYPE = "RetailEdge CoreEdge Quota Operation"
-_RETRYABLE_STATUSES = {"Reserved", "Finalize Pending"}
+_FINALIZE_RETRY_STATUSES = {"Reserved", "Finalize Pending"}
+_RELEASE_RETRY_STATUSES = {"Release Pending"}
+_RETRYABLE_STATUSES = _FINALIZE_RETRY_STATUSES | _RELEASE_RETRY_STATUSES
 _TERMINAL_STATUSES = {
 	"Finalized",
 	"Released",
@@ -78,7 +80,7 @@ def prepare_transaction_quota(
 	if existing:
 		if existing.status == "Finalized":
 			return _serialize_operation(frappe.get_doc(_DOCTYPE, existing.name))
-		if existing.status in _RETRYABLE_STATUSES:
+		if existing.status in _FINALIZE_RETRY_STATUSES:
 			_register_transaction_callbacks(
 				operation_key=existing.name,
 				reservation_reference=existing.reservation_reference,
@@ -339,7 +341,18 @@ def retry_pending_quota_operations(limit: int = 100) -> dict:
 		if row.next_retry_on and get_datetime(row.next_retry_on) > now:
 			continue
 		processed += 1
-		result = finalize_quota_operation(row.name)
+		current_status = frappe.db.get_value(_DOCTYPE, row.name, "status")
+		if current_status in _RELEASE_RETRY_STATUSES:
+			operation = frappe.get_doc(_DOCTYPE, row.name)
+			result = release_quota_operation(
+				row.name,
+				reason=(
+					operation.notes
+					or "Retrying previously requested CoreEdge quota release."
+				),
+			)
+		else:
+			result = finalize_quota_operation(row.name)
 		status = result.get("status")
 		if status == "Finalized":
 			finalized += 1
@@ -367,13 +380,47 @@ def release_quota_operation(operation_key: str, *, reason: str) -> dict:
 	if operation.status in _TERMINAL_STATUSES:
 		return _serialize_operation(operation)
 
-	response = release_usage(
-		operation.reservation_reference,
-		idempotency_key=operation.release_idempotency_key,
-		reason=reason,
-		request_id=f"{operation.operation_key}:release",
-		correlation_id=operation.operation_key,
-	)
+	reason = _required_text(reason, "Release Reason", 500)
+	operation.status = "Release Pending"
+	operation.notes = reason
+	operation.last_attempt_on = now_datetime()
+	operation.attempt_count = int(operation.attempt_count or 0) + 1
+	_save_operation(operation)
+
+	try:
+		response = release_usage(
+			operation.reservation_reference,
+			idempotency_key=operation.release_idempotency_key,
+			reason=reason,
+			request_id=f"{operation.operation_key}:release",
+			correlation_id=operation.operation_key,
+		)
+	except (
+		CoreEdgeRemoteUnavailable,
+		CoreEdgeRemoteAuthenticationFailed,
+		CoreEdgeRemoteNotConfigured,
+		CoreEdgeRemoteError,
+	) as exc:
+		operation.status = "Release Pending"
+		operation.last_error_code = exc.__class__.__name__[:140]
+		operation.last_error_message = str(exc)[:1000]
+		operation.next_retry_on = add_to_date(
+			now_datetime(),
+			minutes=_RETRY_DELAY_MINUTES,
+		)
+		_save_operation(operation)
+		return _serialize_operation(operation)
+	except Exception as exc:
+		operation.status = "Release Pending"
+		operation.last_error_code = "UNEXPECTED_RELEASE_ERROR"
+		operation.last_error_message = str(exc)[:1000]
+		operation.next_retry_on = add_to_date(
+			now_datetime(),
+			minutes=_RETRY_DELAY_MINUTES,
+		)
+		_save_operation(operation)
+		return _serialize_operation(operation)
+
 	data = _response_data(response)
 	if data.get("ok"):
 		operation.status = "Released"
@@ -389,15 +436,36 @@ def release_quota_operation(operation_key: str, *, reason: str) -> dict:
 		_save_operation(operation)
 		return _serialize_operation(operation)
 
+	reason_code = str(data.get("reason_code") or "USAGE_RELEASE_FAILED")
+	message = str(data.get("message") or "CoreEdge quota release failed.")
+	if reason_code == "RESERVATION_EXPIRED":
+		operation.status = "Expired"
+		operation.reservation_status = "Expired"
+		operation.last_error_code = reason_code
+		operation.last_error_message = message[:1000]
+		operation.next_retry_on = None
+		_save_operation(operation)
+		return _serialize_operation(operation)
+	if reason_code in {
+		"RESERVATION_ALREADY_FINALIZED",
+		"RESERVATION_NOT_FOUND",
+	}:
+		return _mark_reconciliation_required(
+			operation,
+			reason_code=reason_code,
+			reason=message,
+		)
+
 	operation.status = "Release Pending"
-	operation.last_error_code = str(
-		data.get("reason_code") or "USAGE_RELEASE_FAILED"
-	)[:140]
-	operation.last_error_message = str(
-		data.get("message") or "CoreEdge quota release failed."
-	)[:1000]
+	operation.last_error_code = reason_code[:140]
+	operation.last_error_message = message[:1000]
+	operation.next_retry_on = add_to_date(
+		now_datetime(),
+		minutes=_RETRY_DELAY_MINUTES,
+	)
 	_save_operation(operation)
 	return _serialize_operation(operation)
+
 
 
 def _register_transaction_callbacks(
