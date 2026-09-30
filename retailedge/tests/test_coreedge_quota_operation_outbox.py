@@ -30,15 +30,18 @@ class TestRetailEdgeCoreEdgeQuotaOperationOutbox(FrappeTestCase):
 				"description": f"Quota transaction {self.suffix}",
 			}
 		).insert(ignore_permissions=True)
+		self.todo_names = [self.todo.name]
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		frappe.db.delete(
 			"RetailEdge CoreEdge Quota Operation",
-			{"transaction_doctype": "ToDo", "transaction_name": self.todo.name},
+			{
+				"transaction_doctype": "ToDo",
+				"transaction_name": ["in", self.todo_names],
+			},
 		)
-		if frappe.db.exists("ToDo", self.todo.name):
-			frappe.delete_doc("ToDo", self.todo.name, force=True, ignore_permissions=True)
+		frappe.db.delete("ToDo", {"name": ["in", self.todo_names]})
 		super().tearDown()
 
 	def test_operation_key_is_stable_and_event_specific(self):
@@ -434,9 +437,7 @@ class TestRetailEdgeCoreEdgeQuotaOperationOutbox(FrappeTestCase):
 				"description": f"Quota transaction second {self.suffix}",
 			}
 		).insert(ignore_permissions=True)
-		self.addCleanup(
-			lambda: frappe.db.delete("ToDo", {"name": doc.name})
-		)
+		self.todo_names.append(doc.name)
 		return doc.name
 
 	def _reserve_response(self, reservation_reference: str):
