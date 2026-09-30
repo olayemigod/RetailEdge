@@ -129,6 +129,13 @@
 						/>
 					</div>
 
+					<PartyBusinessContext
+						partyType="Customer"
+						:party="values.customer"
+						:company="values.company"
+						:branch="values.branch"
+					/>
+
 					<label class="guided-check-field">
 						<input
 							v-model="values.update_stock"
@@ -239,6 +246,7 @@ import {
 import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
 import StandardDeliveryCompletionDialog from "../professional_selling/StandardDeliveryCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
@@ -318,6 +326,7 @@ export default {
 		StandardSalesInvoiceCompletionDialog,
 		StandardDeliveryCompletionDialog,
 		SimplePaymentDialog,
+		PartyBusinessContext,
 	},
 	data() {
 		return {
