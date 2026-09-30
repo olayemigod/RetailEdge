@@ -902,8 +902,15 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 
 
 def _promote_banking_readiness(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose the hardened readiness Page only when the current reader may open it."""
+	"""Expose the hardened readiness Page only when it is not already navigable."""
 	if not _can_open_page(BANKING_READINESS_ITEM["target"]):
+		return
+	if any(
+		item.get("target_type") == "Page"
+		and item.get("target") == BANKING_READINESS_ITEM["target"]
+		for group in navigation_groups
+		for item in group.get("items") or []
+	):
 		return
 	for group in navigation_groups:
 		if group.get("key") != "money":
@@ -1088,7 +1095,7 @@ def _reclassify_navigation_for_task_frequency(navigation_groups: list[dict[str, 
 		key: [] for key, _label, _icon in NAVIGATION_PRESENTATION_GROUPS
 	}
 	passthrough: list[dict[str, Any]] = []
-	seen: set[tuple[str, str, str]] = set()
+	seen: set[tuple[str, str]] = set()
 
 	for group in navigation_groups:
 		group_key = str(group.get("key") or "")
@@ -1100,7 +1107,6 @@ def _reclassify_navigation_for_task_frequency(navigation_groups: list[dict[str, 
 			identity = (
 				str(item.get("target_type") or ""),
 				str(item.get("target") or ""),
-				str(item.get("label") or ""),
 			)
 			if identity in seen:
 				continue
