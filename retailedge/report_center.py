@@ -357,6 +357,30 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "projects",
+		"label": "Projects",
+		"description": "Project portfolio and project-linked financial control reporting.",
+		"icon": "briefcase",
+		"items": (
+			{
+				"label": "Project Portfolio",
+				"description": "Review project billing, cash, cost, margin and completion across the permitted portfolio.",
+				"target_type": "Report",
+				"target": "RetailEdge Project Portfolio",
+				"tags": ("project", "portfolio", "billing", "cash", "margin"),
+				"native_desk": True,
+			},
+			{
+				"label": "Project Financial Control",
+				"description": "Review project budget, billing, receivables, payables, cash, cost and margin.",
+				"target_type": "Report",
+				"target": "RetailEdge Project Financial Control",
+				"tags": ("project", "budget", "receivable", "payable", "margin"),
+				"native_desk": True,
+			},
+		),
+	},
+	{
 		"key": "controls",
 		"label": "Controls & Audit",
 		"description": "Operational exceptions, reconciliation and integrity controls.",
