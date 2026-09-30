@@ -233,7 +233,13 @@ doc_events = {
 
 # Scheduled Tasks
 # ---------------
-# scheduler_events = {}
+scheduler_events = {
+	"cron": {
+		"0/2 * * * *": [
+			"retailedge.integrations.quota_operations.retry_pending_quota_operations",
+		],
+	},
+}
 
 # Testing
 # -------

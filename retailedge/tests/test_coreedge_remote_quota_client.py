@@ -329,8 +329,10 @@ class RetailEdgeQuotaIntegrationBoundaryTests(unittest.TestCase):
 		app_root = Path(retailedge.__file__).resolve().parent
 		hooks = (app_root / "hooks.py").read_text()
 		sales_event = (app_root / "events" / "sales_invoice.py").read_text()
-		self.assertNotIn("integrations.quota", hooks)
+		sales_hook_block = hooks.split('"Sales Invoice": {', 1)[1].split("},", 1)[0]
+		self.assertNotIn("quota", sales_hook_block.lower())
 		self.assertNotIn("integrations.quota", sales_event)
+		self.assertNotIn("prepare_transaction_quota(", sales_event)
 		self.assertNotIn("reserve_usage(", sales_event)
 		self.assertNotIn("finalize_usage(", sales_event)
 
