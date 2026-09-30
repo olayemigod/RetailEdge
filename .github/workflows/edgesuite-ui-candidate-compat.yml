@@ -79,11 +79,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out promoted EdgeSuite UI 1.1.0 runtime
+      - name: Check out governed EdgeSuite UI 1.1.0 runtime
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: fb44c72f817751cf7983bf3b69cd9e5f376159c4
+          ref: 0c00dd8b4418a37b6c48c4def7721ba7a58e1adc
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "fb44c72f817751cf7983bf3b69cd9e5f376159c4"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "0c00dd8b4418a37b6c48c4def7721ba7a58e1adc"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,

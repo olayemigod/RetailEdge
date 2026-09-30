@@ -140,6 +140,51 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 	}
 });
 
+test("RC3 persistent Global Create is available outside Business Hub and reuses the guided picker", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "cash-movement", "Cash Movement");
+
+		const host = page.locator("#edge-product-menu-host");
+		const trigger = host.locator("#edge-product-menu-trigger");
+		const globalCreate = host.locator("#edge-product-global-action");
+
+		await expect(host).toBeVisible();
+		await expect(trigger).toBeVisible();
+		await expect(globalCreate).toHaveCount(1);
+		await expect(globalCreate).toBeVisible();
+		await expect(globalCreate).toHaveAttribute("aria-label", "Create");
+		await expect(globalCreate).toHaveAttribute("title", "Create");
+
+		const sharesTopbarHost = await page.evaluate(() => {
+			const triggerNode = document.getElementById("edge-product-menu-trigger");
+			const actionNode = document.getElementById("edge-product-global-action");
+			return Boolean(
+				triggerNode
+				&& actionNode
+				&& triggerNode.parentElement
+				&& triggerNode.parentElement === actionNode.parentElement
+			);
+		});
+		expect(sharesTopbarHost).toBeTruthy();
+
+		await globalCreate.click();
+		await expect
+			.poll(() => page.evaluate(() => {
+				const route = window.frappe?.get_route?.();
+				return Array.isArray(route) ? route.filter(Boolean).join("/") : String(route || "");
+			}))
+			.toBe("retailedge-business-hub");
+
+		const search = page.getByRole("searchbox", { name: "Search permitted Create entries" });
+		await expect(search).toBeVisible();
+		await expect(search).toBeFocused();
+		expect(await page.locator(".create-picker-item").count()).toBeGreaterThan(0);
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 waffle opens the permission-aware EdgeSuite product menu", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {

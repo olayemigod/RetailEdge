@@ -741,6 +741,10 @@ export default {
 		applyContext(data) {
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
+			if (this.quickActions.length && window.__retailedgeOpenGuidedCreate) {
+				this.createPickerOpen = true;
+				window.__retailedgeOpenGuidedCreate = false;
+			}
 			this.context = { ...this.context, ...(data.context || {}) };
 			if (typeof window.retailedgeSyncShellIdentity === "function") {
 				window.retailedgeSyncShellIdentity({

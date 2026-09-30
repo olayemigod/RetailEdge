@@ -40,6 +40,13 @@ def test_global_create_reuses_canonical_business_hub_guided_host():
     assert "openPendingGuidedCreate" in bridge
     assert "proxy.openCreatePicker()" in bridge
     assert "__retailedgeOpenGuidedCreate = false" in bridge
+    pending = bridge.split("function openPendingGuidedCreate", 1)[1].split("function requestGuidedCreate", 1)[0]
+    assert "const actions = Array.isArray(proxy.quickActions) ? proxy.quickActions : [];" in pending
+    assert "if (actions.length)" in pending
+    assert pending.index("proxy.openCreatePicker();") < pending.index("global.__retailedgeOpenGuidedCreate = false;")
+    assert "if (this.quickActions.length && window.__retailedgeOpenGuidedCreate)" in hub
+    assert "this.createPickerOpen = true;" in hub
+    assert "window.__retailedgeOpenGuidedCreate = false;" in hub
     for component in (
         "SimpleSalesInvoiceDialog",
         "SimplePaymentDialog",
