@@ -206,7 +206,7 @@ test("Accounts User reaches Action Centre and both banking EdgeSuite pages with 
 	const { context, page } = await newPersona(browser, USERS.accounts);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "action-center", "Action Centre", "Review & Approvals");
+		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
 		await openProductPage(page, "banking-readiness", "Banking Setup & Readiness", "Banking & Reconciliation");
 		await openProductPage(page, "bank-matching-reconciliation", "Bank Matching & Reconciliation", "Banking & Reconciliation");
 	} finally {
