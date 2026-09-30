@@ -83,6 +83,8 @@ def test_cashier_expense_detail_exposes_server_derived_workflow_actions():
 		"get_cashier_expense_posting_settings",
 		"CONTROLLED_POSTING_ROLES",
 		"POSTING_REFRESH_ROLES",
+		'frappe.has_permission(EXPENSE_DOCTYPE, "write"',
+		'frappe.has_permission("Journal Entry", "read")',
 		'frappe.has_permission("Journal Entry", "create")',
 		'frappe.has_permission("Journal Entry", "submit")',
 	):
