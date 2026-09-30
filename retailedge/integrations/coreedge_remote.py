@@ -58,11 +58,18 @@ def is_remote_services_enabled() -> bool:
 
 def get_remote_service_status() -> dict:
 	enabled = is_remote_services_enabled()
-	config = get_coreedge_remote_config(required=False) if enabled else None
 	settings = get_retailedge_settings()
+	config = None
+	configuration_valid = True
+	if enabled:
+		try:
+			config = get_coreedge_remote_config(required=False)
+		except CoreEdgeRemoteNotConfigured:
+			configuration_valid = False
 	return {
 		"enabled": enabled,
 		"configured": bool(config),
+		"configuration_valid": configuration_valid,
 		"quota_enabled": bool(
 			enabled and int(getattr(settings, "enable_coreedge_quota_integration", 0) or 0)
 		),
