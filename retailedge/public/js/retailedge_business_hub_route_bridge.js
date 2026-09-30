@@ -251,10 +251,13 @@
 		if (!global.__retailedgeOpenGuidedCreate || !isActiveRoute()) return false;
 		const proxy = getMountedProxy(wrapper);
 		if (proxy && typeof proxy.openCreatePicker === "function") {
-			global.__retailedgeOpenGuidedCreate = false;
-			proxy.openCreatePicker();
-			installGuidedCreateSearch(wrapper);
-			return true;
+			const actions = Array.isArray(proxy.quickActions) ? proxy.quickActions : [];
+			if (actions.length) {
+				proxy.openCreatePicker();
+				global.__retailedgeOpenGuidedCreate = false;
+				installGuidedCreateSearch(wrapper);
+				return true;
+			}
 		}
 		if (attempt < MAX_ATTEMPTS) {
 			global.setTimeout(() => openPendingGuidedCreate(wrapper, attempt + 1), RETRY_MS);
