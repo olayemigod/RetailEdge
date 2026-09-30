@@ -2,7 +2,8 @@
 
 ## Goal
 
-Add a safe RetailEdge client for the CoreEdge V2.6D remote entitlement-usage service without enabling quota enforcement on Sales Invoice, POS, Purchase, Stock or accounting workflows yet.
+Add a safe RetailEdge client for the CoreEdge V2.6D remote entitlement-usage service without enabling quota
+enforcement on Sales Invoice, POS, Purchase, Stock or accounting workflows yet.
 
 This is a transport/configuration foundation only.
 
@@ -16,13 +17,16 @@ CoreEdge PR #31 introduces remote quota reservation with:
 - release;
 - authoritative snapshot.
 
-RetailEdge should not wire those calls into live transaction submission until the central CoreEdge quota PR chain has passed migration and focused/full-suite validation.
+RetailEdge should not wire those calls into live transaction submission until the central CoreEdge quota PR
+chain has passed migration and focused/full-suite validation.
 
-This branch therefore makes the remote contract callable and testable while preserving all current RetailEdge transaction behaviour.
+This branch therefore makes the remote contract callable and testable while preserving all current RetailEdge
+transaction behaviour.
 
 ## Protected site configuration
 
-Credentials must be stored in protected site configuration or a secret manager, not in `RetailEdge Settings`, Custom Fields, client scripts, browser bundles, logs, or source control.
+Credentials must be stored in protected site configuration or a secret manager, not in `RetailEdge Settings`,
+Custom Fields, client scripts, browser bundles, logs, or source control.
 
 Supported keys:
 
@@ -156,7 +160,8 @@ This branch does not:
 
 ## Next RetailEdge slice
 
-After CoreEdge PR #31 is validated, implement **RetailEdge Sales Transaction Quota Integration** as a separate narrow branch.
+After CoreEdge PR #31 is validated, implement **RetailEdge Sales Transaction Quota Integration** as a separate
+narrow branch.
 
 Before coding that hook, lock down:
 
