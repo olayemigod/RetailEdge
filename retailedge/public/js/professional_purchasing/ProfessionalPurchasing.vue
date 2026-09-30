@@ -421,10 +421,14 @@ export default {
 	methods: {
 		applyPendingTarget() {
 			const target = window.retailedgeProfessionalPurchasingTarget;
-			if (!target?.action || !target?.source_name) return;
+			if (!target?.action) return;
 			delete window.retailedgeProfessionalPurchasingTarget;
 			if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
-			if (target.action === "supplier-debit-note") {
+			if (target.action === "new-purchase-order") {
+				this.newPurchaseOrder();
+				return;
+			}
+			if (target.action === "supplier-debit-note" && target.source_name) {
 				window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
 					detail: { source_type: "purchase_invoice", source_name: target.source_name },
 				}));
