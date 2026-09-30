@@ -1,18 +1,18 @@
 <template>
 	<EdgeModal
 		:open="open"
-		:title="formContext.title || 'Purchase Invoice'"
-		:subtitle="formContext.subtitle || 'Create a Purchase Invoice draft using ERPNext buying and stock controls.'"
+		:title="'Direct Purchase'"
+		:subtitle="'Create a direct ERPNext Purchase Invoice. For normal procurement use Purchase Operations: Purchase Order → Purchase Receipt → Purchase Invoice → Payment.'"
 		size="xl"
 		@close="requestClose"
 	>
 		<div v-if="loading" class="guided-purchase-state">
-			<EdgeLoadingState message="Preparing Purchase Invoice..." :skeleton="true" />
+			<EdgeLoadingState message="Preparing Direct Purchase..." :skeleton="true" />
 		</div>
 
 		<div v-else-if="loadError" class="guided-purchase-state">
 			<EdgeErrorState
-				title="Purchase Invoice entry unavailable"
+				title="Direct Purchase unavailable"
 				:message="loadError"
 				@retry="loadContext"
 			/>
@@ -116,8 +116,8 @@
 			<label class="guided-check-field">
 				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
 				<span>
-					<strong>Update Stock</strong>
-					<small>Add received stock when the Purchase Invoice is eventually submitted.</small>
+					<strong>Receive stock with this invoice</strong>
+					<small>Leave off for Bill Only. Turn on only when the goods are physically being received through this direct Purchase Invoice; a Receiving Stock Location is then required.</small>
 				</span>
 			</label>
 
@@ -134,7 +134,7 @@
 				@update:rows="updateItems"
 			/>
 			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">
-				Quick Purchase is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
+				Direct Purchase is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
 			</p>
 
 			<p class="guided-purchase-hint">
@@ -155,7 +155,7 @@
 		<template #footer>
 			<div class="guided-purchase-footer">
 				<div class="guided-purchase-footer-actions">
-					<button type="button" class="edge-button" :disabled="saving" @click="continueInRecordPurchase">Continue in Record Purchase</button>
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInRecordPurchase">Open Direct Purchase Page</button>
 					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
 				</div>
 				<div class="guided-purchase-footer-actions">
@@ -346,7 +346,7 @@ export default {
 				};
 				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
-				this.loadError = errorMessage(error, "Unable to prepare Purchase Invoice.");
+				this.loadError = errorMessage(error, "Unable to prepare Direct Purchase.");
 			} finally {
 				this.loading = false;
 			}
@@ -566,7 +566,7 @@ export default {
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;
-			if (this.quickEntryTooLarge) { this.saveError = `Quick Purchase supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in the full page for larger transactions.`; return; }
+			if (this.quickEntryTooLarge) { this.saveError = `Direct Purchase supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in the full page for larger transactions.`; return; }
 			this.saveError = "";
 			this.saving = true;
 			try {
