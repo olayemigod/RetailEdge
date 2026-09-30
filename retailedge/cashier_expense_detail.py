@@ -119,14 +119,19 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 	self_cashier = str(expense.get("cashier") or "").strip() == str(user or "").strip()
 	is_system_manager = "System Manager" in roles
 
-	can_review_submitted = reviewer and docstatus == 1 and status == "Submitted"
-	can_reopen = reviewer and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
+	can_write_expense = bool(
+		frappe.has_permission(EXPENSE_DOCTYPE, "write", doc=str(expense.get("name") or ""))
+	)
+	can_review_submitted = reviewer and can_write_expense and docstatus == 1 and status == "Submitted"
+	can_reopen = reviewer and can_write_expense and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
 
 	posting = get_cashier_expense_posting_settings()
 	posting_enabled = bool(posting.get("enabled"))
 	posting_role = bool(user_has_any_role(user=user, roles=CONTROLLED_POSTING_ROLES))
 	can_post_permissions = bool(
-		frappe.has_permission("Journal Entry", "create")
+		can_write_expense
+		and frappe.has_permission("Journal Entry", "read")
+		and frappe.has_permission("Journal Entry", "create")
 		and frappe.has_permission("Journal Entry", "submit")
 	)
 	posting_status_allowed = (
