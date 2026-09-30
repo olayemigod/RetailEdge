@@ -55,8 +55,8 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Business Hub", "Page", "retailedge-business-hub", "Home", 10, "all", "Business Workspace", "Blue"),
 
 	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Point of Sale", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
-	WorkspaceHomeItem("POS Opening", "DocType", POSNEXT_OPENING_SHIFT, "Point of Sale", 20, "cashier", "POS Runtime"),
-	WorkspaceHomeItem("POS Closing", "DocType", POSNEXT_CLOSING_SHIFT, "Point of Sale", 30, "cashier", "POS Runtime"),
+	WorkspaceHomeItem("POS Opening Shift", "DocType", POSNEXT_OPENING_SHIFT, "Point of Sale", 20, "cashier", "POS Runtime"),
+	WorkspaceHomeItem("POS Closing Shift", "DocType", POSNEXT_CLOSING_SHIFT, "Point of Sale", 30, "cashier", "POS Runtime"),
 
 	WorkspaceHomeItem("Sales Invoices", "DocType", "Sales Invoice", "Sales", 10, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Sales Orders", "DocType", "Sales Order", "Sales", 20, "operations", "ERPNext Link"),
@@ -171,7 +171,7 @@ def _resolve_runtime_item(item: WorkspaceHomeItem, *, pos_capabilities=None) -> 
 			return None
 		return replace(
 			item,
-			label=pos_capabilities.opening_doctype,
+			label="POS Opening Shift",
 			link_to=pos_capabilities.opening_doctype,
 			source="POSNext Link" if pos_capabilities.provider == "posnext" else "ERPNext Link",
 			url=None,
@@ -182,7 +182,7 @@ def _resolve_runtime_item(item: WorkspaceHomeItem, *, pos_capabilities=None) -> 
 			return None
 		return replace(
 			item,
-			label=pos_capabilities.closing_doctype,
+			label="POS Closing Shift",
 			link_to=pos_capabilities.closing_doctype,
 			source="POSNext Link" if pos_capabilities.provider == "posnext" else "ERPNext Link",
 			url=None,
