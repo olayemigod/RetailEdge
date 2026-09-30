@@ -212,11 +212,15 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		)
 		return _serialize_operation(operation)
 
+	finalize_attempt_key = _retry_idempotency_key(
+		operation.finalize_idempotency_key,
+		int(operation.attempt_count or 0),
+	)
 	try:
 		response = get_remote_usage_client().finalize_usage(
 			operation.reservation_reference,
-			operation.finalize_idempotency_key,
-			request_id=operation.finalize_idempotency_key,
+			finalize_attempt_key,
+			request_id=finalize_attempt_key,
 			correlation_id=f"{operation.source_doctype}:{operation.source_name}",
 			source_path="RetailEdge Sales Commit",
 		)
@@ -424,6 +428,14 @@ def _idempotency_key(doctype: str, name: str, action: str, attempt: str) -> str:
 		return raw
 	digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
 	return f"retail:sale:{action}:{digest}"
+
+
+def _retry_idempotency_key(base_key: str, attempt_count: int) -> str:
+	raw = f"{base_key}:attempt:{max(1, int(attempt_count or 1))}"
+	if len(raw) <= 140:
+		return raw
+	digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+	return f"retail:sale:finalize-retry:{digest}"
 
 
 def _safe_error(exc: Exception) -> str:
