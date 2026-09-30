@@ -91,12 +91,12 @@
 		</EdgeReportShell>
 
 		<SimplePaymentDialog
-			v-if="reportType === 'supplier_payables' && canPaySupplier"
+			v-if="['supplier_payables', 'purchase_register'].includes(reportType) && canPaySupplier"
 			:open="supplierPaymentOpen"
 			intent="pay-supplier"
 			:initialContext="supplierPaymentContext"
 			:nativeFallbackEnabled="canUseNativeDesk"
-			:allowMultiReferenceSupplierPayment="true"
+			:allowMultiReferenceSupplierPayment="reportType === 'supplier_payables'"
 			@close="closeSupplierPayment"
 			@saved="handleSupplierPaymentSaved"
 			@open-native="openNativePayment"
@@ -184,7 +184,7 @@ export default {
 			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: this.canUseNativeDesk && ["invoice", "supplier", "return_against"].includes(column.fieldname),
+				clickable: Boolean(column.clickable) || (this.canUseNativeDesk && ["invoice", "supplier", "return_against"].includes(column.fieldname)),
 			}));
 			if (this.reportType === "supplier_payables" && this.canPaySupplier) {
 				columns.push({ label: "Settle", fieldname: "settlement_action", fieldtype: "Data", width: 90, clickable: true });
@@ -363,7 +363,7 @@ export default {
 			this.supplierPaymentOpen = true;
 		},
 		openSupplierPayment(row) {
-			if (!this.canPaySupplier || this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
+			if (!this.canPaySupplier || !["supplier_payables", "purchase_register"].includes(this.reportType) || !row?.invoice || !row?.supplier) return;
 			this.supplierPaymentContext = {
 				company: this.filters.company || "",
 				branch: row.branch || this.filters.branch || "",
@@ -371,6 +371,26 @@ export default {
 				reference_name: row.invoice,
 			};
 			this.supplierPaymentOpen = true;
+		},
+		runPurchaseRegisterAction(row) {
+			if (this.reportType !== "purchase_register" || !row?.invoice) return;
+			if (row.next_action_key === "pay-supplier") {
+				this.openSupplierPayment(row);
+				return;
+			}
+			if (row.next_action_key === "review-payable") {
+				window.__retailedgeBusinessHubRouteHandoff = {
+					target: "supplier-payables",
+					filters: { company: this.filters.company || "", branch: row.branch || this.filters.branch || "", supplier: row.supplier || "" },
+					createdAt: Date.now(),
+				};
+				frappe.route_options = { company: this.filters.company || "", branch: row.branch || this.filters.branch || "", supplier: row.supplier || "" };
+				frappe.set_route("supplier-payables");
+				return;
+			}
+			if (row.next_action_key === "review-return" && this.canUseNativeDesk) {
+				frappe.set_route("Form", "Purchase Invoice", row.invoice);
+			}
 		},
 		closeSupplierPayment() { this.supplierPaymentOpen = false; this.supplierPaymentContext = {}; },
 		async handleSupplierPaymentSaved(_result) {
@@ -384,6 +404,7 @@ export default {
 			if (!column || !row) return;
 			if (column.fieldname === "settlement_action") { this.togglePayableSelection(row); return; }
 			if (column.fieldname === "payment_action") { this.openSupplierPayment(row); return; }
+			if (column.fieldname === "next_action") { this.runPurchaseRegisterAction(row); return; }
 			if (!this.canUseNativeDesk) return;
 			const value = row[column.fieldname]; if (!value) return;
 			if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Purchase Invoice", value);
