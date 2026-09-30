@@ -169,7 +169,12 @@ test("RC3 persistent Global Create is available outside Business Hub and reuses 
 		expect(sharesTopbarHost).toBeTruthy();
 
 		await globalCreate.click();
-		await expect(page).toHaveURL(/\/app\/retailedge-business-hub/);
+		await expect
+			.poll(() => page.evaluate(() => {
+				const route = window.frappe?.get_route?.();
+				return Array.isArray(route) ? route.filter(Boolean).join("/") : String(route || "");
+			}))
+			.toBe("retailedge-business-hub");
 
 		const search = page.getByRole("searchbox", { name: "Search permitted Create entries" });
 		await expect(search).toBeVisible();
