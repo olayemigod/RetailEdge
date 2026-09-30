@@ -704,10 +704,10 @@ export default {
 			addAction("receive-customer-payment");
 			addAction("pay-supplier");
 			addAction("record-expense");
-			addPage("professional-purchasing", "Receive Stock", "Open ready-to-receive Purchase Orders and prepare Purchase Receipts.", "download");
+			addPage("professional-purchasing", "Purchase Operations", "Follow Purchase Order → Purchase Receipt → Purchase Invoice → Payment and review ready-to-receive orders.", "shopping-bag");
 			addPage("transfer-stock", "Transfer Stock", "Use the full-page workspace for larger or multi-item stock movements.", "repeat");
 			addPage("stock-adjustment", "Stock Adjustment", "Use the full-page workspace for larger physical counts and stock corrections.", "clipboard");
-			addPage("record-purchase", "Record Purchase", "Use the full-page workspace for larger or multi-item Purchase Invoices.", "shopping-bag");
+			addPage("record-purchase", "Direct Purchase", "Use only for a direct supplier Purchase Invoice when the standard Purchase Order / Receipt path does not apply.", "clipboard");
 			addPage("bank-matching-reconciliation", "Match Bank Transactions", "Review imported bank transactions, suggestions and reconciliation queues.", "repeat");
 			return shortcuts;
 		},

@@ -306,6 +306,17 @@ def get_supplier_payables_export(filters: dict[str, Any] | str | None = None) ->
 	return _export_response(_build_supplier_payables_dataset(_coerce_filters(filters)))
 
 
+def _purchase_register_next_action(*, is_return: bool, outstanding: float, can_pay_supplier: bool) -> dict[str, str]:
+	"""Return the next operational action without changing ERPNext document truth."""
+	if is_return:
+		return {"key": "review-return", "label": _("Review Return")}
+	if outstanding > 0.005:
+		if can_pay_supplier:
+			return {"key": "pay-supplier", "label": _("Pay Supplier")}
+		return {"key": "review-payable", "label": _("Review Payable")}
+	return {"key": "complete", "label": _("Complete")}
+
+
 def _build_purchase_register_dataset(filters: frappe._dict) -> dict[str, Any]:
 	_validate_purchase_filters(filters)
 	_assert_report_access(filters)
@@ -317,6 +328,7 @@ def _build_purchase_register_dataset(filters: frappe._dict) -> dict[str, Any]:
 
 	currency = _company_currency(filters.company)
 	outstanding_is_base = _outstanding_is_company_currency()
+	can_pay_supplier = _can_create_payment_entry()
 	rows: list[dict[str, Any]] = []
 	for row in headers:
 		is_return = cint(row.is_return)
@@ -325,6 +337,11 @@ def _build_purchase_register_dataset(filters: frappe._dict) -> dict[str, Any]:
 			outstanding *= flt(row.conversion_rate) or 1.0
 		if is_return and outstanding > 0:
 			outstanding = -abs(outstanding)
+		next_action = _purchase_register_next_action(
+			is_return=bool(is_return),
+			outstanding=outstanding,
+			can_pay_supplier=can_pay_supplier,
+		)
 		rows.append(
 			{
 				"invoice": row.name,
@@ -341,6 +358,8 @@ def _build_purchase_register_dataset(filters: frappe._dict) -> dict[str, Any]:
 				"outstanding": outstanding,
 				"status": row.status or "",
 				"return_against": row.return_against or "",
+				"next_action": next_action["label"],
+				"next_action_key": next_action["key"],
 			}
 		)
 	rows.sort(
@@ -751,6 +770,12 @@ def _purchase_register_columns(currency: str) -> list[dict[str, Any]]:
 		{"fieldname": "grand_total", "label": _("Grand Total"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "outstanding", "label": _("Outstanding"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data"},
+		{
+			"fieldname": "next_action",
+			"label": _("Next Action"),
+			"fieldtype": "Data",
+			"clickable": True,
+		},
 		{
 			"fieldname": "return_against",
 			"label": _("Return Against"),

@@ -516,20 +516,20 @@ test("RC3 Stock Manager reaches Stock Adjustment and Quick Adjustment", async ({
 	}
 });
 
-test("RC3 Purchasing persona reaches Record Purchase, Quick Purchase and purchasing workspaces", async ({ browser }) => {
+test("RC3 Purchasing persona reaches Purchase Operations, Direct Purchase and purchasing workspaces", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.purchasing);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
-		const purchaseAction = page.locator(".home-quick-action").filter({ hasText: "Record Purchase" }).first();
+		const purchaseAction = page.locator(".home-quick-action").filter({ hasText: "Direct Purchase" }).first();
 		await expect(purchaseAction).toBeVisible();
 		await purchaseAction.click();
 		await expect(page).toHaveURL(/\/(?:app|desk)\/record-purchase(?:$|[?#])/);
-		await page.getByRole("heading", { name: "Record Purchase", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
+		await page.getByRole("heading", { name: "Purchase Entry", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
 
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
 		await page.getByRole("button", { name: "+ Create", exact: true }).click();
-		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Purchase" }).first()).toBeVisible();
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Direct Purchase" }).first()).toBeVisible();
 		await page.keyboard.press("Escape");
 
 		await openProductPage(page, "professional-purchasing", "Professional Purchasing");
