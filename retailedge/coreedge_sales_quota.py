@@ -72,7 +72,7 @@ def before_submit_sales_transaction_quota(doc, method=None):
 	if not config.enabled:
 		return
 
-	eligible, reason = is_counted_sales_transaction(doc)
+	eligible, _ = is_counted_sales_transaction(doc)
 	if not eligible:
 		return
 
