@@ -26,7 +26,12 @@ class TestRIR2C1KeyboardCommandOwnershipContract(unittest.TestCase):
 		self.assertIn("link_to: GUIDED_CREATE_ACTION", source)
 		self.assertIn("edgeUI.registerProductMenu(config)", source)
 		self.assertIn("requestGuidedCreate()", source)
-		self.assertIn('new CustomEvent("retailedge-open-guided-create")', source)
+		self.assertIn('const GLOBAL_CREATE_EVENT = "retailedge-open-global-create"', source)
+		self.assertIn('const GLOBAL_CREATE_ASSET = "retailedge_global_create.bundle.js"', source)
+		self.assertIn("retailedgeEnsureGlobalCreateHost", source)
+		self.assertIn("new CustomEvent(GLOBAL_CREATE_EVENT)", source)
+		request = source.split("async function requestGuidedCreate()", 1)[1].split("function deskSlug", 1)[0]
+		self.assertNotIn("frappe.set_route", request)
 
 	def test_candidate_compatibility_freezes_shared_keyboard_guard_contract(self):
 		workflow = CANDIDATE_WORKFLOW.read_text()

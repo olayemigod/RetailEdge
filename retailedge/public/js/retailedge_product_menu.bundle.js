@@ -4,7 +4,8 @@ const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
-const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+const GLOBAL_CREATE_ASSET = "retailedge_global_create.bundle.js";
+const GLOBAL_CREATE_EVENT = "retailedge-open-global-create";
 
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business home and command centre." },
@@ -197,14 +198,23 @@ function buildSections(groups, quickActions = []) {
 	return createSection ? [createSection, ...sections] : sections;
 }
 
-function requestGuidedCreate() {
-	window.__retailedgeOpenGuidedCreate = true;
-	const route = frappe.get_route?.() || [];
-	if (route[0] === BUSINESS_HUB_ROUTE) {
-		document.dispatchEvent(new CustomEvent("retailedge-open-guided-create"));
-		return;
+async function requestGuidedCreate() {
+	try {
+		if (typeof window.retailedgeEnsureGlobalCreateHost !== "function") {
+			await requireAsset(GLOBAL_CREATE_ASSET);
+		}
+		if (typeof window.retailedgeEnsureGlobalCreateHost !== "function") {
+			throw new Error("RetailEdge Global Create host is unavailable.");
+		}
+		window.retailedgeEnsureGlobalCreateHost();
+		document.dispatchEvent(new CustomEvent(GLOBAL_CREATE_EVENT));
+	} catch (error) {
+		console.error("[RetailEdge Global Create] open failed", error);
+		frappe.show_alert?.({
+			message: "RetailEdge Create could not open. Refresh the page and try again.",
+			indicator: "red",
+		}, 7);
 	}
-	frappe.set_route(BUSINESS_HUB_ROUTE);
 }
 
 function deskSlug(value) {
