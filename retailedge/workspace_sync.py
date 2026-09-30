@@ -58,7 +58,7 @@ def sync_retailedge_workspace_layout():
 		workspace_shortcuts,
 	)
 	workspace_links = _normalise_links(build_home_workspace_links(workspace_data))
-	workspace_links = _ensure_workspace_business_hub_link(_ensure_workspace_report_link(workspace_links))
+	workspace_links = _ensure_workspace_business_hub_link(workspace_links)
 	workspace.links = []
 	for row in workspace_links:
 		workspace.append("links", row)
@@ -76,7 +76,7 @@ def sync_retailedge_workspace_layout():
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
 	sidebar_items = _ensure_sidebar_pos_shift_links(sidebar_items)
-	sidebar_items = _ensure_sidebar_business_hub_link(_ensure_sidebar_report_link(sidebar_items))
+	sidebar_items = _ensure_sidebar_business_hub_link(sidebar_items)
 	for row in sidebar_items:
 		sidebar.append("items", row)
 	sidebar.save(ignore_permissions=True)
