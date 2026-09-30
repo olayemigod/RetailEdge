@@ -134,6 +134,7 @@
 		:branch="filters.branch"
 		:canUseNativeDesk="canUseNativeDesk"
 		@close="closeCashierExpenseDetail"
+		@changed="handleCashierExpenseChanged"
 	/>
 </template>
 
@@ -644,6 +645,9 @@ export default {
 		closeCashierExpenseDetail() {
 			this.cashierExpenseDetailOpen = false;
 			this.cashierExpenseDetailName = "";
+		},
+		async handleCashierExpenseChanged() {
+			await this.fetchData();
 		},
 		recordExpense() {
 			if (this.config.cashierOnly) {
