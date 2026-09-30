@@ -137,6 +137,15 @@ def before_submit_sales_transaction_quota(doc, method=None):
 			title=_("Sales Transaction Limit"),
 		)
 
+	frappe.db.after_rollback.add(
+		lambda: _release_rolled_back_reservation(
+			reservation_reference=reservation_reference,
+			release_idempotency_key=release_key,
+			doc_doctype=doc.doctype,
+			doc_name=doc.name,
+		)
+	)
+
 	operation = _insert_quota_operation(
 		doc=doc,
 		operation_key=operation_key,
@@ -151,22 +160,8 @@ def before_submit_sales_transaction_quota(doc, method=None):
 		remote_message=quota.get("message"),
 	)
 
-	frappe.enqueue(
-		FINALIZE_JOB,
-		queue="short",
-		timeout=120,
-		enqueue_after_commit=True,
-		job_id=f"retailedge-sales-quota-finalize::{operation.name}",
-		deduplicate=True,
-		operation_name=operation.name,
-	)
-	frappe.db.after_rollback.add(
-		lambda: _release_rolled_back_reservation(
-			reservation_reference=reservation_reference,
-			release_idempotency_key=release_key,
-			doc_doctype=doc.doctype,
-			doc_name=doc.name,
-		)
+	frappe.db.after_commit.add(
+		lambda: _enqueue_finalize_operation(operation.name)
 	)
 
 
@@ -270,16 +265,28 @@ def retry_pending_sales_quota_operations(limit: int = 50) -> int:
 	)
 	queued = 0
 	for row in rows:
+		if _enqueue_finalize_operation(row.name):
+			queued += 1
+	return queued
+
+
+def _enqueue_finalize_operation(operation_name: str) -> bool:
+	try:
 		frappe.enqueue(
 			FINALIZE_JOB,
 			queue="short",
 			timeout=120,
-			job_id=f"retailedge-sales-quota-finalize::{row.name}",
+			job_id=f"retailedge-sales-quota-finalize::{operation_name}",
 			deduplicate=True,
-			operation_name=row.name,
+			operation_name=operation_name,
 		)
-		queued += 1
-	return queued
+		return True
+	except Exception:
+		frappe.log_error(
+			title="RetailEdge CoreEdge Quota Finalize Queue Failed",
+			message=frappe.get_traceback(),
+		)
+		return False
 
 
 def _insert_quota_operation(
