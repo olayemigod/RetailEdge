@@ -817,6 +817,33 @@ def _build_trends(
 	return {
 		"title": _("Performance Trends"),
 		"description": _("Daily tax-exclusive Net Sales using the same authority as the headline."),
+		"visuals": [
+			{
+				"id": "net-sales-trend",
+				"title": _("Net Sales Trend"),
+				"description": _("Daily tax-exclusive Net Sales."),
+				"kind": "line",
+				"rows": rows,
+				"label_field": "posting_date",
+				"label_type": "date",
+				"value_field": "net_sales",
+				"value_label": _("Net Sales"),
+				"datatype": "Currency",
+				"currency": currency,
+			},
+			{
+				"id": "transaction-activity",
+				"title": _("Transaction Activity"),
+				"description": _("Submitted Sales Invoice transaction count by day."),
+				"kind": "bar",
+				"rows": rows,
+				"label_field": "posting_date",
+				"label_type": "date",
+				"value_field": "transactions",
+				"value_label": _("Transactions"),
+				"datatype": "Int",
+			},
+		],
 		"columns": [
 			{"fieldname": "posting_date", "label": _("Date"), "fieldtype": "Date", "sortable": False},
 			{"fieldname": "net_sales", "label": _("Net Sales"), "fieldtype": "Currency", "options": currency, "sortable": False},
@@ -991,6 +1018,9 @@ def _build_outstanding(
 			{
 				"name": f"{destination}:{metric_label}",
 				"metric": label,
+				"value": flt(value),
+				"datatype": "Currency",
+				"currency": currency,
 				"display_value": _display_value(value, "Currency", currency),
 				"basis": _("Current"),
 				"availability": "available",
@@ -1001,6 +1031,21 @@ def _build_outstanding(
 	return {
 		"title": _("Outstanding Insights"),
 		"description": _("Current customer and supplier exposure using the same balance date as the underlying registers."),
+		"visuals": [
+			{
+				"id": "outstanding-exposure",
+				"title": _("Outstanding Exposure"),
+				"description": _("Current receivable, payable and overdue balances."),
+				"kind": "bar",
+				"orientation": "horizontal",
+				"rows": rows,
+				"label_field": "metric",
+				"value_field": "value",
+				"value_label": _("Amount"),
+				"datatype": "Currency",
+				"currency": currency,
+			}
+		],
 		"columns": [
 			{"fieldname": "metric", "label": _("Exposure"), "fieldtype": "Data", "sortable": False},
 			{"fieldname": "display_value", "label": _("Amount"), "fieldtype": "Data", "sortable": False},
