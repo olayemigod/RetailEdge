@@ -73,6 +73,30 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 		item_source = inspect.getsource(purchase_reporting._get_invoice_items)
 		self.assertIn('"parent": ["in", invoice_names]', item_source)
 
+	def test_purchase_register_next_action_is_permission_and_state_aware(self):
+		self.assertEqual(
+			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=100, can_pay_supplier=True)["key"],
+			"pay-supplier",
+		)
+		self.assertEqual(
+			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=100, can_pay_supplier=False)["key"],
+			"review-payable",
+		)
+		self.assertEqual(
+			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=0, can_pay_supplier=True)["key"],
+			"complete",
+		)
+		self.assertEqual(
+			purchase_reporting._purchase_register_next_action(is_return=True, outstanding=0, can_pay_supplier=True)["key"],
+			"review-return",
+		)
+		source = inspect.getsource(purchase_reporting._build_purchase_register_dataset)
+		self.assertIn('"next_action": next_action["label"]', source)
+		self.assertIn('"next_action_key": next_action["key"]', source)
+		columns = inspect.getsource(purchase_reporting._purchase_register_columns)
+		self.assertIn('"label": _("Next Action")', columns)
+		self.assertIn('"clickable": True', columns)
+
 	def test_payables_ageing_boundaries_are_stable(self):
 		self.assertEqual(purchase_reporting._ageing_bucket(0), "Current")
 		self.assertEqual(purchase_reporting._ageing_bucket(1), "1-30 Days")
