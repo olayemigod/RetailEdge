@@ -130,6 +130,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Buy",
 		"icon": "shopping-bag",
 		"items": (
+			{"label": "Purchase Operations", "target_type": "Page", "target": "professional-purchasing", "icon": "shopping-bag"},
 			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice", "icon": "clipboard"},
 			{"label": "Purchase Register", "target_type": "Page", "target": "purchase-register", "icon": "report"},
 			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
@@ -289,7 +290,7 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "record-purchase", "label": "Quick Purchase", "description": "Create a short Purchase Invoice quickly. Use Record Purchase for larger or multi-item purchases.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+		"key": "record-purchase", "label": "Direct Purchase", "description": "Create a short direct Purchase Invoice. Use Purchase Operations for the standard Purchase Order → Receipt → Invoice workflow.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
