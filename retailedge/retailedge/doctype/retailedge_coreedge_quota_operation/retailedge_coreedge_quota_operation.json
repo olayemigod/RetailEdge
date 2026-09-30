@@ -204,7 +204,7 @@
    "default": "0",
    "fieldname": "attempt_count",
    "fieldtype": "Int",
-   "label": "Finalize Attempts",
+   "label": "Lifecycle Attempts",
    "read_only": 1
   },
   {
