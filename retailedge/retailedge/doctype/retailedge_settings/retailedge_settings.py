@@ -32,9 +32,32 @@ class RetailEdgeSettings(Document):
 		self._validate_price_list_governance()
 		self._set_bank_auto_match_guidance()
 		self._validate_business_expense_posting_workflow_state()
+		self._validate_coreedge_remote_services()
 
 	def on_update(self):
 		clear_retailedge_settings_cache()
+
+
+	def _validate_coreedge_remote_services(self):
+		remote_enabled = int(
+			getattr(self, "enable_coreedge_remote_services", 0) or 0
+		)
+		quota_enabled = int(
+			getattr(self, "enable_coreedge_quota_integration", 0) or 0
+		)
+		if quota_enabled and not remote_enabled:
+			frappe.throw(
+				_(
+					"Enable Remote CoreEdge Services before enabling "
+					"CoreEdge Quota Integration."
+				)
+			)
+		self.coreedge_remote_service_guidance = _(
+			"Remote credentials are read only from protected site configuration: "
+			"coreedge_service_url, coreedge_service_site_identifier, "
+			"coreedge_service_api_key and coreedge_service_api_secret."
+		)
+
 
 
 	def _sync_cashier_expense_posting_policy(self):
