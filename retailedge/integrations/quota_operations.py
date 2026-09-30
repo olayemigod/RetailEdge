@@ -76,7 +76,9 @@ def prepare_transaction_quota(
 		as_dict=True,
 	)
 	if existing:
-		if existing.status in _RETRYABLE_STATUSES | {"Finalized"}:
+		if existing.status == "Finalized":
+			return _serialize_operation(frappe.get_doc(_DOCTYPE, existing.name))
+		if existing.status in _RETRYABLE_STATUSES:
 			_register_transaction_callbacks(
 				operation_key=existing.name,
 				reservation_reference=existing.reservation_reference,
