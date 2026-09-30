@@ -56,6 +56,13 @@
 						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
 
+					<PartyBusinessContext
+						partyType="Supplier"
+						:party="values.supplier"
+						:company="values.company"
+						:branch="values.branch"
+					/>
+
 					<label class="check-field"><input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="editingSavedDraft" /><span><strong>Update Stock</strong><small>{{ editingSavedDraft ? "Stock mode is fixed after the ERPNext draft is created." : "Add received stock when this Purchase Invoice is submitted." }}</small></span></label>
 
 					<div class="items-heading"><div><span class="page-kicker">Purchase items</span><h3>Products and services</h3><p>Use the page for larger purchases instead of keeping a long transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
@@ -80,6 +87,7 @@
 import { callMethod, errorMessage, quickCreateItem, quickCreateSupplier, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
@@ -113,7 +121,7 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeRecordPurchase",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog, PartyBusinessContext },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
