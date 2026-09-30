@@ -62,6 +62,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Sales Orders", "DocType", "Sales Order", "Sales", 20, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Delivery Notes", "DocType", "Delivery Note", "Sales", 30, "stock", "ERPNext Link"),
 
+	WorkspaceHomeItem("Purchase Operations", "Page", "professional-purchasing", "Purchases", 5, "purchasing", "Business Workspace", "Blue"),
 	WorkspaceHomeItem("Purchase Orders", "DocType", "Purchase Order", "Purchases", 10, "purchasing", "ERPNext Link"),
 	WorkspaceHomeItem("Purchase Receipts", "DocType", "Purchase Receipt", "Purchases", 20, "purchasing", "ERPNext Link"),
 	WorkspaceHomeItem("Purchase Invoices", "DocType", "Purchase Invoice", "Purchases", 30, "purchasing", "ERPNext Link"),
