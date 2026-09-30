@@ -119,16 +119,22 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 			HOME_SECTIONS,
 			(
 				"Home",
-				"Sell",
-				"Buy",
+				"Point of Sale",
+				"Sales",
+				"Purchases",
 				"Stock",
-				"Money",
+				"Money & Banking",
 				"Expenses",
 				"Customers",
 				"Suppliers & Payables",
-				"Insights",
-				"Review & Approvals",
-				"Setup",
+				"Operations Review",
+				"Banking & Reconciliation",
+				"Insights & Dashboards",
+				"Reports",
+				"Selling Setup",
+				"Stock Setup",
+				"Finance Setup",
+				"Business Setup",
 			),
 		)
 		targets = {item.link_to for item in HOME_WORKSPACE_ITEMS}
@@ -290,7 +296,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("get_retailedge_business_hub_context", menu)
 		self.assertIn("data.navigation_groups", menu)
 		self.assertIn("product: PRODUCT", menu)
-		self.assertIn('"review-approvals"', menu)
+		self.assertIn('"operations-review"', menu)
+		self.assertIn('"banking-reconciliation"', menu)
 		self.assertIn('"suppliers-payables"', menu)
 		self.assertNotIn("administration:", menu)
 		self.assertNotIn("switch_product_app", menu)
