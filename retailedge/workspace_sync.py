@@ -27,10 +27,10 @@ from retailedge.workspace_home import (
 BUSINESS_HUB_PAGE = "retailedge-business-hub"
 BUSINESS_HUB_LABEL = "Business Hub"
 DASHBOARD_SECTION_LABEL = "Dashboard"
-SALES_POS_SECTION_LABEL = "Sales & POS"
+POS_SECTION_LABEL = "Point of Sale"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
 STOCK_MOVEMENT_LABEL = "Stock Movement History"
-REPORTS_SECTION_LABEL = "Reports & Insights"
+REPORTS_SECTION_LABEL = "Reports"
 
 
 def sync_retailedge_workspace_layout():
@@ -179,7 +179,7 @@ def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
 	if row is None:
 		return items
 
-	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	section_index = _find_section_index(items, POS_SECTION_LABEL)
 	if section_index is None:
 		return items
 	items.insert(section_index + 1, row)
@@ -222,7 +222,7 @@ def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
 	if not shift_doctypes:
 		return items
 
-	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	section_index = _find_section_index(items, POS_SECTION_LABEL)
 	if section_index is None:
 		return items
 
