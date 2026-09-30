@@ -147,7 +147,7 @@ def test_manager_supports_list_create_edit_and_deactivation_without_delete():
 def test_f3f34_contract_preserves_master_and_accounting_truth():
 	doc = DOC.read_text(encoding="utf-8")
 	assert "RetailEdge Expense Category remains the system of record" in doc
-	assert "does not broaden DocType permissions" in doc
+	assert "governed RetailEdge Manager aliases and Accounts Manager" in doc
 	assert "No accounting document is created or mutated" in doc
 	assert "Other RetailEdge Setup resources remain unchanged" in doc
 	assert "Manual browser/persona QA remains deferred" in doc
