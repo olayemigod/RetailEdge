@@ -109,10 +109,20 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Purchases",
-   "link_count": 3,
+   "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Operations",
+   "link_count": 0,
+   "link_to": "professional-purchasing",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -731,12 +741,12 @@
    "type": "DocType"
   },
   {
-   "color": "Grey",
+   "color": "Blue",
    "doc_view": "List",
-   "label": "Purchase Orders",
-   "link_to": "Purchase Order",
+   "label": "Purchase Operations",
+   "link_to": "professional-purchasing",
    "stats_filter": "[]",
-   "type": "DocType"
+   "type": "Page"
   },
   {
    "color": "Grey",
