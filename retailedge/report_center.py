@@ -112,8 +112,8 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "shopping-bag",
 		"items": (
 			{
-				"label": "Buying Control",
-				"description": "Control purchase requests, RFQs, orders, receipts, returns and landed cost in Professional Purchasing.",
+				"label": "Purchase Operations",
+				"description": "Follow purchase requests, orders, receipts, invoices, returns and landed cost through the governed ERPNext purchasing workflow.",
 				"target_type": "Page",
 				"target": "professional-purchasing",
 				"tags": ("buying", "purchase request", "rfq", "purchase order", "receipt", "control"),
