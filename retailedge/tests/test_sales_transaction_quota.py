@@ -378,6 +378,59 @@ class SalesQuotaOperationTests(FrappeTestCase):
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=1)
 	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
 	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
+	def test_finalize_retries_use_distinct_service_idempotency_keys(
+		self,
+		mock_client,
+		mock_get_doc,
+		_mock_docstatus,
+		_mock_save,
+		_mock_lock,
+	):
+		operation = SimpleNamespace(
+			name="op-retry-keys",
+			status="Pending Finalize",
+			attempt_count=0,
+			last_attempt_on=None,
+			source_doctype="Sales Invoice",
+			source_name="SINV-RETRY-KEYS",
+			reservation_expires_on=add_to_date(now_datetime(), hours=1),
+			reservation_reference="CEUR-retry-keys",
+			finalize_idempotency_key="finalize-base-key",
+			entitlement_key="SALES_TRANSACTIONS",
+			last_error=None,
+			finalized_on=None,
+			reason_code=None,
+			remote_message=None,
+		)
+		mock_get_doc.return_value = operation
+		client = MagicMock()
+		client.finalize_usage.side_effect = [
+			CoreEdgeRemoteUsageUnavailable("temporary"),
+			{
+				"data": {
+					"ok": True,
+					"quota": {"reason_code": "RESERVATION_FINALIZED"},
+				}
+			},
+		]
+		mock_client.return_value = client
+
+		first = finalize_sales_quota_operation("op-retry-keys")
+		second = finalize_sales_quota_operation("op-retry-keys")
+
+		self.assertEqual(first["status"], "Pending Finalize")
+		self.assertEqual(second["status"], "Finalized")
+		first_key = client.finalize_usage.call_args_list[0].args[1]
+		second_key = client.finalize_usage.call_args_list[1].args[1]
+		self.assertNotEqual(first_key, second_key)
+		self.assertTrue(first_key.endswith(":attempt:1"))
+		self.assertTrue(second_key.endswith(":attempt:2"))
+
+	@patch("retailedge.coreedge_sales_quota._lock_operation")
+	@patch("retailedge.coreedge_sales_quota._save_operation")
+	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=1)
+	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
+	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
 	def test_finalize_transport_failure_remains_pending_for_retry(
 		self,
 		mock_client,
