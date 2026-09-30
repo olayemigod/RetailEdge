@@ -47,7 +47,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "POS Opening",
+   "label": "POS Opening Shift",
    "link_count": 0,
    "link_to": "POS Opening Entry",
    "link_type": "DocType",
@@ -57,7 +57,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "POS Closing",
+   "label": "POS Closing Shift",
    "link_count": 0,
    "link_to": "POS Closing Entry",
    "link_type": "DocType",
