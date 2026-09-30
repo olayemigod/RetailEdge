@@ -59,10 +59,10 @@ class TestRIR2B3BankingReadinessPromotionContract(unittest.TestCase):
 		targets = [item["target"] for item in navigation[0]["items"]]
 		self.assertEqual(targets.count("banking-readiness"), 1)
 
-	def test_compact_workspace_is_not_part_of_this_controlled_promotion(self):
+	def test_compact_workspace_exposes_banking_readiness_under_reconciliation(self):
 		source = __import__("retailedge.workspace_home", fromlist=["HOME_WORKSPACE_ITEMS"])
 		targets = {(item.link_type, item.link_to) for item in source.HOME_WORKSPACE_ITEMS}
-		self.assertNotIn(("Page", "banking-readiness"), targets)
+		self.assertIn(("Page", "banking-readiness"), targets)
 
 
 if __name__ == "__main__":
