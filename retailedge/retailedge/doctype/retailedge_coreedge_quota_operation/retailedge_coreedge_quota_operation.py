@@ -5,6 +5,23 @@ from frappe import _
 from frappe.model.document import Document
 
 
+_IMMUTABLE_FIELDS = {
+	"operation_key",
+	"source_doctype",
+	"source_name",
+	"company",
+	"branch",
+	"entitlement_key",
+	"units",
+	"reservation_reference",
+	"reservation_expires_on",
+	"reserve_idempotency_key",
+	"finalize_idempotency_key",
+	"release_idempotency_key",
+	"reserved_on",
+}
+
+
 class RetailEdgeCoreEdgeQuotaOperation(Document):
 	def before_insert(self) -> None:
 		if not self.flags.get("allow_retailedge_quota_operation_create"):
@@ -22,6 +39,12 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 			frappe.throw(
 				_("CoreEdge quota operations may only be changed by the RetailEdge quota service."),
 				frappe.PermissionError,
+			)
+
+		if any(self.has_value_changed(fieldname) for fieldname in _IMMUTABLE_FIELDS):
+			frappe.throw(
+				_("CoreEdge quota operation identity and reservation fields are immutable."),
+				frappe.ValidationError,
 			)
 
 		previous_status = self.get_db_value("status") or "Pending Finalize"
