@@ -77,11 +77,11 @@ def test_long_transaction_pages_keep_browser_session_recovery_until_draft_save()
 def test_quick_actions_are_named_as_quick_and_pages_are_named_as_primary_actions():
 	registry = REGISTRY.read_text(encoding="utf-8")
 	master = MASTER.read_text(encoding="utf-8")
-	for quick_label in ("Quick Sale", "Quick Purchase", "Quick Transfer", "Quick Adjustment"):
+	for quick_label in ("Quick Sale", "Direct Purchase", "Quick Transfer", "Quick Adjustment"):
 		assert f'"label": "{quick_label}"' in registry
 	for page_label, route in (
 		("Make Sale", "make-sale"),
-		("Record Purchase", "record-purchase"),
+		("Direct Purchase", "record-purchase"),
 		("Transfer Stock", "transfer-stock"),
 		("Stock Adjustment", "stock-adjustment"),
 	):
@@ -135,7 +135,7 @@ def test_business_hub_primary_shortcuts_use_pages_not_large_modals():
 	hub = HUB.read_text(encoding="utf-8")
 	for route, label in (
 		("make-sale", "Make Sale"),
-		("record-purchase", "Record Purchase"),
+		("record-purchase", "Direct Purchase"),
 		("transfer-stock", "Transfer Stock"),
 		("stock-adjustment", "Stock Adjustment"),
 	):
@@ -149,7 +149,7 @@ def test_business_hub_primary_shortcuts_use_pages_not_large_modals():
 def test_quick_modals_warn_before_discard_and_continue_to_full_pages():
 	dialogs = {
 		ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleSalesInvoiceDialog.vue": ("Discard the unsaved Quick Sale changes?", "Continue in Make Sale", "open-page"),
-		ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePurchaseInvoiceDialog.vue": ("Discard the unsaved Quick Purchase changes?", "Continue in Record Purchase", "open-page"),
+		ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePurchaseInvoiceDialog.vue": ("Discard the unsaved Quick Purchase changes?", "Open Direct Purchase Page", "open-page"),
 		ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleStockTransferDialog.vue": ("Discard the unsaved Quick Transfer changes?", "Continue in Transfer Stock", "open-page"),
 		ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleStockAdjustmentDialog.vue": ("Discard the unsaved Quick Adjustment changes?", "Continue in Stock Adjustment", "open-page"),
 	}
@@ -185,7 +185,7 @@ def test_business_hub_handoffs_preserve_entered_transaction_context():
 def test_transaction_workspace_exposes_full_page_primary_and_quick_companions():
 	source = TRANSACTION_WORKSPACE.read_text(encoding="utf-8")
 	backend = TRANSACTION_WORKSPACE_BACKEND.read_text(encoding="utf-8")
-	for label in ("Quick Sale", "Quick Purchase", "Quick Transfer", "Quick Adjustment"):
+	for label in ("Quick Sale", "Direct Purchase", "Quick Transfer", "Quick Adjustment"):
 		assert f">{label}<" in source
 	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
 		assert route in source
