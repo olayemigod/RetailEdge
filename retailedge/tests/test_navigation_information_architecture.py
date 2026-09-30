@@ -165,6 +165,7 @@ def test_native_workspace_uses_same_task_frequency_taxonomy():
 		by_section.setdefault(item.section, set()).add(item.link_to)
 
 	assert "Sales Invoice" in by_section["Sales"]
+	assert "professional-purchasing" in by_section["Purchases"]
 	assert "Sales Person" not in by_section["Sales"]
 	assert "Sales Person" in by_section["Selling Setup"]
 	assert "Stock Ledger" not in by_section["Stock"]
