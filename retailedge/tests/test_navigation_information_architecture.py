@@ -132,6 +132,8 @@ def test_reports_centre_absorbs_detailed_links_removed_from_daily_navigation():
 		"RetailEdge Customer Advance Register",
 		"RetailEdge Invoice Payment Audit",
 		"RetailEdge Daily Sales Audit Register",
+		"RetailEdge Project Portfolio",
+		"RetailEdge Project Financial Control",
 	}:
 		assert target in targets
 
