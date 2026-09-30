@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retailedge_home_header\",\"type\":\"header\",\"data\":{\"text\":\"<div class=\\\"retailedge-home-title\\\"><span>ProcessEdge Retail</span><small>Structured for Scale.</small></div>\",\"col\":12}},{\"id\":\"retailedge_home_start_pos\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Start POS\",\"col\":4}},{\"id\":\"retailedge_home_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Home\",\"col\":4}},{\"id\":\"retailedge_home_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Sell\",\"col\":4}},{\"id\":\"retailedge_home_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Buy\",\"col\":4}},{\"id\":\"retailedge_home_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"retailedge_home_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Money\",\"col\":4}},{\"id\":\"retailedge_home_section_6\",\"type\":\"card\",\"data\":{\"card_name\":\"Expenses\",\"col\":4}},{\"id\":\"retailedge_home_section_7\",\"type\":\"card\",\"data\":{\"card_name\":\"Customers\",\"col\":4}},{\"id\":\"retailedge_home_section_8\",\"type\":\"card\",\"data\":{\"card_name\":\"Suppliers & Payables\",\"col\":4}},{\"id\":\"retailedge_home_section_9\",\"type\":\"card\",\"data\":{\"card_name\":\"Insights\",\"col\":4}},{\"id\":\"retailedge_home_section_10\",\"type\":\"card\",\"data\":{\"card_name\":\"Review & Approvals\",\"col\":4}},{\"id\":\"retailedge_home_section_11\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}}]",
+ "content": "[{\"id\":\"retailedge_home_header\",\"type\":\"header\",\"data\":{\"text\":\"<div class=\\\"retailedge-home-title\\\"><span>ProcessEdge Retail</span><small>Structured for Scale.</small></div>\",\"col\":12}},{\"id\":\"retailedge_home_start_pos\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Start POS\",\"col\":4}},{\"id\":\"retailedge_home_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Home\",\"col\":4}},{\"id\":\"retailedge_home_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Point of Sale\",\"col\":4}},{\"id\":\"retailedge_home_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Sales\",\"col\":4}},{\"id\":\"retailedge_home_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Purchases\",\"col\":4}},{\"id\":\"retailedge_home_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"retailedge_home_section_6\",\"type\":\"card\",\"data\":{\"card_name\":\"Money & Banking\",\"col\":4}},{\"id\":\"retailedge_home_section_7\",\"type\":\"card\",\"data\":{\"card_name\":\"Expenses\",\"col\":4}},{\"id\":\"retailedge_home_section_8\",\"type\":\"card\",\"data\":{\"card_name\":\"Customers\",\"col\":4}},{\"id\":\"retailedge_home_section_9\",\"type\":\"card\",\"data\":{\"card_name\":\"Suppliers & Payables\",\"col\":4}},{\"id\":\"retailedge_home_section_10\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations Review\",\"col\":4}},{\"id\":\"retailedge_home_section_11\",\"type\":\"card\",\"data\":{\"card_name\":\"Banking & Reconciliation\",\"col\":4}},{\"id\":\"retailedge_home_section_12\",\"type\":\"card\",\"data\":{\"card_name\":\"Insights & Dashboards\",\"col\":4}},{\"id\":\"retailedge_home_section_13\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"retailedge_home_section_14\",\"type\":\"card\",\"data\":{\"card_name\":\"Selling Setup\",\"col\":4}},{\"id\":\"retailedge_home_section_15\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock Setup\",\"col\":4}},{\"id\":\"retailedge_home_section_16\",\"type\":\"card\",\"data\":{\"card_name\":\"Finance Setup\",\"col\":4}},{\"id\":\"retailedge_home_section_17\",\"type\":\"card\",\"data\":{\"card_name\":\"Business Setup\",\"col\":4}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -38,8 +38,8 @@
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Sell",
-   "link_count": 5,
+   "label": "Point of Sale",
+   "link_count": 2,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -63,6 +63,16 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "close": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
   },
   {
    "hidden": 0,
@@ -98,21 +108,11 @@
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Buy",
+   "label": "Purchases",
    "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Purchase Invoices",
-   "link_count": 0,
-   "link_to": "Purchase Invoice",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
   },
   {
    "hidden": 0,
@@ -135,52 +135,32 @@
    "type": "Link"
   },
   {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Purchase Invoices",
+   "link_count": 0,
+   "link_to": "Purchase Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Stock",
-   "link_count": 10,
-   "link_type": "DocType",
+   "link_count": 4,
+   "link_type": "Page",
    "onboard": 0,
    "type": "Card Break"
   },
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Products",
+   "label": "Stock Position",
    "link_count": 0,
-   "link_to": "Item",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Stock Locations",
-   "link_count": 0,
-   "link_to": "Warehouse",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Stock Movement History",
-   "link_count": 0,
-   "link_to": "RetailEdge Stock Movement History",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Stock Balance",
-   "link_count": 0,
-   "link_to": "Stock Balance",
-   "link_type": "Report",
+   "link_to": "stock-position",
+   "link_type": "Page",
    "onboard": 0,
    "type": "Link"
   },
@@ -215,40 +195,10 @@
    "type": "Link"
   },
   {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Stock Ledger",
-   "link_count": 0,
-   "link_to": "Stock Ledger",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Projected Stock",
-   "link_count": 0,
-   "link_to": "Stock Projected Qty",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Stock Ageing",
-   "link_count": 0,
-   "link_to": "Stock Ageing",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Money",
+   "label": "Money & Banking",
    "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
@@ -261,6 +211,16 @@
    "link_count": 0,
    "link_to": "Payment Entry",
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cash Movement",
+   "link_count": 0,
+   "link_to": "cash-movement",
+   "link_type": "Page",
    "onboard": 0,
    "type": "Link"
   },
@@ -285,24 +245,24 @@
    "type": "Link"
   },
   {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Bank Matching",
-   "link_count": 0,
-   "link_to": "RetailEdge Bank Transaction Matching",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
    "label": "Expenses",
-   "link_count": 1,
-   "link_type": "DocType",
+   "link_count": 2,
+   "link_type": "Page",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Business Expenses",
+   "link_count": 0,
+   "link_to": "business-expenses",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -336,11 +296,11 @@
   },
   {
    "hidden": 0,
-   "is_query_report": 1,
-   "label": "Receivables",
+   "is_query_report": 0,
+   "label": "Customer Receivables",
    "link_count": 0,
-   "link_to": "Accounts Receivable",
-   "link_type": "Report",
+   "link_to": "customer-receivables",
+   "link_type": "Page",
    "onboard": 0,
    "type": "Link"
   },
@@ -349,7 +309,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Suppliers & Payables",
-   "link_count": 2,
+   "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -366,11 +326,171 @@
   },
   {
    "hidden": 0,
-   "is_query_report": 1,
-   "label": "Payables",
+   "is_query_report": 0,
+   "label": "Supplier Payables",
    "link_count": 0,
-   "link_to": "Accounts Payable",
-   "link_type": "Report",
+   "link_to": "supplier-payables",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Payment Orders",
+   "link_count": 0,
+   "link_to": "Payment Order",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "close": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Operations Review",
+   "link_count": 4,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daily Sales Audit",
+   "link_count": 0,
+   "link_to": "daily-sales-audit",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cashier Expense Review",
+   "link_count": 0,
+   "link_to": "expense-review",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cash Shift Verification",
+   "link_count": 0,
+   "link_to": "cash-shift-verification",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Closing Variance & Expenses",
+   "link_count": 0,
+   "link_to": "pos-closing-variance",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "close": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Banking & Reconciliation",
+   "link_count": 5,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Matching & Reconciliation",
+   "link_count": 0,
+   "link_to": "bank-matching-reconciliation",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Banking Readiness",
+   "link_count": 0,
+   "link_to": "banking-readiness",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Unmatched Bank Transactions",
+   "link_count": 0,
+   "link_to": "unmatched-bank-transactions",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Unmatched Bank Payments",
+   "link_count": 0,
+   "link_to": "unmatched-bank-payments",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reconciliation Handoff",
+   "link_count": 0,
+   "link_to": "reconciliation-handoff",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "close": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Insights & Dashboards",
+   "link_count": 3,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Financial Dashboard",
+   "link_count": 0,
+   "link_to": "owner-dashboard",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Branch Performance",
+   "link_count": 0,
+   "link_to": "branch-performance-dashboard",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Salesperson Performance",
+   "link_count": 0,
+   "link_to": "salesperson-performance-dashboard",
+   "link_type": "Page",
    "onboard": 0,
    "type": "Link"
   },
@@ -398,18 +518,18 @@
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Insights",
-   "link_count": 2,
-   "link_type": "Report",
+   "label": "Selling Setup",
+   "link_count": 3,
+   "link_type": "Page",
    "onboard": 0,
    "type": "Card Break"
   },
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Branch Performance",
+   "label": "Sales Team & Targets",
    "link_count": 0,
-   "link_to": "branch-performance-dashboard",
+   "link_to": "sales-team-control",
    "link_type": "Page",
    "onboard": 0,
    "type": "Link"
@@ -417,10 +537,20 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Salesperson Performance",
+   "label": "Sales People",
    "link_count": 0,
-   "link_to": "salesperson-performance-dashboard",
-   "link_type": "Page",
+   "link_to": "Sales Person",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Partners",
+   "link_count": 0,
+   "link_to": "Sales Partner",
+   "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   },
@@ -428,8 +558,8 @@
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Review & Approvals",
-   "link_count": 11,
+   "label": "Stock Setup",
+   "link_count": 4,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -437,9 +567,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Bank Match Reviews",
+   "label": "Products",
    "link_count": 0,
-   "link_to": "RetailEdge Bank Transaction Match",
+   "link_to": "Item",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -447,9 +577,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Daily Sales Audit",
+   "label": "Stock Locations",
    "link_count": 0,
-   "link_to": "RetailEdge Daily Sales Audit",
+   "link_to": "Warehouse",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -457,90 +587,20 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Cashier Expense Review",
+   "label": "Batches",
    "link_count": 0,
-   "link_to": "expense-review",
-   "link_type": "Page",
+   "link_to": "Batch",
+   "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   },
   {
    "hidden": 0,
-   "is_query_report": 1,
-   "label": "Cash Shift Verification",
+   "is_query_report": 0,
+   "label": "Serial Numbers",
    "link_count": 0,
-   "link_to": "RetailEdge Cash Shift Verification",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Invoice Payment Audit",
-   "link_count": 0,
-   "link_to": "RetailEdge Invoice Payment Audit",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "POS Closing Variance vs Expenses",
-   "link_count": 0,
-   "link_to": "POS Closing Variance vs Expenses",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Unmatched Bank Transactions",
-   "link_count": 0,
-   "link_to": "RetailEdge Unmatched Bank Transactions",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Unmatched Bank Payments",
-   "link_count": 0,
-   "link_to": "RetailEdge Unmatched Bank Payment Events",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Reconciliation Readiness",
-   "link_count": 0,
-   "link_to": "RetailEdge Bank Match Reconciliation Readiness",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Reconciliation Handoff",
-   "link_count": 0,
-   "link_to": "RetailEdge Reconciliation Handoff",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Daily Sales Audit Register",
-   "link_count": 0,
-   "link_to": "RetailEdge Daily Sales Audit Register",
-   "link_type": "Report",
+   "link_to": "Serial No",
+   "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   },
@@ -548,8 +608,58 @@
    "close": 1,
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Setup",
-   "link_count": 6,
+   "label": "Finance Setup",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Accounts",
+   "link_count": 0,
+   "link_to": "Bank Account",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Modes of Payment",
+   "link_count": 0,
+   "link_to": "Mode of Payment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cost Centers",
+   "link_count": 0,
+   "link_to": "Cost Center",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Statement Mapping",
+   "link_count": 0,
+   "link_to": "RetailEdge Statement Mapping Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "close": 1,
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Business Setup",
+   "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -580,36 +690,6 @@
    "label": "Expense Categories",
    "link_count": 0,
    "link_to": "RetailEdge Expense Category",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Bank Accounts",
-   "link_count": 0,
-   "link_to": "Bank Account",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Modes of Payment",
-   "link_count": 0,
-   "link_to": "Mode of Payment",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Bank Statement Mapping",
-   "link_count": 0,
-   "link_to": "RetailEdge Statement Mapping Template",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
@@ -653,6 +733,14 @@
   {
    "color": "Grey",
    "doc_view": "List",
+   "label": "Purchase Orders",
+   "link_to": "Purchase Order",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Payments",
    "link_to": "Payment Entry",
    "stats_filter": "[]",
@@ -668,27 +756,19 @@
   },
   {
    "color": "Blue",
-   "doc_view": "",
-   "label": "Stock Movement History",
-   "link_to": "RetailEdge Stock Movement History",
-   "stats_filter": "[]",
-   "type": "Report"
-  },
-  {
-   "color": "Blue",
-   "doc_view": "",
-   "label": "Branch Performance",
-   "link_to": "branch-performance-dashboard",
+   "doc_view": "List",
+   "label": "Reports Centre",
+   "link_to": "reports-centre",
    "stats_filter": "[]",
    "type": "Page"
   },
   {
-   "color": "Green",
+   "color": "Blue",
    "doc_view": "List",
-   "label": "Daily Sales Audit",
-   "link_to": "RetailEdge Daily Sales Audit",
+   "label": "Branch Performance",
+   "link_to": "branch-performance-dashboard",
    "stats_filter": "[]",
-   "type": "DocType"
+   "type": "Page"
   }
  ],
  "title": "ProcessEdge Retail"
