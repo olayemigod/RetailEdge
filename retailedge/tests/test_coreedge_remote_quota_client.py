@@ -285,22 +285,24 @@ class RetailEdgeSettingsRemoteCoreEdgeTests(unittest.TestCase):
 			RetailEdgeSettings,
 		)
 
-		doc = RetailEdgeSettings.__new__(RetailEdgeSettings)
-		doc.enable_coreedge_remote_services = 0
-		doc.enable_coreedge_quota_integration = 1
+		doc = SimpleNamespace(
+			enable_coreedge_remote_services=0,
+			enable_coreedge_quota_integration=1,
+		)
 		with self.assertRaises(frappe.ValidationError):
-			doc._validate_coreedge_remote_services()
+			RetailEdgeSettings._validate_coreedge_remote_services(doc)
 
 	def test_remote_guidance_does_not_request_credentials_in_doctype(self):
 		from retailedge.retailedge.doctype.retailedge_settings.retailedge_settings import (
 			RetailEdgeSettings,
 		)
 
-		doc = RetailEdgeSettings.__new__(RetailEdgeSettings)
-		doc.enable_coreedge_remote_services = 1
-		doc.enable_coreedge_quota_integration = 1
-		doc.coreedge_remote_service_guidance = None
-		doc._validate_coreedge_remote_services()
+		doc = SimpleNamespace(
+			enable_coreedge_remote_services=1,
+			enable_coreedge_quota_integration=1,
+			coreedge_remote_service_guidance=None,
+		)
+		RetailEdgeSettings._validate_coreedge_remote_services(doc)
 		guidance = doc.coreedge_remote_service_guidance
 		self.assertIn("protected site configuration", guidance)
 		self.assertIn("coreedge_service_api_secret", guidance)
