@@ -31,7 +31,7 @@ def _posnext_exists(doctype: str, name: str) -> bool:
 
 def _base_sidebar(start_row: dict) -> list[dict]:
 	return [
-		{"type": "Section Break", "label": "Sales & POS"},
+		{"type": "Section Break", "label": "Point of Sale"},
 		start_row,
 		{"type": "Link", "label": "Sales Invoice", "link_type": "DocType", "link_to": "Sales Invoice"},
 	]
@@ -47,14 +47,16 @@ def test_sidebar_uses_native_erpnext_pos_without_posnext():
 
 	labels = [row.get("label") for row in items]
 	assert labels[:5] == [
-		"Sales & POS",
+		"Point of Sale",
 		START_POS_LABEL,
-		ERPNEXT_POS_OPENING_ENTRY,
-		ERPNEXT_POS_CLOSING_ENTRY,
+		"POS Opening Shift",
+		"POS Closing Shift",
 		"Sales Invoice",
 	]
-	assert POSNEXT_OPENING_SHIFT not in labels
-	assert POSNEXT_CLOSING_SHIFT not in labels
+	opening = next(row for row in items if row.get("label") == "POS Opening Shift")
+	closing = next(row for row in items if row.get("label") == "POS Closing Shift")
+	assert opening["link_to"] == ERPNEXT_POS_OPENING_ENTRY
+	assert closing["link_to"] == ERPNEXT_POS_CLOSING_ENTRY
 
 
 def test_sidebar_uses_posnext_when_shift_doctypes_are_installed():
@@ -69,7 +71,9 @@ def test_sidebar_uses_posnext_when_shift_doctypes_are_installed():
 	labels = [row.get("label") for row in items]
 	assert start["link_type"] == "URL"
 	assert start["url"] == POSNEXT_POS_URL
-	assert POSNEXT_OPENING_SHIFT in labels
-	assert POSNEXT_CLOSING_SHIFT in labels
-	assert ERPNEXT_POS_OPENING_ENTRY not in labels
-	assert ERPNEXT_POS_CLOSING_ENTRY not in labels
+	assert "POS Opening Shift" in labels
+	assert "POS Closing Shift" in labels
+	opening = next(row for row in items if row.get("label") == "POS Opening Shift")
+	closing = next(row for row in items if row.get("label") == "POS Closing Shift")
+	assert opening["link_to"] == POSNEXT_OPENING_SHIFT
+	assert closing["link_to"] == POSNEXT_CLOSING_SHIFT
