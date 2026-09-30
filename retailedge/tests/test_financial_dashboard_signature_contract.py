@@ -200,6 +200,28 @@ def test_financial_dashboard_reuses_tax_exclusive_sales_visual_authority_for_tre
     assert 'fieldname = "brand" if dimension == "Brand" else "item_group"' in provider
 
 
+def test_financial_dashboard_declares_rich_visuals_from_existing_authoritative_rows():
+    provider = PROVIDER.read_text()
+    for expected in (
+        '"id": "net-sales-trend"',
+        '"title": _("Net Sales Trend")',
+        '"kind": "line"',
+        '"value_field": "net_sales"',
+        '"id": "transaction-activity"',
+        '"title": _("Transaction Activity")',
+        '"value_field": "transactions"',
+        '"id": "outstanding-exposure"',
+        '"title": _("Outstanding Exposure")',
+        '"orientation": "horizontal"',
+        '"value_field": "value"',
+    ):
+        assert expected in provider
+    assert '"visuals": [' in provider
+    assert '"value": flt(value)' in provider
+    assert '"datatype": "Currency"' in provider
+    assert '"currency": currency' in provider
+
+
 def test_financial_dashboard_optional_sections_are_settings_only_not_permission_grants():
     provider = PROVIDER.read_text()
     assert 'preferences["show_collection"]' in provider
