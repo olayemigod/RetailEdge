@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 0c00dd8b4418a37b6c48c4def7721ba7a58e1adc
+          ref: 6f90676dbbf492d9f65923282d2e4dc53ef58d7b
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "0c00dd8b4418a37b6c48c4def7721ba7a58e1adc"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "6f90676dbbf492d9f65923282d2e4dc53ef58d7b"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
@@ -176,6 +176,8 @@ jobs:
           PY
           bench --site retail-ci.localhost migrate
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
+          grep -Fq 'EdgeFinancialChartPanel' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/financial_dashboard.js
+          grep -Fq 'edge-financial-chart-grid' apps/edgesuite_ui/edgesuite_ui/public/css/edgeui_financial_dashboard.css
           test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py
 
       - name: Run full RetailEdge test suite
