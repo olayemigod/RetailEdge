@@ -277,7 +277,7 @@ class TestGuidedPayment(unittest.TestCase):
 			'"receive-sales-order-payment"',
 			'"reference_doctype": "Sales Order"',
 			"get_reference_details(",
-			'if reference_doctype == "Sales Invoice":',
+			'if reference_doctype in {"Sales Invoice", "Purchase Invoice"}:',
 			"Available for advance",
 		):
 			self.assertIn(contract, source)
