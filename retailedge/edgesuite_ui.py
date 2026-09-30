@@ -412,14 +412,14 @@ def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> 
 	if runtime_target == "pos_opening":
 		if not pos_capabilities.opening_doctype:
 			return None
-		resolved["label"] = pos_capabilities.opening_doctype
+		resolved["label"] = _("POS Opening Shift")
 		resolved["target_type"] = "DocType"
 		resolved["target"] = pos_capabilities.opening_doctype
 		return resolved
 	if runtime_target == "pos_closing":
 		if not pos_capabilities.closing_doctype:
 			return None
-		resolved["label"] = pos_capabilities.closing_doctype
+		resolved["label"] = _("POS Closing Shift")
 		resolved["target_type"] = "DocType"
 		resolved["target"] = pos_capabilities.closing_doctype
 		return resolved
