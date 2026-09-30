@@ -15,11 +15,11 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertIn('import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue"', component)
-		self.assertIn('v-if="reportType === \'supplier_payables\' && canPaySupplier"', component)
+		self.assertIn('v-if="[\'supplier_payables\', \'purchase_register\'].includes(reportType) && canPaySupplier"', component)
 		self.assertIn('intent="pay-supplier"', component)
 		self.assertIn(':initialContext="supplierPaymentContext"', component)
 		self.assertIn(':nativeFallbackEnabled="canUseNativeDesk"', component)
-		self.assertIn(':allowMultiReferenceSupplierPayment="true"', component)
+		self.assertIn(':allowMultiReferenceSupplierPayment="reportType === \'supplier_payables\'"', component)
 		self.assertIn('fieldname: "settlement_action"', component)
 		self.assertIn('fieldname: "payment_action"', component)
 		self.assertIn('payment_action: "Pay Supplier"', component)
@@ -61,14 +61,16 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn("canPaySupplier: false", component)
 		self.assertIn("this.canPaySupplier = Boolean(context.capabilities?.can_pay_supplier);", component)
 		self.assertIn('this.reportType === "supplier_payables" && this.canPaySupplier', component)
-		self.assertIn("if (!this.canPaySupplier || this.reportType !== \"supplier_payables\"", component)
+		self.assertIn('if (!this.canPaySupplier || !["supplier_payables", "purchase_register"].includes(this.reportType)', component)
 
-	def test_payment_action_is_local_to_supplier_payables_and_keeps_accounting_native(self):
+	def test_supplier_payables_multi_payment_and_purchase_register_single_payment_keep_accounting_native(self):
 		component = (
 			APP_ROOT / "public" / "js" / "purchase_reporting" / "PurchaseReportingReport.vue"
 		).read_text()
 
 		self.assertIn('if (this.reportType === "supplier_payables")', component)
+		self.assertIn('if (column.fieldname === "next_action")', component)
+		self.assertIn("runPurchaseRegisterAction(row)", component)
 		self.assertIn('this.rows = this.reportType === "supplier_payables"', component)
 		self.assertIn('purchase_register:', component)
 		self.assertIn('supplier_payables:', component)
