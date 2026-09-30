@@ -342,7 +342,7 @@ def _release_rolled_back_reservation(
 	doc_name: str,
 ) -> None:
 	try:
-		get_remote_usage_client().release_usage(
+		response = get_remote_usage_client().release_usage(
 			reservation_reference,
 			release_idempotency_key,
 			"RetailEdge transaction rolled back before database commit.",
@@ -350,6 +350,17 @@ def _release_rolled_back_reservation(
 			correlation_id=f"{doc_doctype}:{doc_name}",
 			source_path="RetailEdge Sales Rollback",
 		)
+		data = response.get("data") or {}
+		if not data.get("ok"):
+			frappe.log_error(
+				title="RetailEdge CoreEdge Quota Release Rejected",
+				message=(
+					f"Reservation: {reservation_reference}\n"
+					f"Document: {doc_doctype} {doc_name}\n"
+					f"Reason: {str(data.get('reason_code') or '')[:140]}\n"
+					f"Message: {str(data.get('message') or '')[:500]}"
+				),
+			)
 	except Exception:
 		frappe.log_error(
 			title="RetailEdge CoreEdge Quota Release Failed",
