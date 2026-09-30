@@ -186,13 +186,13 @@ def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
 	return items
 
 
-def _pos_shift_sidebar_row(doctype: str) -> dict:
+def _pos_shift_sidebar_row(doctype: str, label: str) -> dict:
 	return {
 		"child": 1,
 		"collapsible": 0,
 		"indent": 0,
 		"keep_closed": 0,
-		"label": doctype,
+		"label": label,
 		"link_to": doctype,
 		"link_type": "DocType",
 		"show_arrow": 0,
@@ -216,10 +216,15 @@ def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
 		)
 	]
 	capabilities = get_pos_runtime_capabilities(_target_exists)
-	shift_doctypes = [
-		doctype for doctype in (capabilities.opening_doctype, capabilities.closing_doctype) if doctype
+	shift_rows = [
+		(doctype, label)
+		for doctype, label in (
+			(capabilities.opening_doctype, "POS Opening Shift"),
+			(capabilities.closing_doctype, "POS Closing Shift"),
+		)
+		if doctype
 	]
-	if not shift_doctypes:
+	if not shift_rows:
 		return items
 
 	section_index = _find_section_index(items, POS_SECTION_LABEL)
@@ -229,8 +234,8 @@ def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
 	insert_at = section_index + 1
 	if insert_at < len(items) and items[insert_at].get("label") == START_POS_LABEL:
 		insert_at += 1
-	for offset, doctype in enumerate(shift_doctypes):
-		items.insert(insert_at + offset, _pos_shift_sidebar_row(doctype))
+	for offset, (doctype, label) in enumerate(shift_rows):
+		items.insert(insert_at + offset, _pos_shift_sidebar_row(doctype, label))
 	return items
 
 
