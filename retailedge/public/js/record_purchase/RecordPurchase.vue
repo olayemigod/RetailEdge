@@ -12,18 +12,40 @@
 	>
 		<EdgePageLayout class="retailedge-record-purchase-page">
 			<EdgePageHeader
-				title="Record Purchase"
-				description="Use this full-page workspace for purchases with longer item lists. Quick Purchase remains available for short entries."
+				title="Purchase Entry"
+				description="Choose the ERPNext purchase path first. Standard procurement follows Purchase Order → Purchase Receipt → Purchase Invoice → Payment; direct supplier invoices remain available for genuine direct purchases."
 			/>
 			<EdgeLoadingState v-if="loading && !loaded" message="Preparing purchase entry..." :skeleton="true" />
-			<EdgeErrorState v-else-if="loadError" title="Record Purchase unavailable" :message="loadError" @retry="loadPage" />
+			<EdgeErrorState v-else-if="loadError" title="Purchase Entry unavailable" :message="loadError" @retry="loadPage" />
 
 			<div v-else class="transaction-page-content">
 				<section v-if="recoveryCandidate" class="edge-panel recovery-panel">
 					<div><strong>Unsaved purchase found</strong><small>{{ recoverySummary }}</small></div>
 					<div class="page-actions"><button class="edge-button edge-button--primary" type="button" @click="restoreRecovery">Restore</button><button class="edge-button" type="button" @click="discardRecovery">Discard</button></div>
 				</section>
-				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Purchase</strong><p>{{ handoffNotice }}</p></section>
+				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Direct Purchase</strong><p>{{ handoffNotice }}</p></section>
+
+				<section v-if="showPurchaseIntentChooser" class="edge-panel purchase-intent-panel">
+					<div class="purchase-intent-heading">
+						<span class="page-kicker">Choose purchase path</span>
+						<h3>How is this purchase being processed?</h3>
+						<p>RetailEdge follows ERPNext purchasing documents rather than treating every purchase as a Purchase Invoice.</p>
+					</div>
+					<div class="purchase-intent-grid">
+						<article class="purchase-intent-card purchase-intent-card--primary">
+							<div><strong>Standard Purchase</strong><small>Purchase Order → Purchase Receipt → Purchase Invoice → Payment.</small></div>
+							<div class="page-actions"><button class="edge-button edge-button--primary" type="button" @click="startStandardPurchase">Start Purchase Order</button><button class="edge-button" type="button" @click="openPurchaseOperations">Purchase Operations</button></div>
+						</article>
+						<article class="purchase-intent-card">
+							<div><strong>Receive &amp; Bill Now</strong><small>For a genuine direct purchase where goods are physically received now. ERPNext Purchase Invoice will post stock when submitted.</small></div>
+							<button class="edge-button" type="button" @click="startDirectPurchase(true)">Record Direct Purchase</button>
+						</article>
+						<article class="purchase-intent-card">
+							<div><strong>Bill Only</strong><small>Record the supplier bill without stock movement. Use when stock was received separately or the purchase is a service/non-stock expense.</small></div>
+							<button class="edge-button" type="button" @click="startDirectPurchase(false)">Record Supplier Bill</button>
+						</article>
+					</div>
+				</section>
 
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
@@ -36,7 +58,7 @@
 					</div>
 				</section>
 
-				<form v-if="!savedDocument || editingSavedDraft" class="edge-panel transaction-form" @submit.prevent="saveDraft">
+				<form v-if="(!savedDocument || editingSavedDraft) && entryIntent === 'direct'" class="edge-panel transaction-form" @submit.prevent="saveDraft">
 					<div class="context-cards">
 						<div><span>Company</span><strong>{{ values.company || "Not set" }}</strong></div>
 						<div v-if="values.branch"><span>Branch</span><strong>{{ values.branch }}</strong></div>
@@ -56,7 +78,14 @@
 						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
 
-					<label class="check-field"><input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="editingSavedDraft" /><span><strong>Update Stock</strong><small>{{ editingSavedDraft ? "Stock mode is fixed after the ERPNext draft is created." : "Add received stock when this Purchase Invoice is submitted." }}</small></span></label>
+					<div class="purchase-mode-card">
+						<div>
+							<span>Direct purchase type</span>
+							<strong>{{ values.update_stock ? "Receive & Bill Now" : "Bill Only" }}</strong>
+							<small>{{ values.update_stock ? "ERPNext will post the received stock when this Purchase Invoice is submitted. A Receiving Stock Location is required." : "This Purchase Invoice records the supplier payable only and does not move stock." }}</small>
+						</div>
+						<button v-if="!editingSavedDraft" class="edge-button" type="button" @click="choosePurchaseType">Change Purchase Type</button>
+					</div>
 
 					<div class="items-heading"><div><span class="page-kicker">Purchase items</span><h3>Products and services</h3><p>Use the page for larger purchases instead of keeping a long transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
 					<EdgeChildTable :field="itemTableField" :rows="values.items" :columns="itemColumns" :addLabel="'Add Item'" :linkSearcher="searchLineLink" :linkCanCreate="canCreateItemLink" :linkCreator="createItemLink" :linkCreateLabel="itemCreateLabel" :newRowsFirst="true" @update:rows="updateItems" />
@@ -118,13 +147,14 @@ export default {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
 			pricingTokens: {}, pricingCache: new Map(), recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false, completionOpen: false,
-			paymentOpen: false, paymentInitialContext: {},
+			paymentOpen: false, paymentInitialContext: {}, entryIntent: "choose",
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			itemTableField: { label: "Items", description: "Use this full-page table for purchases with many lines." },
 			itemColumns: [{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" }, { fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 }, { fieldname: "rate", label: "Buying Rate", fieldtype: "Currency", placeholder: "Auto buying price" }],
 		};
 	},
 	computed: {
+		showPurchaseIntentChooser() { return this.loaded && !this.savedDocument && !this.editingSavedDraft && this.entryIntent === "choose"; },
 		branchEnabled() { return Boolean(this.formContext.capabilities?.branch_enabled); },
 		requiresBranchSelection() { return Boolean(this.formContext.capabilities?.requires_branch_selection); },
 		transactionContextReady() { if (!this.values.update_stock) return true; if (this.requiresBranchSelection && !this.values.branch) return false; return Boolean(this.values.warehouse); },
@@ -148,13 +178,13 @@ export default {
 	methods: {
 		async loadPage() {
 			if (this.loading) return;
-			this.loading = true; this.loadError = ""; this.saveError = ""; this.savedDocument = null; this.completionOpen = false; this.pricingCache.clear();
+			this.loading = true; this.loadError = ""; this.saveError = ""; this.savedDocument = null; this.completionOpen = false; this.entryIntent = "choose"; this.pricingCache.clear();
 			try {
 				const [data, shell] = await Promise.all([callMethod(CONTEXT_METHOD), callMethod(SHELL_METHOD)]);
 				this.formContext = data || {}; this.applyShell(shell || {}); this.applyDefaults(data?.defaults || {});
 				if (!(await this.consumeHandoff())) this.loadRecoveryCandidate();
 				this.loaded = true;
-			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Record Purchase."); }
+			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Purchase Entry."); }
 			finally { this.loading = false; }
 		},
 		applyDefaults(defaults) { this.values = { ...emptyValues(), ...(defaults || {}), items: (defaults?.items || emptyValues().items).map((row) => ({ ...row })) }; this.initialSnapshot = JSON.stringify(this.values); },
@@ -168,7 +198,24 @@ export default {
 			if (!route || route === "/app/record-purchase") return;
 			const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); };
 			if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go();
-			frappe.confirm("Leave Record Purchase? Unsaved changes are retained temporarily in this browser session.", go);
+			frappe.confirm("Leave Purchase Entry? Unsaved changes are retained temporarily in this browser session.", go);
+		},
+		startStandardPurchase() {
+			window.retailedgeProfessionalPurchasingTarget = { action: "new-purchase-order", user: frappe.session?.user || "Guest" };
+			frappe.set_route("professional-purchasing");
+		},
+		openPurchaseOperations() {
+			frappe.set_route("professional-purchasing");
+		},
+		startDirectPurchase(updateStock) {
+			this.entryIntent = "direct";
+			this.values.update_stock = updateStock ? 1 : 0;
+			if (!updateStock) this.values.warehouse = "";
+			this.saveError = "";
+		},
+		choosePurchaseType() {
+			this.entryIntent = "choose";
+			this.saveError = "";
 		},
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
@@ -185,11 +232,13 @@ export default {
 					this.values.warehouse = r.warehouse || this.values.warehouse || "";
 				}
 				await this.revalidateCarriedPricing();
-				this.handoffNotice = "Quick Purchase data was carried into Record Purchase and its current Branch, Receiving Stock Location and Price List access were revalidated.";
+				this.entryIntent = "direct";
+				this.handoffNotice = "Direct Purchase data was carried into this page and its current Branch, Receiving Stock Location and Price List access were revalidated.";
 			} catch (error) {
 				this.values.branch = ""; this.values.warehouse = "";
 				this.saveError = errorMessage(error, "The carried Branch or Receiving Stock Location is no longer available. Choose the current transaction context before saving.");
-				this.handoffNotice = "Quick Purchase line items were carried over, but the saved Branch / Receiving Stock Location was cleared because access could not be revalidated.";
+				this.entryIntent = "direct";
+				this.handoffNotice = "Direct Purchase line items were carried over, but the saved Branch / Receiving Stock Location was cleared because access could not be revalidated.";
 			}
 			return true;
 		},
@@ -208,12 +257,13 @@ export default {
 					return true;
 				}
 				this.syncPageFromDraftPreview(preview);
+				this.entryIntent = "direct";
 				this.editingSavedDraft = true;
 				this.completionOpen = false;
 				this.recoveryCandidate = null;
 				this.clearRecovery();
 				this.initialSnapshot = JSON.stringify(this.values);
-				this.handoffNotice = `Editing saved Purchase Invoice ${name} on the persistent Record Purchase page.`;
+				this.handoffNotice = `Editing saved Purchase Invoice ${name} on the direct Purchase page.`;
 				return true;
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to load the Purchase Invoice draft on Record Purchase.");
@@ -223,6 +273,7 @@ export default {
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
 		async restoreRecovery() {
 			if (!this.recoveryCandidate?.values) return;
+			this.entryIntent = "direct";
 			const recovered = clone(this.recoveryCandidate.values);
 			this.values = { ...this.values, ...recovered, items: (recovered.items || []).map((row) => ({ ...row })) };
 			this.recoveryCandidate = null; this.saveError = "";
@@ -380,5 +431,5 @@ export default {
 </script>
 
 <style scoped>
-.transaction-page-content,.transaction-form{display:grid;gap:18px}.transaction-page-content{padding-bottom:28px}.transaction-form,.recovery-panel,.notice-panel,.saved-panel{padding:18px;border:1px solid var(--edge-color-border,var(--edge-border,#dfe3e8));border-radius:12px;background:var(--edge-color-surface,#fff)}.recovery-panel,.saved-panel,.items-heading,.sticky-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.recovery-panel>div:first-child,.saved-panel>div:first-child,.sticky-actions>div:first-child{display:grid;gap:4px}.notice-panel{display:grid;gap:4px}.notice-panel p,.saved-panel p,.items-heading p,.sticky-actions small{margin:0;color:var(--edge-color-ink-500,#667085)}.page-kicker{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--edge-color-brand-600,#2563eb)}.context-cards{display:flex;flex-wrap:wrap;gap:10px}.context-cards>div{display:grid;gap:2px;min-width:180px;padding:9px 12px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:8px;background:var(--edge-color-surface-muted,#f8fafc)}.context-cards span,.field span{font-size:.78rem;color:var(--edge-color-ink-500,#667085)}.context-cards small{font-size:.72rem;color:var(--edge-color-ink-500,#667085)}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:6px}.field span{font-weight:600}.check-field{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:8px}.check-field span{display:grid;gap:2px}.hint{margin:-8px 0 0;font-size:.8rem;color:var(--edge-color-ink-500,#667085)}.form-error,.form-warning{padding:10px 12px;border-radius:8px}.form-error{border:1px solid var(--edge-color-danger,#d92d20);color:var(--edge-color-danger,#b42318);background:var(--edge-color-danger-subtle,#fef3f2)}.form-warning{border:1px solid var(--edge-color-warning,#f79009);background:var(--edge-color-warning-subtle,#fffaeb)}.items-heading h3{margin:3px 0 4px}.item-count{white-space:nowrap;font-size:.8rem;font-weight:700;padding:6px 9px;border:1px solid var(--edge-color-border,#dfe3e8);border-radius:999px}.sticky-actions{position:sticky;bottom:0;z-index:5;padding:14px;border:1px solid var(--edge-color-border,#dfe3e8);border-radius:10px;background:color-mix(in srgb,var(--edge-color-surface,#fff) 94%,transparent);backdrop-filter:blur(8px)}.page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}@media(max-width:760px){.field-grid{grid-template-columns:1fr}.recovery-panel,.saved-panel,.items-heading,.sticky-actions{align-items:stretch;flex-direction:column}.page-actions{justify-content:flex-start}}
+.transaction-page-content,.transaction-form{display:grid;gap:18px}.purchase-intent-panel{padding:18px;border:1px solid var(--edge-color-border,#dfe3e8);border-radius:12px;background:var(--edge-color-surface,#fff)}.purchase-intent-heading{display:grid;gap:4px}.purchase-intent-heading h3,.purchase-intent-heading p{margin:0}.purchase-intent-heading p{color:var(--edge-color-ink-500,#667085)}.purchase-intent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}.purchase-intent-card{display:grid;gap:14px;padding:14px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:10px;background:var(--edge-color-surface-muted,#f8fafc)}.purchase-intent-card>div:first-child{display:grid;gap:5px}.purchase-intent-card small{color:var(--edge-color-ink-500,#667085)}.purchase-intent-card--primary{border-color:var(--edge-color-brand-500,#2563eb)}.purchase-mode-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:10px;background:var(--edge-color-surface-muted,#f8fafc)}.purchase-mode-card>div{display:grid;gap:3px}.purchase-mode-card span,.purchase-mode-card small{color:var(--edge-color-ink-500,#667085)}.transaction-page-content{padding-bottom:28px}.transaction-form,.recovery-panel,.notice-panel,.saved-panel{padding:18px;border:1px solid var(--edge-color-border,var(--edge-border,#dfe3e8));border-radius:12px;background:var(--edge-color-surface,#fff)}.recovery-panel,.saved-panel,.items-heading,.sticky-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.recovery-panel>div:first-child,.saved-panel>div:first-child,.sticky-actions>div:first-child{display:grid;gap:4px}.notice-panel{display:grid;gap:4px}.notice-panel p,.saved-panel p,.items-heading p,.sticky-actions small{margin:0;color:var(--edge-color-ink-500,#667085)}.page-kicker{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--edge-color-brand-600,#2563eb)}.context-cards{display:flex;flex-wrap:wrap;gap:10px}.context-cards>div{display:grid;gap:2px;min-width:180px;padding:9px 12px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:8px;background:var(--edge-color-surface-muted,#f8fafc)}.context-cards span,.field span{font-size:.78rem;color:var(--edge-color-ink-500,#667085)}.context-cards small{font-size:.72rem;color:var(--edge-color-ink-500,#667085)}.field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:6px}.field span{font-weight:600}.check-field{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--edge-color-border,#e5e7eb);border-radius:8px}.check-field span{display:grid;gap:2px}.hint{margin:-8px 0 0;font-size:.8rem;color:var(--edge-color-ink-500,#667085)}.form-error,.form-warning{padding:10px 12px;border-radius:8px}.form-error{border:1px solid var(--edge-color-danger,#d92d20);color:var(--edge-color-danger,#b42318);background:var(--edge-color-danger-subtle,#fef3f2)}.form-warning{border:1px solid var(--edge-color-warning,#f79009);background:var(--edge-color-warning-subtle,#fffaeb)}.items-heading h3{margin:3px 0 4px}.item-count{white-space:nowrap;font-size:.8rem;font-weight:700;padding:6px 9px;border:1px solid var(--edge-color-border,#dfe3e8);border-radius:999px}.sticky-actions{position:sticky;bottom:0;z-index:5;padding:14px;border:1px solid var(--edge-color-border,#dfe3e8);border-radius:10px;background:color-mix(in srgb,var(--edge-color-surface,#fff) 94%,transparent);backdrop-filter:blur(8px)}.page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}@media(max-width:760px){.purchase-intent-grid{grid-template-columns:1fr}.purchase-mode-card{align-items:stretch;flex-direction:column}.field-grid{grid-template-columns:1fr}.recovery-panel,.saved-panel,.items-heading,.sticky-actions{align-items:stretch;flex-direction:column}.page-actions{justify-content:flex-start}}
 </style>
