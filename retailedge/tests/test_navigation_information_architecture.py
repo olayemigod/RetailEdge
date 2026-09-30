@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
+from retailedge.edgesuite_ui import _resolve_navigation_item
 from retailedge.master_experience import (
 	NAVIGATION_PRESENTATION_GROUPS,
 	_reclassify_navigation_for_task_frequency,
@@ -194,3 +196,38 @@ def test_purchase_invoice_remains_an_operational_destination_when_reports_centre
 	)[1].split("def _can_create_master", 1)[0]
 	assert "_promote_purchase_invoice_ownership(navigation_groups)" not in context_builder
 	assert 'feature_flags["purchase_invoice_ownership"] = "native_invoice_plus_reports_centre"' in context_builder
+
+
+
+def test_pos_shift_navigation_uses_stable_business_labels_with_provider_targets():
+	capabilities = SimpleNamespace(
+		provider="erpnext",
+		start_link_type="Page",
+		start_target="point-of-sale",
+		start_url=None,
+		opening_doctype="POS Opening Entry",
+		closing_doctype="POS Closing Entry",
+	)
+	opening = _resolve_navigation_item(
+		{
+			"label": "POS Opening",
+			"target_type": "DocType",
+			"target": "POS Opening Entry",
+			"runtime_target": "pos_opening",
+		},
+		pos_capabilities=capabilities,
+	)
+	closing = _resolve_navigation_item(
+		{
+			"label": "POS Closing",
+			"target_type": "DocType",
+			"target": "POS Closing Entry",
+			"runtime_target": "pos_closing",
+		},
+		pos_capabilities=capabilities,
+	)
+
+	assert opening["label"] == "POS Opening Shift"
+	assert opening["target"] == "POS Opening Entry"
+	assert closing["label"] == "POS Closing Shift"
+	assert closing["target"] == "POS Closing Entry"
