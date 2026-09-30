@@ -477,7 +477,7 @@ def _search_outstanding_references(
 	if branch and branch_field:
 		filters[branch_field] = branch
 
-	if reference_doctype == "Sales Invoice":
+	if reference_doctype in {"Sales Invoice", "Purchase Invoice"}:
 		filters["outstanding_amount"] = [">", 0]
 		fields = ["name", "posting_date", "outstanding_amount", "currency"]
 		if has_field(reference_doctype, "due_date"):

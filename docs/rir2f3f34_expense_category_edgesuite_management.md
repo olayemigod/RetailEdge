@@ -26,12 +26,12 @@ The EdgeSuite manager guides the user and then saves the same DocType through no
 
 ## Permission boundary
 
-F3F34 does not broaden DocType permissions.
+F3F34 originally preserved existing DocType permissions. The operational-blocker hardening now grants create/write to governed RetailEdge Manager aliases and Accounts Manager so authorised business managers can maintain Expense Categories inside EdgeSuite.
 
 The manager:
 
 - requires normal read permission before loading;
-- exposes create only when Frappe create permission exists;
+- exposes create only when Frappe create permission exists; the DocType grants that permission to System Manager, RetailEdge Manager/RetailEdgeManager, and Accounts Manager;
 - exposes edit only when the selected document grants write permission;
 - uses normal permission-aware `frappe.get_list` queries;
 - revalidates Company, Account and Cost Centre read permission server-side;
@@ -215,7 +215,7 @@ Manual browser/persona QA remains deferred to consolidated RIR2E acceptance.
 
 ## Out of scope
 
-- permission-role redesign;
+- broader permission-role redesign beyond the governed manager roles listed above;
 - bulk category import/export;
 - category merge;
 - automated master rename;

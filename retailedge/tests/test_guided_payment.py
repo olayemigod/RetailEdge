@@ -263,6 +263,13 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertIn("allocatedTotal", component)
 		self.assertIn("unallocatedAmount", component)
 
+	def test_supplier_payment_search_uses_purchase_invoice_outstanding_not_per_billed(self):
+		source = (APP_ROOT / "guided_payment.py").read_text()
+		self.assertIn('if reference_doctype in {"Sales Invoice", "Purchase Invoice"}:', source)
+		invoice_branch = source.split('if reference_doctype in {"Sales Invoice", "Purchase Invoice"}:', 1)[1].split("# Sales Order advances", 1)[0]
+		self.assertIn('filters["outstanding_amount"] = [">", 0]', invoice_branch)
+		self.assertNotIn('filters["per_billed"]', invoice_branch)
+
 	def test_sales_order_customer_advance_uses_erpnext_reference_engine(self):
 		source = (APP_ROOT / "guided_payment.py").read_text()
 		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()
@@ -270,7 +277,7 @@ class TestGuidedPayment(unittest.TestCase):
 			'"receive-sales-order-payment"',
 			'"reference_doctype": "Sales Order"',
 			"get_reference_details(",
-			'if reference_doctype == "Sales Invoice":',
+			'if reference_doctype in {"Sales Invoice", "Purchase Invoice"}:',
 			"Available for advance",
 		):
 			self.assertIn(contract, source)
