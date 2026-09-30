@@ -78,6 +78,13 @@
 						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
 
+					<PartyBusinessContext
+						partyType="Supplier"
+						:party="values.supplier"
+						:company="values.company"
+						:branch="values.branch"
+					/>
+
 					<div class="purchase-mode-card">
 						<div>
 							<span>Direct purchase type</span>
@@ -109,6 +116,7 @@
 import { callMethod, errorMessage, quickCreateItem, quickCreateSupplier, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
@@ -142,7 +150,7 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeRecordPurchase",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog, PartyBusinessContext },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
