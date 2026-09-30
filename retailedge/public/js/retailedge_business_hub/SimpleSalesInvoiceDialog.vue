@@ -98,6 +98,13 @@
 				/>
 			</div>
 
+			<PartyBusinessContext
+				partyType="Customer"
+				:party="values.customer"
+				:company="values.company"
+				:branch="values.branch"
+			/>
+
 			<label class="guided-check-field">
 				<input
 					v-model="values.update_stock"
@@ -178,6 +185,7 @@ import {
 	resolveBranchWarehouse,
 	QUICK_ENTRY_MAX_LINES,
 } from "./guidedEntryUtils";
+import PartyBusinessContext from "./PartyBusinessContext.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
@@ -226,6 +234,7 @@ export default {
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
+		PartyBusinessContext,
 	},
 	props: {
 		nativeFallbackEnabled: { type: Boolean, default: false },
