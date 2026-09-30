@@ -84,7 +84,8 @@ class SalesQuotaContractTests(unittest.TestCase):
 		mock_client.assert_not_called()
 
 	@patch("retailedge.coreedge_sales_quota.frappe.db.after_rollback.add")
-	@patch("retailedge.coreedge_sales_quota.frappe.enqueue")
+	@patch("retailedge.coreedge_sales_quota.frappe.db.after_commit.add")
+	@patch("retailedge.coreedge_sales_quota._enqueue_finalize_operation")
 	@patch("retailedge.coreedge_sales_quota._insert_quota_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
 	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
@@ -95,7 +96,8 @@ class SalesQuotaContractTests(unittest.TestCase):
 		mock_client,
 		_mock_existing,
 		mock_insert,
-		mock_enqueue,
+		mock_enqueue_finalize,
+		mock_after_commit,
 		mock_after_rollback,
 	):
 		mock_config.return_value = SalesTransactionQuotaConfig(enabled=True)
@@ -125,9 +127,10 @@ class SalesQuotaContractTests(unittest.TestCase):
 		self.assertEqual(kwargs["reference_doctype"], "Sales Invoice")
 		self.assertEqual(kwargs["reference_name"], "SINV-TEST-001")
 		self.assertEqual(kwargs["expires_in_seconds"], 3600)
-		mock_enqueue.assert_called_once()
-		self.assertTrue(mock_enqueue.call_args.kwargs["enqueue_after_commit"])
-		self.assertTrue(mock_enqueue.call_args.kwargs["deduplicate"])
+		mock_after_commit.assert_called_once()
+		commit_callback = mock_after_commit.call_args.args[0]
+		commit_callback()
+		mock_enqueue_finalize.assert_called_once_with("quota-op-001")
 		mock_after_rollback.assert_called_once()
 
 	def test_operation_key_is_stable_and_scoped_by_doctype(self):
@@ -202,7 +205,7 @@ class SalesQuotaContractTests(unittest.TestCase):
 
 	@patch("retailedge.coreedge_sales_quota._release_rolled_back_reservation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.after_rollback.add")
-	@patch("retailedge.coreedge_sales_quota.frappe.enqueue")
+	@patch("retailedge.coreedge_sales_quota.frappe.db.after_commit.add")
 	@patch("retailedge.coreedge_sales_quota._insert_quota_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
 	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
@@ -213,7 +216,7 @@ class SalesQuotaContractTests(unittest.TestCase):
 		mock_client,
 		_mock_existing,
 		mock_insert,
-		_mock_enqueue,
+		_mock_after_commit,
 		mock_after_rollback,
 		mock_release,
 	):
@@ -258,7 +261,7 @@ class SalesQuotaOperationTests(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
 		frappe.set_user("Administrator")
-		frappe.db.delete(OPERATION_DOCTYPE, {"source_name": ["like", "quota-test-%"]})
+		frappe.db.delete(OPERATION_DOCTYPE, {"operation_key": ["like", "quota-operation-%"]})
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -439,18 +442,17 @@ class SalesQuotaOperationTests(FrappeTestCase):
 		self.assertIn("expired", operation.last_error.lower())
 		mock_save.assert_called_once()
 
-	@patch("retailedge.coreedge_sales_quota.frappe.enqueue")
+	@patch("retailedge.coreedge_sales_quota._enqueue_finalize_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.get_all")
 	def test_retry_worker_queues_only_pending_operations(self, mock_get_all, mock_enqueue):
 		mock_get_all.return_value = [
 			frappe._dict(name="op-one"),
 			frappe._dict(name="op-two"),
 		]
+		mock_enqueue.return_value = True
 		queued = retry_pending_sales_quota_operations()
 		self.assertEqual(queued, 2)
 		self.assertEqual(mock_enqueue.call_count, 2)
-		for call in mock_enqueue.call_args_list:
-			self.assertTrue(call.kwargs["deduplicate"])
 
 
 if __name__ == "__main__":
