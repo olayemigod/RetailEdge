@@ -262,6 +262,191 @@ SETUP_MANAGED_DOCTYPES = {
 }
 
 
+# Final user-facing information architecture. Existing permission checks and
+# EdgeSuite ownership promotions run first; this layer only classifies the
+# resulting permitted destinations by how the user works.
+NAVIGATION_PRESENTATION_GROUPS: tuple[tuple[str, str, str], ...] = (
+	("home", "Home", "home"),
+	("point-of-sale", "Point of Sale", "grid"),
+	("sales", "Sales", "shopping-cart"),
+	("purchases", "Purchases", "shopping-bag"),
+	("stock", "Stock", "layers"),
+	("money-banking", "Money & Banking", "wallet"),
+	("expenses", "Expenses", "file-text"),
+	("customers", "Customers", "users"),
+	("suppliers-payables", "Suppliers & Payables", "users"),
+	("operations-review", "Operations Review", "shield"),
+	("banking-reconciliation", "Banking & Reconciliation", "repeat"),
+	("planning-control", "Planning & Control", "calendar"),
+	("assets", "Asset Management", "briefcase"),
+	("service-warranty", "Service & Warranty", "tool"),
+	("projects", "Projects", "briefcase"),
+	("insights", "Insights & Dashboards", "chart"),
+	("reports", "Reports", "report"),
+	("selling-setup", "Selling Setup", "users"),
+	("pricing-promotions", "Pricing & Promotions", "tag"),
+	("stock-setup", "Stock Setup", "layers"),
+	("finance-setup", "Finance Setup", "book-open"),
+	("business-setup", "Business Setup", "settings"),
+)
+
+REPORT_CENTRE_ONLY_PAGE_TARGETS = {
+	"sales-invoice-register",
+	"sales-by-item",
+	"purchase-register",
+	"expense-register",
+	"stock-movement-history",
+	"daily-sales-audit-register",
+}
+
+MENU_HIDDEN_DUPLICATE_TARGETS = {
+	"transaction-workspace",
+}
+
+SALES_OPERATION_TARGETS = {
+	"Sales Invoice",
+	"Sales Order",
+	"Delivery Note",
+	"make-sale",
+	"professional-selling",
+	"document-output-sharing",
+}
+PURCHASE_OPERATION_TARGETS = {
+	"Purchase Invoice",
+	"Purchase Order",
+	"Purchase Receipt",
+	"record-purchase",
+	"professional-purchasing",
+}
+STOCK_OPERATION_TARGETS = {
+	"Stock Entry",
+	"Stock Reconciliation",
+	"Material Request",
+	"transfer-stock",
+	"stock-adjustment",
+	"stock-position",
+	"stock-traceability-control",
+}
+MONEY_OPERATION_TARGETS = {
+	"Payment Entry",
+	"Bank Transaction",
+	"RetailEdge Payment Statement Import",
+	"payment-management",
+	"cash-movement",
+	"Journal Entry",
+}
+CUSTOMER_OPERATION_TARGETS = {
+	"Customer",
+	"customer-360",
+	"customer-receivables",
+}
+SUPPLIER_OPERATION_TARGETS = {
+	"Supplier",
+	"supplier-payables",
+	"Payment Order",
+}
+OPERATIONS_REVIEW_TARGETS = {
+	"business-control-center",
+	"action-center",
+	"supplier-document-review",
+	"daily-sales-audit",
+	"expense-review",
+	"cash-shift-verification",
+	"pos-closing-variance",
+	"stock-accounting-integrity",
+}
+BANKING_RECONCILIATION_TARGETS = {
+	"Payment Reconciliation",
+	"bank-matching-reconciliation",
+	"unmatched-bank-transactions",
+	"unmatched-bank-payments",
+	"banking-readiness",
+	"reconciliation-handoff",
+}
+PLANNING_CONTROL_TARGETS = {
+	"forecasting-planning",
+	"sales-forecast",
+	"RetailEdge Planning Scenario",
+	"budget-control",
+	"Budget",
+}
+ASSET_TARGETS = {"assets-control", "Asset"}
+INSIGHT_TARGETS = {
+	"owner-dashboard",
+	"branch-performance-dashboard",
+	"salesperson-performance-dashboard",
+	"customer-sales-intelligence",
+	"customer-opportunity-intelligence",
+	"inventory-intelligence",
+	"inventory-transfer-opportunities",
+	"inventory-ageing",
+	"inventory-profitability",
+	"basket-affinity",
+	"sales-quality-intelligence",
+	"cash-flow-outlook",
+}
+SELLING_SETUP_TARGETS = {
+	"sales-team-control",
+	"Sales Person",
+	"Sales Partner",
+	"Subscription",
+	"Subscription Plan",
+}
+PRICING_PROMOTIONS_TARGETS = {
+	"pricing-promotions-control",
+	"Price List",
+	"Item Price",
+	"Pricing Rule",
+	"Promotional Scheme",
+	"Coupon Code",
+	"Loyalty Program",
+}
+STOCK_SETUP_TARGETS = {"Item", "Warehouse", "Batch", "Serial No"}
+FINANCE_SETUP_TARGETS = {
+	"Bank Account",
+	"Mode of Payment",
+	"Cost Center",
+	"RetailEdge Statement Mapping Template",
+}
+BUSINESS_SETUP_TARGETS = {
+	"retailedge-setup",
+	"RetailEdge Settings",
+	"RetailEdge Branch Profile",
+	"RetailEdge Expense Category",
+	"Asset Category",
+	"branch-assignments",
+	"company-profile",
+	"operating-context",
+}
+SERVICE_WARRANTY_TARGETS = {
+	"service-warranty-control",
+	"Warranty Claim",
+	"Maintenance Schedule",
+	"Maintenance Visit",
+}
+PROJECT_TARGETS = {"project-operations", "Project"}
+
+GROUP_FALLBACK_BUCKETS = {
+	"home": "home",
+	"sell": "sales",
+	"buy": "purchases",
+	"stock": "stock",
+	"assets": "assets",
+	"money": "money-banking",
+	"expenses": "expenses",
+	"customers": "customers",
+	"service-warranty": "service-warranty",
+	"suppliers-payables": "suppliers-payables",
+	"insights": "insights",
+	"review-approvals": "operations-review",
+	"accounting": "money-banking",
+	"pricing-promotions": "pricing-promotions",
+	"setup": "business-setup",
+	"projects": "projects",
+	"reports": "reports",
+}
+
+
 def _promote_browser_approved_r4_pages(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Promote the R4 pages already accepted into final RetailEdge composition.
 
@@ -822,6 +1007,120 @@ def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> No
 	setup_group["items"] = items
 
 
+def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | None:
+	target_type = str(item.get("target_type") or "")
+	target = str(item.get("target") or "")
+	label = str(item.get("label") or "")
+	label_lower = label.lower()
+	target_lower = target.lower()
+
+	# Detailed reports belong in Reports Centre, not in everyday operational menus.
+	if target_type == "Report" or target in REPORT_CENTRE_ONLY_PAGE_TARGETS:
+		return None
+	if target in MENU_HIDDEN_DUPLICATE_TARGETS:
+		return None
+	if target == "reports-centre":
+		return "reports"
+	if target == "retailedge-business-hub":
+		return "home"
+
+	if (
+		label == "Start POS"
+		or target_type == "URL" and "pos" in target_lower
+		or target_type == "DocType" and (
+			"pos opening" in target_lower
+			or "pos closing" in target_lower
+			or "opening shift" in target_lower
+			or "closing shift" in target_lower
+		)
+	):
+		return "point-of-sale"
+	if target in SALES_OPERATION_TARGETS:
+		return "sales"
+	if target in PURCHASE_OPERATION_TARGETS:
+		return "purchases"
+	if target in STOCK_OPERATION_TARGETS:
+		return "stock"
+	if target in MONEY_OPERATION_TARGETS:
+		return "money-banking"
+	if target in {"business-expenses", "cashier-expenses"}:
+		return "expenses"
+	if target in CUSTOMER_OPERATION_TARGETS:
+		return "customers"
+	if target in SUPPLIER_OPERATION_TARGETS:
+		return "suppliers-payables"
+	if target in OPERATIONS_REVIEW_TARGETS:
+		return "operations-review"
+	if target in BANKING_RECONCILIATION_TARGETS:
+		return "banking-reconciliation"
+	if target in PLANNING_CONTROL_TARGETS:
+		return "planning-control"
+	if target in ASSET_TARGETS:
+		return "assets"
+	if target in SERVICE_WARRANTY_TARGETS:
+		return "service-warranty"
+	if target in PROJECT_TARGETS:
+		return "projects"
+	if target in INSIGHT_TARGETS:
+		return "insights"
+	if target in SELLING_SETUP_TARGETS:
+		return "selling-setup"
+	if target in PRICING_PROMOTIONS_TARGETS:
+		return "pricing-promotions"
+	if target in STOCK_SETUP_TARGETS:
+		return "stock-setup"
+	if target in FINANCE_SETUP_TARGETS:
+		return "finance-setup"
+	if target in BUSINESS_SETUP_TARGETS:
+		return "business-setup"
+
+	# Keep future items available under their originating business family until
+	# they receive an explicit classification.
+	return GROUP_FALLBACK_BUCKETS.get(group_key)
+
+
+def _reclassify_navigation_for_task_frequency(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Separate daily operations, management/review, insights/reports and setup.
+
+	This is presentation-only. Items have already passed role, Frappe permission,
+	Native Desk and target-existence gates before they reach this function.
+	"""
+	buckets: dict[str, list[dict[str, Any]]] = {
+		key: [] for key, _label, _icon in NAVIGATION_PRESENTATION_GROUPS
+	}
+	passthrough: list[dict[str, Any]] = []
+	seen: set[tuple[str, str, str]] = set()
+
+	for group in navigation_groups:
+		group_key = str(group.get("key") or "")
+		unclassified: list[dict[str, Any]] = []
+		for item in group.get("items") or []:
+			bucket = _navigation_bucket_for_item(group_key, item)
+			if bucket is None:
+				continue
+			identity = (
+				str(item.get("target_type") or ""),
+				str(item.get("target") or ""),
+				str(item.get("label") or ""),
+			)
+			if identity in seen:
+				continue
+			seen.add(identity)
+			if bucket in buckets:
+				buckets[bucket].append(item)
+			else:
+				unclassified.append(item)
+		if unclassified:
+			passthrough.append({**group, "items": unclassified})
+
+	reclassified = [
+		{"key": key, "label": label, "icon": icon, "items": buckets[key]}
+		for key, label, icon in NAVIGATION_PRESENTATION_GROUPS
+		if buckets[key]
+	]
+	navigation_groups[:] = [*reclassified, *passthrough]
+
+
 def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> None:
 	"""Remove native Desk routes from final ordinary-user composition.
 
@@ -861,7 +1160,6 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_pricing_promotions_ownership(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
-	_promote_purchase_invoice_ownership(navigation_groups)
 	_promote_stock_movement_history(navigation_groups)
 	_promote_business_expense_ownership(navigation_groups)
 	_promote_cashier_expense_ownership(navigation_groups)
@@ -871,6 +1169,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_project_operations(navigation_groups)
 	_promote_reports_centre(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
+	_reclassify_navigation_for_task_frequency(navigation_groups)
 	_contain_native_navigation_for_edgesuite_only(context)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -931,7 +1230,8 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["pricing_promotions_ownership"] = "application_workspace"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
-	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
+	feature_flags["purchase_invoice_ownership"] = "native_invoice_plus_reports_centre"
+	feature_flags["navigation_information_architecture"] = "task_frequency_v1"
 	feature_flags["stock_movement_history_ownership"] = "edgesuite_page"
 	feature_flags["cashier_expense_ownership"] = "edgesuite_expense_register"
 	feature_flags["business_expense_ownership"] = "edgesuite_business_expenses"
