@@ -1,0 +1,309 @@
+{
+ "actions": [],
+ "autoname": "field:operation_key",
+ "creation": "2026-09-30 23:10:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "identity_section",
+  "operation_key",
+  "status",
+  "entitlement_key",
+  "units",
+  "transaction_doctype",
+  "transaction_name",
+  "transaction_event",
+  "company",
+  "branch",
+  "reservation_section",
+  "reservation_reference",
+  "reservation_status",
+  "reserved_on",
+  "expires_on",
+  "finalized_on",
+  "released_on",
+  "idempotency_section",
+  "reserve_idempotency_key",
+  "finalize_idempotency_key",
+  "release_idempotency_key",
+  "retry_section",
+  "attempt_count",
+  "last_attempt_on",
+  "next_retry_on",
+  "last_error_code",
+  "last_error_message",
+  "reconciliation_reason",
+  "actor",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "Quota Operation"
+  },
+  {
+   "fieldname": "operation_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Operation Key",
+   "read_only": 1,
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "default": "Reserved",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Reserved\nFinalize Pending\nFinalized\nRelease Pending\nReleased\nExpired\nReconciliation Required\nFailed",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "entitlement_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Entitlement Key",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "units",
+   "fieldtype": "Int",
+   "label": "Units",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "transaction_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Transaction DocType",
+   "options": "DocType",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "transaction_name",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Transaction",
+   "options": "transaction_doctype",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Submit",
+   "fieldname": "transaction_event",
+   "fieldtype": "Data",
+   "label": "Transaction Event",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reservation_section",
+   "fieldtype": "Section Break",
+   "label": "CoreEdge Reservation"
+  },
+  {
+   "fieldname": "reservation_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reservation Reference",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "Active",
+   "fieldname": "reservation_status",
+   "fieldtype": "Data",
+   "label": "Remote Reservation Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reserved_on",
+   "fieldtype": "Datetime",
+   "label": "Reserved On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Datetime",
+   "in_standard_filter": 1,
+   "label": "Expires On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "finalized_on",
+   "fieldtype": "Datetime",
+   "label": "Finalized On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "released_on",
+   "fieldtype": "Datetime",
+   "label": "Released On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "idempotency_section",
+   "fieldtype": "Section Break",
+   "label": "Idempotency"
+  },
+  {
+   "fieldname": "reserve_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Reserve Idempotency Key",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "finalize_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Finalize Idempotency Key",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "release_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Release Idempotency Key",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "retry_section",
+   "fieldtype": "Section Break",
+   "label": "Retry and Reconciliation"
+  },
+  {
+   "default": "0",
+   "fieldname": "attempt_count",
+   "fieldtype": "Int",
+   "label": "Finalize Attempts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_attempt_on",
+   "fieldtype": "Datetime",
+   "label": "Last Attempt On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_retry_on",
+   "fieldtype": "Datetime",
+   "in_standard_filter": 1,
+   "label": "Next Retry On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error_code",
+   "fieldtype": "Data",
+   "label": "Last Error Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error_message",
+   "fieldtype": "Small Text",
+   "label": "Last Error Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_reason",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Link",
+   "label": "Created By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-30 23:10:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge CoreEdge Quota Operation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor"
+  }
+ ],
+ "search_fields": "operation_key,status,entitlement_key,transaction_doctype,transaction_name,reservation_reference,last_error_code",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
