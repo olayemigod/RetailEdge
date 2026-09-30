@@ -168,13 +168,20 @@ test("RC3 persistent Global Create is available outside Business Hub and reuses 
 		});
 		expect(sharesTopbarHost).toBeTruthy();
 
+		const routeBeforeCreate = await page.evaluate(() => {
+			const route = window.frappe?.get_route?.();
+			return Array.isArray(route) ? route.filter(Boolean).join("/") : String(route || "");
+		});
+		expect(routeBeforeCreate).toBe("cash-movement");
+
 		await globalCreate.click();
+		await expect(page.locator("#retailedge-global-create-host")).toHaveCount(1);
 		await expect
 			.poll(() => page.evaluate(() => {
 				const route = window.frappe?.get_route?.();
 				return Array.isArray(route) ? route.filter(Boolean).join("/") : String(route || "");
 			}))
-			.toBe("retailedge-business-hub");
+			.toBe("cash-movement");
 
 		const search = page.getByRole("searchbox", { name: "Search permitted Create entries" });
 		await expect(search).toBeVisible();
