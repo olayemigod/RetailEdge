@@ -5,7 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import frappe
@@ -41,8 +41,8 @@ class CoreEdgeRemoteResponseInvalid(CoreEdgeRemoteError):
 class CoreEdgeRemoteConfig:
 	base_url: str
 	site_identifier: str
-	api_key: str
-	api_secret: str
+	api_key: str = field(repr=False)
+	api_secret: str = field(repr=False)
 	timeout_seconds: int = 10
 	client_id: str | None = None
 
