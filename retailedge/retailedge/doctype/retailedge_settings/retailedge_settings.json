@@ -94,6 +94,10 @@
   "enable_coreedge_payment_requests",
   "enable_coreedge_notifications",
   "enable_coreedge_branch_context",
+  "coreedge_remote_services_section",
+  "enable_coreedge_remote_services",
+  "enable_coreedge_quota_integration",
+  "coreedge_remote_service_guidance",
   "bank_transaction_matching_tab",
   "bank_transaction_matching_section",
   "bank_auto_match_mode",
@@ -624,6 +628,33 @@
    "fieldname": "enable_coreedge_branch_context",
    "fieldtype": "Check",
    "label": "Use CoreEdge Branch Context"
+  },
+  {
+   "fieldname": "coreedge_remote_services_section",
+   "fieldtype": "Section Break",
+   "label": "Remote CoreEdge Services"
+  },
+  {
+   "default": "0",
+   "description": "Allow RetailEdge server code to call the registered central CoreEdge Service Gateway. Credentials remain in protected site configuration and are never stored in this DocType.",
+   "fieldname": "enable_coreedge_remote_services",
+   "fieldtype": "Check",
+   "label": "Enable Remote CoreEdge Services"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_coreedge_remote_services",
+   "description": "Enable the remote entitlement usage client foundation. This setting alone does not enforce a quota on Sales Invoice, POS, purchasing, stock or any other RetailEdge transaction.",
+   "fieldname": "enable_coreedge_quota_integration",
+   "fieldtype": "Check",
+   "label": "Enable CoreEdge Quota Integration"
+  },
+  {
+   "description": "Configure coreedge_service_url, coreedge_service_site_identifier, coreedge_service_api_key and coreedge_service_api_secret in protected site_config.json or deployment secrets. Do not place API credentials in this form.",
+   "fieldname": "coreedge_remote_service_guidance",
+   "fieldtype": "Small Text",
+   "label": "Remote Service Configuration",
+   "read_only": 1
   },
   {
    "fieldname": "bank_transaction_matching_tab",
