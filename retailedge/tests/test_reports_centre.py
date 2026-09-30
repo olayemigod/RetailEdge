@@ -69,6 +69,7 @@ def test_reports_centre_exposes_permission_filtered_catalogue(
 		"expenses",
 		"profitability",
 		"planning",
+		"projects",
 		"controls",
 		"financial",
 	]
