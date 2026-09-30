@@ -80,7 +80,7 @@ def test_reports_centre_exposes_permission_filtered_catalogue(
 	assert sales["items"][0]["target"] == "professional-selling"
 	assert sales["items"][0]["label"] == "Selling Control"
 	assert purchases["items"][0]["target"] == "professional-purchasing"
-	assert purchases["items"][0]["label"] == "Buying Control"
+	assert purchases["items"][0]["label"] == "Purchase Operations"
 	assert any(item["target"] == "supplier-document-review" and item["label"] == "Supplier Document Control" for item in purchases["items"])
 	planning = next(group for group in result["groups"] if group["key"] == "planning")
 	assert [item["target"] for item in planning["items"]] == ["forecasting-planning", "sales-forecast"]
@@ -155,7 +155,7 @@ def test_reports_centre_control_layer_reuses_existing_workspaces_without_new_met
 
 	for label in (
 		'"label": "Selling Control"',
-		'"label": "Buying Control"',
+		'"label": "Purchase Operations"',
 		'"label": "Supplier Document Control"',
 	):
 		assert label in source
