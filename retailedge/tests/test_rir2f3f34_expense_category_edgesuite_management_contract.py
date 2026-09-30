@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 
 from retailedge import expense_category_setup
@@ -34,6 +35,17 @@ def test_category_manager_reads_are_permission_aware_and_bounded():
 	assert "More than {0} Expense Categories match this view" in source
 	assert "ignore_permissions" not in source
 	assert "frappe.db.commit" not in source
+
+
+def test_expense_category_permissions_allow_governed_manager_maintenance():
+	meta_path = ROOT / "retailedge/doctype/retailedge_expense_category/retailedge_expense_category.json"
+	meta = json.loads(meta_path.read_text(encoding="utf-8"))
+	by_role = {row["role"]: row for row in meta.get("permissions", [])}
+	for role in ("RetailEdge Manager", "RetailEdgeManager", "Accounts Manager"):
+		assert by_role[role].get("read") == 1
+		assert by_role[role].get("create") == 1
+		assert by_role[role].get("write") == 1
+		assert not by_role[role].get("delete")
 
 
 def test_category_create_and_edit_keep_native_permissions_authoritative():
