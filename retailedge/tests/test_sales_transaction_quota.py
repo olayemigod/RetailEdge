@@ -11,6 +11,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from retailedge.coreedge_sales_quota import (
 	OPERATION_DOCTYPE,
+	_release_rolled_back_reservation,
 	SalesTransactionQuotaConfig,
 	before_submit_sales_transaction_quota,
 	finalize_sales_quota_operation,
@@ -241,6 +242,32 @@ class SalesQuotaContractTests(unittest.TestCase):
 		self.assertEqual(
 			mock_release.call_args.kwargs["reservation_reference"],
 			"CEUR-ROLLBACK",
+		)
+
+	@patch("retailedge.coreedge_sales_quota.frappe.log_error")
+	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
+	def test_rejected_rollback_release_is_logged(self, mock_client, mock_log):
+		client = MagicMock()
+		client.release_usage.return_value = {
+			"data": {
+				"ok": False,
+				"reason_code": "CAPABILITY_NOT_ACTIVATED",
+				"message": "Release capability unavailable",
+			}
+		}
+		mock_client.return_value = client
+
+		_release_rolled_back_reservation(
+			reservation_reference="CEUR-ROLLBACK-REJECTED",
+			release_idempotency_key="release-rejected",
+			doc_doctype="Sales Invoice",
+			doc_name="SINV-ROLLBACK-REJECTED",
+		)
+
+		mock_log.assert_called_once()
+		self.assertEqual(
+			mock_log.call_args.kwargs["title"],
+			"RetailEdge CoreEdge Quota Release Rejected",
 		)
 
 	def test_hooks_attach_before_submit_only_and_no_cancel_refund_hook(self):
