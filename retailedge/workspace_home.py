@@ -30,7 +30,7 @@ class WorkspaceHomeItem:
 
 
 # Native Frappe workspace is a compact fallback. The EdgeSuite Business Hub is the
-# primary shell and carries the role-aware Home and Accounting groups.
+# primary shell and carries the full role-aware navigation.
 HOME_SECTIONS: tuple[str, ...] = (
 	"Home",
 	"Point of Sale",
@@ -121,7 +121,6 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile", "Business Setup", 20, "admin", "Business Workspace"),
 	WorkspaceHomeItem("Expense Categories", "DocType", "RetailEdge Expense Category", "Business Setup", 30, "admin", "Business Workspace"),
 )
-
 
 
 def _target_exists(link_type: str, link_to: str) -> bool:
