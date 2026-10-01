@@ -68,11 +68,13 @@ def test_standard_submit_blocks_workflows_and_advanced_po_cases():
 	assert '_permission(PURCHASE_ORDER_DOCTYPE, "submit", doc.name)' in source
 
 
-def test_restricted_blank_branch_fails_closed_before_submission():
+def test_restricted_blank_or_disabled_branch_fails_closed_before_submission():
 	source = _read(BACKEND)
 	assert "_document_branch(doc)" in source
-	assert "user_has_global_branch_access(user=frappe.session.user)" in source
-	assert "validate_user_branch_access(" in source
+	assert "get_operational_branch_scope(company, user=frappe.session.user)" in source
+	assert "validate_operating_branch(" in source
+	assert '"allowed_branches"' in source
+	assert "active operational access to Branch" in source
 	assert "has no Branch attribution for your restricted access" in source
 
 
