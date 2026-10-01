@@ -96,7 +96,7 @@
 								<button type="button" class="edge-button edge-button--secondary" :disabled="previewLoading || !details.can_print" @click="refreshPreview">
 									{{ previewLoading ? "Refreshing..." : "Refresh" }}
 								</button>
-								<button v-if="outputMode !== 'view'" type="button" class="edge-button edge-button--secondary" :disabled="!previewHtml || previewLoading" @click="printPreview">
+								<button type="button" class="edge-button edge-button--secondary" :disabled="!previewHtml || previewLoading" @click="printPreview">
 									Print
 								</button>
 								<button type="button" class="edge-button edge-button--primary" :disabled="!details.can_print" @click="downloadPdf">
@@ -121,7 +121,7 @@
 						</div>
 					</section>
 
-					<aside v-if="outputMode !== 'view'" class="edge-panel output-actions">
+					<aside class="edge-panel output-actions">
 						<div class="section-heading">
 							<div>
 								<span class="output-kicker">3. Output & share</span>
@@ -292,7 +292,6 @@ export default {
 			emailMessage: "",
 			sendingEmail: false,
 			preparingWhatsApp: false,
-			outputMode: "share",
 			searchTimer: null,
 		};
 	},
@@ -368,7 +367,6 @@ export default {
 			const target = window.retailedgeDocumentOutputTarget;
 			if (!target?.document || !target?.name) return;
 			const definition = this.documents.find((row) => row.key === target.document && row.available && row.can_read);
-			this.outputMode = target.mode === "view" ? "view" : "share";
 			delete window.retailedgeDocumentOutputTarget;
 			if (!definition) return;
 			this.selectedDocumentKey = definition.key;
