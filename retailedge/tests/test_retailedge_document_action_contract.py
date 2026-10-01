@@ -57,6 +57,9 @@ def test_document_output_target_assignment_is_centralised():
 def test_core_transaction_lists_keep_view_review_and_output_meanings_separate():
 	selling = (PUBLIC_JS / "professional_selling" / "ProfessionalSelling.vue").read_text(encoding="utf-8")
 	purchasing = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text(encoding="utf-8")
+	purchase_order_review = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchaseOrderSubmitOverlay.vue").read_text(encoding="utf-8")
+	purchase_receipt_history = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchaseReceiptHistoryOverlay.vue").read_text(encoding="utf-8")
+	purchase_receipt_review = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchaseReceiptPreviewOverlay.vue").read_text(encoding="utf-8")
 	payments = (PUBLIC_JS / "payment_management" / "PaymentHistoryPanel.vue").read_text(encoding="utf-8")
 	make_sale = (PUBLIC_JS / "make_sale" / "MakeSale.vue").read_text(encoding="utf-8")
 
@@ -64,6 +67,13 @@ def test_core_transaction_lists_keep_view_review_and_output_meanings_separate():
 	assert 'if (action === "output") { this.openDocumentOutput(document, row); return; }' in selling
 	assert "openDocumentOutputSharing" in selling
 	assert 'Number(row.docstatus || 0) === 0 ? "Review / Edit" : "View"' in purchasing
+	assert `openDocumentOutput('purchase-order', row.name)` in purchasing
+	assert '"purchase-order", this.submitted.name' in purchase_order_review
+	assert "Print & Share" in purchase_order_review
+	assert `openDocumentOutput(row.name)` in purchase_receipt_history
+	assert '"purchase-receipt", name' in purchase_receipt_history
+	assert '"purchase-receipt", this.submitted.name' in purchase_receipt_review
+	assert "Print & Share" in purchase_receipt_review
 	assert 'Number(row.docstatus || 0) === 0 ? "Review" : "View"' in payments
 	assert 'this.deliveryCompletionOpen = true;' in make_sale
 	assert 'openDocumentOutput("delivery-note", result.name, "view")' not in make_sale
