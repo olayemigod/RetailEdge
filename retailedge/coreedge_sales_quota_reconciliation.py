@@ -10,6 +10,10 @@ from frappe.utils import cint, getdate, now_datetime
 
 from retailedge.coreedge_sales_quota import (
 	OPERATION_DOCTYPE,
+	_enqueue_finalize_operation,
+	_register_after_commit,
+	_register_after_rollback,
+	_release_rolled_back_reservation,
 	finalize_sales_quota_operation,
 	get_sales_transaction_quota_config,
 )
@@ -302,6 +306,20 @@ def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> di
 		)
 		return _reconciliation_response(operation, ok=False)
 
+	_register_after_rollback(
+		lambda: _release_rolled_back_reservation(
+			reservation_reference=reservation_reference,
+			release_idempotency_key=release_key,
+			doc_doctype=operation.source_doctype,
+			doc_name=operation.source_name,
+			reason=(
+				"RetailEdge quota reconciliation rolled back before recovered "
+				"reservation state committed."
+			),
+			source_path="RetailEdge Sales Quota Reconciliation Rollback",
+		)
+	)
+
 	operation.status = "Pending Finalize"
 	operation.reservation_reference = reservation_reference
 	operation.reservation_expires_on = quota.get("expires_on")
@@ -317,19 +335,20 @@ def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> di
 	operation.flags.allow_retailedge_quota_reconciliation = True
 	operation.save(ignore_permissions=True)
 
-	result = finalize_sales_quota_operation(operation.name)
-	operation.reload()
+	_register_after_commit(
+		lambda: _enqueue_finalize_operation(operation.name)
+	)
 	_write_review_event(
 		operation=operation,
 		action="Reconcile Unreserved",
-		result=_event_result_for_status(operation.status),
+		result="Pending Finalize",
 		previous_status=previous_status,
 		new_status=operation.status,
 		reason=reason,
-		reason_code=operation.reason_code or result.get("reason_code"),
-		message=operation.last_error or operation.remote_message or "",
+		reason_code=operation.reason_code,
+		message=_("Recovered reservation committed locally; finalization is queued after commit."),
 	)
-	return _reconciliation_response(operation, ok=operation.status == "Finalized")
+	return _reconciliation_response(operation, ok=True)
 
 
 def get_quota_reconciliation_rows(
