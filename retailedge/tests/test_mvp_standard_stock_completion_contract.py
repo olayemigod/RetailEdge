@@ -173,6 +173,8 @@ def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
 		"editable_items",
 		"expected_modified",
 		"EdgeChildTable",
+		"EdgeLinkField",
+		"setDraftItemCode(index, $event)",
 		"window.EdgeSuiteUI",
 	):
 		assert contract in dialog
@@ -198,7 +200,10 @@ def test_stock_draft_editor_revalidates_existing_and_new_items_as_simple_stock_i
 	method = source[source.index("def _update_stock_draft_items"):source.index("def _build_preview")]
 	assert 'if kind == "transfer":\n\t\t\t_assert_simple_transfer_item(item_code)' in method
 	assert 'else:\n\t\t\t_assert_simple_adjustment_item(item_code)' in method
-	assert method.index('item_code = _clean(row.get("item_code"))') < method.index('_assert_simple_transfer_item(item_code)')
+	assert 'stored_item_code = _clean(row.get("item_code"))' in method
+	assert 'if kind == "transfer":' in method
+	assert 'row.item_code = item_code' in method
+	assert method.index('stored_item_code = _clean(row.get("item_code"))') < method.index('_assert_simple_transfer_item(item_code)')
 
 
 def test_stock_draft_editor_keeps_scope_and_tracking_complexity_out_of_editable_payload():

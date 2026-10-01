@@ -75,6 +75,7 @@ def test_cashier_expense_detail_exposes_server_derived_workflow_actions():
 	source = _read(CASHIER_DETAIL)
 	for expected in (
 		"def _workflow_actions(",
+		'"can_submit_for_review"',
 		'"can_approve"',
 		'"can_reject"',
 		'"can_reopen"',
@@ -97,11 +98,13 @@ def test_edgesuite_cashier_detail_owns_review_and_accounting_actions():
 	detail = _read(DETAIL_COMPONENT)
 	for expected in (
 		"Workflow Actions",
+		"Submit for Review",
 		"Approve",
 		"Reject",
 		"Reopen",
 		"Refresh Posting Readiness",
 		"Post to Accounts",
+		"retailedge.cashier_expense_detail.submit_cashier_expense_for_review",
 		"retailedge.api.approve_cashier_expense",
 		"retailedge.api.reject_cashier_expense",
 		"retailedge.api.reopen_cashier_expense",
@@ -123,3 +126,19 @@ def test_cashier_workflow_actions_refresh_edgesuite_reports_in_place():
 		assert '@changed="handleCashierExpenseChanged"' in source
 		assert "handleCashierExpenseChanged" in source
 		assert "await this.fetchData()" in source
+
+
+def test_draft_cashier_expense_can_enter_review_from_edgesuite():
+	backend = _read(CASHIER_DETAIL)
+	detail = _read(DETAIL_COMPONENT)
+	for expected in (
+		"def submit_cashier_expense_for_review(",
+		'doc.has_permission("submit")',
+		"doc.submit()",
+		'"persistence"] = "native_submit"',
+	):
+		assert expected in backend
+	assert "Submit for Review" in detail
+	assert "submitForReview()" in detail
+	assert "actions.reasons" in detail
+	assert "workflowVisible" in detail
