@@ -97,6 +97,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 const PREVIEW_METHOD = "retailedge.professional_purchase_receipt.get_professional_purchase_receipt_preview";
 const SUBMIT_METHOD = "retailedge.professional_purchase_receipt.submit_standard_purchase_receipt";
 const START_WORKFLOW_METHOD = "retailedge.professional_purchase_receipt.start_standard_purchase_receipt_workflow";
@@ -225,7 +226,7 @@ export default {
 		},
 		openDocumentOutput() {
 			if (!this.submitted?.name) return;
-			window.retailedge?.openDocumentOutputSharing?.("purchase-receipt", this.submitted.name);
+			openDocumentOutputSharing("purchase-receipt", this.submitted.name);
 		},
 		async runNextAction(action) {
 			if (!this.submitted?.name || !action || this.posting) return;
