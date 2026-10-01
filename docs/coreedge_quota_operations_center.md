@@ -2,7 +2,8 @@
 
 ## Goal
 
-Provide an operational control surface for RetailEdge/CoreEdge sales-quota lifecycle exceptions without changing ERPNext accounting truth or inventing a browser-side reconciliation authority.
+Provide an operational control surface for RetailEdge/CoreEdge sales-quota lifecycle exceptions without
+changing ERPNext accounting truth or inventing a browser-side reconciliation authority.
 
 This slice is stacked on:
 
@@ -41,7 +42,9 @@ Retry is limited to:
 
 RetailEdge Branch Manager is deliberately **not** granted this page in the first slice.
 
-The quota-operation DocType does not yet have a dedicated row-level permission rule that restricts native record access by operational Branch. Adding the Page role alone would create a risk that a Branch Manager could bypass the EdgeSuite filters and read other Branches through a native DocType route.
+The quota-operation DocType does not yet have a dedicated row-level permission rule that restricts native
+record access by operational Branch. Adding the Page role alone would create a risk that a Branch Manager
+could bypass the EdgeSuite filters and read other Branches through a native DocType route.
 
 A later Branch Manager rollout must first implement and test a row-scoped DocType permission contract.
 
@@ -268,7 +271,8 @@ No accounting record is changed.
 
 ## Next slice
 
-After this page is validated, the next CoreEdge-side design should be a governed **Quota Reconciliation Decision** contract for selected Needs Review cases.
+After this page is validated, the next CoreEdge-side design should be a governed
+**Quota Reconciliation Decision** contract for selected Needs Review cases.
 
 That future contract should distinguish at least:
 
@@ -279,4 +283,5 @@ That future contract should distinguish at least:
 - reservation missing/inaccessible;
 - operator-approved commercial adjustment.
 
-It must remain append-only, reasoned, auditable, tenant/product/service-client scoped, and must never mutate submitted ERPNext accounting documents.
+It must remain append-only, reasoned, auditable, tenant/product/service-client scoped, and must never mutate
+submitted ERPNext accounting documents.
