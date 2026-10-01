@@ -550,8 +550,8 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 			{
 				"doctype": REVIEW_EVENT_DOCTYPE,
 				"quota_operation": op.name,
-				"action": "Reconcile Unreserved",
-				"result": "Needs Review",
+				"action": "Submit CoreEdge Review",
+				"result": "Submitted",
 				"source_doctype": "User",
 				"source_name": "Administrator",
 				"entitlement_key": "SALES_TRANSACTIONS",
