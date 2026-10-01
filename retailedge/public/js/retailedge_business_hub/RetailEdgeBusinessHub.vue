@@ -1200,10 +1200,9 @@ export default {
 			}
 			this.openRecordPurchaseFromQuick({ document_name: result.name });
 		},
-		openDocumentOutput(document, name, mode = "share") {
+		openDocumentOutput(document, name) {
 			if (!document || !name) return;
-			window.retailedgeDocumentOutputTarget = { document, name, mode };
-			frappe.set_route("document-output-sharing");
+			window.retailedge?.openDocumentOutputSharing?.(document, name);
 		},
 		openRecordPurchaseFromQuick(payload = {}) {
 			try { window.sessionStorage.setItem(`${RECORD_PURCHASE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), document_name: payload?.document_name || "", values: payload?.values || {} })); } catch (_error) {}
