@@ -53,9 +53,17 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 			)
 
 		previous_status = self.get_db_value("status") or "Pending Finalize"
-		if previous_status in {"Finalized", "Needs Review"} and self.status != previous_status:
+		if previous_status == "Finalized" and self.status != "Finalized":
 			frappe.throw(
-				_("A terminal CoreEdge quota operation cannot change status."),
+				_("A finalized CoreEdge quota operation cannot change status."),
+				frappe.ValidationError,
+			)
+		if previous_status == "Needs Review" and self.status not in {
+			"Needs Review",
+			"Finalized",
+		}:
+			frappe.throw(
+				_("A Needs Review quota operation may only remain under review or finalize."),
 				frappe.ValidationError,
 			)
 		if previous_status == "Pending Finalize" and self.status not in {
