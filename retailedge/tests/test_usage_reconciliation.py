@@ -17,17 +17,15 @@ from retailedge.coreedge_sales_quota import (
 
 
 class UsageReconciliationApiTests(unittest.TestCase):
-	@patch("retailedge.coreedge_sales_quota.frappe.session")
-	@patch("retailedge.coreedge_sales_quota.frappe.get_roles")
+	@patch("retailedge.coreedge_sales_quota._can_manage_quota_review", return_value=False)
+	@patch("retailedge.coreedge_sales_quota._assert_quota_review_reader")
 	@patch("retailedge.coreedge_sales_quota.frappe.get_list")
 	def test_auditor_can_read_but_cannot_retry(
 		self,
 		mock_get_list,
-		mock_get_roles,
-		mock_session,
+		_mock_reader,
+		_mock_can_manage,
 	):
-		mock_session.user = "auditor@example.com"
-		mock_get_roles.return_value = ["RetailEdge Auditor"]
 		mock_get_list.return_value = [
 			frappe._dict(
 				name="op-review",
@@ -49,17 +47,15 @@ class UsageReconciliationApiTests(unittest.TestCase):
 		self.assertFalse(payload["rows"][0]["can_retry"])
 		self.assertFalse(payload["rows"][0]["requires_manual_reconciliation"])
 
-	@patch("retailedge.coreedge_sales_quota.frappe.session")
-	@patch("retailedge.coreedge_sales_quota.frappe.get_roles")
+	@patch("retailedge.coreedge_sales_quota._can_manage_quota_review", return_value=True)
+	@patch("retailedge.coreedge_sales_quota._assert_quota_review_reader")
 	@patch("retailedge.coreedge_sales_quota.frappe.get_list")
 	def test_manager_sees_retry_only_when_reservation_exists(
 		self,
 		mock_get_list,
-		mock_get_roles,
-		mock_session,
+		_mock_reader,
+		_mock_can_manage,
 	):
-		mock_session.user = "manager@example.com"
-		mock_get_roles.return_value = ["RetailEdge Manager"]
 		mock_get_list.return_value = [
 			frappe._dict(
 				name="op-reserved",
@@ -89,27 +85,27 @@ class UsageReconciliationApiTests(unittest.TestCase):
 		self.assertFalse(payload["rows"][1]["can_retry"])
 		self.assertTrue(payload["rows"][1]["requires_manual_reconciliation"])
 
-	@patch("retailedge.coreedge_sales_quota.frappe.session")
-	@patch("retailedge.coreedge_sales_quota.frappe.get_roles")
-	def test_non_review_role_is_denied(self, mock_get_roles, mock_session):
-		mock_session.user = "cashier@example.com"
-		mock_get_roles.return_value = ["Sales User"]
-		with self.assertRaises(frappe.PermissionError):
-			get_sales_quota_review()
+	def test_role_gate_excludes_cashier_and_sales_user(self):
+		source = Path(
+			frappe.get_app_path("retailedge", "coreedge_sales_quota.py")
+		).read_text()
+		start = source.index("def _assert_quota_review_reader")
+		end = source.index("def _can_manage_quota_review", start)
+		section = source[start:end]
+		self.assertIn('"RetailEdge Auditor"', section)
+		self.assertIn('"RetailEdge Manager"', section)
+		self.assertNotIn('"Sales User"', section)
+		self.assertNotIn('"RetailEdge Cashier"', section)
 
 	@patch("retailedge.coreedge_sales_quota.finalize_sales_quota_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
-	@patch("retailedge.coreedge_sales_quota.frappe.session")
-	@patch("retailedge.coreedge_sales_quota.frappe.get_roles")
+	@patch("retailedge.coreedge_sales_quota._assert_quota_review_manager")
 	def test_manager_retry_calls_governed_finalize_with_review_override(
 		self,
-		mock_get_roles,
-		mock_session,
+		_mock_manager,
 		mock_get_doc,
 		mock_finalize,
 	):
-		mock_session.user = "manager@example.com"
-		mock_get_roles.return_value = ["RetailEdge Manager"]
 		operation = MagicMock()
 		operation.name = "op-review"
 		operation.status = "Needs Review"
@@ -127,16 +123,12 @@ class UsageReconciliationApiTests(unittest.TestCase):
 		)
 
 	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
-	@patch("retailedge.coreedge_sales_quota.frappe.session")
-	@patch("retailedge.coreedge_sales_quota.frappe.get_roles")
+	@patch("retailedge.coreedge_sales_quota._assert_quota_review_manager")
 	def test_unreserved_review_cannot_retry(
 		self,
-		mock_get_roles,
-		mock_session,
+		_mock_manager,
 		mock_get_doc,
 	):
-		mock_session.user = "manager@example.com"
-		mock_get_roles.return_value = ["RetailEdge Manager"]
 		operation = MagicMock()
 		operation.name = "op-unreserved"
 		operation.status = "Needs Review"
