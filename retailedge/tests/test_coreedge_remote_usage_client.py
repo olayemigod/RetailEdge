@@ -245,11 +245,15 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 	def test_timeout_is_bounded_to_safe_default(self):
 		self.assertEqual(
 			self._config(coreedge_service_timeout_seconds=0).timeout_seconds,
-			8,
+			15,
 		)
 		self.assertEqual(
-			self._config(coreedge_service_timeout_seconds=121).timeout_seconds,
-			8,
+			self._config(coreedge_service_timeout_seconds=61).timeout_seconds,
+			15,
+		)
+		self.assertEqual(
+			self._config(coreedge_service_timeout_seconds=2).timeout_seconds,
+			15,
 		)
 		self.assertEqual(
 			self._config(coreedge_service_timeout_seconds=30).timeout_seconds,
