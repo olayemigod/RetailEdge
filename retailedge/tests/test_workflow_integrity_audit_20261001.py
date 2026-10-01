@@ -66,6 +66,16 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertIn("get_effective_cashier_expense_posting_roles", posting_source)
 		self.assertNotIn("and posting_role", (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8"))
 
+	def test_cashier_workflow_and_ledger_statuses_remain_distinct(self):
+		accounting = (APP_ROOT / "cashier_expense_accounting.py").read_text(encoding="utf-8")
+		detail = (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8")
+		self.assertIn('workflow_active = bool(_get_active_workflow("RetailEdge Cashier Expense"))', accounting)
+		self.assertIn('new_status=previous_status if workflow_active else "Posted"', accounting)
+		self.assertIn('"ledger_status": "Posted"', accounting)
+		self.assertIn('"workflow_status_preserved": workflow_active', accounting)
+		self.assertIn("if workflow_controlled:", detail)
+		self.assertIn("No Cashier Expense workflow action is currently available to this user.", detail)
+
 	def test_cash_movement_uses_gl_truth_and_expense_journal_entries_are_money_out(self):
 		source = (APP_ROOT / "cash_movement.py").read_text(encoding="utf-8")
 		self.assertIn("FROM `tabGL Entry` gle", source)
