@@ -293,12 +293,17 @@ def install_internal_transfer_bank_leg_identity():
 			exclude_match=exclude_match,
 		)
 
-	def active_review_match_for_candidate(document_type, document_name):
-		legacy_match = original_active_review(document_type, document_name)
+	def active_review_match_for_candidate(document_type, document_name, bank_transaction_name=None):
+		"""Preserve the matching helper contract and add leg-aware transfer scoping."""
+		bank_transaction = bank_transaction_name or _get_context_bank_transaction()
+		legacy_match = original_active_review(
+			document_type,
+			document_name,
+			bank_transaction_name=bank_transaction,
+		)
 		if not legacy_match:
 			return None
 		if cstr(document_type).strip() == "Payment Entry":
-			bank_transaction = _get_context_bank_transaction()
 			if bank_transaction and _is_submitted_internal_transfer(document_name):
 				rows = _same_leg_match_rows(document_name, bank_transaction, confirmed_only=False)
 				return rows[0] if rows else None
