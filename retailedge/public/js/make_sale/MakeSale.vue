@@ -501,7 +501,9 @@ export default {
 	created() {
 		this._onPageShow = () => {
 			if (this.loading) return;
-			if (!this.loaded || this.hasPendingHandoff()) this.loadPage();
+			const pendingHandoff = this.hasPendingHandoff();
+			if (pendingHandoff) this.loaded = false;
+			if (!this.loaded || pendingHandoff) this.loadPage();
 		};
 		this._beforeUnload = (event) => {
 			if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return;
@@ -526,6 +528,7 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.savedDocument = null;
+			this.recoveryCandidate = null;
 			this.workflowError = "";
 			this.handoffNotice = "";
 			this.pricingCache.clear();
