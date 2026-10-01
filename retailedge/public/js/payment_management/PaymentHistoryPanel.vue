@@ -277,13 +277,14 @@ export default {
 		submitStandardDraft() {
 			const review = this.standardReview.review || {};
 			if (!this.canSubmitStandard || this.submitting) return;
-			confirmAboveEdgeModal(__(`Submit Payment Entry ${this.paymentDetail.payment_entry}? ERPNext will post the authoritative accounting entry.`), async () => {
+			const paymentEntry = this.paymentDetail.payment_entry;
+			confirmAboveEdgeModal(__(`Submit Payment Entry ${paymentEntry}? ERPNext will post the authoritative accounting entry.`), async () => {
 				this.submitting = true; this.detailError = "";
 				try {
 					const isCustomer = this.standardReview.kind === "standard_customer";
 					const method = isCustomer ? CUSTOMER_SUBMIT_METHOD : SUPPLIER_SUBMIT_METHOD;
 					const args = {
-						payment_entry: this.paymentDetail.payment_entry,
+						payment_entry: paymentEntry,
 						expected_payment_entry_modified: review.payment_entry_modified,
 						company: this.paymentDetail.company,
 						branch: this.paymentDetail.branch || null,
@@ -292,10 +293,10 @@ export default {
 					await callMethod(method, args);
 					frappe.show_alert({ message: __("Payment submitted through ERPNext."), indicator: "green" });
 					await this.loadPaymentHistory(Number(this.pagination.page || 1));
-					await this.reviewHistoryPayment(this.paymentDetail.payment_entry);
+					await this.reviewHistoryPayment(paymentEntry);
 				} catch (error) {
 					this.detailError = errorMessage(error, "Payment submission failed.");
-					if (this.paymentDetail.payment_entry) await this.reviewHistoryPayment(this.paymentDetail.payment_entry);
+					if (paymentEntry) await this.reviewHistoryPayment(paymentEntry);
 				} finally { this.submitting = false; }
 			});
 		},
