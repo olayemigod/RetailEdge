@@ -592,6 +592,9 @@ def _reconciliation_response(operation, *, ok: bool) -> dict:
 		"source_doctype": operation.source_doctype,
 		"source_name": operation.source_name,
 		"reservation_reference": operation.reservation_reference,
+		"reconciliation_case_reference": operation.reconciliation_case_reference or "",
+		"reconciliation_case_status": operation.reconciliation_case_status or "",
+		"reconciliation_submitted_on": operation.reconciliation_submitted_on,
 		"reason_code": operation.reason_code or "",
 		"message": operation.last_error or operation.remote_message or "",
 	}
