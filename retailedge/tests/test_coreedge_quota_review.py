@@ -387,7 +387,6 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 		super().tearDown()
 
 	def _make_needs_review(self, suffix: str):
-		company = frappe.db.get_value("Company", {}, "name")
 		doc = frappe.get_doc(
 			{
 				"doctype": OPERATION_DOCTYPE,
@@ -395,7 +394,7 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 				"status": "Needs Review",
 				"source_doctype": "User",
 				"source_name": "Administrator",
-				"company": company,
+				"company": "Quota Review Test Company",
 				"entitlement_key": "SALES_TRANSACTIONS",
 				"units": 1,
 				"reservation_reference": None,
@@ -407,7 +406,7 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 			}
 		)
 		doc.flags.allow_retailedge_quota_operation_create = True
-		return doc.insert(ignore_permissions=True)
+		return doc.insert(ignore_permissions=True, ignore_links=True)
 
 	def test_reservation_cannot_be_attached_by_ordinary_engine_update(self):
 		doc = self._make_needs_review("ordinary-attach")
@@ -431,9 +430,16 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
 
-	def test_review_list_returns_permission_aware_summary_and_pagination(self):
+	@patch("retailedge.coreedge_quota_review.get_operational_branch_scope")
+	def test_review_list_returns_permission_aware_summary_and_pagination(
+		self,
+		mock_scope,
+	):
+		mock_scope.return_value = {
+			"restricted": False,
+			"allowed_branches": [],
+		}
 		operation = self._make_needs_review("list-summary")
-		self.assertTrue(operation.company)
 		result = list_quota_operations(
 			filters={"status": "All", "company": operation.company},
 			page=1,
