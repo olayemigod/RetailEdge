@@ -131,6 +131,15 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertNotIn(".save()", reuse_body)
 		self.assertNotIn(".submit()", reuse_body)
 
+	def test_bank_referenced_internal_transfer_reuses_exact_draft(self):
+		source = (APP_ROOT / "guided_cash_transfer.py").read_text(encoding="utf-8")
+		self.assertIn("def _existing_internal_transfer_draft(", source)
+		self.assertIn('"payment_type": "Internal Transfer"', source)
+		self.assertIn('"reference_no": reference_no', source)
+		self.assertIn("limit_page_length=3", source)
+		self.assertIn('"reused": bool(reused)', source)
+		self.assertIn("Multiple matching draft Internal Transfer Payment Entries already exist", source)
+
 	def test_credit_note_policy_matches_erpnext_outstanding_semantics(self):
 		source = _Doc(
 			{"name": "ACC-SINV-1", "outstanding_amount": 5000},
