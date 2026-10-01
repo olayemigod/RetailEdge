@@ -322,6 +322,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
 import { getTransactionEntryPreference } from "../retailedge_business_hub/guidedEntryUtils";
@@ -553,7 +554,7 @@ export default {
 		},
 		openDocumentOutput(document, name) {
 			if (!document || !name) return;
-			window.retailedge?.openDocumentOutputSharing?.(document, name);
+			openDocumentOutputSharing(document, name);
 		},
 		closeSupplierPayment() {
 			this.supplierPaymentOpen = false;
