@@ -331,6 +331,7 @@ MONEY_OPERATION_TARGETS = {
 	"Payment Entry",
 	"Bank Transaction",
 	"RetailEdge Payment Statement Import",
+	"bank-statement-imports",
 	"payment-management",
 	"cash-movement",
 	"Journal Entry",
