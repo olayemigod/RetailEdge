@@ -253,8 +253,12 @@
 					}),
 					default: () => [
 						h("div", { class: "row g-3 mb-4" }, [
-							h("div", { class: "col-md-3" }, [metric("Needs Review", "needs_review", "Operator attention required", "danger")]),
-							h("div", { class: "col-md-3" }, [metric("Pending Finalize", "pending_finalize", "Retry may be available", "warning")]),
+							h("div", { class: "col-md-3" }, [
+								metric("Needs Review", "needs_review", "Operator attention required", "danger"),
+							]),
+							h("div", { class: "col-md-3" }, [
+								metric("Pending Finalize", "pending_finalize", "Retry may be available", "warning"),
+							]),
 							h("div", { class: "col-md-3" }, [metric("Finalized", "finalized", "CoreEdge usage confirmed", "success")]),
 							h("div", { class: "col-md-3" }, [metric("Rows", "total", "Current filter result", "neutral")]),
 						]),
