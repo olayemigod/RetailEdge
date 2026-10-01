@@ -11,6 +11,10 @@ from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_draft_items import _validate_warehouse_branch, editable_items, update_draft_items
+from retailedge.professional_sales_invoice import (
+	apply_sales_return_outstanding_policy,
+	get_sales_return_outstanding_policy,
+)
 from retailedge.professional_selling import (
 	_assert_read,
 	_validate_stored_operational_branch,
@@ -306,6 +310,7 @@ def _validate_sales_return_context(doc, *, company: str, invoice_branch: str) ->
 		"source_name": source_name,
 		"source_branch": source_branch,
 		"blockers": list(dict.fromkeys(blockers)),
+		"outstanding_policy": get_sales_return_outstanding_policy(source, doc),
 	}
 
 
@@ -522,6 +527,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
 		"is_return": bool(cint(doc.get("is_return"))),
 		"return_against": _clean(doc.get("return_against")),
+		"return_outstanding_policy": source_context.get("outstanding_policy") or {},
 		"source_mode": source_mode,
 		"posting_date": _clean(doc.get("posting_date")),
 		"due_date": _clean(doc.get("due_date")),
@@ -878,6 +884,11 @@ def submit_standard_sales_invoice(
 			frappe.PermissionError,
 		)
 
+	outstanding_policy = {}
+	if source_mode == SOURCE_MODE_SALES_RETURN:
+		source = frappe.get_doc(SALES_INVOICE_DOCTYPE, source_context["source_name"])
+		outstanding_policy = apply_sales_return_outstanding_policy(source, doc)
+
 	# ERPNext remains authoritative for GL, receivable/outstanding, tax, loyalty,
 	# source billing status and Stock Ledger/valuation when update_stock is enabled.
 	doc.submit()
@@ -897,6 +908,7 @@ def submit_standard_sales_invoice(
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"is_return": bool(cint(doc.get("is_return"))),
 		"return_against": _clean(doc.get("return_against")),
+		"return_outstanding_policy": outstanding_policy,
 		"source_mode": source_mode,
 		"source_type": source_context["source_type"],
 		"source_name": source_context["source_name"],
@@ -955,6 +967,15 @@ def apply_standard_sales_invoice_workflow_action(
 			frappe.ValidationError,
 		)
 
+	if source_mode == SOURCE_MODE_SALES_RETURN:
+		source = frappe.get_doc(SALES_INVOICE_DOCTYPE, source_context["source_name"])
+		policy = apply_sales_return_outstanding_policy(source, doc)
+		if doc.meta.has_field("update_outstanding_for_self") and cint(doc.get("update_outstanding_for_self")) != cint(policy["update_outstanding_for_self"]):
+			doc.update_outstanding_for_self = policy["update_outstanding_for_self"]
+			doc.save()
+			doc.reload()
+			expected_modified = _clean(doc.get("modified"))
+
 	result = apply_document_workflow_action(
 		doctype=SALES_INVOICE_DOCTYPE,
 		name=name,
@@ -973,6 +994,7 @@ def apply_standard_sales_invoice_workflow_action(
 				"update_stock": bool(cint(current.get("update_stock"))),
 				"is_return": bool(cint(current.get("is_return"))),
 				"return_against": _clean(current.get("return_against")),
+				"return_outstanding_policy": source_context.get("outstanding_policy") or {},
 				"source_mode": source_mode,
 				"source_type": source_context["source_type"],
 				"source_name": source_context["source_name"],
