@@ -386,7 +386,8 @@ class RetailEdgeCashierExpense(Document):
 		self.review_required = 1 if self.docstatus == 1 and self.expense_status in {"Submitted", "Rejected", "Pending Ledger"} else 0
 		if self.expense_status == "Pending Ledger":
 			self.user_message = (
-				"This expense is approved for future ledger posting, but actual posting is not enabled in this phase."
+				self.posting_block_reason
+				or "The till expense is recorded. Accounting posting is pending the configured posting stage or an authorised accounting poster."
 			)
 		elif self.posting_block_reason:
 			self.user_message = self.posting_block_reason
