@@ -529,8 +529,7 @@ export default {
 
 		openDocumentOutput(document, row) {
 			if (!document?.key || !row?.name) return;
-			window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode: "share" };
-			frappe.set_route("document-output-sharing");
+			window.retailedge?.openDocumentOutputSharing?.(document.key, row.name);
 		},
 
 		openStandardCompletion(document) {
