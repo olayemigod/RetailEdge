@@ -84,8 +84,8 @@ class SalesQuotaContractTests(unittest.TestCase):
 		before_submit_sales_transaction_quota(self._doc())
 		mock_client.assert_not_called()
 
-	@patch("retailedge.coreedge_sales_quota.frappe.db.after_rollback.add")
-	@patch("retailedge.coreedge_sales_quota.frappe.db.after_commit.add")
+	@patch("retailedge.coreedge_sales_quota._register_after_rollback")
+	@patch("retailedge.coreedge_sales_quota._register_after_commit")
 	@patch("retailedge.coreedge_sales_quota._enqueue_finalize_operation")
 	@patch("retailedge.coreedge_sales_quota._insert_quota_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
@@ -205,8 +205,8 @@ class SalesQuotaContractTests(unittest.TestCase):
 		before_submit_sales_transaction_quota(self._doc())
 
 	@patch("retailedge.coreedge_sales_quota._release_rolled_back_reservation")
-	@patch("retailedge.coreedge_sales_quota.frappe.db.after_rollback.add")
-	@patch("retailedge.coreedge_sales_quota.frappe.db.after_commit.add")
+	@patch("retailedge.coreedge_sales_quota._register_after_rollback")
+	@patch("retailedge.coreedge_sales_quota._register_after_commit")
 	@patch("retailedge.coreedge_sales_quota._insert_quota_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
 	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
