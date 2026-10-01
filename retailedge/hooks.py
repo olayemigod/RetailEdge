@@ -174,9 +174,11 @@ doc_events = {
 	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
+		"before_submit": "retailedge.coreedge_sales_quota.before_submit_sales_transaction_quota",
 	},
 	"POS Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
+		"before_submit": "retailedge.coreedge_sales_quota.before_submit_sales_transaction_quota",
 	},
 	"Sales Order": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
@@ -233,7 +235,13 @@ doc_events = {
 
 # Scheduled Tasks
 # ---------------
-# scheduler_events = {}
+scheduler_events = {
+	"cron": {
+		"0/10 * * * *": [
+			"retailedge.coreedge_sales_quota.retry_pending_sales_quota_operations",
+		],
+	},
+}
 
 # Testing
 # -------

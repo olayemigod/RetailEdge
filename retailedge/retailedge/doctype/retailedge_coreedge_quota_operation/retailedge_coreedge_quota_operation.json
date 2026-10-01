@@ -1,0 +1,260 @@
+{
+ "actions": [],
+ "autoname": "field:operation_key",
+ "creation": "2026-10-01 00:20:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "identity_section",
+  "operation_key",
+  "status",
+  "source_doctype",
+  "source_name",
+  "company",
+  "branch",
+  "quota_section",
+  "entitlement_key",
+  "units",
+  "reservation_reference",
+  "reservation_expires_on",
+  "warning",
+  "reason_code",
+  "remote_message",
+  "idempotency_section",
+  "reserve_idempotency_key",
+  "finalize_idempotency_key",
+  "release_idempotency_key",
+  "lifecycle_section",
+  "reserved_on",
+  "finalized_on",
+  "last_attempt_on",
+  "attempt_count",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "fieldname": "identity_section",
+   "fieldtype": "Section Break",
+   "label": "CoreEdge Quota Operation"
+  },
+  {
+   "fieldname": "operation_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Operation Key",
+   "reqd": 1,
+   "set_only_once": 1,
+   "unique": 1
+  },
+  {
+   "default": "Pending Finalize",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Pending Finalize\nFinalized\nNeeds Review",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source DocType",
+   "options": "DocType",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source Document",
+   "options": "source_doctype",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quota_section",
+   "fieldtype": "Section Break",
+   "label": "Quota Reservation"
+  },
+  {
+   "fieldname": "entitlement_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Entitlement Key",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "units",
+   "fieldtype": "Int",
+   "label": "Units",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "reservation_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reservation Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reservation_expires_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Reservation Expires On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "warning",
+   "fieldtype": "Check",
+   "label": "Warning",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason_code",
+   "fieldtype": "Data",
+   "label": "Reason Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remote_message",
+   "fieldtype": "Small Text",
+   "label": "Remote Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "idempotency_section",
+   "fieldtype": "Section Break",
+   "label": "Idempotency"
+  },
+  {
+   "fieldname": "reserve_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Reserve Idempotency Key",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "finalize_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Finalize Idempotency Key",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "release_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Release Idempotency Key",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle"
+  },
+  {
+   "fieldname": "reserved_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Reserved On",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "finalized_on",
+   "fieldtype": "Datetime",
+   "label": "Finalized On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_attempt_on",
+   "fieldtype": "Datetime",
+   "label": "Last Finalize Attempt",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "attempt_count",
+   "fieldtype": "Int",
+   "label": "Finalize Attempts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-01 00:20:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge CoreEdge Quota Operation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor"
+  }
+ ],
+ "search_fields": "operation_key,status,source_doctype,source_name,company,branch,entitlement_key,reservation_reference",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
