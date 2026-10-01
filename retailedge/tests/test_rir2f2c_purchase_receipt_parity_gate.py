@@ -18,7 +18,7 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", prepare_receipt)
 		self.assertNotIn("prepare_purchase_receipt_draft", prepare_receipt)
 		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt", result.name)', prepare_receipt)
-		self.assertIn("openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); }", component)
+		self.assertIn('openPurchaseReceipts() { frappe.set_route("purchase-receipt-history"); }', component)
 
 	def test_edgesuite_receipt_actions_are_intercepted_before_native_handoff(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
@@ -33,7 +33,7 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 			'button.setAttribute("data-retailedge-receipt-preview", "true")',
 			'button.setAttribute("data-retailedge-receipt-history", "true")',
 			"OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT",
-			"OPEN_PURCHASE_RECEIPT_HISTORY_EVENT",
+			'frappe.set_route("purchase-receipt-history")',
 			"if (!nativeDeskEnabled()) return;",
 			"event.stopImmediatePropagation()",
 		):
