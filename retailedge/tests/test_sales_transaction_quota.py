@@ -19,7 +19,10 @@ from retailedge.coreedge_sales_quota import (
 	make_sales_quota_operation_key,
 	retry_pending_sales_quota_operations,
 )
-from retailedge.integrations.coreedge_remote_usage import CoreEdgeRemoteUsageUnavailable
+from retailedge.integrations.coreedge_remote_usage import (
+	CoreEdgeRemoteUsageAuthenticationFailed,
+	CoreEdgeRemoteUsageUnavailable,
+)
 
 
 class SalesQuotaContractTests(unittest.TestCase):
@@ -218,6 +221,26 @@ class SalesQuotaContractTests(unittest.TestCase):
 		self.assertIsNone(kwargs["reservation_reference"])
 		mock_after_commit.assert_not_called()
 		mock_after_rollback.assert_not_called()
+
+	@patch("retailedge.coreedge_sales_quota._log_quota_failure")
+	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
+	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota.get_sales_transaction_quota_config")
+	def test_fail_open_does_not_bypass_authentication_failure(
+		self,
+		mock_config,
+		mock_client,
+		_mock_existing,
+		_mock_log,
+	):
+		mock_config.return_value = SalesTransactionQuotaConfig(enabled=True, fail_closed=False)
+		client = MagicMock()
+		client.reserve_usage.side_effect = CoreEdgeRemoteUsageAuthenticationFailed(
+			"COREDGE_REMOTE_USAGE_AUTHENTICATION_FAILED"
+		)
+		mock_client.return_value = client
+		with self.assertRaises(frappe.ValidationError):
+			before_submit_sales_transaction_quota(self._doc())
 
 	@patch("retailedge.coreedge_sales_quota._release_rolled_back_reservation")
 	@patch("retailedge.coreedge_sales_quota._register_after_rollback")
