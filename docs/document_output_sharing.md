@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provide one safe customer-document output experience for Quotation, Sales Order, Delivery Note and Sales Invoice without replacing ERPNext/Frappe document, Print Format, Letterhead, permission, email, stock or accounting truth.
+Provide one safe business-document output experience for RetailEdge selling and purchasing documents without replacing ERPNext/Frappe document, Print Format, Letterhead, permission, email, stock or accounting truth.
 
 ## Architecture
 
@@ -22,8 +22,12 @@ Provide one safe customer-document output experience for Quotation, Sales Order,
 2. Sales Order
 3. Delivery Note
 4. Sales Invoice
+5. Purchase Order
+6. Purchase Receipt
+7. Purchase Invoice
+8. POS Receipt (ERPNext POS Invoice)
 
-These are the first customer-facing document types. Additional document types should only be added after their permission, privacy and business-use rules are explicit.
+The registry covers the RetailEdge business documents that currently have an explicit print/share use case. Selling and purchasing records remain subject to the source DocType's read, print and email permissions plus Operating Company/Branch scope. Additional document types should only be added after their permission, privacy and business-use rules are explicit.
 
 ## Output flows
 
@@ -39,7 +43,7 @@ The browser opens Frappe's authenticated print view using the selected ERPNext P
 
 `send_document_email` requires read + print + email permission. The recipient address is validated, the PDF is rendered using the same native print engine, and Frappe's mail transport queues the message with the business document as its reference.
 
-The source Quotation, Sales Order, Delivery Note or Sales Invoice is never modified by this operation.
+The source business document is never modified by this operation.
 
 ### WhatsApp
 
@@ -95,4 +99,4 @@ RetailEdge does not make a private ERP document public merely to obtain a WhatsA
 - CoreEdge-managed email/WhatsApp delivery provider integration.
 - Tenant-level default Print Format / Letterhead preferences where they do not override ERPNext permission truth.
 - Auditable delivery outcome display based on authoritative Communication/provider logs.
-- Additional customer documents after explicit security and workflow review.
+- Additional business documents after explicit security and workflow review.
