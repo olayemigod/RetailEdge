@@ -139,6 +139,43 @@ def list_quota_operations(
 
 
 @frappe.whitelist()
+def get_quota_review_history(operation_name: str) -> dict:
+	_assert_read_access()
+	name = _operation_name(operation_name)
+	visible = frappe.get_list(
+		OPERATION_DOCTYPE,
+		filters={"name": name},
+		fields=["name"],
+		limit_page_length=1,
+	)
+	if not visible:
+		frappe.throw(_("Quota review item was not found or is not accessible."), frappe.PermissionError)
+
+	events = frappe.get_list(
+		_REVIEW_EVENT_DOCTYPE,
+		filters={"quota_operation": name},
+		fields=[
+			"name",
+			"action",
+			"result_status",
+			"reason",
+			"reason_code",
+			"message",
+			"reservation_reference",
+			"actor",
+			"occurred_on",
+		],
+		order_by="occurred_on desc",
+		limit_page_length=100,
+	)
+	return {
+		"operation_name": name,
+		"events": [dict(row) for row in events],
+		"truncated": len(events) >= 100,
+	}
+
+
+@frappe.whitelist()
 def search_quota_review_options(
 	doctype: str,
 	txt: str = "",
