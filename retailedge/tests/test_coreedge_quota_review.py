@@ -11,6 +11,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_to_date, now_datetime
 
 from retailedge.coreedge_quota_review import (
+	_build_filters,
 	_review_reason,
 	reconcile_unreserved_quota_operation,
 	retry_quota_operation,
@@ -220,6 +221,43 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		self.assertFalse(result["ok"])
 		self.assertEqual(result["reason_code"], "SOURCE_NOT_SUBMITTED")
 		mock_record_failure.assert_called_once()
+
+	@patch("retailedge.coreedge_quota_review.get_operational_branch_scope")
+	def test_restricted_zero_branch_scope_fails_closed(self, mock_scope):
+		mock_scope.return_value = {
+			"restricted": True,
+			"allowed_branches": [],
+		}
+		with self.assertRaises(frappe.PermissionError):
+			_build_filters(
+				frappe._dict(
+					{
+						"status": "Open",
+						"company": "Test Company",
+						"branch": "Main",
+					}
+				)
+			)
+
+	@patch("retailedge.coreedge_quota_review.get_operational_branch_scope")
+	def test_unrestricted_branch_scope_allows_explicit_branch_filter(self, mock_scope):
+		mock_scope.return_value = {
+			"restricted": False,
+			"allowed_branches": [],
+		}
+		filters, _scope, _or_filters = _build_filters(
+			frappe._dict(
+				{
+					"status": "Open",
+					"company": "Test Company",
+					"branch": "Main",
+				}
+			)
+		)
+		self.assertIn(
+			[OPERATION_DOCTYPE, "branch", "=", "Main"],
+			filters,
+		)
 
 	def test_review_service_uses_permission_aware_get_list_only(self):
 		source = Path(
