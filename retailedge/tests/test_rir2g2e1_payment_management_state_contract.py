@@ -88,3 +88,17 @@ def test_customer_advance_bank_reference_is_validated_before_create_and_errors_a
 	assert "window.retailedge?.userErrorMessage?.(error, fallback)" in source
 	assert "error?.exc || error?.exception" not in source
 	assert "retailedge.stock_movement_filters.branch_query" in source
+
+
+def test_successful_customer_advance_is_not_reclassified_as_create_failure_by_refresh():
+	source = _source()
+	create_start = source.index("let result = null;")
+	success_start = source.index("dialog.hide();", create_start)
+	create_segment = source[create_start:success_start]
+	assert "create_customer_advance_draft" in create_segment
+	assert "loadAdvances" not in create_segment
+	assert "loadDraftPayments" not in create_segment
+	post_create = source[success_start:source.index("openPaymentHistory()", success_start)]
+	assert "Customer advance draft created. Review it before submission." in post_create
+	assert post_create.index("Customer advance draft created. Review it before submission.") < post_create.index("await this.loadAdvances();")
+	assert post_create.index("await this.loadAdvances();") < post_create.index("await this.loadDraftPayments();")
