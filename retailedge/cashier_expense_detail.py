@@ -6,8 +6,17 @@ import frappe
 from frappe import _
 
 from retailedge.cashier_expense import get_effective_expense_status, user_has_any_role, user_is_reviewer
-from retailedge.cashier_expense_accounting import CONTROLLED_POSTING_ROLES
-from retailedge.cashier_expense_posting import POSTING_REFRESH_ROLES, get_cashier_expense_posting_settings
+from retailedge.cashier_expense_accounting import (
+	attempt_direct_cashier_expense_posting,
+	get_cashier_expense_posting_permissions,
+)
+from retailedge.cashier_expense_posting import (
+	POSTING_REFRESH_ROLES,
+	get_cashier_expense_posting_settings,
+	refresh_cashier_expense_posting_readiness,
+)
+from retailedge.workflow_actions import apply_document_workflow_action
+from retailedge.workflow_readiness import get_workflow_readiness
 from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
@@ -102,13 +111,21 @@ def get_cashier_expense_detail(
 		)
 
 	expense = dict(rows[0])
+	doc = frappe.get_doc(EXPENSE_DOCTYPE, expense["name"])
+	workflow_readiness = get_workflow_readiness(doctype=EXPENSE_DOCTYPE, doc=doc)
 	return {
 		"expense": expense,
-		"actions": _workflow_actions(expense),
+		"workflow_readiness": workflow_readiness,
+		"actions": _workflow_actions(expense, doc=doc, workflow_readiness=workflow_readiness),
 	}
 
 
-def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
+def _workflow_actions(
+	expense: dict[str, Any],
+	*,
+	doc=None,
+	workflow_readiness: dict[str, Any] | None = None,
+) -> dict[str, Any]:
 	"""Expose only currently relevant EdgeSuite actions; mutation endpoints remain authoritative."""
 	status = get_effective_expense_status(expense)
 	docstatus = int(expense.get("docstatus") or 0)
@@ -116,6 +133,9 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 	user = frappe.session.user
 	roles = set(frappe.get_roles(user) or [])
 	reviewer = bool(user_is_reviewer(user))
+	workflow_readiness = workflow_readiness or {}
+	workflow_controlled = str(workflow_readiness.get("source") or "") == "frappe"
+	workflow_actions = list(workflow_readiness.get("available_actions") or []) if workflow_controlled else []
 	self_cashier = str(expense.get("cashier") or "").strip() == str(user or "").strip()
 	is_system_manager = "System Manager" in roles
 
@@ -123,27 +143,22 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 		frappe.has_permission(EXPENSE_DOCTYPE, "write", doc=str(expense.get("name") or ""))
 	)
 	can_submit_for_review = bool(
-		docstatus == 0
+		not workflow_controlled
+		and docstatus == 0
 		and can_write_expense
 		and frappe.has_permission(EXPENSE_DOCTYPE, "submit", doc=str(expense.get("name") or ""))
 	)
-	can_review_submitted = reviewer and can_write_expense and docstatus == 1 and status == "Submitted"
-	can_reopen = reviewer and can_write_expense and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
+	can_review_submitted = (not workflow_controlled) and reviewer and can_write_expense and docstatus == 1 and status == "Submitted"
+	can_reopen = (not workflow_controlled) and reviewer and can_write_expense and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
 
 	posting = get_cashier_expense_posting_settings()
 	posting_enabled = bool(posting.get("enabled"))
-	posting_role = bool(user_has_any_role(user=user, roles=CONTROLLED_POSTING_ROLES))
-	can_post_permissions = bool(
-		can_write_expense
-		and frappe.has_permission("Journal Entry", "read")
-		and frappe.has_permission("Journal Entry", "create")
-		and frappe.has_permission("Journal Entry", "submit")
+	posting_permissions = get_cashier_expense_posting_permissions(
+		doc or frappe.get_doc(EXPENSE_DOCTYPE, expense["name"]),
+		settings=posting,
+		automatic=False,
 	)
-	posting_status_allowed = (
-		status == "Pending Ledger"
-		if posting.get("require_approval_before_posting")
-		else status in {"Submitted", "Pending Ledger"}
-	)
+	can_post_permissions = bool(posting_permissions.get("can_post"))
 	can_post = bool(
 		docstatus == 1
 		and status not in {"Cancelled", "Rejected", "Posted"}
@@ -152,7 +167,6 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 		and posting.get("posting_document_type") == "Journal Entry"
 		and posting_role
 		and can_post_permissions
-		and posting_status_allowed
 		and bool(expense.get("posting_ready"))
 	)
 
@@ -178,12 +192,50 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 		"can_reopen": bool(can_reopen),
 		"can_refresh_posting": can_refresh,
 		"can_post_to_accounts": can_post,
+		"workflow_controlled": workflow_controlled,
+		"workflow_actions": workflow_actions,
 		"posting_enabled": posting_enabled,
 		"posting_mode": posting.get("posting_mode") or "",
 		"posting_document_type": posting.get("posting_document_type") or "Journal Entry",
 		"reasons": reasons,
 	}
 
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_cashier_expense_workflow_action(
+	expense_name: str,
+	action: str,
+	expected_modified: str | None = None,
+	expected_workflow_state: str | None = None,
+) -> dict[str, Any]:
+	"""Apply one active Frappe Workflow action, then refresh posting readiness.
+
+	When Direct Posting is selected, reaching the configured submitted posting
+	state may auto-post only if the acting user's merchant-configured role and
+	normal Journal Entry permissions allow it. Otherwise the expense remains
+	Pending Ledger for an authorised poster.
+	"""
+	scoped = get_cashier_expense_detail(expense_name)
+	expense = scoped.get("expense") or {}
+	workflow = scoped.get("workflow_readiness") or {}
+	if str(workflow.get("source") or "") != "frappe":
+		frappe.throw(_("Cashier Expense is not controlled by an active Frappe Workflow."))
+	result = apply_document_workflow_action(
+		doctype=EXPENSE_DOCTYPE,
+		name=str(expense.get("name") or expense_name),
+		action=str(action or "").strip(),
+		expected_modified=str(expected_modified or ""),
+		expected_state=str(expected_workflow_state or ""),
+	)
+	refresh_cashier_expense_posting_readiness(expense_name)
+	doc = frappe.get_doc(EXPENSE_DOCTYPE, expense_name)
+	posting_result = attempt_direct_cashier_expense_posting(doc)
+	return {
+		"workflow_result": result,
+		"posting_result": posting_result,
+		"detail": get_cashier_expense_detail(expense_name),
+	}
 
 
 @frappe.whitelist(methods=["POST"])
