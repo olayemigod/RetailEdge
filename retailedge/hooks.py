@@ -268,12 +268,16 @@ permission_query_conditions = {
 	"Item Price": "retailedge.pricing_promotions_workspace.get_item_price_permission_query_conditions",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
 	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
+	"RetailEdge CoreEdge Quota Operation": "retailedge.coreedge_quota_permissions.get_operation_permission_query_conditions",
+	"RetailEdge CoreEdge Quota Review Event": "retailedge.coreedge_quota_permissions.get_review_event_permission_query_conditions",
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
 	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
+	"RetailEdge CoreEdge Quota Operation": "retailedge.coreedge_quota_permissions.has_operation_permission",
+	"RetailEdge CoreEdge Quota Review Event": "retailedge.coreedge_quota_permissions.has_review_event_permission",
 }
 
 # Extend DocType Class
