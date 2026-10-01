@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint, get_datetime, scrub
 
 EXPENSE_CATEGORY_DOCTYPE = "RetailEdge Expense Category"
 DEFAULT_PAGE_SIZE = 25
@@ -261,6 +261,8 @@ def save_expense_category(
 		doc = frappe.new_doc(EXPENSE_CATEGORY_DOCTYPE)
 
 	_apply_values(doc, values)
+	if not name and not str(getattr(doc, "category_code", None) or "").strip():
+		doc.category_code = _default_category_code(str(getattr(doc, "category_name", None) or ""))
 	_validate_link_permissions(doc)
 
 	if name:
@@ -284,6 +286,13 @@ def _coerce_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
 
 	allowed = {"company", "active_status", "search_text", "page_size"}
 	return {key: filters.get(key) for key in allowed if key in filters}
+
+def _default_category_code(category_name: str) -> str:
+	code = scrub(str(category_name or "").strip()).replace("_", "-").upper()
+	if not code:
+		frappe.throw(_("Category Name is required."))
+	return code[:140]
+
 
 def _apply_values(doc, values: dict[str, Any]) -> None:
 	allowed = (
