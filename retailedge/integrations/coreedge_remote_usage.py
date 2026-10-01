@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -76,6 +77,7 @@ class CoreEdgeRemoteUsageConfig:
 	site_identifier: str = ""
 	api_key: str = field(default="", repr=False)
 	api_secret: str = field(default="", repr=False)
+	allow_insecure_http: bool = False
 	timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS
 
 	@classmethod
@@ -90,6 +92,10 @@ class CoreEdgeRemoteUsageConfig:
 			site_identifier=str(values.get("coreedge_site_identifier") or "").strip().lower(),
 			api_key=str(values.get("coreedge_api_key") or "").strip(),
 			api_secret=str(values.get("coreedge_api_secret") or "").strip(),
+			allow_insecure_http=_parse_bool(
+				values.get("coreedge_remote_usage_allow_insecure_http"),
+				default=False,
+			),
 			timeout_seconds=_parse_timeout(values.get("coreedge_timeout_seconds")),
 		)
 
@@ -98,6 +104,18 @@ class CoreEdgeRemoteUsageConfig:
 		if self.enabled:
 			if not self.base_url:
 				blockers.append("CoreEdge base URL is not configured.")
+			else:
+				parsed = urlparse(self.base_url)
+				if not parsed.scheme or not parsed.netloc:
+					blockers.append("CoreEdge base URL is invalid.")
+				elif parsed.scheme.lower() == "http":
+					if not self.allow_insecure_http:
+						blockers.append(
+							"CoreEdge base URL must use HTTPS unless insecure HTTP is "
+							"explicitly enabled for controlled local QA."
+						)
+				elif parsed.scheme.lower() != "https":
+					blockers.append("CoreEdge base URL must use HTTPS.")
 			if not self.site_identifier:
 				blockers.append("CoreEdge site identifier is not configured.")
 			if not self.api_key or not self.api_secret:
@@ -115,6 +133,7 @@ class CoreEdgeRemoteUsageConfig:
 			"site_identifier_configured": bool(self.site_identifier),
 			"api_key_configured": bool(self.api_key),
 			"api_secret_configured": bool(self.api_secret),
+			"allow_insecure_http": self.allow_insecure_http,
 			"timeout_seconds": self.timeout_seconds,
 		}
 
