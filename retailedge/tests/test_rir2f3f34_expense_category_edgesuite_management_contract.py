@@ -174,3 +174,13 @@ def test_manager_errors_use_shared_friendly_error_parser():
 	manager = MANAGER_UI.read_text(encoding="utf-8")
 	assert "window.retailedge?.userErrorMessage?.(error, fallback)" in manager
 	assert "error?.exc || error?.exception" not in manager
+
+
+def test_manager_save_gating_is_explicit_and_explains_why_disabled():
+	manager = MANAGER_UI.read_text(encoding="utf-8")
+	assert ':disabled="saveDisabled"' in manager
+	assert ':title="saveDisabledReason"' in manager
+	assert "if (!this.canCreate) return true;" in manager
+	assert 'if (!String(this.form.category_name || "").trim()) return true;' in manager
+	assert 'if (!String(this.form.company || "").trim()) return true;' in manager
+	assert "if (this.saveDisabledReason) this.formError = this.saveDisabledReason;" in manager
