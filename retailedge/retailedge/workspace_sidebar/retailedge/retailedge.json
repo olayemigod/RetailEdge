@@ -408,6 +408,17 @@
    "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Quota Operations Review",
+   "link_to": "quota-operations-review",
+   "link_type": "Page",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Cashier Expense Review",
    "link_to": "expense-review",
    "link_type": "Page",

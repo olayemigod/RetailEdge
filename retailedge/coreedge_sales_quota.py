@@ -195,13 +195,27 @@ def make_sales_quota_operation_key(doctype: str, name: str) -> str:
 	return f"resq-{hashlib.sha256(value.encode('utf-8')).hexdigest()[:40]}"
 
 
-def finalize_sales_quota_operation(operation_name: str) -> dict:
+def finalize_sales_quota_operation(
+	operation_name: str,
+	*,
+	allow_needs_review: bool = False,
+	review_action: str | None = None,
+	review_reason: str | None = None,
+) -> dict:
 	_lock_operation(operation_name)
 	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
 	if operation.status == "Finalized":
 		return _serialize_operation(operation)
-	if operation.status == "Needs Review":
+	if operation.status == "Needs Review" and not allow_needs_review:
 		return _serialize_operation(operation)
+	if operation.status == "Needs Review" and not operation.reservation_reference:
+		return _serialize_operation(operation)
+	if allow_needs_review:
+		_apply_review_metadata(
+			operation,
+			action=review_action or "Retry CoreEdge Finalization",
+			reason=review_reason,
+		)
 
 	operation.attempt_count = int(operation.attempt_count or 0) + 1
 	operation.last_attempt_on = now_datetime()
@@ -233,7 +247,7 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		)
 	except CoreEdgeRemoteUsageError as exc:
 		operation.last_error = _safe_error(exc)
-		_save_operation(operation)
+		_save_operation(operation, reconciliation=allow_needs_review)
 		return _serialize_operation(operation)
 
 	data = response.get("data") or {}
@@ -244,7 +258,7 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		operation.reason_code = quota.get("reason_code") or "RESERVATION_FINALIZED"
 		operation.remote_message = quota.get("message") or ""
 		operation.last_error = None
-		_save_operation(operation)
+		_save_operation(operation, reconciliation=allow_needs_review)
 		return _serialize_operation(operation)
 
 	operation.reason_code = data.get("reason_code") or quota.get("reason_code") or ""
@@ -257,7 +271,7 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		"USAGE_RESERVATION_ACCESS_DENIED",
 	}:
 		operation.status = "Needs Review"
-	_save_operation(operation)
+	_save_operation(operation, reconciliation=allow_needs_review)
 	return _serialize_operation(operation)
 
 
@@ -407,9 +421,25 @@ def _mark_needs_review(operation, message: str) -> None:
 	_save_operation(operation)
 
 
-def _save_operation(operation) -> None:
+def _save_operation(operation, *, reconciliation: bool = False) -> None:
 	operation.flags.allow_retailedge_quota_operation_update = True
+	if reconciliation:
+		operation.flags.allow_retailedge_quota_operation_reconcile = True
 	operation.save(ignore_permissions=True)
+
+
+def _apply_review_metadata(
+	operation,
+	*,
+	action: str,
+	reason: str | None,
+) -> None:
+	resolved_reason = str(reason or "").strip()
+	if resolved_reason:
+		operation.review_reason = resolved_reason[:1000]
+	operation.review_action = str(action or "")[:140]
+	operation.reviewed_by = getattr(frappe.session, "user", None) or "Administrator"
+	operation.reviewed_on = now_datetime()
 
 
 def _lock_operation(name: str) -> None:
@@ -436,6 +466,10 @@ def _serialize_operation(operation) -> dict:
 		"attempt_count": int(operation.attempt_count or 0),
 		"last_error": operation.last_error or "",
 		"finalized_on": operation.finalized_on,
+		"review_action": operation.review_action or "",
+		"review_reason": operation.review_reason or "",
+		"reviewed_by": operation.reviewed_by or "",
+		"reviewed_on": operation.reviewed_on,
 	}
 
 
