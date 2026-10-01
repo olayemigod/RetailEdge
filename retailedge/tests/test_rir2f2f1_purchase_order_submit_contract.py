@@ -135,11 +135,12 @@ def test_submitted_purchase_order_exposes_permission_aware_receipt_and_invoice_a
 	assert '"per_billed": flt(getattr(doc, "per_billed", 0))' in source
 
 	for contract in (
-		"submittedNextActions",
-		"runSubmittedNextAction(action.value)",
-		"retailedge-open-professional-purchase-receipt-preview",
-		"prepare_purchase_invoice_from_purchase_order",
-		"retailedge-professional-purchasing-purchase-invoice-ready",
+		"submitted.next_actions",
+		"runNextAction(action.value)",
+		"OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT",
+		"PREPARE_PO_INVOICE_METHOD",
+		"PURCHASE_INVOICE_READY_EVENT",
+		"View Purchase Order",
 	):
 		assert contract in overlay
 
