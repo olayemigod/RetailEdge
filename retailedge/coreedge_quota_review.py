@@ -17,7 +17,10 @@ from retailedge.integrations.coreedge_remote_usage import (
 	get_remote_usage_client,
 	get_remote_usage_readiness,
 )
-from retailedge.operating_context import get_allowed_operating_branches
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operational_branch_scope,
+)
 
 
 _REVIEW_EVENT_DOCTYPE = "RetailEdge CoreEdge Quota Review Event"
@@ -149,7 +152,14 @@ def search_quota_review_options(
 		frappe.throw(_("Unsupported quota review filter search."), frappe.PermissionError)
 
 	if doctype == "Branch":
-		branches = get_allowed_operating_branches(company=company) if company else []
+		if not company:
+			return []
+		scope = get_operational_branch_scope(company=company)
+		branches = (
+			scope["allowed_branches"]
+			if scope["restricted"]
+			else get_allowed_operating_branches(company=company)
+		)
 		return [
 			{"value": branch, "label": branch}
 			for branch in branches
@@ -384,8 +394,11 @@ def _build_filters(filters: frappe._dict):
 	if company:
 		scope_filters.append([OPERATION_DOCTYPE, "company", "=", company])
 	if branch:
-		allowed = set(get_allowed_operating_branches(company=company) or [])
-		if allowed and branch not in allowed:
+		if not company:
+			frappe.throw(_("Choose a Company before filtering by Branch."), frappe.ValidationError)
+		scope = get_operational_branch_scope(company=company)
+		allowed = set(scope["allowed_branches"] or [])
+		if scope["restricted"] and branch not in allowed:
 			frappe.throw(_("You are not allowed to review that Branch."), frappe.PermissionError)
 		scope_filters.append([OPERATION_DOCTYPE, "branch", "=", branch])
 
