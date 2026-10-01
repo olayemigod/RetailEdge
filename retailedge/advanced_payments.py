@@ -8,9 +8,9 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_details
 
-from retailedge.branch_context import has_field, validate_user_branch_access
+from retailedge.branch_context import has_field
 from retailedge.guided_payment import get_simple_payment_mode_details
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import get_operating_context, resolve_operational_branch
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -68,12 +68,14 @@ def _resolve_advance_scope(company: str | None, branch: str | None) -> tuple[str
 	if not resolved_branch and (not company or resolved_company == operating_company):
 		resolved_branch = operating_branch
 	if resolved_branch:
-		validate_user_branch_access(
-			resolved_branch,
-			user=frappe.session.user,
-			company=resolved_company,
-			throw=True,
-		)
+		resolved_branch = str(
+			resolve_operational_branch(
+				resolved_company,
+				resolved_branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
 	return resolved_company, resolved_branch
 
 
@@ -207,7 +209,14 @@ def create_customer_advance_draft(values: dict | str | None = None) -> dict[str,
 
 	branch = str(values.get("branch") or "").strip()
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+		branch = str(
+			resolve_operational_branch(
+				company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
 	branch_field = _require_payment_branch_field(branch)
 
 	customer = str(values.get("customer") or values.get("party") or "").strip()
