@@ -105,6 +105,22 @@ OUTPUT_DOCUMENTS: tuple[dict[str, Any], ...] = (
 		"native_route": "/app/sales-invoice",
 	},
 	{
+		"key": "purchase-order",
+		"doctype": "Purchase Order",
+		"label": "Purchase Order",
+		"party_field": "supplier",
+		"date_field": "transaction_date",
+		"native_route": "/app/purchase-order",
+	},
+	{
+		"key": "purchase-receipt",
+		"doctype": "Purchase Receipt",
+		"label": "Purchase Receipt",
+		"party_field": "supplier",
+		"date_field": "posting_date",
+		"native_route": "/app/purchase-receipt",
+	},
+	{
 		"key": "purchase-invoice",
 		"doctype": "Purchase Invoice",
 		"label": "Purchase Invoice",
@@ -274,7 +290,7 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 
 
 def _default_share_copy(definition: dict[str, Any], summary: dict[str, Any]) -> dict[str, str]:
-	"""Create neutral customer-facing defaults from the client Company identity."""
+	"""Create neutral business-document defaults from the client Company identity."""
 	company = str(summary.get("company") or "").strip()
 	label = str(definition.get("label") or definition.get("doctype") or "Document").strip()
 	name = str(summary.get("name") or "").strip()
