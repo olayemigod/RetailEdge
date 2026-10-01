@@ -33,10 +33,12 @@ class _DraftAdvance(SimpleNamespace):
 class TestAdvancedPayments(unittest.TestCase):
 	@patch("retailedge.advanced_payments._payment_branch_field", return_value=None)
 	@patch("retailedge.advanced_payments._assert_read")
+	@patch("retailedge.advanced_payments.resolve_operational_branch", return_value={"branch": ""})
 	@patch("retailedge.advanced_payments.frappe.get_list")
 	def test_list_customer_advances_uses_authoritative_unallocated_payment_entries(
 		self,
 		mock_get_list,
+		mock_branch_resolver,
 		_mock_assert_read,
 		_mock_branch_field,
 	):
@@ -66,6 +68,7 @@ class TestAdvancedPayments(unittest.TestCase):
 		self.assertEqual(kwargs["filters"]["party"], "CUST-001")
 		self.assertEqual(kwargs["filters"]["company"], "Demo Company")
 		self.assertEqual(kwargs["limit_page_length"], MAX_ADVANCE_ROWS)
+		mock_branch_resolver.assert_called_once()
 		self.assertEqual(rows[0]["unallocated_amount"], 750.0)
 		self.assertEqual(rows[0]["route"], "/app/payment-entry/ACC-PAY-0001")
 
@@ -128,6 +131,57 @@ class TestAdvancedPayments(unittest.TestCase):
 		self.assertTrue(result["advance_payment"])
 		self.assertEqual(result["allocation_status"], "Unallocated")
 		self.assertEqual(result["docstatus"], 0)
+
+	@patch("retailedge.advanced_payments._payment_branch_field", return_value="branch")
+	@patch("retailedge.advanced_payments.get_simple_payment_mode_details")
+	@patch("retailedge.advanced_payments.get_party_details")
+	@patch("retailedge.advanced_payments._company_currency", return_value="NGN")
+	@patch("retailedge.advanced_payments.resolve_operational_branch", return_value={"branch": "Lagos"})
+	@patch("retailedge.advanced_payments._assert_read")
+	@patch("retailedge.advanced_payments._assert_create_payment_entry")
+	@patch("retailedge.advanced_payments.frappe.new_doc")
+	def test_customer_advance_blank_branch_uses_operating_branch_resolution(
+		self,
+		mock_new_doc,
+		_mock_create_permission,
+		_mock_read,
+		mock_branch_resolver,
+		_mock_currency,
+		mock_party_details,
+		mock_mode_details,
+		_mock_branch_field,
+	):
+		doc = _DraftAdvance()
+		mock_new_doc.return_value = doc
+		mock_party_details.return_value = frappe._dict(
+			party_account="Debtors - DC",
+			party_account_currency="NGN",
+		)
+		mock_mode_details.return_value = {
+			"account": "Bank - DC",
+			"account_type": "Bank",
+			"account_currency": "NGN",
+			"reference_required": False,
+		}
+
+		result = create_customer_advance_draft(
+			{
+				"company": "Demo Company",
+				"customer": "CUST-001",
+				"posting_date": "2026-08-28",
+				"mode_of_payment": "Cash",
+				"amount": 1500,
+			}
+		)
+
+		mock_branch_resolver.assert_called_once_with(
+			"Demo Company",
+			"",
+			user=frappe.session.user,
+		)
+		self.assertEqual(doc.branch, "Lagos")
+		self.assertEqual(result["branch"], "Lagos")
+
 
 	@patch("retailedge.advanced_payments._assert_create_payment_entry")
 	def test_customer_advance_rejects_invoice_references(self, _mock_create_permission):
