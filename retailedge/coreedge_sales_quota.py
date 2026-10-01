@@ -261,6 +261,26 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 	return _serialize_operation(operation)
 
 
+@frappe.whitelist()
+def retry_sales_quota_finalize(operation_name: str) -> dict:
+	"""Operator-triggered retry for a still-pending quota finalization."""
+	_require_post()
+	_assert_quota_review_operator()
+
+	operation_name = str(operation_name or "").strip()
+	if not operation_name:
+		frappe.throw(_("Quota operation is required."), frappe.ValidationError)
+
+	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
+	operation.check_permission("read")
+	if operation.status != "Pending Finalize":
+		frappe.throw(
+			_("Only Pending Finalize quota operations can be retried."),
+			frappe.ValidationError,
+		)
+	return finalize_sales_quota_operation(operation.name)
+
+
 def retry_pending_sales_quota_operations(limit: int = 50) -> int:
 	try:
 		resolved_limit = max(1, min(int(limit or 50), 200))
@@ -306,6 +326,23 @@ def _register_after_commit(callback) -> None:
 
 def _register_after_rollback(callback) -> None:
 	frappe.db.after_rollback.add(callback)
+
+
+def _assert_quota_review_operator() -> None:
+	if frappe.session.user == "Administrator":
+		return
+	roles = set(frappe.get_roles(frappe.session.user))
+	if not roles.intersection({"System Manager", "RetailEdge Manager", "RetailEdgeManager"}):
+		frappe.throw(
+			_("You are not allowed to retry CoreEdge quota finalization."),
+			frappe.PermissionError,
+		)
+
+
+def _require_post() -> None:
+	request = getattr(frappe.local, "request", None)
+	if request is not None and str(getattr(request, "method", "")).upper() != "POST":
+		frappe.throw(_("This operation requires an HTTP POST request."), frappe.PermissionError)
 
 
 def _insert_quota_operation(
