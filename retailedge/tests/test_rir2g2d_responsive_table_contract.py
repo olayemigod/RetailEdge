@@ -35,6 +35,9 @@ LOCAL_OVERFLOW_WRAPPERS = {
 FRAPPE_RESPONSIVE_WRAPPERS = {
 	"professional_purchasing/ProfessionalPurchaseOrderSubmitOverlay.vue",
 	"professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue",
+	"professional_purchasing/PurchaseReceiptHistoryPage.vue",
+	"professional_purchasing/RfqHistoryPage.vue",
+	"professional_purchasing/SupplierQuotationHistoryPage.vue",
 	"professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue",
 	"professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue",
 	"professional_purchasing/ProfessionalRfqHistoryOverlay.vue",
