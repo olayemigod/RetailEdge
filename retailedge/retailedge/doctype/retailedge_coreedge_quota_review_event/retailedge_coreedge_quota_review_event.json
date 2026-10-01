@@ -180,6 +180,18 @@
    "read": 1,
    "report": 1,
    "role": "RetailEdgeAuditor"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager"
   }
  ],
  "search_fields": "quota_operation,action,result,company,branch,source_name,entitlement_key,reservation_reference,reason_code",
