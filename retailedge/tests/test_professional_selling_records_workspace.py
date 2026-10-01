@@ -96,7 +96,7 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 	for contract in (
 		'placeholder="More"',
 		"moreActions(row)",
-		'"Print & Send"',
+		'"Print & Share"',
 		'"Advanced: Open in ERPNext"',
 		'{{ loadingMore ? "Loading..." : "Load more" }}',
 		"runPrimaryAction(row)",
@@ -117,13 +117,41 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 	assert 'description: "Open the full ERPNext document for advanced work."' not in records
 
 	for contract in (
-		'openDocumentOutput(document, row, mode = "share")',
-		"window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode };",
-		'if (action === "view") { this.openDocumentOutput(document, row, "view"); return; }',
-		'if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }',
+		"openRecordPreview(document, row)",
+		'if (action === "view") { this.openRecordPreview(document, row); return; }',
+		'if (action === "output") { this.openDocumentOutput(document, row); return; }',
+		'window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode: "share" };',
 		'frappe.set_route("document-output-sharing");',
 	):
 		assert contract in workspace
+	assert 'this.openDocumentOutput(document, row, "view")' not in workspace
+
+
+def test_submitted_view_reuses_operational_completion_preview_with_next_actions():
+	workspace = read(WORKSPACE)
+	standard = read(APP_ROOT / "public/js/professional_selling/StandardSellingCompletionDialog.vue")
+	delivery = read(APP_ROOT / "public/js/professional_selling/StandardDeliveryCompletionDialog.vue")
+	invoice = read(APP_ROOT / "public/js/professional_selling/StandardSalesInvoiceCompletionDialog.vue")
+
+	for contract in (
+		'if (document.key === "quotation")',
+		'this.openStandardCompletion({ doctype: "Quotation", name: row.name });',
+		'if (document.key === "sales-order")',
+		'this.openStandardCompletion({ doctype: "Sales Order", name: row.name });',
+		'if (document.key === "delivery-note")',
+		'this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });',
+		'if (document.key === "sales-invoice")',
+		"this.openSalesInvoiceCompletion(",
+	):
+		assert contract in workspace
+
+	for source in (standard, delivery, invoice):
+		assert "else if (Number(this.preview?.docstatus || 0) === 1)" in source
+		assert "this.completedResult = await this.decorateCompletedResult(this.preview);" in source
+		assert "Print & Share" in source
+	assert "View Sales Invoice" in invoice
+	assert "View Delivery Note" in delivery
+	assert "View ${label}" in standard
 
 
 def test_submitted_rows_receive_server_authoritative_conversion_and_payment_actions():
