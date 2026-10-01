@@ -774,7 +774,19 @@ export default {
 				title: __("Record Customer Advance"),
 				fields: [
 					{ fieldname: "company", fieldtype: "Link", options: "Company", label: __("Company"), reqd: 1, default: this.filters.company, read_only: 1 },
-					{ fieldname: "branch", fieldtype: "Link", options: "Branch", label: __("Branch"), default: this.filters.branch || "" },
+					{
+						fieldname: "branch",
+						fieldtype: "Link",
+						options: "Branch",
+						label: __("Branch"),
+						default: this.filters.branch || "",
+						get_query: () => ({
+							query: "retailedge.stock_movement_filters.branch_query",
+							filters: {
+								company: String(dialog?.get_value("company") || this.filters.company || "").trim(),
+							},
+						}),
+					},
 					{ fieldname: "customer", fieldtype: "Link", options: "Customer", label: __("Customer"), reqd: 1, default: this.filters.customer || "" },
 					{ fieldname: "posting_date", fieldtype: "Date", label: __("Posting Date"), reqd: 1, default: frappe.datetime.get_today() },
 					{ fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1, onchange: () => this.syncAdvanceReferenceRequirement(dialog).catch((error) => frappe.msgprint({ title: __("Payment mode needs attention"), message: errorMessage(error, "Payment mode details could not be loaded."), indicator: "red" })) },
