@@ -379,13 +379,20 @@ def test_purchase_invoice_next_action_reuses_professional_supplier_debit_note_re
 	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in bundle
 
 
-def test_business_hub_record_purchase_opens_purchase_invoice_completion():
+def test_business_hub_quick_purchase_hands_saved_draft_to_persistent_record_purchase():
 	source = _read(HUB)
-	assert 'import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue"' in source
 	assert "handleSimplePurchaseInvoiceSaved(result)" in source
-	assert 'this.openPurchaseInvoiceCompletion({ doctype: "Purchase Invoice", name: result.name })' in source
-	assert "purchaseInvoiceCompletionOpen" in source
-	assert "purchaseInvoiceCompletionDocument" in source
+	assert "this.openRecordPurchaseFromQuick({ document_name: result.name });" in source
+	assert 'document_name: payload?.document_name || ""' in source
+	assert 'frappe.set_route("record-purchase")' in source
+	assert "StandardPurchaseInvoiceCompletionDialog" not in source
+	assert "purchaseInvoiceCompletionOpen" not in source
+
+
+def test_purchase_completion_discard_confirmation_is_elevated_above_edgesuite_modal():
+	source = _read(DIALOG)
+	assert "confirmAboveEdgeModal" in source
+	assert 'frappe.confirm(__("Discard unsaved Purchase Invoice draft changes?")' not in source
 
 
 def test_professional_purchasing_exposes_resumable_draft_review():
