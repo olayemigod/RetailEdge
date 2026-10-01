@@ -71,13 +71,17 @@ export default {
 	methods: {
 		async loadShell() {
 			try {
-				const context = typeof window.retailedgeGetBusinessHubContext === "function"
-					? await window.retailedgeGetBusinessHubContext()
-					: await callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
-				const operating = context.context || {};
-				this.tenantName = operating.company_label || operating.company || "";
-				this.branchName = operating.branch || "";
-				this.userName = operating.user_name || "";
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
+					? window.retailedgeGetBusinessHubContext()
+					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const [context, operatingContext] = await Promise.all([
+					navigationPromise,
+					callMethod("retailedge.operating_context.get_operating_context"),
+				]);
+				const shell = context.context || {};
+				this.tenantName = operatingContext.company_label || operatingContext.company || shell.company || "";
+				this.branchName = operatingContext.branch || "";
+				this.userName = shell.user_name || shell.user || "";
 				this.canUseNativeDesk = Boolean(context?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(context.navigation_groups || []);
 			} catch (_error) {
