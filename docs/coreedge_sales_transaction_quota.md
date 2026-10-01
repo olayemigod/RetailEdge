@@ -179,13 +179,21 @@ This is deliberate:
 
 Sales reservations default to the CoreEdge maximum of 3600 seconds.
 
-If a committed sale cannot be finalized before the hold expires, the local operation becomes
-`Needs Review`.
+RetailEdge does not decide finalization from its cached expiry timestamp alone.
+
+Even when the local timestamp has passed, RetailEdge asks CoreEdge for the reservation's authoritative state.
+This matters when CoreEdge already finalized the reservation but the acknowledgement was lost.
+
+If CoreEdge confirms the reservation is Expired, Released, missing, or no longer accessible, the local
+operation becomes `Needs Review`.
+
+A cancelled ERPNext sale still proves that a successful submit occurred, so a pending reservation may still
+be finalized after cancellation. Cancellation does not refund the transaction quota.
 
 RetailEdge does not mutate or cancel the submitted invoice.
 
-This is the correct accounting-safe failure mode: the commercial usage discrepancy is reviewed separately
-from the ERPNext transaction.
+This is the correct accounting-safe failure mode: commercial usage reconciliation remains separate from the
+ERPNext transaction.
 
 A future operator reconciliation workflow may resolve these cases against CoreEdge usage history.
 
@@ -299,7 +307,8 @@ Coverage includes:
 - finalize success;
 - transient finalize retry;
 - attempt-scoped finalize service idempotency;
-- expired reservation -> Needs Review;
+- CoreEdge-confirmed expired reservation -> Needs Review;
+- cancelled submitted sale still finalizes usage;
 - scheduled Pending Finalize retry;
 - source-contract assertion that no cancellation refund hook exists.
 
