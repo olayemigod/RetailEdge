@@ -205,6 +205,13 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertEqual(policy["mode"], "credit_note_outstanding")
 		self.assertEqual(policy["update_outstanding_for_self"], 1)
 
+	def test_credit_note_completion_explains_outstanding_treatment(self):
+		ui = (PUBLIC_JS / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue").read_text(encoding="utf-8")
+		self.assertIn("Credit Note outstanding treatment", ui)
+		self.assertIn("preview.return_outstanding_policy?.message", ui)
+		self.assertIn("Update Outstanding for Self turned off", ui)
+		self.assertIn("later reconciliation or refund", ui)
+
 	def test_selling_lineage_routes_existing_documents_and_reuses_drafts(self):
 		source = (APP_ROOT / "professional_selling.py").read_text(encoding="utf-8")
 		self.assertIn('"value": "open-existing-document"', source)
