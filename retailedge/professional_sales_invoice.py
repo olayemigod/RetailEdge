@@ -783,6 +783,42 @@ def create_sales_invoice_from_delivery_note(delivery_note: str) -> dict[str, Any
 	)
 
 
+
+def get_sales_return_outstanding_policy(source, target) -> dict[str, Any]:
+	"""Resolve ERPNext's return outstanding policy without mutating submitted truth."""
+	field_available = bool(getattr(target, "meta", None) and target.meta.has_field("update_outstanding_for_self"))
+	source_outstanding = max(flt(source.get("outstanding_amount")), 0)
+	credit_amount = abs(flt(target.get("grand_total")))
+	can_reduce_source = bool(
+		field_available
+		and source_outstanding > 0.005
+		and credit_amount > 0
+		and credit_amount <= source_outstanding + 0.005
+	)
+	return {
+		"field_available": field_available,
+		"source_outstanding": source_outstanding,
+		"credit_amount": credit_amount,
+		"update_outstanding_for_self": 0 if can_reduce_source else 1,
+		"mode": "reduce_source_outstanding" if can_reduce_source else "credit_note_outstanding",
+		"message": (
+			_("This Credit Note will reduce the outstanding on Sales Invoice {0}.").format(source.name)
+			if can_reduce_source
+			else _(
+				"This Credit Note cannot be fully applied against the source invoice outstanding. "
+				"ERPNext will keep the credit on the Credit Note for later reconciliation or refund."
+			)
+		),
+	}
+
+
+def apply_sales_return_outstanding_policy(source, target) -> dict[str, Any]:
+	policy = get_sales_return_outstanding_policy(source, target)
+	if policy["field_available"]:
+		target.update_outstanding_for_self = policy["update_outstanding_for_self"]
+	return policy
+
+
 def _lock_sales_return_source(name: str) -> None:
 	rows = frappe.db.sql(
 		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
@@ -857,6 +893,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 				"return_against": source.name,
 				"posting_status": "Draft",
 				"existing": True,
+				"outstanding_policy": get_sales_return_outstanding_policy(source, existing),
 			}
 		)
 		return response
@@ -883,6 +920,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 		source_branch=source_branch,
 	)
 	_set_branch_if_supported(target, mapped_branch)
+	outstanding_policy = apply_sales_return_outstanding_policy(source, target)
 	target.insert()
 	response = _invoice_response(
 		target,
@@ -896,6 +934,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 			"return_against": source.name,
 			"posting_status": "Draft",
 			"existing": False,
+			"outstanding_policy": outstanding_policy,
 		}
 	)
 	return response
