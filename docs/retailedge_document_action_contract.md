@@ -39,10 +39,12 @@ RetailEdge uses one product-wide meaning for document actions. A list, queue, hi
 
 - Draft Purchase Order → **Review / Edit**.
 - Submitted Purchase Order → **View**, read-only, with permitted Receive Stock / Create Purchase Invoice actions.
+- Submitted Purchase Order → separate **Print & Share** → Document Output & Sharing with the Purchase Order preselected.
 - Draft Purchase Invoice → **Review & Complete**.
 - Submitted Purchase Invoice → **View**, read-only, with permitted Pay Supplier / Supplier Debit Note / Supplier Payables actions.
-- Purchase Receipt history remains an operational history surface; its current row actions are Create Invoice and Advanced ERPNext rather than an artificial View button.
-- Purchase Invoice Print & Share → Document Output & Sharing.
+- Purchase Receipt history remains an operational history surface; it exposes **Print & Share**, Create Invoice where permitted, and explicit Advanced ERPNext without inventing an output-based View action.
+- A newly submitted Purchase Receipt exposes **Print & Share** beside its permitted next workflow actions.
+- Purchase Order, Purchase Receipt and Purchase Invoice output all use the shared Document Output & Sharing workbench.
 
 ### Payments
 
@@ -79,7 +81,8 @@ This sets the selected document and routes to `document-output-sharing`. Operati
 - any output target uses `mode: "view"`;
 - an operational `openDocumentOutput(..., "view")` path returns;
 - Document Output restores a legacy `outputMode` View branch;
-- core Selling, Purchasing and Payment list action semantics regress.
+- core Selling, Purchasing and Payment list action semantics regress;
+- Purchase Order/Purchase Receipt Print & Share paths stop using the shared output helper or are accidentally merged back into View.
 
 ## Manual QA
 
