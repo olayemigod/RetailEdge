@@ -98,7 +98,7 @@
 						</span>
 					</label>
 					<EdgeDropdown v-model="filters.expense_status" :options="statuses" label="Status" placeholder="All active statuses" />
-					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
+					<EdgeSmartDateRange class="edge-smart-date--align-end" v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div class="filter-note">
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
 						<span v-if="config.analysis">Posted accounting expense is kept separate from optional unposted cashier exposure</span>
