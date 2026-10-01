@@ -658,28 +658,24 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertIsNone(row["payment_row_amount"])
 
 	@patch(
-		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
-		return_value=[],
+		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction"
 	)
 	@patch(
-		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
-		return_value=[
-			{
-				"document_type": "Payment Entry",
-				"document_name": "ACC-PAY-2026-00008",
-				"candidate_amount": 1090,
-				"score": 92,
-				"confidence": "Strong Match",
-				"candidate_category": "payment_entry_match",
-				"payment_event_found": 1,
-				"payment_event_source": "Payment Entry",
-			}
-		],
+		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction"
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction"
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.validate_locked_candidate_from_selected_row",
+		return_value={"valid": False, "reason": "Selected Payment Entry is no longer valid."},
 	)
 	def test_resolve_matching_candidate_does_not_fallback_when_explicit_target_missing(
 		self,
-		_mock_payment_candidates,
-		_mock_sales_candidates,
+		mock_validate,
+		mock_payment_candidates,
+		mock_sales_candidates,
+		mock_journal_candidates,
 	):
 		candidate = _resolve_matching_candidate(
 			bank_transaction_name="ACC-BTN-2026-00007",
@@ -687,7 +683,15 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			suggested_document="ACC-PAY-2026-00012",
 		)
 		self.assertIsNone(candidate)
+		mock_validate.assert_called_once()
+		mock_payment_candidates.assert_not_called()
+		mock_sales_candidates.assert_not_called()
+		mock_journal_candidates.assert_not_called()
 
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[],
@@ -711,11 +715,13 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self,
 		_mock_payment_candidates,
 		_mock_sales_candidates,
+		_mock_journal_candidates,
 	):
 		candidate = _resolve_matching_candidate(bank_transaction_name="ACC-BTN-2026-00007")
 		self.assertEqual(candidate.get("document_name"), "ACC-PAY-2026-00008")
 
 	@patch("retailedge.bank_transaction_match_workflow._select_candidate_for_queue")
+	@patch("retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction", return_value=[])
 	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
@@ -724,6 +730,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		mock_normalize,
 		mock_sales_candidates,
 		mock_payment_candidates,
+		_mock_journal_candidates,
 		mock_select,
 	):
 		mock_normalize.return_value = {
@@ -1185,6 +1192,10 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(locked_candidate.payment_event_found, 1)
 
 	@patch(
+		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
 		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[],
 	)
@@ -1194,7 +1205,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 	)
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
 	def test_revalidate_reports_missing_locked_candidate_name(
-		self, mock_bank_transaction, _mock_sales, _mock_payment
+		self, mock_bank_transaction, _mock_sales, _mock_payment, _mock_journal
 	):
 		mock_bank_transaction.return_value = frappe._dict(
 			{
