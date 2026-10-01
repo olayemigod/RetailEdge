@@ -187,6 +187,9 @@ class SalesQuotaContractTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			before_submit_sales_transaction_quota(self._doc())
 
+	@patch("retailedge.coreedge_sales_quota._register_after_rollback")
+	@patch("retailedge.coreedge_sales_quota._register_after_commit")
+	@patch("retailedge.coreedge_sales_quota._insert_quota_operation")
 	@patch("retailedge.coreedge_sales_quota._log_quota_failure")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=None)
 	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
@@ -197,12 +200,24 @@ class SalesQuotaContractTests(unittest.TestCase):
 		mock_client,
 		_mock_existing,
 		_mock_log,
+		mock_insert,
+		mock_after_commit,
+		mock_after_rollback,
 	):
 		mock_config.return_value = SalesTransactionQuotaConfig(enabled=True, fail_closed=False)
 		client = MagicMock()
 		client.reserve_usage.side_effect = CoreEdgeRemoteUsageUnavailable("down")
 		mock_client.return_value = client
+
 		before_submit_sales_transaction_quota(self._doc())
+
+		mock_insert.assert_called_once()
+		kwargs = mock_insert.call_args.kwargs
+		self.assertEqual(kwargs["status"], "Needs Review")
+		self.assertEqual(kwargs["reason_code"], "FAIL_OPEN_UNRESERVED")
+		self.assertIsNone(kwargs["reservation_reference"])
+		mock_after_commit.assert_not_called()
+		mock_after_rollback.assert_not_called()
 
 	@patch("retailedge.coreedge_sales_quota._release_rolled_back_reservation")
 	@patch("retailedge.coreedge_sales_quota._register_after_rollback")
@@ -342,6 +357,29 @@ class SalesQuotaOperationTests(FrappeTestCase):
 		doc.flags.allow_retailedge_quota_operation_update = True
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
+
+	def test_engine_can_record_unreserved_needs_review_operation(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": OPERATION_DOCTYPE,
+				"operation_key": "quota-operation-fail-open",
+				"status": "Needs Review",
+				"source_doctype": "User",
+				"source_name": "Administrator",
+				"entitlement_key": "SALES_TRANSACTIONS",
+				"units": 1,
+				"reservation_reference": None,
+				"reserve_idempotency_key": "reserve-fail-open",
+				"finalize_idempotency_key": "finalize-fail-open",
+				"release_idempotency_key": "release-fail-open",
+				"reason_code": "FAIL_OPEN_UNRESERVED",
+				"reserved_on": now_datetime(),
+			}
+		)
+		doc.flags.allow_retailedge_quota_operation_create = True
+		doc.insert(ignore_permissions=True)
+		self.assertEqual(doc.status, "Needs Review")
+		self.assertFalse(doc.reservation_reference)
 
 	def test_operation_is_engine_updated_and_non_deletable(self):
 		doc = self._operation("protected")
