@@ -21,14 +21,20 @@ Protected/non-UI site configuration:
 - `retailedge_sales_quota_fail_closed` — default 1;
 - `retailedge_sales_quota_reservation_seconds` — default 3600, allowed 60–3600.
 
-The underlying CoreEdge connection still uses the protected keys documented by the remote-client foundation:
+The underlying CoreEdge connection uses the shared protected Service Client keys documented by the
+remote-client foundation:
 
 - `coreedge_remote_usage_enabled`;
-- `coreedge_base_url`;
-- `coreedge_site_identifier`;
-- `coreedge_api_key`;
-- `coreedge_api_secret`;
-- `coreedge_timeout_seconds`.
+- `coreedge_service_url`;
+- `coreedge_service_site_identifier`;
+- `coreedge_service_api_key`;
+- `coreedge_service_api_secret`;
+- `coreedge_service_allow_insecure_http`;
+- `coreedge_service_timeout_seconds`.
+
+These are the same canonical credentials used by the V2.4E context-inventory client. The quota client still
+accepts the documented short-key aliases when a canonical value is absent, but operators should configure
+only the shared `coreedge_service_*` family going forward.
 
 Credentials remain outside RetailEdge Settings and source control.
 
