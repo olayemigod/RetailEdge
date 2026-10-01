@@ -1806,6 +1806,11 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 			"expected_bank_account": details.get("candidate_canonical_account"),
 			"branch": context.get("branch") or row.get("branch"),
 		}
+		bank_direction = cstr(
+			row.get("bank_direction")
+			or details.get("bank_direction")
+			or details.get("direction")
+		).strip() or "Inflow"
 		bank_transaction = {
 			"bank_account": row.get("bank_account"),
 			"bank_transaction": row.get("bank_transaction"),
@@ -1813,7 +1818,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 			"amount": row.get("bank_amount"),
 			"branch": row.get("branch"),
 			"company": row.get("company"),
-			"direction": "Inflow",
+			"direction": bank_direction,
 			"is_reconciled": _report_boolean(details.get("is_reconciled"), 0),
 		}
 		account_payload = _resolve_account_match_payload(bank_transaction, candidate)
