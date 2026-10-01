@@ -34,7 +34,7 @@ class TestRIR2F3F17PurchaseReturnSupplierDebitNoteEdgeSuiteOwnershipContract(uni
 			self.assertIn(contract, component)
 		self.assertIn("consumeProfessionalPurchasingTarget", bundle)
 		self.assertIn("retailedgeProfessionalPurchasingTarget", bundle)
-		self.assertIn('target.action !== "supplier-debit-note"', bundle)
+		self.assertIn('target.action === "supplier-debit-note"', bundle)
 		self.assertIn("delete window.retailedgeProfessionalPurchasingTarget", bundle)
 		self.assertIn('String(target.user || "") !== String(frappe.session?.user || "Guest")', bundle)
 
