@@ -42,7 +42,7 @@ RetailEdge uses one product-wide meaning for document actions. A list, queue, hi
 - Submitted Purchase Order → separate **Print & Share** → Document Output & Sharing with the Purchase Order preselected.
 - Draft Purchase Invoice → **Review & Complete**.
 - Submitted Purchase Invoice → **View**, read-only, with permitted Pay Supplier / Supplier Debit Note / Supplier Payables actions.
-- Purchase Receipt history remains an operational history surface; it exposes **Print & Share**, Create Invoice where permitted, and explicit Advanced ERPNext without inventing an output-based View action.
+- Purchase Receipt History is a persistent EdgeSuite page; it exposes **Print & Share**, Create Invoice where permitted, and explicit Advanced ERPNext without inventing an output-based View action.
 - A newly submitted Purchase Receipt exposes **Print & Share** beside its permitted next workflow actions.
 - Purchase Order, Purchase Receipt and Purchase Invoice output all use the shared Document Output & Sharing workbench.
 
@@ -66,13 +66,14 @@ RetailEdge uses one product-wide meaning for document actions. A list, queue, hi
 
 ## Shared routing rule
 
-Any supported **Print & Share** action should call the shared browser contract:
+Any supported **Print & Share** action must use the shared routing contract. Module code should import:
 
 ```javascript
-window.retailedge.openDocumentOutputSharing(documentKey, documentName)
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
+openDocumentOutputSharing(documentKey, documentName);
 ```
 
-This sets the selected document and routes to `document-output-sharing`. Operational View code must never call this helper.
+The navigation utility delegates to `window.retailedge.openDocumentOutputSharing(...)` when the global runtime helper is present and otherwise applies the same share-only target before routing to `document-output-sharing`. This avoids silent no-op clicks on pages where the global helper has not yet attached. Operational View code must never call either output helper.
 
 ## Regression protection
 
@@ -82,7 +83,8 @@ This sets the selected document and routes to `document-output-sharing`. Operati
 - an operational `openDocumentOutput(..., "view")` path returns;
 - Document Output restores a legacy `outputMode` View branch;
 - core Selling, Purchasing and Payment list action semantics regress;
-- Purchase Order/Purchase Receipt Print & Share paths stop using the shared output helper or are accidentally merged back into View.
+- Purchase Order/Purchase Receipt Print & Share paths stop using the shared output navigation contract or are accidentally merged back into View;
+- output target assignment or direct output routing appears outside the two approved shared routing modules.
 
 ## Manual QA
 
