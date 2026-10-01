@@ -59,7 +59,7 @@ def get_quota_operations_center_context() -> dict[str, Any]:
 			"company": company,
 			"branch": branch,
 			"status": "Open",
-			"source_doctype": "",
+			"source_doctype": "All",
 			"search": "",
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
@@ -273,8 +273,8 @@ def _build_query_filters(filters: frappe._dict) -> dict[str, Any]:
 			)
 		query_filters["branch"] = ["in", allowed]
 
-	source_doctype = str(filters.get("source_doctype") or "").strip()
-	if source_doctype:
+	source_doctype = str(filters.get("source_doctype") or "All").strip() or "All"
+	if source_doctype != "All":
 		if source_doctype not in SOURCE_DOCTYPES:
 			frappe.throw(_("Unsupported quota operation source type."), frappe.ValidationError)
 		query_filters["source_doctype"] = source_doctype
