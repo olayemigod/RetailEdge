@@ -4,7 +4,7 @@
 			<div>
 				<div class="payment-history-eyebrow">Money & Payments</div>
 				<h3>Payment History</h3>
-				<p>Find and revisit permission-visible ERPNext Payment Entries without leaving Payment Management.</p>
+				<p>Find and revisit permission-visible ERPNext Payment Entries.</p>
 			</div>
 			<button class="edge-secondary-button" type="button" :disabled="loading || !filters.company" @click="loadPaymentHistory(1)">
 				{{ loading ? "Refreshing…" : "Refresh" }}
@@ -82,68 +82,74 @@
 			<button class="edge-secondary-button" type="button" :disabled="loading || !pagination.has_next" @click="loadPaymentHistory(Number(pagination.page || 1) + 1)">Next</button>
 		</div>
 
-		<section v-if="paymentDetail.payment_entry" class="payment-detail-panel">
-			<div class="payment-history-head">
-				<div>
-					<div class="payment-history-eyebrow">Payment Review</div>
-					<h3>{{ paymentDetail.payment_entry }}</h3>
-					<p>ERPNext Payment Entry remains the accounting source of truth.</p>
-				</div>
-				<div class="detail-actions">
-					<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPaymentInERPNext(paymentDetail.payment_entry)">Open in ERPNext</button>
-					<button class="edge-secondary-button" type="button" @click="clearPaymentDetail">Close</button>
-				</div>
+		<EdgeModal
+			:open="detailOpen"
+			:title="paymentDetail.payment_entry ? `Payment Review · ${paymentDetail.payment_entry}` : 'Payment Review'"
+			subtitle="ERPNext Payment Entry remains the accounting source of truth."
+			size="lg"
+			@close="clearPaymentDetail"
+		>
+			<div class="payment-detail-modal">
+				<div v-if="detailError" class="payment-history-error">{{ detailError }}</div>
+				<div v-else-if="detailLoading" class="payment-history-state compact">Loading payment details…</div>
+				<template v-else-if="paymentDetail.payment_entry">
+					<div class="detail-grid">
+						<article><span>Status</span><strong>{{ paymentDetail.status || documentState(paymentDetail.docstatus) }}</strong></article>
+						<article><span>Company</span><strong>{{ paymentDetail.company }}</strong></article>
+						<article><span>Branch</span><strong>{{ paymentDetail.branch || "—" }}</strong></article>
+						<article><span>Posting Date</span><strong>{{ formatDate(paymentDetail.posting_date) }}</strong></article>
+						<article><span>Payment Type</span><strong>{{ paymentDetail.payment_type || "—" }}</strong></article>
+						<article><span>Party</span><strong>{{ paymentDetail.party ? `${paymentDetail.party_type} · ${paymentDetail.party}` : "—" }}</strong></article>
+						<article><span>Mode</span><strong>{{ paymentDetail.mode_of_payment || "—" }}</strong></article>
+						<article><span>Paid</span><strong>{{ formatCurrency(paymentDetail.paid_amount) }}</strong></article>
+						<article><span>Received</span><strong>{{ formatCurrency(paymentDetail.received_amount) }}</strong></article>
+						<article><span>Unallocated</span><strong>{{ formatCurrency(paymentDetail.unallocated_amount) }}</strong></article>
+						<article><span>Reference No</span><strong>{{ paymentDetail.reference_no || "—" }}</strong></article>
+						<article><span>Reference Date</span><strong>{{ formatDate(paymentDetail.reference_date) }}</strong></article>
+					</div>
+
+					<div v-if="paymentDetail.references?.length" class="reference-block">
+						<h4>Allocations</h4>
+						<div class="table-wrap">
+							<table class="payment-history-table compact-table">
+								<thead><tr><th>Document</th><th>Reference</th><th class="num">Allocated</th><th class="num">Outstanding at Draft</th></tr></thead>
+								<tbody>
+									<tr v-for="row in paymentDetail.references" :key="`${row.reference_doctype}:${row.reference_name}`">
+										<td>{{ row.reference_doctype }}</td><td>{{ row.reference_name }}</td><td class="num">{{ formatCurrency(row.allocated_amount) }}</td><td class="num">{{ formatCurrency(row.outstanding_amount) }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+
+					<div v-if="standardReview.blockers?.length" class="review-warning">
+						<strong>{{ standardReview.advanced_only ? "Advanced review required" : "Submission checks" }}</strong>
+						<ul><li v-for="blocker in standardReview.blockers" :key="blocker">{{ blocker }}</li></ul>
+						<p v-if="standardReview.advanced_only && !canUseNativeDesk">An accounting manager with Advanced ERPNext access must handle this payment shape.</p>
+					</div>
+					<div v-else-if="Number(paymentDetail.docstatus) !== 0" class="read-only-note">Submitted and cancelled payments are inspect-only here. Posted accounting documents are not mutated.</div>
+				</template>
 			</div>
 
-			<div v-if="detailError" class="payment-history-error">{{ detailError }}</div>
-			<div v-else-if="detailLoading" class="payment-history-state compact">Loading payment details…</div>
-			<template v-else>
-				<div class="detail-grid">
-					<article><span>Status</span><strong>{{ paymentDetail.status || documentState(paymentDetail.docstatus) }}</strong></article>
-					<article><span>Company</span><strong>{{ paymentDetail.company }}</strong></article>
-					<article><span>Branch</span><strong>{{ paymentDetail.branch || "—" }}</strong></article>
-					<article><span>Posting Date</span><strong>{{ formatDate(paymentDetail.posting_date) }}</strong></article>
-					<article><span>Payment Type</span><strong>{{ paymentDetail.payment_type || "—" }}</strong></article>
-					<article><span>Party</span><strong>{{ paymentDetail.party ? `${paymentDetail.party_type} · ${paymentDetail.party}` : "—" }}</strong></article>
-					<article><span>Mode</span><strong>{{ paymentDetail.mode_of_payment || "—" }}</strong></article>
-					<article><span>Paid</span><strong>{{ formatCurrency(paymentDetail.paid_amount) }}</strong></article>
-					<article><span>Received</span><strong>{{ formatCurrency(paymentDetail.received_amount) }}</strong></article>
-					<article><span>Unallocated</span><strong>{{ formatCurrency(paymentDetail.unallocated_amount) }}</strong></article>
-					<article><span>Reference No</span><strong>{{ paymentDetail.reference_no || "—" }}</strong></article>
-					<article><span>Reference Date</span><strong>{{ formatDate(paymentDetail.reference_date) }}</strong></article>
-				</div>
-
-				<div v-if="paymentDetail.references?.length" class="reference-block">
-					<h4>Allocations</h4>
-					<div class="table-wrap">
-						<table class="payment-history-table compact-table">
-							<thead><tr><th>Document</th><th>Reference</th><th class="num">Allocated</th><th class="num">Outstanding at Draft</th></tr></thead>
-							<tbody>
-								<tr v-for="row in paymentDetail.references" :key="`${row.reference_doctype}:${row.reference_name}`">
-									<td>{{ row.reference_doctype }}</td><td>{{ row.reference_name }}</td><td class="num">{{ formatCurrency(row.allocated_amount) }}</td><td class="num">{{ formatCurrency(row.outstanding_amount) }}</td>
-								</tr>
-							</tbody>
-						</table>
+			<template #footer>
+				<div class="payment-review-footer">
+					<div class="detail-actions">
+						<button v-if="canUseNativeDesk && paymentDetail.payment_entry" class="edge-secondary-button" type="button" :disabled="submitting || detailLoading" @click="openPaymentInERPNext(paymentDetail.payment_entry)">Advanced: ERPNext</button>
+					</div>
+					<div class="detail-actions">
+						<button v-if="canSubmitStandard" class="edge-primary-button" type="button" :disabled="submitting || detailLoading" @click="submitStandardDraft">{{ submitting ? "Submitting…" : "Submit Standard Payment" }}</button>
+						<button class="edge-secondary-button" type="button" :disabled="submitting" @click="clearPaymentDetail">Close</button>
 					</div>
 				</div>
-
-				<div v-if="standardReview.blockers?.length" class="review-warning">
-					<strong>{{ standardReview.advanced_only ? "Advanced review required" : "Submission checks" }}</strong>
-					<ul><li v-for="blocker in standardReview.blockers" :key="blocker">{{ blocker }}</li></ul>
-					<p v-if="standardReview.advanced_only && !canUseNativeDesk">An accounting manager with Advanced ERPNext access must handle this payment shape.</p>
-				</div>
-				<div v-if="canSubmitStandard" class="standard-submit-bar">
-					<span>This draft passes the existing standard review contract.</span>
-					<button class="edge-primary-button" type="button" :disabled="submitting" @click="submitStandardDraft">{{ submitting ? "Submitting…" : "Submit Standard Payment" }}</button>
-				</div>
-				<div v-else-if="Number(paymentDetail.docstatus) !== 0" class="read-only-note">Submitted and cancelled payments are inspect-only here. Posted accounting documents are not mutated.</div>
 			</template>
-		</section>
+		</EdgeModal>
 	</section>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown"];
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
+const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"];
 const HISTORY_METHOD = "retailedge.payment_history.list_payment_history";
 const DETAIL_METHOD = "retailedge.payment_history.get_payment_history_detail";
 const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
@@ -165,7 +171,7 @@ export default {
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 	data() {
 		return {
-			loading: false, error: "", detailLoading: false, detailError: "", submitting: false,
+			loading: false, error: "", detailLoading: false, detailError: "", detailOpen: false, submitting: false,
 			paymentHistory: [], paymentDetail: {}, pagination: { page: 1, page_size: 25, has_previous: false, has_next: false },
 			canUseNativeDesk: false, companyLabel: "", branchLabel: "", partyLabel: "",
 			filters: { company: "", branch: "", party_type: "", party: "", payment_type: "", docstatus: "all", from_date: "", to_date: "", page_size: 25 },
@@ -259,18 +265,19 @@ export default {
 		},
 		async reviewHistoryPayment(paymentEntry) {
 			if (!paymentEntry) return;
+			this.detailOpen = true;
 			this.detailLoading = true; this.detailError = ""; this.paymentDetail = { payment_entry: paymentEntry };
 			try {
 				this.paymentDetail = await callMethod(DETAIL_METHOD, { payment_entry: paymentEntry, company: this.filters.company || "", branch: this.filters.branch || "" });
 			} catch (error) { this.paymentDetail = {}; this.detailError = errorMessage(error, "Payment detail failed to load."); }
 			finally { this.detailLoading = false; }
 		},
-		clearPaymentDetail() { this.paymentDetail = {}; this.detailError = ""; },
+		clearPaymentDetail() { if (this.submitting) return; this.detailOpen = false; this.paymentDetail = {}; this.detailError = ""; },
 		openPaymentInERPNext(name) { if (!this.canUseNativeDesk || !name) return; frappe.set_route("Form", "Payment Entry", name); },
 		submitStandardDraft() {
 			const review = this.standardReview.review || {};
 			if (!this.canSubmitStandard || this.submitting) return;
-			frappe.confirm(__(`Submit Payment Entry ${this.paymentDetail.payment_entry}? ERPNext will post the authoritative accounting entry.`), async () => {
+			confirmAboveEdgeModal(__(`Submit Payment Entry ${this.paymentDetail.payment_entry}? ERPNext will post the authoritative accounting entry.`), async () => {
 				this.submitting = true; this.detailError = "";
 				try {
 					const isCustomer = this.standardReview.kind === "standard_customer";
@@ -301,8 +308,9 @@ export default {
 </script>
 
 <style scoped>
-.payment-history-panel,.payment-detail-panel { margin-top:20px; padding:18px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-lg,10px); background:var(--edge-surface,#fff); }
-.payment-history-head,.history-pagination,.detail-actions,.standard-submit-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.payment-history-panel { margin-top:20px; padding:18px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-lg,10px); background:var(--edge-surface,#fff); }
+.payment-detail-modal { display:grid; gap:16px; }
+.payment-history-head,.history-pagination,.detail-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .payment-history-head { align-items:flex-start; margin-bottom:16px; }
 .payment-history-head h3 { margin:4px 0; color:var(--edge-text,#101828); }
 .payment-history-head p { margin:0; color:var(--edge-text-muted,#667085); }
@@ -336,7 +344,7 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .review-warning ul { margin:6px 0 0 18px; padding:0; }
 .review-warning p { margin:8px 0 0; }
 .read-only-note { border-color:var(--edge-border,#d9d9d9); color:var(--edge-text-muted,#667085); }
-.standard-submit-bar { margin-top:16px; padding:12px 14px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); color:var(--edge-text-muted,#667085); }
+.payment-review-footer { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; }
 @media (max-width:980px) { .history-filter-grid,.detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media (max-width:560px) { .history-filter-grid,.detail-grid { grid-template-columns:1fr; } .payment-history-head,.history-pagination,.detail-actions,.standard-submit-bar { flex-direction:column; align-items:stretch; } }
+@media (max-width:560px) { .history-filter-grid,.detail-grid { grid-template-columns:1fr; } .payment-history-head,.history-pagination,.detail-actions,.payment-review-footer { flex-direction:column; align-items:stretch; } }
 </style>
