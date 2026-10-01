@@ -57,6 +57,9 @@ The API secret is excluded from the configuration object's representation and ne
 HTTPS is required by default. Plain HTTP is rejected unless
 `coreedge_service_allow_insecure_http = 1` is explicitly set for controlled local QA.
 
+The HTTP transport does not follow redirects. This prevents the Service Client Authorization token from being
+forwarded to a redirected endpoint or host.
+
 Example configuration shape:
 
 ```json
@@ -164,7 +167,8 @@ Coverage includes:
 - HTTPS required by default;
 - explicit insecure-HTTP local-QA override;
 - canonical shared Service Client config;
-- legacy short-key compatibility and canonical-key precedence.
+- legacy short-key compatibility and canonical-key precedence;
+- redirect refusal so Service Client credentials are not forwarded across redirects.
 
 ## Out of scope
 
