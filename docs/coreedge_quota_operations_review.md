@@ -65,7 +65,10 @@ Default Status is `Open`, which means:
 
 Company and Branch filters follow RetailEdge operating-context governance.
 
-A restricted user with zero active Branch access is not treated as unrestricted.
+If a Branch-restricted user leaves Branch blank, the backend automatically scopes the review to all of that
+user's currently allowed Branches for the selected Company.
+
+A restricted user with zero active Branch access fails closed and is not treated as unrestricted.
 
 All operation and history lists use permission-aware `frappe.get_list`; the page does not use `get_all`.
 
@@ -265,6 +268,7 @@ Coverage includes:
 - successful reservation attachment + finalization;
 - unsubmitted-source rejection;
 - restricted-zero Branch scope fail-closed;
+- restricted multi-Branch implicit scoping;
 - unrestricted Branch filtering;
 - permission-aware `get_list` contract;
 - EdgeSuite ownership/no direct client writes;
