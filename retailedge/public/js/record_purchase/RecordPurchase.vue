@@ -242,7 +242,7 @@ export default {
 	},
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
-		this._pageShow = () => { if (!this.loaded && !this.loading) this.loadPage(); };
+		this._pageShow = () => { if (!this.loading && (!this.loaded || this.hasPendingHandoff())) this.loadPage(); };
 		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-record-purchase-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
@@ -291,6 +291,14 @@ export default {
 		},
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
+		hasPendingHandoff() {
+			try {
+				const raw = sessionStorage.getItem(this.handoffKey()) || "";
+				return Boolean(stored(raw, 10 * 60 * 1000));
+			} catch (_error) {
+				return false;
+			}
+		},
 		async consumeHandoff() {
 			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
 			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
