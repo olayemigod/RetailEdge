@@ -39,7 +39,7 @@ function renderLoadError(wrapper, error) {
 	const errorDiv = document.createElement("div");
 	errorDiv.className = "retailedge-payment-management-load-error alert alert-danger p-6 text-center";
 	const title = document.createElement("strong"); title.textContent = __(`${PAGE_TITLE} failed to load`);
-	const detail = document.createElement("div"); detail.textContent = error?.message || __("Unknown page load error");
+	const detail = document.createElement("div"); detail.textContent = window.retailedge?.userErrorMessage?.(error, __("Unknown page load error")) || __("Unknown page load error");
 	errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
 }
 
@@ -58,17 +58,13 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(RESTRICTED_GUARD_ASSET);
 		installRestrictedOperationalGuard();
 		await requireAsync(PAYMENT_ASSET);
-		if (typeof window.mountPaymentManagementPage !== "function" || typeof window.mountPaymentHistoryPanel !== "function") {
+		if (typeof window.mountPaymentManagementPage !== "function") {
 			throw new Error("Payment Management bundle is unavailable.");
 		}
 		bootLoading.remove();
 		const root = document.createElement("div"); root.className = "retailedge-payment-management-root";
-		const managementRoot = document.createElement("div"); managementRoot.className = "retailedge-payment-management-main";
-		const historyRoot = document.createElement("div"); historyRoot.className = "retailedge-payment-history-root";
-		root.append(managementRoot, historyRoot);
 		page.body.append(root);
-		await window.mountPaymentManagementPage(managementRoot);
-		await window.mountPaymentHistoryPanel(historyRoot);
+		await window.mountPaymentManagementPage(root);
 	} catch (error) {
 		bootLoading.remove();
 		renderLoadError(wrapper, error);
