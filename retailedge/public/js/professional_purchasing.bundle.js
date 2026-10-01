@@ -1,7 +1,5 @@
 import ProfessionalPurchasing from "./professional_purchasing/ProfessionalPurchasing.vue";
 import ProfessionalRfqPreviewOverlay from "./professional_purchasing/ProfessionalRfqPreviewOverlay.vue";
-import ProfessionalRfqHistoryOverlay from "./professional_purchasing/ProfessionalRfqHistoryOverlay.vue";
-import ProfessionalSupplierQuotationHistoryOverlay from "./professional_purchasing/ProfessionalSupplierQuotationHistoryOverlay.vue";
 import ProfessionalSupplierQuotationPurchaseOrderOverlay from "./professional_purchasing/ProfessionalSupplierQuotationPurchaseOrderOverlay.vue";
 import ProfessionalPurchaseOrderSubmitOverlay from "./professional_purchasing/ProfessionalPurchaseOrderSubmitOverlay.vue";
 import { installProfessionalPurchaseReturnOwnership } from "./professional_purchasing/professionalPurchaseReturnOwnership";
@@ -15,7 +13,6 @@ const COMPARE_QUOTATIONS_LABEL = "Compare Quotations";
 const ADVANCED_COMPARE_QUOTATIONS_LABEL = "Advanced: Compare Quotations in ERPNext";
 const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
-const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
@@ -228,17 +225,6 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const overlayApp = edgeUI.createEdgeApp(ProfessionalRfqPreviewOverlay);
 	overlayApp.mount(overlayRoot);
 
-	const historyRoot = document.createElement("div");
-	historyRoot.className = "retailedge-professional-rfq-history-overlay-root";
-	(target.parentNode || target).appendChild(historyRoot);
-	const historyApp = edgeUI.createEdgeApp(ProfessionalRfqHistoryOverlay);
-	historyApp.mount(historyRoot);
-
-	const supplierQuotationHistoryRoot = document.createElement("div");
-	supplierQuotationHistoryRoot.className = "retailedge-professional-supplier-quotation-history-overlay-root";
-	(target.parentNode || target).appendChild(supplierQuotationHistoryRoot);
-	const supplierQuotationHistoryApp = edgeUI.createEdgeApp(ProfessionalSupplierQuotationHistoryOverlay);
-	supplierQuotationHistoryApp.mount(supplierQuotationHistoryRoot);
 
 	const supplierQuotationPurchaseOrderRoot = document.createElement("div");
 	supplierQuotationPurchaseOrderRoot.className = "retailedge-supplier-quotation-purchase-order-overlay-root";
