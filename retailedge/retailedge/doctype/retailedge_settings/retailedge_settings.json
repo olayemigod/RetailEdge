@@ -301,7 +301,7 @@
   {
    "default": "Controlled Posting",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "Choose Controlled Posting to require review before accounting, or Direct Posting to attempt accounting posting immediately after submission. Physical till cash remains tracked separately from accounting status.",
+   "description": "Choose Direct Posting to auto-attempt accounting as soon as the expense reaches its permitted posting stage, or Controlled Posting to require an authorised user to run the Post to Accounts action. With an active Frappe Workflow, the configured Posting Workflow State may follow any number of merchant-defined approvals. Physical till cash remains tracked separately from accounting status.",
    "fieldname": "cashier_expense_posting_mode",
    "fieldtype": "Select",
    "label": "Cashier Expense Posting Mode",
@@ -423,8 +423,8 @@
    "options": "RetailEdge Cashier Expense Posting Role"
   },
   {
-   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting && doc.cashier_expense_posting_mode == 'Controlled Posting'",
-   "description": "When an active Frappe Workflow controls Cashier Expense, accounting posting is allowed only after the expense reaches this submitted Workflow State. The Workflow may contain any number of merchant-defined approvals.",
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "description": "When an active Frappe Workflow controls Cashier Expense, this submitted Workflow State is the accounting-posting gate. In Direct Posting, reaching this state auto-attempts posting using the acting user's configured role and normal Journal Entry permissions. In Controlled Posting, reaching this state makes the expense eligible for an authorised user to post manually. The Workflow may contain any number of merchant-defined approvals before this state.",
    "fieldname": "cashier_expense_posting_workflow_state",
    "fieldtype": "Link",
    "label": "Workflow State Allowed for Accounting Posting",
