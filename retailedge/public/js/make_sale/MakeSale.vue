@@ -500,7 +500,8 @@ export default {
 	},
 	created() {
 		this._onPageShow = () => {
-			if (!this.loaded && !this.loading) this.loadPage();
+			if (this.loading) return;
+			if (!this.loaded || this.hasPendingHandoff()) this.loadPage();
 		};
 		this._beforeUnload = (event) => {
 			if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return;
@@ -619,6 +620,14 @@ export default {
 		},
 		handoffKey() {
 			return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`;
+		},
+		hasPendingHandoff() {
+			try {
+				const raw = window.sessionStorage.getItem(this.handoffKey()) || "";
+				return Boolean(cleanStoredPayload(raw, HANDOFF_MAX_AGE_MS));
+			} catch (_error) {
+				return false;
+			}
 		},
 		async consumeHandoff() {
 			let raw = "";
