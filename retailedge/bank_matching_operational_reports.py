@@ -393,7 +393,7 @@ def _hydrate_match_candidate_context(row, details):
 	if suggested_document_type == "Payment Entry":
 		entry_name = cstr(row.get("payment_entry") or row.get("suggested_document")).strip()
 		if entry_name and has_doctype("Payment Entry"):
-			fields = ["paid_to", "paid_from", "received_amount", "paid_amount", "mode_of_payment", "party", "party_type"]
+			fields = ["posting_date", "docstatus", "paid_to", "paid_from", "received_amount", "paid_amount", "mode_of_payment", "party", "party_type"]
 			if has_field("Payment Entry", "retailedge_branch"):
 				fields.append("retailedge_branch")
 			payload = frappe.db.get_value("Payment Entry", entry_name, fields, as_dict=True) or {}
@@ -403,14 +403,17 @@ def _hydrate_match_candidate_context(row, details):
 			context["payment_account"] = context.get("payment_account") or cstr(
 				payload.get("paid_to") if direction == "Inflow" else payload.get("paid_from") if direction == "Outflow" else payload.get("paid_to") or payload.get("paid_from")
 			).strip()
-			context["payment_event_amount"] = flt(
-				context.get("payment_event_amount")
-				or payload.get("received_amount") if direction == "Inflow"
-				else context.get("payment_event_amount") or payload.get("paid_amount") if direction == "Outflow"
-				else context.get("payment_event_amount") or payload.get("received_amount") or payload.get("paid_amount")
+			resolved_amount = (
+				payload.get("received_amount")
+				if direction == "Inflow"
+				else payload.get("paid_amount")
+				if direction == "Outflow"
+				else payload.get("received_amount") or payload.get("paid_amount")
 			)
+			context["payment_event_amount"] = flt(context.get("payment_event_amount") or resolved_amount)
 			context["party"] = payload.get("party") or row.get("party") or row.get("customer")
 			context["branch"] = payload.get("retailedge_branch") or row.get("branch")
+			context["candidate_posting_date"] = payload.get("posting_date") or details.get("posting_date")
 			context["candidate_docstatus"] = payload.get("docstatus")
 		return context
 
@@ -428,7 +431,7 @@ def _hydrate_match_candidate_context(row, details):
 			context["payment_account"] = context.get("payment_account") or cstr(details.get("candidate_canonical_account")).strip()
 			context["payment_event_amount"] = flt(context.get("payment_event_amount") or row.get("candidate_amount"))
 			context["branch"] = payload.get("retailedge_branch") or payload.get("branch") or row.get("branch")
-			context["candidate_posting_date"] = payload.get("posting_date") or details.get("candidate_posting_date")
+			context["candidate_posting_date"] = payload.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date")
 			context["candidate_docstatus"] = payload.get("docstatus")
 		return context
 
@@ -457,6 +460,8 @@ def _hydrate_match_candidate_context(row, details):
 				context["payment_account"] = context.get("payment_account") or cstr(best_row.get("account") or best_row.get("expected_account")).strip()
 				context["payment_event_amount"] = flt(context.get("payment_event_amount") or best_row.get("base_amount") or best_row.get("amount"))
 				context["party"] = row.get("party") or row.get("customer") or getattr(invoice_doc, "customer", None)
+			context["candidate_posting_date"] = getattr(invoice_doc, "posting_date", None) or details.get("posting_date")
+			context["candidate_docstatus"] = getattr(invoice_doc, "docstatus", None)
 		return context
 
 	return context
@@ -606,7 +611,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 			"document_type": row.get("suggested_document_type"),
 			"document_name": row.get("suggested_document"),
 			"candidate_category": hydrated.get("candidate_category") or details.get("candidate_category"),
-			"posting_date": details.get("candidate_posting_date") or row.get("transaction_date"),
+			"posting_date": details.get("candidate_posting_date") or details.get("posting_date") or row.get("transaction_date"),
 			"payment_account": hydrated.get("payment_account") or details.get("payment_account"),
 			"account": hydrated.get("payment_account") or details.get("payment_account") or details.get("candidate_canonical_account"),
 			"expected_bank_account": details.get("candidate_canonical_account"),
@@ -678,8 +683,21 @@ def _safe_load_json(value):
 	if not value:
 		return {}
 	try:
-		loaded = frappe.parse_json(value)
-		return loaded or {}
+		loaded = frappe.parse_json(value) or {}
+		if not isinstance(loaded, dict):
+			return {}
+		bank_context = loaded.get("bank_context") if isinstance(loaded.get("bank_context"), dict) else {}
+		candidate_context = loaded.get("candidate_context") if isinstance(loaded.get("candidate_context"), dict) else {}
+		if not bank_context and not candidate_context:
+			return loaded
+		merged = {
+			key: item
+			for key, item in loaded.items()
+			if key not in {"bank_context", "candidate_context"}
+		}
+		merged.update(bank_context)
+		merged.update(candidate_context)
+		return merged
 	except Exception:
 		return {}
 
@@ -1661,7 +1679,7 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 				"payment_event_amount": flt(details.get("payment_entry_paid_amount") or details.get("payment_row_amount") or row.get("candidate_amount") or payment_amount),
 				"branch": details.get("branch") or payload.get("retailedge_branch") or row.get("branch"),
 				"party": payload.get("party") or row.get("party") or row.get("customer"),
-				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date"),
+				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date"),
 				"candidate_docstatus": payload.get("docstatus"),
 			}
 			continue
@@ -1675,7 +1693,7 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 				"payment_event_amount": flt(details.get("payment_row_amount") or row.get("candidate_amount")),
 				"branch": details.get("branch") or payload.get("retailedge_branch") or payload.get("branch") or row.get("branch"),
 				"party": row.get("party") or row.get("customer"),
-				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date"),
+				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date"),
 				"candidate_docstatus": payload.get("docstatus"),
 			}
 			continue
@@ -1712,7 +1730,8 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 			"payment_event_amount": payment_amount,
 			"branch": details.get("branch") or invoice.get("retailedge_branch") or invoice.get("branch") or row.get("branch"),
 			"party": row.get("party") or row.get("customer") or invoice.get("customer"),
-			"candidate_posting_date": invoice.get("posting_date") or details.get("candidate_posting_date"),
+			"candidate_posting_date": invoice.get("posting_date") or details.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date"),
+			"candidate_docstatus": invoice.get("docstatus"),
 		}
 	return context_map
 
@@ -1773,7 +1792,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 			"document_type": row.get("suggested_document_type"),
 			"document_name": row.get("suggested_document"),
 			"candidate_category": context.get("candidate_category") or details.get("candidate_category"),
-			"posting_date": context.get("candidate_posting_date") or details.get("candidate_posting_date") or row.get("transaction_date"),
+			"posting_date": context.get("candidate_posting_date") or details.get("candidate_posting_date") or details.get("posting_date") or row.get("transaction_date"),
 			"payment_account": context.get("payment_account") or details.get("payment_account"),
 			"account": context.get("payment_account") or details.get("payment_account") or details.get("candidate_canonical_account"),
 			"expected_bank_account": details.get("candidate_canonical_account"),
@@ -1800,7 +1819,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 		combined["payment_account"] = context.get("payment_account") or details.get("payment_account")
 		combined["branch_match"] = details.get("branch_match")
 		combined["branch_match_available"] = details.get("branch_match_available")
-		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date")
+		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date") or details.get("posting_date")
 		combined["candidate_docstatus"] = context.get("candidate_docstatus")
 		combined["bank_direction"] = bank_direction
 		readiness, reason = _readiness_for_match_row(combined)
