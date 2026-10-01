@@ -40,7 +40,6 @@
 							<strong>Edit draft items</strong>
 							<p>Company, Branch, purpose and warehouse scope stay fixed. ERPNext revalidates every quantity and item when this draft is saved.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">{{ busy ? "Saving..." : "Save Draft Changes" }}</button>
 					</div>
 					<div class="stock-editor-fields">
 						<EdgeInput v-model="draftPostingDate" id="stock-draft-posting-date" label="Posting Date" type="date" :disabled="busy" required />
@@ -121,6 +120,15 @@
 					Advanced: Open in ERPNext
 				</button>
 				<div class="stock-completion-actions">
+					<button
+						v-if="preview?.can_edit"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy || !draftDirty || !draftValid"
+						@click="saveDraftChanges"
+					>
+						{{ busy ? "Saving..." : "Save Draft Changes" }}
+					</button>
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<button
 						v-if="preview?.can_submit"
@@ -148,6 +156,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.standard_stock_completion.get_standard_stock_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_stock_completion.update_standard_stock_document_draft";
 const TRANSFER_SEARCH_METHOD = "retailedge.guided_stock_transfer.search_simple_stock_transfer_options";
@@ -370,7 +380,7 @@ export default {
 		requestClose() {
 			if (this.busy) return;
 			if (this.preview?.can_edit && this.draftDirty) {
-				frappe.confirm(__("Discard unsaved stock draft changes?"), () => this.$emit("close"));
+				confirmAboveEdgeModal(__("Discard unsaved stock draft changes?"), () => this.$emit("close"));
 				return;
 			}
 			this.$emit("close");

@@ -34,7 +34,8 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn('frappe.throw(_("Choose an Operating Company before viewing customer advances."))', source)
 		self.assertIn('"company": company,', source)
 		self.assertIn("company, branch = _resolve_advance_scope(company, branch)", source)
-		self.assertIn("validate_user_branch_access(", source)
+		self.assertIn("resolve_operational_branch(", source)
+		self.assertNotIn("validate_user_branch_access(", source)
 
 	def test_payment_and_invoice_branches_are_independently_authorized_before_reconciliation(self):
 		source = self.read("payment_application.py")

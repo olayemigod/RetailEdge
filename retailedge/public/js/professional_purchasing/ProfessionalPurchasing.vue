@@ -290,7 +290,7 @@
 								<td><span class="status-pill">{{ row.status || (row.docstatus === 0 ? "Draft" : "Submitted") }}</span></td>
 								<td><div class="attention-badges"><span v-if="!row.attention_flags?.length" class="attention-badge attention-badge--clear">Clear</span><span v-for="flag in row.attention_flags || []" :key="flag.key" class="attention-badge" :class="`attention-badge--${flag.kind || 'readiness'}`">{{ flag.label }}</span></div></td>
 								<td class="num">{{ formatPercent(row.per_received) }}</td><td class="num">{{ formatPercent(row.per_billed) }}</td><td class="num strong">{{ formatMoney(row.grand_total, row.currency) }}</td>
-								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">{{ canUseNativeDesk ? "Open" : "Review" }}</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
+								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">{{ Number(row.docstatus || 0) === 0 ? "Review / Edit" : "View" }}</button><button v-if="Number(row.docstatus || 0) === 1" type="button" class="edge-small-button" @click="openDocumentOutput('purchase-order', row.name)">Print & Share</button><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openPurchaseOrderAdvanced(row.name)">Advanced</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
 							</tr></tbody>
 						</table>
 					</div>
@@ -356,7 +356,7 @@ const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader",
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, type = "GET") { return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 function doctypeSlug(doctype) { return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function dispatchEdgeSuiteEvent(name, detail = {}) { window.dispatchEvent(new CustomEvent(name, { detail })); }
 function sortedCopy(rows, sort) {
@@ -548,9 +548,12 @@ export default {
 				return;
 			}
 			if (payload.action === "output") {
-				window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" };
-				frappe.set_route("document-output-sharing");
+				this.openDocumentOutput("purchase-invoice", payload.name);
 			}
+		},
+		openDocumentOutput(document, name) {
+			if (!document || !name) return;
+			window.retailedge?.openDocumentOutputSharing?.(document, name);
 		},
 		closeSupplierPayment() {
 			this.supplierPaymentOpen = false;
@@ -707,8 +710,11 @@ export default {
 		openProcurementTracker() { if (!this.canUseNativeDesk || !this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
 		openPurchaseOrder(name) {
 			if (!name) return;
-			if (this.canUseNativeDesk) frappe.set_route("Form", "Purchase Order", name);
-			else dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name });
+			dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name });
+		},
+		openPurchaseOrderAdvanced(name) {
+			if (!this.canUseNativeDesk || !name) return;
+			frappe.set_route("Form", "Purchase Order", name);
 		},
 		openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },

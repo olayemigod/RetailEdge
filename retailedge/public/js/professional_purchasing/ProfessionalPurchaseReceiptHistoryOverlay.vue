@@ -48,7 +48,7 @@
 							<td>{{ formatQty(row.total_qty) }}</td>
 							<td>{{ row.branch || '—' }}</td>
 							<td>{{ row.status || 'Submitted' }}</td>
-							<td><div class="receipt-history__actions"><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? 'Preparing…' : 'Create Invoice' }}</button><button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open in ERPNext</button></div></td>
+							<td><div class="receipt-history__actions"><button type="button" class="edge-small-button" @click="openDocumentOutput(row.name)">Print & Share</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? 'Preparing…' : 'Create Invoice' }}</button><button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open in ERPNext</button></div></td>
 						</tr>
 					</tbody>
 				</table>
@@ -165,6 +165,7 @@ export default {
 		},
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatQty(value) { const number = Number(value || 0); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 3 }) : "0"; },
+		openDocumentOutput(name) { if (name) window.retailedge?.openDocumentOutputSharing?.("purchase-receipt", name); },
 		openAdvancedReceipt(name) { if (this.nativeFallbackEnabled && name) frappe.set_route("Form", "Purchase Receipt", name); },
 		openAdvancedList() { if (this.nativeFallbackEnabled) frappe.set_route("List", "Purchase Receipt"); },
 		close() { if (!this.loading) { this.open = false; this.error = ""; } },

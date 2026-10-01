@@ -182,6 +182,16 @@ def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
 
 
 
+def test_stock_save_action_lives_in_completion_footer_and_discard_confirm_stays_above_modal():
+	dialog = _read(DIALOG)
+	editor = dialog[dialog.index('class="stock-draft-editor"'):dialog.index("<template #footer>")]
+	footer = dialog[dialog.index("<template #footer>"):]
+	assert "Save Draft Changes" not in editor
+	assert "Save Draft Changes" in footer
+	assert "confirmAboveEdgeModal" in dialog
+	assert 'frappe.confirm(__("Discard unsaved stock draft changes?")' not in dialog
+
+
 def test_stock_completion_requires_saving_dirty_editor_before_submit_or_workflow():
 	dialog = _read(DIALOG)
 	for contract in (

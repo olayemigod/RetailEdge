@@ -4,8 +4,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "payment_history.py"
 PANEL = ROOT / "public" / "js" / "payment_management" / "PaymentHistoryPanel.vue"
-BUNDLE = ROOT / "public" / "js" / "payment_management.bundle.js"
-PAGE_LOADER = ROOT / "retailedge" / "page" / "payment_management" / "payment_management.js"
+MANAGEMENT_BUNDLE = ROOT / "public" / "js" / "payment_management.bundle.js"
+MANAGEMENT_LOADER = ROOT / "retailedge" / "page" / "payment_management" / "payment_management.js"
+HISTORY_BUNDLE = ROOT / "public" / "js" / "payment_history.bundle.js"
+HISTORY_PAGE = ROOT / "public" / "js" / "payment_management" / "PaymentHistoryPage.vue"
+HISTORY_LOADER = ROOT / "retailedge" / "page" / "payment_history" / "payment_history.js"
+NAVIGATION = ROOT / "edgesuite_ui.py"
 
 
 def _read(path: Path) -> str:
@@ -53,10 +57,14 @@ def test_detail_reuses_existing_standard_customer_and_supplier_review_contracts(
 	assert "Submit Standard Payment" in panel
 
 
-def test_payment_management_owns_history_and_revisit_without_forced_native_handoff():
+def test_payment_history_is_a_separate_edgesuite_page_linked_from_payment_management():
 	panel = _read(PANEL)
-	bundle = _read(BUNDLE)
-	loader = _read(PAGE_LOADER)
+	management_bundle = _read(MANAGEMENT_BUNDLE)
+	management_loader = _read(MANAGEMENT_LOADER)
+	history_bundle = _read(HISTORY_BUNDLE)
+	history_page = _read(HISTORY_PAGE)
+	history_loader = _read(HISTORY_LOADER)
+	navigation = _read(NAVIGATION)
 	assert "Payment History" in panel
 	assert "retailedge.payment_history.list_payment_history" in panel
 	assert "retailedge.payment_history.get_payment_history_detail" in panel
@@ -67,14 +75,16 @@ def test_payment_management_owns_history_and_revisit_without_forced_native_hando
 	assert "canUseNativeDesk" in panel
 	assert "retailedge.edgesuite_ui.get_retailedge_business_hub_context" in panel
 	assert "retailedge.master_experience.get_master_retailedge_business_hub_context" not in panel
-	assert 'v-if="canUseNativeDesk"' in panel
-	assert "PaymentHistoryPanel.vue" in bundle
-	assert "mountPaymentHistoryPanel" in bundle
-	assert 'rootSelector: ".retailedge-payment-management-root"' in loader
-	assert 'historyRoot.className = "retailedge-payment-history-root"' in loader
-	assert "root.append(managementRoot, historyRoot)" in loader
-	assert "window.mountPaymentHistoryPanel(historyRoot)" in loader
-
+	assert 'v-if="canUseNativeDesk && paymentDetail.payment_entry"' in panel
+	assert "PaymentHistoryPanel.vue" not in management_bundle
+	assert "mountPaymentHistoryPanel" not in management_loader
+	assert "PaymentHistoryPage.vue" in history_bundle
+	assert "mountPaymentHistoryPage" in history_bundle
+	assert 'const PAGE_ROUTE = "payment-history"' in history_loader
+	assert "PaymentHistoryPanel" in history_page
+	assert '"label": "Payment History"' in navigation
+	assert '"target": "payment-history"' in navigation
+	assert 'retailedgeConsumeBusinessHubRouteOptions?.("payment-history")' in panel
 
 def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_queries():
 	panel = _read(PANEL)
@@ -98,3 +108,26 @@ def test_native_payment_open_is_explicit_and_double_gated():
 	assert 'v-if="canUseNativeDesk"' in panel
 	assert "if (!this.canUseNativeDesk || !name) return" in panel
 	assert 'frappe.set_route("Form", "Payment Entry", name)' in panel
+
+
+def test_payment_review_opens_in_modal_instead_of_inline_below_history():
+	panel = _read(PANEL)
+	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"]' in panel
+	assert ':open="detailOpen"' in panel
+	assert "Payment Review ·" in panel
+	assert "detailOpen = true" in panel
+	assert "payment-detail-panel" not in panel
+	assert "payment-review-footer" in panel
+	assert "Submit Standard Payment" in panel
+	assert "Advanced: ERPNext" in panel
+	assert "confirmAboveEdgeModal" in panel
+	assert "const paymentEntry = this.paymentDetail.payment_entry;" in panel
+
+
+def test_submitted_payment_entries_use_view_while_drafts_keep_review():
+	panel = _read(PANEL)
+	assert 'Number(row.docstatus || 0) === 0 ? "Review" : "View"' in panel
+	assert '"Payment Review" : "Payment View"' in panel
+	assert ':open="detailOpen"' in panel
+	assert "Submitted and cancelled accounting records remain read-only." in panel
+	assert "Submit Standard Payment" in panel

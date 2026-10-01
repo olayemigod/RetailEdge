@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		title="Review & Submit Purchase Order"
-		subtitle="Review the current ERPNext draft before submission. Standard submission is blocked when advanced approval or purchasing rules apply."
+		:title="dialogTitle"
+		:subtitle="dialogSubtitle"
 		size="xl"
 		@close="close"
 	>
@@ -21,11 +21,11 @@
 			</div>
 
 			<div v-if="submitted" class="po-submit-review__success">
-				<strong>Purchase Order {{ submitted.name }} submitted.</strong>
-				<span>ERPNext has applied its normal Purchase Order submission rules and procurement status updates.</span>
-				<div v-if="submitted.next_actions?.length" class="po-submit-review__next-actions">
+				<strong>Purchase Order {{ submitted.name }} is submitted.</strong>
+				<span>Review the saved ERPNext order and continue with any permitted procurement action below.</span>
+				<div class="po-submit-review__next-actions">
 					<button
-						v-for="action in submitted.next_actions"
+						v-for="action in submitted.next_actions || []"
 						:key="action.value"
 						type="button"
 						class="edge-button edge-button--primary"
@@ -34,6 +34,7 @@
 					>
 						{{ action.label }}
 					</button>
+					<button type="button" class="edge-button" @click="openDocumentOutput">Print & Share</button>
 				</div>
 			</div>
 			<div v-else-if="preview.blockers?.length" class="po-submit-review__blocked">
@@ -54,7 +55,7 @@
 						:key="action.action"
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="submitting"
+						:disabled="submitting || saving || draftDirty"
 						@click="applyWorkflow(action.action)"
 					>
 						{{ submitting ? 'Applying…' : action.action }}<span v-if="action.next_state"> → {{ action.next_state }}</span>
@@ -63,11 +64,55 @@
 				</div>
 			</div>
 
-			<div class="table-responsive">
+			<section v-if="preview.can_edit && !submitted" class="po-draft-editor">
+				<div class="po-draft-editor__heading">
+					<div>
+						<strong>Edit draft before completion</strong>
+						<p>Company, Supplier, Branch, Buying Price List, Stock Location and existing item identity stay protected. You may add new items; ERPNext recalculates and validates the draft when you save.</p>
+					</div>
+				</div>
+				<div class="po-draft-editor__grid">
+					<label><span>Order Date</span><input v-model="draftTransactionDate" class="form-control" type="date" :disabled="saving || submitting" /></label>
+					<label><span>Required By</span><input v-model="draftScheduleDate" class="form-control" type="date" :min="draftTransactionDate || undefined" :disabled="saving || submitting" /></label>
+					<label class="po-draft-editor__terms"><span>Terms / Notes</span><textarea v-model="draftTerms" class="form-control" rows="2" :disabled="saving || submitting"></textarea></label>
+				</div>
+				<div class="table-responsive">
+					<table class="table po-submit-review__table po-draft-editor__table">
+						<thead><tr><th>Item</th><th class="text-right">Qty</th><th>UOM</th><th class="text-right">Rate</th><th>Required</th><th>Stock Location</th><th>Action</th></tr></thead>
+						<tbody>
+							<tr v-for="(row, index) in draftItems" :key="row.name || `new-${index}`">
+								<td>
+									<template v-if="row.name">
+										<strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small>
+									</template>
+									<EdgeLinkField
+										v-else
+										:modelValue="row.item_code"
+										placeholder="Search item"
+										:searcher="searchDraftItem"
+										@update:modelValue="setDraftItemCode(index, $event)"
+									/>
+								</td>
+								<td><input :value="row.qty" class="form-control text-right" type="number" min="0.000001" step="any" :disabled="saving || submitting" @input="setDraftItemQty(index, $event.target.value)" /></td>
+								<td>{{ row.uom || '—' }}</td>
+								<td><input :value="row.rate" class="form-control text-right" type="number" min="0" step="any" :disabled="saving || submitting" @input="setDraftItemRate(index, $event.target.value)" /></td>
+								<td><input v-model="row.schedule_date" class="form-control" type="date" :min="draftTransactionDate || undefined" :disabled="saving || submitting" /></td>
+								<td>{{ row.warehouse || preview.default_warehouse || '—' }}</td>
+								<td><button v-if="!row.name" type="button" class="edge-button" :disabled="saving || submitting" @click="removeNewDraftItem(index)">Remove</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="po-draft-editor__item-actions">
+					<button type="button" class="edge-button" :disabled="saving || submitting" @click="addDraftItem">Add Item</button>
+					<span>New rows inherit the Purchase Order's governed Supplier, Branch, Buying Price List and receiving Stock Location.</span>
+				</div>
+			</section>
+			<div v-else class="table-responsive">
 				<table class="table po-submit-review__table">
 					<thead><tr><th>Item</th><th class="text-right">Qty</th><th>UOM</th><th class="text-right">Rate</th><th class="text-right">Amount</th><th>Required</th><th>Stock Location</th></tr></thead>
 					<tbody>
-						<tr v-for="row in preview.items || []" :key="`${row.item_code}-${row.schedule_date}-${row.warehouse}`">
+						<tr v-for="row in preview.items || []" :key="[row.name || row.item_code, row.schedule_date, row.warehouse].join('-')">
 							<td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td>
 							<td class="text-right">{{ row.qty }}</td>
 							<td>{{ row.uom || '—' }}</td>
@@ -84,25 +129,49 @@
 
 		<template #footer>
 			<div class="po-submit-review__footer">
-				<button
-					v-if="preview?.can_submit && !preview?.workflow_eligible && !submitted"
-					type="button"
-					class="edge-button edge-button--primary"
-					:disabled="submitting"
-					@click="submitOrder"
-				>
-					{{ submitting ? 'Submitting...' : 'Submit Purchase Order' }}
-				</button>
-				<span v-else></span>
-				<button type="button" class="edge-button" :disabled="submitting" @click="close">Close</button>
+				<div class="po-submit-review__footer-actions">
+					<button
+						v-if="nativeDeskAllowed && purchaseOrder"
+						type="button"
+						class="edge-button"
+						:disabled="submitting || saving"
+						@click="openAdvanced"
+					>
+						Advanced: ERPNext
+					</button>
+					<button
+						v-if="preview?.can_edit && !submitted"
+						type="button"
+						class="edge-button"
+						:disabled="saving || submitting || !draftDirty || !draftValid"
+						@click="saveDraft"
+					>
+						{{ saving ? 'Saving...' : 'Save Draft Changes' }}
+					</button>
+					<button
+						v-if="preview?.can_submit && !preview?.workflow_eligible && !submitted"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting || saving || draftDirty"
+						@click="submitOrder"
+					>
+						{{ submitting ? 'Submitting...' : 'Submit Purchase Order' }}
+					</button>
+				</div>
+				<button type="button" class="edge-button" :disabled="submitting || saving" @click="close">Close</button>
 			</div>
 		</template>
 	</EdgeModal>
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_submit_preview";
 const SUBMIT_METHOD = "retailedge.professional_purchase_order_submit.submit_standard_purchase_order";
+const UPDATE_METHOD = "retailedge.professional_purchase_order_submit.update_standard_purchase_order_draft";
+const ITEM_SEARCH_METHOD = "retailedge.professional_purchase_order_submit.search_purchase_order_draft_items";
+const ITEM_PRICING_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_draft_item_pricing";
 const WORKFLOW_METHOD = "retailedge.professional_purchase_order_submit.apply_standard_purchase_order_workflow_action";
 const OPEN_EVENT = "retailedge-open-purchase-order-submit";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
@@ -113,7 +182,23 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
+
+function draftSnapshot(transactionDate, scheduleDate, terms, items) {
+	return JSON.stringify({
+		transaction_date: transactionDate || "",
+		schedule_date: scheduleDate || "",
+		terms: terms || "",
+		items: (items || []).map((row) => ({
+			name: row.name || "",
+			item_code: row.item_code || "",
+			qty: Number(row.qty || 0),
+			rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
+			schedule_date: row.schedule_date || "",
+			warehouse: row.warehouse || "",
+		})),
+	});
+}
 
 export default {
 	name: "ProfessionalPurchaseOrderSubmitOverlay",
@@ -121,6 +206,7 @@ export default {
 		EdgeModal: runtime.EdgeModal,
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
+		EdgeLinkField: runtime.EdgeLinkField,
 	},
 	data() {
 		return {
@@ -128,10 +214,46 @@ export default {
 			purchaseOrder: "",
 			loading: false,
 			submitting: false,
+			saving: false,
 			error: "",
 			preview: null,
 			submitted: null,
+			draftTransactionDate: "",
+			draftScheduleDate: "",
+			draftTerms: "",
+			draftItems: [],
+			draftBaseline: "",
+			pricingTokens: {},
 		};
+	},
+	computed: {
+		dialogTitle() {
+			return Number(this.preview?.docstatus || 0) === 1 ? "View Purchase Order" : "Review & Submit Purchase Order";
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 1
+				? "Review the submitted ERPNext Purchase Order and continue with any permitted purchasing workflow."
+				: "Review the current ERPNext draft before submission. Standard submission is blocked when advanced approval or purchasing rules apply.";
+		},
+		nativeDeskAllowed() {
+			const access = frappe.boot?.edgesuite_ui_access || {};
+			return String(access.mode || "").trim() !== "edgesuite_only" && Boolean(access.can_use_native_desk);
+		},
+		draftDirty() {
+			if (!this.preview?.can_edit || this.submitted) return false;
+			return draftSnapshot(this.draftTransactionDate, this.draftScheduleDate, this.draftTerms, this.draftItems) !== this.draftBaseline;
+		},
+		draftValid() {
+			if (!this.draftTransactionDate || !this.draftScheduleDate || this.draftScheduleDate < this.draftTransactionDate) return false;
+			return this.draftItems.length > 0 && this.draftItems.every((row) =>
+				Boolean(row.name || row.item_code) &&
+				Number(row.qty || 0) > 0 &&
+				row.rate !== "" && row.rate !== null && row.rate !== undefined &&
+				Number(row.rate) >= 0 &&
+				Boolean(row.schedule_date) &&
+				row.schedule_date >= this.draftTransactionDate
+			);
+		},
 	},
 	created() {
 		this._open = (event) => {
@@ -148,16 +270,135 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		resetDraft() {
+			this.draftTransactionDate = "";
+			this.draftScheduleDate = "";
+			this.draftTerms = "";
+			this.draftItems = [];
+			this.draftBaseline = "";
+		},
+		hydrateDraft(preview) {
+			this.draftTransactionDate = preview?.transaction_date || "";
+			this.draftScheduleDate = preview?.schedule_date || preview?.transaction_date || "";
+			this.draftTerms = preview?.terms || "";
+			this.draftItems = (preview?.items || []).map((row) => ({ ...row }));
+			this.pricingTokens = {};
+			this.draftBaseline = draftSnapshot(this.draftTransactionDate, this.draftScheduleDate, this.draftTerms, this.draftItems);
+		},
+		addDraftItem() {
+			this.draftItems = [...this.draftItems, {
+				name: "",
+				item_code: "",
+				item_name: "",
+				qty: 1,
+				uom: "",
+				rate: "",
+				schedule_date: this.draftScheduleDate || this.draftTransactionDate || "",
+				warehouse: this.preview?.default_warehouse || "",
+			}];
+		},
+		removeNewDraftItem(index) {
+			const row = this.draftItems[index];
+			if (!row || row.name || this.saving || this.submitting) return;
+			this.draftItems = this.draftItems.filter((_item, rowIndex) => rowIndex !== index);
+			this.pricingTokens = {};
+		},
+		searchDraftItem(query) {
+			if (!this.preview?.purchase_order) return Promise.resolve([]);
+			return callMethod(ITEM_SEARCH_METHOD, {
+				purchase_order: this.preview.purchase_order,
+				txt: query || "",
+			}).then((rows) => Array.isArray(rows) ? rows : []);
+		},
+		setDraftItemCode(index, value) {
+			const row = this.draftItems[index];
+			if (!row || row.name) return;
+			row.item_code = value || "";
+			row.rate = "";
+			row.warehouse = row.warehouse || this.preview?.default_warehouse || "";
+			this.draftItems = [...this.draftItems];
+			if (row.item_code) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemQty(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.qty = value;
+			this.draftItems = [...this.draftItems];
+			if (!row.name && row.item_code && Number(value || 0) > 0) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemRate(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.rate = value;
+			this.draftItems = [...this.draftItems];
+		},
+		async refreshDraftItemPricing(index) {
+			const row = this.draftItems[index];
+			if (!row?.item_code || row.name || !this.preview?.purchase_order) return;
+			const token = (this.pricingTokens[index] || 0) + 1;
+			this.pricingTokens[index] = token;
+			try {
+				const result = await callMethod(ITEM_PRICING_METHOD, {
+					purchase_order: this.preview.purchase_order,
+					item_code: row.item_code,
+					qty: Number(row.qty || 1),
+				});
+				if (this.pricingTokens[index] !== token || this.draftItems[index]?.item_code !== row.item_code) return;
+				this.draftItems[index] = {
+					...this.draftItems[index],
+					rate: result?.rate ?? "",
+					warehouse: this.draftItems[index]?.warehouse || this.preview?.default_warehouse || "",
+				};
+				this.draftItems = [...this.draftItems];
+			} catch (error) {
+				if (this.pricingTokens[index] === token) this.error = errorMessage(error, `Unable to price ${row.item_code}.`);
+			}
+		},
+		async saveDraft() {
+			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.saving || this.submitting) return;
+			this.saving = true;
+			this.error = "";
+			try {
+				this.preview = await callMethod(UPDATE_METHOD, {
+					purchase_order: this.preview.purchase_order,
+					expected_purchase_order_modified: this.preview.purchase_order_modified,
+					values: {
+						transaction_date: this.draftTransactionDate,
+						schedule_date: this.draftScheduleDate,
+						terms: this.draftTerms,
+						items: this.draftItems.map((row) => ({
+							name: row.name || "",
+							item_code: row.item_code || "",
+							qty: Number(row.qty || 0),
+							rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
+							schedule_date: row.schedule_date,
+							warehouse: row.warehouse || "",
+						})),
+					},
+				}, "POST");
+				this.hydrateDraft(this.preview);
+				frappe.show_alert({ message: __("Purchase Order draft changes saved."), indicator: "green" });
+				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
+			} catch (error) {
+				this.error = errorMessage(error, "Unable to save Purchase Order draft changes.");
+			} finally {
+				this.saving = false;
+			}
+		},
 		async loadPreview() {
 			if (!this.purchaseOrder || this.loading) return;
 			this.loading = true; this.error = ""; this.submitted = null;
 			try {
 				this.preview = await callMethod(PREVIEW_METHOD, { purchase_order: this.purchaseOrder });
+				this.submitted = Number(this.preview?.docstatus || 0) === 1
+					? { ...this.preview, name: this.preview.purchase_order }
+					: null;
+				this.hydrateDraft(this.preview);
 			} catch (error) { this.error = errorMessage(error, "Unable to review this Purchase Order."); }
 			finally { this.loading = false; }
 		},
 		async applyWorkflow(action) {
-			if (!this.preview?.workflow_eligible || !action || this.submitting) return;
+			if (!this.preview?.workflow_eligible || !action || this.submitting || this.saving || this.draftDirty) return;
 			this.submitting = true; this.error = "";
 			try {
 				const result = await callMethod(WORKFLOW_METHOD, {
@@ -168,9 +409,14 @@ export default {
 				}, "POST");
 				this.preview = await callMethod(PREVIEW_METHOD, { purchase_order: this.purchaseOrder });
 				this.submitted = Number(result.docstatus || 0) === 1 ? result : null;
+				this.hydrateDraft(this.preview);
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 			} catch (error) { this.error = errorMessage(error, "Unable to apply this Purchase Order workflow action."); }
 			finally { this.submitting = false; }
+		},
+		openDocumentOutput() {
+			if (!this.submitted?.name) return;
+			window.retailedge?.openDocumentOutputSharing?.("purchase-order", this.submitted.name);
 		},
 		async runNextAction(action) {
 			if (!this.submitted?.name || !action || this.submitting) return;
@@ -198,7 +444,7 @@ export default {
 			}
 		},
 		async submitOrder() {
-			if (!this.preview?.can_submit || this.preview?.workflow_eligible || this.submitting) return;
+			if (!this.preview?.can_submit || this.preview?.workflow_eligible || this.submitting || this.saving || this.draftDirty) return;
 			this.submitting = true; this.error = "";
 			try {
 				this.submitted = await callMethod(SUBMIT_METHOD, {
@@ -210,15 +456,30 @@ export default {
 			} catch (error) { this.error = errorMessage(error, "Unable to submit this Purchase Order."); }
 			finally { this.submitting = false; }
 		},
+		openAdvanced() {
+			if (!this.nativeDeskAllowed || !this.purchaseOrder) return;
+			frappe.set_route("Form", "Purchase Order", this.purchaseOrder);
+		},
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatMoney(value, currency) { try { return format_currency(Number(value || 0), currency || frappe.boot?.sysdefaults?.currency || ""); } catch (_error) { return `${currency || ""} ${Number(value || 0).toLocaleString()}`.trim(); } },
-		close() {
-			if (this.loading || this.submitting) return;
+		forceClose() {
 			this.open = false;
 			this.purchaseOrder = "";
 			this.preview = null;
 			this.submitted = null;
 			this.error = "";
+			this.resetDraft();
+		},
+		close() {
+			if (this.loading || this.submitting || this.saving) return;
+			if (this.draftDirty) {
+				confirmAboveEdgeModal(
+					__("Discard unsaved Purchase Order changes?"),
+					() => this.forceClose(),
+				);
+				return;
+			}
+			this.forceClose();
 		},
 	},
 };
@@ -234,7 +495,16 @@ export default {
 .po-submit-review__workflow-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 .po-submit-review__blocked ul { margin:.35rem 0 0 1.1rem; padding:0; }
 .po-submit-review__table td { vertical-align:top; }
+.po-draft-editor { display:grid; gap:.8rem; padding:.8rem; border:1px solid var(--border-color,#d1d8dd); border-radius:.5rem; }
+.po-draft-editor__heading p { margin:.2rem 0 0; opacity:.72; font-size:.82rem; }
+.po-draft-editor__grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
+.po-draft-editor__grid label { display:grid; gap:.3rem; font-size:.82rem; font-weight:600; }
+.po-draft-editor__terms { grid-column:1 / -1; }
+.po-draft-editor__table input { min-width:7rem; }
+.po-draft-editor__item-actions { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.po-draft-editor__item-actions span { opacity:.72; font-size:.78rem; }
 .po-submit-review__note { margin:0; font-size:.82rem; opacity:.72; }
 .po-submit-review__footer { width:100%; display:flex; justify-content:space-between; gap:.75rem; }
-@media (max-width:560px) { .po-submit-review__footer { flex-direction:column; } }
+.po-submit-review__footer-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+@media (max-width:560px) { .po-submit-review__footer { flex-direction:column; } .po-draft-editor__grid { grid-template-columns:1fr; } .po-draft-editor__terms { grid-column:auto; } }
 </style>

@@ -67,6 +67,20 @@
 		return fallbackText;
 	};
 
+	window.retailedge.openDocumentOutputSharing = function (document, name) {
+		const documentKey = String(document || "").trim();
+		const documentName = String(name || "").trim();
+		if (!documentKey || !documentName || typeof frappe === "undefined" || typeof frappe.set_route !== "function") return false;
+		window.retailedgeDocumentOutputTarget = {
+			document: documentKey,
+			name: documentName,
+			mode: "share",
+		};
+		frappe.set_route("document-output-sharing");
+		return true;
+	};
+
+
 	const RETAILEDGE_BUSINESS_HUB_ROUTE = "retailedge-business-hub";
 	const RETAILEDGE_DESKTOP_LABEL = "PEdge Retail";
 	const RETAILEDGE_DESKTOP_PATH = "/desk/retailedge-business-hub";

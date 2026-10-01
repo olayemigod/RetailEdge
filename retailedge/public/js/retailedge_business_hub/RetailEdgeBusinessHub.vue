@@ -289,26 +289,6 @@
 				@open-page="openMakeSaleFromQuick"
 				@open-native="openNativeSalesInvoice"
 			/>
-			<StandardSalesInvoiceCompletionDialog
-				:open="salesInvoiceCompletionOpen"
-				:document="salesInvoiceCompletionDocument"
-				:canUseNativeDesk="nativeFallbackEnabled"
-				:showNextActions="true"
-				@close="closeSalesInvoiceCompletion"
-				@changed="handleSalesInvoiceCompletionChanged"
-				@completed="handleSalesInvoiceCompletionCompleted"
-				@next-action="handleSalesInvoiceCompletionNextAction"
-			/>
-			<StandardDeliveryCompletionDialog
-				:open="deliveryCompletionOpen"
-				:document="deliveryCompletionDocument"
-				:canUseNativeDesk="nativeFallbackEnabled"
-				@close="closeDeliveryCompletion"
-				@changed="handleDeliveryCompletionChanged"
-				@completed="handleDeliveryCompletionCompleted"
-				@next-action="handleDeliveryCompletionNextAction"
-			/>
-
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
 				:native-fallback-enabled="nativeFallbackEnabled"
@@ -351,17 +331,6 @@
 				@open-page="openRecordPurchaseFromQuick"
 				@open-native="openNativePurchaseInvoice"
 			/>
-			<StandardPurchaseInvoiceCompletionDialog
-				:open="purchaseInvoiceCompletionOpen"
-				:document="purchaseInvoiceCompletionDocument"
-				:canUseNativeDesk="nativeFallbackEnabled"
-				:showNextActions="true"
-				@close="closePurchaseInvoiceCompletion"
-				@changed="handlePurchaseInvoiceCompletionChanged"
-				@completed="handlePurchaseInvoiceCompletionCompleted"
-				@next-action="handlePurchaseInvoiceCompletionNextAction"
-			/>
-
 			<SimpleCashierExpenseDialog
 				:open="simpleCashierExpenseOpen"
 				:native-fallback-enabled="nativeFallbackEnabled"
@@ -416,10 +385,7 @@ import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import GuidedWorkflowCompletionDialog from "./GuidedWorkflowCompletionDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
-import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
-import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
-import StandardDeliveryCompletionDialog from "../professional_selling/StandardDeliveryCompletionDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
@@ -430,8 +396,6 @@ const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
 const HOME_VISUALS_METHOD = "retailedge.business_hub_visuals.get_business_hub_visuals";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
-const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
-const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
@@ -603,10 +567,7 @@ export default {
 		GuidedWorkflowCompletionDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
-		StandardPurchaseInvoiceCompletionDialog,
 		SimpleSalesInvoiceDialog,
-		StandardSalesInvoiceCompletionDialog,
-		StandardDeliveryCompletionDialog,
 		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
 		StandardStockCompletionDialog,
@@ -628,20 +589,14 @@ export default {
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
-			salesInvoiceCompletionOpen: false,
-			salesInvoiceCompletionDocument: null,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
 			simplePaymentInitialContext: {},
-			deliveryCompletionOpen: false,
-			deliveryCompletionDocument: null,
 			simpleCashDepositOpen: false,
 			internalTransferCompletionOpen: false,
 			internalTransferCompletionDocument: null,
 			simpleCashTransferOpen: false,
 			simplePurchaseInvoiceOpen: false,
-			purchaseInvoiceCompletionOpen: false,
-			purchaseInvoiceCompletionDocument: null,
 			simpleCashierExpenseOpen: false,
 			cashierExpenseCompletionOpen: false,
 			cashierExpenseCompletionDocument: null,
@@ -1144,97 +1099,17 @@ export default {
 			this.simpleSalesInvoiceOpen = false;
 		},
 		handleSimpleSalesInvoiceSaved(result) {
-			this.simpleSalesInvoiceOpen = false;
-			if (result?.name) {
-				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
-			}
-		},
-		openSalesInvoiceCompletion(document) {
-			if (document?.doctype !== "Sales Invoice" || !document?.name) return;
-			this.salesInvoiceCompletionDocument = { doctype: "Sales Invoice", name: document.name };
-			this.salesInvoiceCompletionOpen = true;
-		},
-		closeSalesInvoiceCompletion() {
-			this.salesInvoiceCompletionOpen = false;
-			this.salesInvoiceCompletionDocument = null;
-		},
-		handleSalesInvoiceCompletionChanged() {
-			this.refreshContext({ force: true });
-		},
-		handleSalesInvoiceCompletionCompleted() {
-			this.refreshContext({ force: true });
-		},
-		async handleSalesInvoiceCompletionNextAction(payload) {
-			if (!payload?.action || !payload?.name) return;
-			this.closeSalesInvoiceCompletion();
-			if (payload.action === "make-payment") {
-				this.simplePaymentIntent = "receive-customer-payment";
-				this.simplePaymentInitialContext = {
-					company: this.context.company || "",
-					branch: this.context.branch || "",
-					party: payload.customer || "",
-					reference_name: payload.name,
-				};
-				this.simplePaymentOpen = true;
+			if (!result?.name) {
+				this.simpleSalesInvoiceOpen = false;
 				return;
 			}
-			if (payload.action === "create-delivery-note") {
-				try {
-					const result = await callMethod(CREATE_DELIVERY_METHOD, { sales_invoice: payload.name }, "POST");
-					if (!result?.name) throw new Error("Delivery Note draft was not returned.");
-					if (Number(result.docstatus || 0) === 0) {
-						this.deliveryCompletionDocument = { doctype: "Delivery Note", name: result.name };
-						this.deliveryCompletionOpen = true;
-					} else {
-						this.openDocumentOutput("delivery-note", result.name, "view");
-					}
-				} catch (error) {
-					const message = window.retailedge?.userErrorMessage?.(error, "Unable to continue to Delivery Note.")
-						|| "Unable to continue to Delivery Note.";
-					frappe.show_alert?.({ message, indicator: "red" }, 8);
-				}
-				return;
-			}
-			if (payload.action === "create-return-credit-note") {
-				try {
-					const result = await callMethod(CREATE_RETURN_METHOD, { sales_invoice: payload.name }, "POST");
-					if (!result?.name) throw new Error("Return / Credit Note draft was not returned.");
-					window.retailedgeProfessionalSellingTarget = {
-						doctype: "Sales Invoice",
-						name: result.name,
-						source_mode: "sales_return",
-						user: frappe.session?.user || "Guest",
-					};
-					frappe.set_route("professional-selling");
-				} catch (error) {
-					const message = window.retailedge?.userErrorMessage?.(error, "Unable to prepare the Return / Credit Note.")
-						|| "Unable to prepare the Return / Credit Note.";
-					frappe.show_alert?.({ message, indicator: "red" }, 8);
-				}
-				return;
-			}
-			if (payload.action === "output") this.openDocumentOutput("sales-invoice", payload.name, "share");
-		},
-		closeDeliveryCompletion() {
-			this.deliveryCompletionOpen = false;
-			this.deliveryCompletionDocument = null;
-		},
-		handleDeliveryCompletionChanged() {
-			this.refreshContext({ force: true });
-		},
-		handleDeliveryCompletionCompleted() {
-			this.refreshContext({ force: true });
-		},
-		handleDeliveryCompletionNextAction(payload) {
-			if (payload?.action === "output" && payload?.name) {
-				this.closeDeliveryCompletion();
-				this.openDocumentOutput("delivery-note", payload.name, "share");
-			}
+			this.openMakeSaleFromQuick({ document_name: result.name });
 		},
 		openMakeSaleFromQuick(payload = {}) {
 			try {
 				window.sessionStorage.setItem(`${MAKE_SALE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({
 					createdAt: Date.now(),
+					document_name: payload?.document_name || "",
 					values: payload?.values || {},
 				}));
 			} catch (_error) {
@@ -1319,64 +1194,18 @@ export default {
 			this.simplePurchaseInvoiceOpen = false;
 		},
 		handleSimplePurchaseInvoiceSaved(result) {
-			this.simplePurchaseInvoiceOpen = false;
-			if (result?.name) {
-				this.openPurchaseInvoiceCompletion({ doctype: "Purchase Invoice", name: result.name });
-			}
-		},
-		openPurchaseInvoiceCompletion(document) {
-			if (document?.doctype !== "Purchase Invoice" || !document?.name) return;
-			this.purchaseInvoiceCompletionDocument = { doctype: "Purchase Invoice", name: document.name };
-			this.purchaseInvoiceCompletionOpen = true;
-		},
-		closePurchaseInvoiceCompletion() {
-			this.purchaseInvoiceCompletionOpen = false;
-			this.purchaseInvoiceCompletionDocument = null;
-		},
-		handlePurchaseInvoiceCompletionChanged() {
-			this.refreshContext({ force: true });
-		},
-		handlePurchaseInvoiceCompletionCompleted() {
-			this.refreshContext({ force: true });
-		},
-		handlePurchaseInvoiceCompletionNextAction(payload) {
-			if (!payload?.action || !payload?.name) return;
-			this.closePurchaseInvoiceCompletion();
-			if (payload.action === "pay-supplier") {
-				this.simplePaymentIntent = "pay-supplier";
-				this.simplePaymentInitialContext = {
-					company: payload.company || this.context.company || "",
-					branch: payload.branch || this.context.branch || "",
-					party: payload.supplier || "",
-					reference_name: payload.name,
-				};
-				this.simplePaymentOpen = true;
+			if (!result?.name) {
+				this.simplePurchaseInvoiceOpen = false;
 				return;
 			}
-			if (payload.action === "create-supplier-debit-note") {
-				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name, user: frappe.session?.user || "Guest" };
-				frappe.set_route("professional-purchasing");
-				return;
-			}
-			if (payload.action === "supplier-payables") {
-				const filters = {
-					company: payload.company || this.context.company || "",
-					branch: payload.branch || this.context.branch || "",
-					supplier: payload.supplier || "",
-				};
-				setBusinessHubRouteHandoff("/app/supplier-payables", filters);
-				frappe.set_route("supplier-payables");
-				return;
-			}
-			if (payload.action === "output") this.openDocumentOutput("purchase-invoice", payload.name, "share");
+			this.openRecordPurchaseFromQuick({ document_name: result.name });
 		},
-		openDocumentOutput(document, name, mode = "share") {
+		openDocumentOutput(document, name) {
 			if (!document || !name) return;
-			window.retailedgeDocumentOutputTarget = { document, name, mode };
-			frappe.set_route("document-output-sharing");
+			window.retailedge?.openDocumentOutputSharing?.(document, name);
 		},
 		openRecordPurchaseFromQuick(payload = {}) {
-			try { window.sessionStorage.setItem(`${RECORD_PURCHASE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			try { window.sessionStorage.setItem(`${RECORD_PURCHASE_HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), document_name: payload?.document_name || "", values: payload?.values || {} })); } catch (_error) {}
 			this.simplePurchaseInvoiceOpen = false;
 			frappe.set_route("record-purchase");
 		},

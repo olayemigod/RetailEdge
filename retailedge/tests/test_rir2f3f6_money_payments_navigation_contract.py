@@ -27,6 +27,14 @@ def test_money_payments_routes_to_edgesuite_payment_management():
 	assert '"icon": "wallet"' in payments
 
 
+def test_money_payment_history_routes_to_separate_edgesuite_page():
+	source = _read(NAVIGATION)
+	history = _navigation_item(source, "Payment History")
+	assert '"target_type": "Page"' in history
+	assert '"target": "payment-history"' in history
+	assert '"target": "Payment Entry"' not in history
+
+
 def test_reconciliation_and_payment_orders_remain_native_in_f3f6():
 	source = _read(NAVIGATION)
 	reconciliation = _navigation_item(source, "Payment Reconciliation")

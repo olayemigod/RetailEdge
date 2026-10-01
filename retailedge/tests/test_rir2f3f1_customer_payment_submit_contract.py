@@ -34,14 +34,15 @@ def test_draft_listing_is_permission_aware_and_requires_operating_scope():
 	source = _read(BACKEND)
 	listing = _function_source(source, "list_standard_customer_payment_drafts", "submit_standard_customer_payment")
 	assert "Choose Company and Customer before reviewing draft payments" in listing
-	assert "Choose a Branch before reviewing draft payments for restricted access" in listing
-	assert "validate_user_branch_access(" in listing
-	assert "user_has_global_branch_access(user=frappe.session.user)" in listing
+	assert "get_operational_branch_scope(company, user=frappe.session.user)" in listing
+	assert "resolve_operational_branch(" in listing
 	assert "frappe.get_list(" in listing
 	assert '"docstatus": 0' in listing
 	assert '"payment_type": "Receive"' in listing
 	assert '"party_type": CUSTOMER_DOCTYPE' in listing
 	assert "frappe.get_all(" not in listing
+	assert "except (frappe.PermissionError, frappe.ValidationError)" in listing
+	assert "legacy/stale draft" in listing
 
 
 def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex_allocations():
@@ -57,11 +58,11 @@ def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex
 	assert "Separate party-account advances require Advanced ERPNext review" in source
 
 
-def test_restricted_blank_branch_and_context_tampering_fail_closed():
+def test_restricted_blank_disabled_branch_and_context_tampering_fail_closed():
 	source = _read(BACKEND)
 	assert "_payment_branch(doc)" in source
-	assert "user_has_global_branch_access(user=frappe.session.user)" in source
-	assert "validate_user_branch_access(" in source
+	assert "get_operational_branch_scope(company, user=frappe.session.user)" in source
+	assert "resolve_operational_branch(" in source
 	assert "has no Branch attribution for your restricted access" in source
 	assert "does not belong to the selected Company" in source
 	assert "does not belong to the selected Customer" in source

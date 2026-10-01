@@ -10,13 +10,17 @@ class TestDocumentOutput(unittest.TestCase):
 	def read(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_registry_covers_customer_facing_sales_documents(self):
+	def test_registry_covers_retailedge_business_documents(self):
 		source = self.read("document_output.py")
 		for contract in (
 			'"doctype": "Quotation"',
 			'"doctype": "Sales Order"',
 			'"doctype": "Delivery Note"',
 			'"doctype": "Sales Invoice"',
+			'"doctype": "Purchase Order"',
+			'"native_route": "/app/purchase-order"',
+			'"doctype": "Purchase Receipt"',
+			'"native_route": "/app/purchase-receipt"',
 			'"doctype": "Purchase Invoice"',
 			'"party_field": "supplier"',
 			'"native_route": "/app/purchase-invoice"',
@@ -142,6 +146,19 @@ class TestDocumentOutput(unittest.TestCase):
 		):
 			self.assertIn(contract, component)
 		self.assertNotIn("/printview?", component)
+
+
+	def test_output_workspace_is_share_only_and_never_used_as_view(self):
+		component = self.read("public/js/document_output_sharing/DocumentOutputSharing.vue")
+		global_runtime = self.read("public/js/retailedge.js")
+		self.assertNotIn("outputMode", component)
+		self.assertNotIn('target.mode === "view"', component)
+		self.assertIn('class="edge-panel output-actions"', component)
+		self.assertIn('@click="printPreview"', component)
+		self.assertIn("Print", component)
+		self.assertIn("openDocumentOutputSharing = function", global_runtime)
+		self.assertIn('mode: "share"', global_runtime)
+		self.assertIn('frappe.set_route("document-output-sharing")', global_runtime)
 
 
 	def test_whatsapp_is_user_initiated_without_public_document_link(self):

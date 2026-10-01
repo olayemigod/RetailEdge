@@ -806,6 +806,7 @@ def _sales_invoice_has_returnable_items(invoice) -> bool:
 	return False
 
 
+@frappe.whitelist()
 def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
 	"""Resolve permitted next actions for one visible Professional Selling record."""
 	document = str(document or "").strip()

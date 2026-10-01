@@ -253,6 +253,17 @@ def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
 	assert '<input id="invoice-due-date"' not in dialog
 
 
+def test_sales_completion_save_draft_action_is_in_footer_and_record_actions_are_whitelisted():
+	dialog = _read(DIALOG)
+	editor = dialog[dialog.index('class="invoice-draft-editor"'):dialog.index("<template #footer>")]
+	footer = dialog[dialog.index("<template #footer>"):]
+	assert "Save Draft Changes" not in editor
+	assert "Save Draft Changes" in footer
+	service = _read(ROOT / "professional_selling.py")
+	action_index = service.index("def get_professional_selling_record_actions")
+	assert "@frappe.whitelist()" in service[max(0, action_index - 80):action_index]
+
+
 def test_tabbed_sales_invoice_exposes_output_and_draft_edit_paths():
 	source = _read(SELLING)
 	assert "window.retailedgeDocumentOutputTarget" in source
@@ -390,13 +401,22 @@ def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
 	assert "Advanced: Open in ERPNext" not in dialog
 
 
-def test_business_hub_simple_invoice_opens_same_completion_review():
+def test_business_hub_quick_invoice_hands_saved_draft_to_persistent_make_sale():
 	source = _read(HUB)
-	assert 'import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue"' in source
 	assert "handleSimpleSalesInvoiceSaved(result)" in source
-	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name })' in source
-	assert "salesInvoiceCompletionOpen" in source
-	assert "salesInvoiceCompletionDocument" in source
+	assert "this.openMakeSaleFromQuick({ document_name: result.name });" in source
+	assert 'document_name: payload?.document_name || ""' in source
+	assert 'frappe.set_route("make-sale")' in source
+	assert "StandardSalesInvoiceCompletionDialog" not in source
+	assert "salesInvoiceCompletionOpen" not in source
+
+
+def test_sales_completion_dialog_direct_submit_is_visible_when_backend_allows_it():
+	source = _read(DIALOG)
+	assert 'v-if="preview?.can_submit"' in source
+	assert 'v-if="preview?.can_edit && draftDirty"' not in source
+	assert ':disabled="busy || draftDirty"' in source
+	assert "confirmAboveEdgeModal" in source
 
 
 def test_existing_invoice_creation_paths_remain_draft_only():

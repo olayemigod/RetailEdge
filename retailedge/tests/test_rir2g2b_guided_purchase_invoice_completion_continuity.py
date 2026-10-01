@@ -201,6 +201,14 @@ def test_dialog_uses_server_authoritative_submit_and_workflow_actions():
 	assert 'v-if="canUseNativeDesk && document?.name"' in source
 
 
+def test_purchase_completion_save_draft_action_is_in_footer():
+	dialog = _read(DIALOG)
+	editor = dialog[dialog.index('class="invoice-draft-editor"'):dialog.index("<template #footer>")]
+	footer = dialog[dialog.index("<template #footer>"):]
+	assert "Save Draft Changes" not in editor
+	assert "Save Draft Changes" in footer
+
+
 def test_professional_purchasing_source_mode_preserves_source_ownership_and_allows_governed_completion():
 	source = _read(SERVICE)
 	for marker in (
@@ -379,13 +387,20 @@ def test_purchase_invoice_next_action_reuses_professional_supplier_debit_note_re
 	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in bundle
 
 
-def test_business_hub_record_purchase_opens_purchase_invoice_completion():
+def test_business_hub_quick_purchase_hands_saved_draft_to_persistent_record_purchase():
 	source = _read(HUB)
-	assert 'import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue"' in source
 	assert "handleSimplePurchaseInvoiceSaved(result)" in source
-	assert 'this.openPurchaseInvoiceCompletion({ doctype: "Purchase Invoice", name: result.name })' in source
-	assert "purchaseInvoiceCompletionOpen" in source
-	assert "purchaseInvoiceCompletionDocument" in source
+	assert "this.openRecordPurchaseFromQuick({ document_name: result.name });" in source
+	assert 'document_name: payload?.document_name || ""' in source
+	assert 'frappe.set_route("record-purchase")' in source
+	assert "StandardPurchaseInvoiceCompletionDialog" not in source
+	assert "purchaseInvoiceCompletionOpen" not in source
+
+
+def test_purchase_completion_discard_confirmation_is_elevated_above_edgesuite_modal():
+	source = _read(DIALOG)
+	assert "confirmAboveEdgeModal" in source
+	assert 'frappe.confirm(__("Discard unsaved Purchase Invoice draft changes?")' not in source
 
 
 def test_professional_purchasing_exposes_resumable_draft_review():

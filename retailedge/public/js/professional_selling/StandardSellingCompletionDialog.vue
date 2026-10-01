@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="dialogTitle"
-		subtitle="Review the saved ERPNext draft and complete it through native submission or the active Frappe Workflow."
+		:subtitle="dialogSubtitle"
 		size="xl"
 		@close="requestClose"
 	>
@@ -85,7 +85,7 @@
 					</p>
 				</div>
 
-				<div v-if="preview.blockers?.length" class="selling-completion-blockers">
+				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="selling-completion-blockers">
 					<strong>Standard completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
@@ -119,7 +119,7 @@
 						>
 							{{ action.label }}
 						</button>
-						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Send</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Share</button>
 					</div>
 				</div>
 
@@ -243,7 +243,13 @@ export default {
 	},
 	computed: {
 		dialogTitle() {
-			return this.document?.doctype ? `Complete ${this.document.doctype}` : "Complete Selling Document";
+			const label = this.document?.doctype || "Selling Document";
+			return Number(this.preview?.docstatus || 0) === 0 ? `Complete ${label}` : `View ${label}`;
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 0
+				? "Review the saved ERPNext draft and complete it through native submission or the active Frappe Workflow."
+				: "Review the saved ERPNext document and continue with any permitted next workflow.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
@@ -303,6 +309,10 @@ export default {
 				if (Number(this.preview?.docstatus || 0) === 0) {
 					this.completedResult = null;
 					this.hydrateDraft();
+				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.completedResult = await this.decorateCompletedResult(this.preview);
+				} else {
+					this.completedResult = null;
 				}
 			} catch (error) {
 				this.preview = null;

@@ -136,7 +136,15 @@
 			<div v-if="formError" class="manager-error">{{ formError }}</div>
 			<div class="form-actions">
 				<button type="button" class="edge-button edge-button--secondary" @click="returnToList">Cancel</button>
-				<button type="button" class="edge-button edge-button--primary" :disabled="saving || (editingName && !canWrite)" @click="saveCategory">{{ saving ? "Saving…" : editingName ? "Save Changes" : "Create Category" }}</button>
+				<button
+					type="button"
+					class="edge-button edge-button--primary"
+					:disabled="saveDisabled"
+					:title="saveDisabledReason"
+					@click="saveCategory"
+				>
+					{{ saving ? "Saving…" : editingName ? "Save Changes" : "Create Category" }}
+				</button>
 			</div>
 		</section>
 	</section>
@@ -160,7 +168,7 @@ function callMethod(method, args = {}, type = null) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?.exception || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 function blankForm() {
@@ -203,6 +211,24 @@ export default {
 			editingName: "",
 			expectedModified: "",
 		};
+	},
+	computed: {
+		saveDisabled() {
+			if (this.saving) return true;
+			if (this.editingName) return !this.canWrite;
+			if (!this.canCreate) return true;
+			if (!String(this.form.category_name || "").trim()) return true;
+			if (!String(this.form.company || "").trim()) return true;
+			return false;
+		},
+		saveDisabledReason() {
+			if (this.saving) return "Saving Expense Category…";
+			if (this.editingName && !this.canWrite) return "You do not have permission to edit Expense Categories.";
+			if (!this.editingName && !this.canCreate) return "You do not have permission to create Expense Categories.";
+			if (!String(this.form.category_name || "").trim()) return "Enter Category Name.";
+			if (!this.editingName && !String(this.form.company || "").trim()) return "Select Company.";
+			return "";
+		},
 	},
 	mounted() {
 		this.loadContext();
@@ -291,7 +317,10 @@ export default {
 			this.fetchList();
 		},
 		async saveCategory() {
-			if (this.saving || (this.editingName && !this.canWrite)) return;
+			if (this.saveDisabled) {
+				if (this.saveDisabledReason) this.formError = this.saveDisabledReason;
+				return;
+			}
 			if (!this.form.category_name || (!this.form.company && !this.editingName)) {
 				this.formError = "Category Name and Company are required.";
 				return;

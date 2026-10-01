@@ -76,10 +76,10 @@ def test_sales_order_mapping_populates_required_delivery_dates_before_insert():
 	assert source.index("target.delivery_date = delivery_date") < source.index("target.insert()")
 
 
-def test_submitted_rows_use_view_while_drafts_use_edit_complete_and_output_is_print_send():
+def test_submitted_rows_use_view_while_drafts_use_edit_complete_and_output_is_print_share():
 	source = read("public/js/professional_selling/ProfessionalSellingRecords.vue")
 	assert 'return this.canComplete(row) ? "Edit / Complete" : "View";' in source
-	assert 'label: "Print & Send"' in source
+	assert 'label: "Print & Share"' in source
 	assert 'action: "view"' in source
 	assert 'action: "complete"' in source
 

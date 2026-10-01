@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		title="Complete Purchase Invoice"
-		subtitle="Review the saved ERPNext Purchase Invoice and complete it through native submission or the active Frappe Workflow."
+		:title="dialogTitle"
+		:subtitle="dialogSubtitle"
 		size="lg"
 		@close="requestClose"
 	>
@@ -30,7 +30,6 @@
 							<strong>Edit draft before completion</strong>
 							<p>Company, Supplier, Branch, stock mode, warehouses and PO/Receipt source links remain protected. ERPNext recalculates the draft when saved.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">{{ busy ? "Saving..." : "Save Draft Changes" }}</button>
 					</div>
 					<div class="invoice-editor-grid">
 						<EdgeInput v-model="draftPostingDate" id="purchase-invoice-posting-date" label="Posting Date" type="date" :disabled="busy" required />
@@ -81,7 +80,7 @@
 					</p>
 				</div>
 
-				<div v-if="preview.blockers?.length" class="invoice-completion-blockers">
+				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="invoice-completion-blockers">
 					<strong>Standard Purchase Invoice completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
@@ -101,8 +100,8 @@
 
 				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
-						<strong>Purchase Invoice submitted</strong>
-						<p>Continue with the next permitted payable workflow without reopening the transaction.</p>
+						<strong>Purchase Invoice is submitted</strong>
+						<p>Review the saved invoice and continue with the next permitted payable workflow.</p>
 					</div>
 					<div class="invoice-next-buttons">
 						<button
@@ -136,6 +135,15 @@
 					Advanced: Open in ERPNext
 				</button>
 				<div class="invoice-completion-actions">
+					<button
+						v-if="preview?.can_edit && !completedResult"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy || !draftDirty || !draftValid"
+						@click="saveDraftChanges"
+					>
+						{{ busy ? "Saving..." : "Save Draft Changes" }}
+					</button>
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
@@ -165,6 +173,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
@@ -227,6 +237,14 @@ export default {
 		};
 	},
 	computed: {
+		dialogTitle() {
+			return Number(this.preview?.docstatus || 0) === 0 ? "Complete Purchase Invoice" : "View Purchase Invoice";
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 0
+				? "Review the saved ERPNext Purchase Invoice and complete it through native submission or the active Frappe Workflow."
+				: "Review the submitted ERPNext Purchase Invoice and continue with any permitted payable workflow.";
+		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
 		},
@@ -300,6 +318,10 @@ export default {
 				if (Number(this.preview?.docstatus || 0) === 0) {
 					this.completedResult = null;
 					this.syncDraftEditor(this.preview);
+				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.completedResult = { ...this.preview };
+				} else {
+					this.completedResult = null;
 				}
 			} catch (error) {
 				this.preview = null;
@@ -454,7 +476,7 @@ export default {
 		requestClose() {
 			if (this.busy) return;
 			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
-				frappe.confirm(__("Discard unsaved Purchase Invoice draft changes?"), () => this.$emit("close"));
+				confirmAboveEdgeModal(__("Discard unsaved Purchase Invoice draft changes?"), () => this.$emit("close"));
 				return;
 			}
 			this.$emit("close");

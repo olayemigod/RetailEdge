@@ -87,9 +87,15 @@ class TestTransactionEntryPreference(unittest.TestCase):
 			"Smart",
 			"Quick Entry",
 			"Full Page",
-			"set_transaction_entry_preference",
+			"setTransactionEntryPreference",
+			"getTransactionEntryPreference({ force: true })",
 		):
 			self.assertIn(contract, context)
+		self.assertIn("selection = null", context)
+		self.assertIn("ENTRY_PREFERENCE_LABELS[rawValue]", context)
+		self.assertIn("__retailedgeTransactionEntryPreferenceCache", utils)
+		self.assertIn("readSharedTransactionEntryPreferenceCache", utils)
+		self.assertIn("writeSharedTransactionEntryPreferenceCache", utils)
 
 	def test_professional_selling_honours_full_page_and_popup_escape_for_new_sales(self):
 		selling = (ROOT / "public/js/professional_selling/ProfessionalSelling.vue").read_text(encoding="utf-8")

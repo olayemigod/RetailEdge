@@ -106,8 +106,10 @@
 </template>
 
 <script>
-const ENTRY_PREFERENCE_METHOD = "retailedge.transaction_entry_preference.get_transaction_entry_preference";
-const ENTRY_PREFERENCE_SAVE_METHOD = "retailedge.transaction_entry_preference.set_transaction_entry_preference";
+import {
+	getTransactionEntryPreference,
+	setTransactionEntryPreference,
+} from "../retailedge_business_hub/guidedEntryUtils";
 const ENTRY_PREFERENCE_LABELS = Object.freeze({
 	smart: "Smart",
 	quick: "Quick Entry",
@@ -203,17 +205,29 @@ export default {
 	methods: {
 		async loadEntryPreference() {
 			try {
-				const result = await callMethod(ENTRY_PREFERENCE_METHOD);
+				const result = await getTransactionEntryPreference({ force: true });
 				this.entryPreferenceLabel = ENTRY_PREFERENCE_LABELS[result?.value] || "Smart";
 			} catch (_error) {
 				this.entryPreferenceLabel = "Smart";
 			}
 		},
-		async saveEntryPreference() {
-			const value = ENTRY_PREFERENCE_VALUES[this.entryPreferenceLabel] || "smart";
+		async saveEntryPreference(selection = null) {
+			let label = this.entryPreferenceLabel;
+			if (typeof selection === "string") {
+				if (ENTRY_PREFERENCE_VALUES[selection]) label = selection;
+				else if (ENTRY_PREFERENCE_LABELS[selection]) label = ENTRY_PREFERENCE_LABELS[selection];
+			} else if (selection && typeof selection === "object") {
+				const rawValue = String(selection.value || "").trim();
+				const rawLabel = String(selection.label || "").trim();
+				if (ENTRY_PREFERENCE_LABELS[rawValue]) label = ENTRY_PREFERENCE_LABELS[rawValue];
+				else if (ENTRY_PREFERENCE_VALUES[rawValue]) label = rawValue;
+				else if (ENTRY_PREFERENCE_VALUES[rawLabel]) label = rawLabel;
+			}
+			const value = ENTRY_PREFERENCE_VALUES[label] || "smart";
+			this.entryPreferenceLabel = label;
 			this.entryPreferenceSaving = true;
 			try {
-				const result = await callMethod(ENTRY_PREFERENCE_SAVE_METHOD, { value });
+				const result = await setTransactionEntryPreference(value);
 				this.entryPreferenceLabel = ENTRY_PREFERENCE_LABELS[result?.value] || "Smart";
 				frappe.show_alert({ message: __("Transaction entry preference updated."), indicator: "green" });
 			} catch (error) {

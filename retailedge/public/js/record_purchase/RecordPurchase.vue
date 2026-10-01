@@ -50,11 +50,74 @@
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
 					<div class="page-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" class="edge-button" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button><button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-supplier-debit-note')" class="edge-button" type="button" @click="runSavedNextAction('create-supplier-debit-note')">Supplier Debit Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('supplier-payables')">Supplier Payables</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('output')">Print / Share</button>
 						<button class="edge-button" type="button" @click="startAnother">Start Another Purchase</button>
+					</div>
+				</section>
+
+				<section
+					v-if="savedDocument && !editingSavedDraft && Number(savedDocument.docstatus || 0) === 0"
+					class="edge-panel transaction-form"
+					aria-label="Purchase Invoice workflow and submission"
+				>
+					<div class="items-heading">
+						<div>
+							<span class="page-kicker">Workflow & submission</span>
+							<h3>Complete {{ savedDocument.name }}</h3>
+							<p>Approval and submission stay on this persistent page. Quick Purchase only creates the ERPNext draft.</p>
+						</div>
+						<span class="item-count">{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow" : "Ready to submit" }}</span>
+					</div>
+
+					<div v-if="workflowError" class="form-error" role="alert">{{ workflowError }}</div>
+
+					<div v-if="savedDocument.workflow_readiness?.source === 'frappe'" class="form-warning" role="status">
+						<strong>{{ savedDocument.workflow_readiness.workflow || "Frappe Workflow" }}</strong>
+						<div v-if="savedDocument.workflow_readiness.current_state">
+							Current state: <strong>{{ savedDocument.workflow_readiness.current_state }}</strong>
+						</div>
+						<div>{{ savedDocument.workflow_readiness.message || "Use one of the permitted workflow actions below." }}</div>
+					</div>
+
+					<div v-if="savedDocument.blockers?.length" class="form-warning" role="status">
+						<strong>Completion checks</strong>
+						<ul>
+							<li v-for="blocker in savedDocument.blockers" :key="blocker">{{ blocker }}</li>
+						</ul>
+					</div>
+
+					<div class="sticky-actions">
+						<div>
+							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "ERPNext submission" }}</strong>
+							<small v-if="savedDocument.workflow_readiness?.source === 'frappe'">Only actions currently permitted by Frappe Workflow are shown.</small>
+							<small v-else>Submit uses ERPNext's normal Purchase Invoice validation, payable and stock posting rules.</small>
+						</div>
+						<div class="page-actions">
+							<button class="edge-button" type="button" :disabled="workflowBusy" @click="refreshSavedDocumentPreview">{{ workflowBusy ? "Refreshing..." : "Refresh Status" }}</button>
+							<button
+								v-for="action in workflowActions"
+								:key="action.action"
+								class="edge-button edge-button--primary"
+								type="button"
+								:disabled="workflowBusy || !savedDocument.workflow_eligible"
+								@click="applySavedWorkflow(action.action)"
+							>
+								{{ action.action }}
+							</button>
+							<button
+								v-if="savedDocument.can_submit && savedDocument.workflow_readiness?.source !== 'frappe'"
+								class="edge-button edge-button--primary"
+								type="button"
+								:disabled="workflowBusy"
+								@click="submitSavedDocument"
+							>
+								{{ workflowBusy ? "Submitting..." : "Submit Purchase Invoice" }}
+							</button>
+							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="workflowBusy" @click="openAdvancedNative">Advanced: ERPNext</button>
+						</div>
 					</div>
 				</section>
 
@@ -106,7 +169,6 @@
 				</form>
 			</div>
 
-			<StandardPurchaseInvoiceCompletionDialog :open="completionOpen" :document="savedDocument" :canUseNativeDesk="canUseNativeDesk" :showNextActions="true" @close="completionOpen = false" @changed="handleCompletionChanged" @completed="handleCompletionCompleted" @next-action="handleCompletionNextAction" />
 			<SimplePaymentDialog :open="paymentOpen" intent="pay-supplier" :initialContext="paymentInitialContext" :nativeFallbackEnabled="canUseNativeDesk" @close="closePayment" @saved="handlePaymentSaved" />
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -114,7 +176,6 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateItem, quickCreateSupplier, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
-import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 
@@ -125,6 +186,8 @@ const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_c
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
 const UPDATE_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
+const SUBMIT_METHOD = "retailedge.standard_purchase_invoice_completion.submit_standard_purchase_invoice";
+const WORKFLOW_METHOD = "retailedge.standard_purchase_invoice_completion.apply_standard_purchase_invoice_workflow_action";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:record-purchase:handoff:";
 const RECOVERY_PREFIX = "retailedge:record-purchase:recovery:";
@@ -150,12 +213,12 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeRecordPurchase",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog, PartyBusinessContext },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, SimplePaymentDialog, PartyBusinessContext },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
-			pricingTokens: {}, pricingCache: new Map(), recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false, completionOpen: false,
-			paymentOpen: false, paymentInitialContext: {}, entryIntent: "choose",
+			pricingTokens: {}, pricingCache: new Map(), recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false,
+			workflowBusy: false, workflowError: "", paymentOpen: false, paymentInitialContext: {}, entryIntent: "choose",
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			itemTableField: { label: "Items", description: "Use this full-page table for purchases with many lines." },
 			itemColumns: [{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" }, { fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 }, { fieldname: "rate", label: "Buying Rate", fieldtype: "Currency", placeholder: "Auto buying price" }],
@@ -174,11 +237,17 @@ export default {
 		searchContext() { return { company: this.values.company, branch: this.values.branch, warehouse: this.values.warehouse, supplier: this.values.supplier, price_list: this.values.price_list }; },
 		hasUnsavedChanges() { return Boolean(this.initialSnapshot && JSON.stringify(this.values) !== this.initialSnapshot); },
 		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
+		workflowActions() { return this.savedDocument?.workflow_readiness?.available_actions || []; },
 		recoverySummary() { const v = this.recoveryCandidate?.values || {}; const count = (v.items || []).filter((row) => row?.item_code).length; return `${v.supplier ? `Supplier: ${v.supplier}. ` : ""}${count} item${count === 1 ? "" : "s"} entered.`; },
 	},
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
-		this._pageShow = () => { if (!this.loaded && !this.loading) this.loadPage(); };
+		this._pageShow = () => {
+			if (this.loading) return;
+			const pendingHandoff = this.hasPendingHandoff();
+			if (pendingHandoff) this.loaded = false;
+			if (!this.loaded || pendingHandoff) this.loadPage();
+		};
 		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-record-purchase-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
@@ -186,7 +255,7 @@ export default {
 	methods: {
 		async loadPage() {
 			if (this.loading) return;
-			this.loading = true; this.loadError = ""; this.saveError = ""; this.savedDocument = null; this.completionOpen = false; this.entryIntent = "choose"; this.pricingCache.clear();
+			this.loading = true; this.loadError = ""; this.saveError = ""; this.workflowError = ""; this.savedDocument = null; this.recoveryCandidate = null; this.entryIntent = "choose"; this.pricingCache.clear();
 			try {
 				const [data, shell] = await Promise.all([callMethod(CONTEXT_METHOD), callMethod(SHELL_METHOD)]);
 				this.formContext = data || {}; this.applyShell(shell || {}); this.applyDefaults(data?.defaults || {});
@@ -227,6 +296,14 @@ export default {
 		},
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
+		hasPendingHandoff() {
+			try {
+				const raw = sessionStorage.getItem(this.handoffKey()) || "";
+				return Boolean(stored(raw, 10 * 60 * 1000));
+			} catch (_error) {
+				return false;
+			}
+		},
 		async consumeHandoff() {
 			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
 			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
@@ -260,18 +337,13 @@ export default {
 					this.handoffNotice = `Purchase Invoice ${name} is no longer a draft. Review its current status instead of editing it.`;
 					return true;
 				}
-				if (!preview?.can_edit) {
-					this.saveError = (preview?.blockers || [])[0] || "This direct Purchase Invoice draft cannot be edited on Record Purchase.";
-					return true;
-				}
 				this.syncPageFromDraftPreview(preview);
 				this.entryIntent = "direct";
-				this.editingSavedDraft = true;
-				this.completionOpen = false;
+				this.editingSavedDraft = false;
 				this.recoveryCandidate = null;
 				this.clearRecovery();
 				this.initialSnapshot = JSON.stringify(this.values);
-				this.handoffNotice = `Editing saved Purchase Invoice ${name} on the direct Purchase page.`;
+				this.handoffNotice = `Purchase Invoice ${name} was saved from Quick Purchase. Review workflow/submission below or continue editing on this page.`;
 				return true;
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to load the Purchase Invoice draft on Record Purchase.");
@@ -345,6 +417,7 @@ export default {
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
 					this.initialSnapshot = JSON.stringify(this.values);
 					this.editingSavedDraft = false;
+					await this.refreshSavedDocumentPreview({ silent: true });
 					frappe.show_alert?.({ message: `Purchase Invoice ${result.name} draft updated`, indicator: "green" });
 					return;
 				}
@@ -353,7 +426,7 @@ export default {
 				this.clearRecovery();
 				this.initialSnapshot = JSON.stringify(this.values);
 				this.savedDocument = { ...result, doctype: result.doctype || "Purchase Invoice" };
-				this.completionOpen = false;
+				await this.refreshSavedDocumentPreview({ silent: true });
 				frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Purchase Invoice draft."); }
 			finally { this.saving = false; }
@@ -366,7 +439,7 @@ export default {
 				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Purchase Invoice" };
 				if (!preview?.can_edit) { this.saveError = (preview?.blockers || [])[0] || "This Purchase Invoice draft is no longer editable in the standard page."; return; }
 				this.syncPageFromDraftPreview(preview);
-				this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values);
+				this.editingSavedDraft = true; this.initialSnapshot = JSON.stringify(this.values);
 			} catch (error) { this.saveError = errorMessage(error, "Unable to reload this Purchase Invoice draft for editing."); }
 			finally { this.saving = false; }
 		},
@@ -389,18 +462,74 @@ export default {
 			if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || "";
 			if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ name: row.name || "", item_code: row.item_code || "", qty: row.qty, rate: row.rate }));
 		},
-		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
-		handleCompletionChanged(result) {
-			if (!result?.name) return;
-			this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
-			if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); }
+		async refreshSavedDocumentPreview({ silent = false } = {}) {
+			if (!this.savedDocument?.name || this.workflowBusy) return;
+			this.workflowBusy = true;
+			if (!silent) this.workflowError = "";
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "direct" }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Purchase Invoice" };
+				if (Number(preview?.docstatus || 0) === 0) {
+					this.syncPageFromDraftPreview(preview);
+					if (!this.editingSavedDraft) this.initialSnapshot = JSON.stringify(this.values);
+				}
+			} catch (error) {
+				this.workflowError = errorMessage(error, "Unable to refresh Purchase Invoice workflow status.");
+			} finally {
+				this.workflowBusy = false;
+			}
 		},
-		handleCompletionCompleted(result) { this.editingSavedDraft = false; if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" }; },
+		async submitSavedDocument() {
+			if (!this.savedDocument?.name || !this.savedDocument?.can_submit || this.workflowBusy) return;
+			this.workflowBusy = true;
+			this.workflowError = "";
+			try {
+				const result = await callMethod(SUBMIT_METHOD, {
+					name: this.savedDocument.name,
+					expected_modified: this.savedDocument.modified || "",
+					source_mode: "direct",
+				}, "POST");
+				this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
+				this.editingSavedDraft = false;
+				frappe.show_alert?.({ message: `Purchase Invoice ${result.name || this.savedDocument.name} submitted`, indicator: "green" }, 7);
+			} catch (error) {
+				this.workflowError = errorMessage(error, "Unable to submit this Purchase Invoice.");
+			} finally {
+				this.workflowBusy = false;
+			}
+		},
+		async applySavedWorkflow(action) {
+			if (!action || !this.savedDocument?.name || !this.savedDocument?.workflow_eligible || this.workflowBusy) return;
+			this.workflowBusy = true;
+			this.workflowError = "";
+			try {
+				const result = await callMethod(WORKFLOW_METHOD, {
+					name: this.savedDocument.name,
+					action,
+					expected_modified: this.savedDocument.modified || "",
+					expected_workflow_state: this.savedDocument.workflow_readiness?.current_state || "",
+					source_mode: "direct",
+				}, "POST");
+				if (Number(result?.docstatus || 0) === 1) {
+					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
+					this.editingSavedDraft = false;
+					frappe.show_alert?.({ message: `Purchase Invoice ${result.name || this.savedDocument.name} submitted through Workflow`, indicator: "green" }, 7);
+					return;
+				}
+				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "direct" }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Purchase Invoice" };
+				this.syncPageFromDraftPreview(preview);
+				this.initialSnapshot = JSON.stringify(this.values);
+			} catch (error) {
+				this.workflowError = errorMessage(error, "Unable to apply this Purchase Invoice workflow action.");
+			} finally {
+				this.workflowBusy = false;
+			}
+		},
 		hasSavedNextAction(action) { return (this.savedDocument?.next_actions || []).some((row) => row?.value === action); },
 		runSavedNextAction(action) { if (!this.savedDocument?.name) return; this.handleCompletionNextAction({ action, doctype: "Purchase Invoice", name: this.savedDocument.name, supplier: this.savedDocument.supplier || this.values.supplier || "", company: this.savedDocument.company || this.values.company || "", branch: this.savedDocument.branch || this.values.branch || "" }); },
 		handleCompletionNextAction(payload) {
 			if (!payload?.action || !payload?.name) return;
-			this.completionOpen = false;
 			if (payload.action === "pay-supplier") {
 				this.paymentInitialContext = { company: payload.company || this.values.company || "", branch: payload.branch || this.values.branch || "", party: payload.supplier || this.values.supplier || "", reference_name: payload.name };
 				this.paymentOpen = true;
@@ -419,7 +548,7 @@ export default {
 				frappe.set_route("supplier-payables");
 				return;
 			}
-			if (payload.action === "output") { window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" }; frappe.set_route("document-output-sharing"); }
+			if (payload.action === "output") { window.retailedge?.openDocumentOutputSharing?.("purchase-invoice", payload.name); }
 		},
 		closePayment() { this.paymentOpen = false; this.paymentInitialContext = {}; },
 		async handlePaymentSaved() {

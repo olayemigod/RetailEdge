@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		title="Complete Sales Invoice"
-		subtitle="Review the saved ERPNext Sales Invoice and complete it through native submission or the active Frappe Workflow."
+		:title="dialogTitle"
+		:subtitle="dialogSubtitle"
 		size="lg"
 		@close="requestClose"
 	>
@@ -26,9 +26,6 @@
 							<strong>Edit draft before completion</strong>
 							<p>Update permitted draft fields here. Customer, Company, Branch, item identity and source links remain protected; Stock Location stays branch-governed.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
-							{{ busy ? "Saving..." : "Save Draft Changes" }}
-						</button>
 					</div>
 					<div class="invoice-editor-grid">
 						<EdgeInput id="invoice-posting-date" v-model="draftPostingDate" label="Posting Date" type="date" :disabled="busy" required />
@@ -77,7 +74,7 @@
 					</p>
 				</div>
 
-				<div v-if="preview.blockers?.length" class="invoice-completion-blockers">
+				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="invoice-completion-blockers">
 					<strong>Standard Sales Invoice completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
@@ -111,7 +108,7 @@
 						>
 							{{ action.label }}
 						</button>
-						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Send</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Share</button>
 					</div>
 				</div>
 
@@ -126,10 +123,19 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !document?.name" @click="downloadPdf">PDF</button>
 				</div>
 				<div class="invoice-completion-actions">
+					<button
+						v-if="preview?.can_edit && !completedResult"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy || !draftDirty || !draftValid"
+						@click="saveDraftChanges"
+					>
+						{{ busy ? "Saving..." : "Save Draft Changes" }}
+					</button>
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
-							v-if="preview?.can_edit && draftDirty"
+							v-if="preview?.can_submit"
 							type="button"
 							class="edge-button edge-button--primary"
 							:disabled="busy || draftDirty"
@@ -155,6 +161,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
@@ -215,6 +223,14 @@ export default {
 		};
 	},
 	computed: {
+		dialogTitle() {
+			return Number(this.preview?.docstatus || 0) === 0 ? "Complete Sales Invoice" : "View Sales Invoice";
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 0
+				? "Review the saved ERPNext Sales Invoice and complete it through native submission or the active Frappe Workflow."
+				: "Review the submitted ERPNext Sales Invoice and continue with any permitted next workflow.";
+		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
 		},
@@ -294,7 +310,13 @@ export default {
 			this.actionError = "";
 			try {
 				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name, source_mode: this.sourceMode || "standard" }));
-				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
+				if (Number(this.preview?.docstatus || 0) === 0) {
+					this.completedResult = null;
+				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.completedResult = await this.decorateCompletedResult(this.preview);
+				} else {
+					this.completedResult = null;
+				}
 			} catch (error) {
 				this.applyPreview(null);
 				this.error = errorMessage(error, "Unable to review this Sales Invoice.");
@@ -557,7 +579,7 @@ export default {
 		requestClose() {
 			if (this.busy) return;
 			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
-				frappe.confirm(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
+				confirmAboveEdgeModal(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
 				return;
 			}
 			this.$emit("close");

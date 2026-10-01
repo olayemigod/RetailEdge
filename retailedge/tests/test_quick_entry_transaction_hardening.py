@@ -257,25 +257,54 @@ def test_sales_return_handoff_is_scoped_to_current_user():
 	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in selling
 
 
-def test_business_hub_quick_sale_and_purchase_continue_after_submission():
+
+def test_business_hub_quick_sale_and_purchase_handoff_saved_drafts_to_persistent_pages():
 	hub = HUB.read_text(encoding="utf-8")
+	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
+	purchase = ENTRY_PAGES["record-purchase"]["component"].read_text(encoding="utf-8")
+
 	for contract in (
-		'StandardDeliveryCompletionDialog',
-		':showNextActions="true"',
-		'@next-action="handleSalesInvoiceCompletionNextAction"',
-		'@next-action="handlePurchaseInvoiceCompletionNextAction"',
-		'CREATE_DELIVERY_METHOD',
-		'simplePaymentInitialContext',
-		'"receive-customer-payment"',
-		'"pay-supplier"',
-		'"supplier-payables"',
-		'"document-output-sharing"',
+		"handleSimpleSalesInvoiceSaved(result)",
+		"this.openMakeSaleFromQuick({ document_name: result.name });",
+		"handleSimplePurchaseInvoiceSaved(result)",
+		"this.openRecordPurchaseFromQuick({ document_name: result.name });",
+		'document_name: payload?.document_name || ""',
+		'frappe.set_route("make-sale")',
+		'frappe.set_route("record-purchase")',
 	):
 		assert contract in hub
-	assert "handleSalesInvoiceCompletionCompleted() {\n\t\t\tthis.refreshContext" in hub
-	assert "handlePurchaseInvoiceCompletionCompleted() {\n\t\t\tthis.refreshContext" in hub
 
+	for forbidden in (
+		"StandardSalesInvoiceCompletionDialog",
+		"StandardPurchaseInvoiceCompletionDialog",
+		"salesInvoiceCompletionOpen",
+		"purchaseInvoiceCompletionOpen",
+		"openSalesInvoiceCompletion(",
+		"openPurchaseInvoiceCompletion(",
+	):
+		assert forbidden not in hub
 
+	for source, contracts in (
+		(make_sale, (
+			"Workflow & submission",
+			"submit_standard_sales_invoice",
+			"apply_standard_sales_invoice_workflow_action",
+			"create-delivery-note",
+			"create-return-credit-note",
+			"receive-customer-payment",
+			"openDocumentOutputSharing",
+		)),
+		(purchase, (
+			"Workflow & submission",
+			"submit_standard_purchase_invoice",
+			"apply_standard_purchase_invoice_workflow_action",
+			"pay-supplier",
+			"supplier-payables",
+			"openDocumentOutputSharing",
+		)),
+	):
+		for contract in contracts:
+			assert contract in source
 
 def test_business_hub_treats_submitted_customer_and_supplier_payments_as_completed_edgesuite_work():
 	hub = HUB.read_text(encoding="utf-8")
@@ -332,25 +361,38 @@ def test_persistent_transaction_pages_fail_closed_for_native_desk_and_scope_hand
 
 
 
-def test_persistent_pages_do_not_auto_open_completion_after_first_save():
-	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
+
+def test_sales_and_purchase_persistent_pages_keep_completion_inline_after_first_save():
+	for route in ("make-sale", "record-purchase"):
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert "Continue Editing on Page" in source
+		assert "Workflow & submission" in source
+		assert "refreshSavedDocumentPreview" in source
+		assert "await this.refreshSavedDocumentPreview({ silent: true });" in source
+		assert "Review / Complete" not in source
+		assert "completionOpen" not in source
+
+	for route in ("transfer-stock", "stock-adjustment"):
 		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
 		assert "Continue Editing on Page" in source
 		assert "Review / Complete" in source
-		create_segment = source[source.index("async saveDraft()"):source.index("openCompletion", source.index("async saveDraft()")) if "openCompletion" in source[source.index("async saveDraft()"):] else len(source)]
+		create_segment = source[source.index("async saveDraft()"):source.index("openCompletion", source.index("async saveDraft()"))]
 		assert "this.completionOpen = false" in create_segment
 
 
-def test_make_sale_can_receive_existing_draft_handoff_for_persistent_editing():
+def test_make_sale_saved_quick_draft_handoff_lands_on_persistent_workflow_summary():
 	source = (ROOT / "public/js/make_sale/MakeSale.vue").read_text(encoding="utf-8")
 	for contract in (
 		"document_name",
 		"consumeSavedDraftHandoff",
 		"PREVIEW_METHOD",
-		"editingSavedDraft = true",
+		"editingSavedDraft = false",
 		"syncPageFromDraftPreview(preview)",
+		"was saved from Quick Sale. Review workflow/submission below",
+		"Workflow & submission",
 	):
 		assert contract in source
+	assert "StandardSalesInvoiceCompletionDialog" not in source
 
 
 def test_persistent_pages_keep_saved_draft_editing_on_the_page():
@@ -364,14 +406,17 @@ def test_persistent_pages_keep_saved_draft_editing_on_the_page():
 		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
 		assert "editingSavedDraft" in source
 		assert "Continue Editing on Page" in source
-		assert "Review / Complete" in source
 		assert update_method in source
 		assert "expected_modified: this.savedDocument.modified" in source
 		assert "this.initialSnapshot = JSON.stringify(this.values)" in source
 		assert "Cancel Edit" in source
 		assert "savedDocument && !editingSavedDraft" in source
 		assert "!savedDocument || editingSavedDraft" in source
-
+		if route in ("make-sale", "record-purchase"):
+			assert "Workflow & submission" in source
+			assert "Review / Complete" not in source
+		else:
+			assert "Review / Complete" in source
 
 def test_persistent_page_creators_return_modified_for_stale_safe_updates():
 	creators = (
@@ -577,3 +622,20 @@ def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 			"GL Entry",
 		):
 			assert forbidden not in source
+
+
+def test_cached_persistent_transaction_pages_reload_when_a_new_quick_handoff_exists():
+	make_sale = MAKE_SALE.read_text(encoding="utf-8")
+	purchase = RECORD_PURCHASE.read_text(encoding="utf-8")
+
+	assert "hasPendingHandoff()" in make_sale
+	assert "const pendingHandoff = this.hasPendingHandoff();" in make_sale
+	assert "if (pendingHandoff) this.loaded = false;" in make_sale
+	assert "cleanStoredPayload(raw, HANDOFF_MAX_AGE_MS)" in make_sale
+	assert "this.recoveryCandidate = null;" in make_sale
+
+	assert "hasPendingHandoff()" in purchase
+	assert "const pendingHandoff = this.hasPendingHandoff();" in purchase
+	assert "if (pendingHandoff) this.loaded = false;" in purchase
+	assert "stored(raw, 10 * 60 * 1000)" in purchase
+	assert "this.recoveryCandidate = null;" in purchase
