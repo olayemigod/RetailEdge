@@ -44,23 +44,25 @@ def test_all_four_draft_selling_documents_support_safe_edit_and_item_additions()
 		assert "Save Draft Changes" in dialog
 
 
-def test_submitted_rows_have_view_and_print_send_while_drafts_keep_edit_complete():
+def test_submitted_rows_have_operational_view_and_print_share_while_drafts_keep_edit_complete():
 	records = read("public/js/professional_selling/ProfessionalSellingRecords.vue")
 	workspace = read("public/js/professional_selling/ProfessionalSelling.vue")
 	output = read("public/js/document_output_sharing/DocumentOutputSharing.vue")
 
 	for contract in (
 		'return this.canComplete(row) ? "Edit / Complete" : "View";',
-		'label: "Print & Send"',
+		'label: "Print & Share"',
 		'action: "view"',
 		"record-more--fly-up",
 		"bottom:calc(100% + .25rem)",
 	):
 		assert contract in records
-	assert 'if (action === "view") { this.openDocumentOutput(document, row, "view"); return; }' in workspace
-	assert 'if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }' in workspace
-	assert 'outputMode === "view"' in output
-	assert 'outputMode !== \'view\'' in output
+	assert 'if (action === "view") { this.openRecordPreview(document, row); return; }' in workspace
+	assert 'if (action === "output") { this.openDocumentOutput(document, row); return; }' in workspace
+	assert 'mode: "share"' in workspace
+	assert 'frappe.set_route("document-output-sharing")' in workspace
+	assert 'this.openDocumentOutput(document, row, "view")' not in workspace
+	assert "Document Output & Sharing" in output
 
 
 def test_customer_facing_professional_selling_errors_use_shared_sanitizer():
