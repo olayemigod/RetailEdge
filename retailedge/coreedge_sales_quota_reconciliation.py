@@ -5,7 +5,8 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, now_datetime
+from frappe.desk.search import validate_and_sanitize_search_inputs
+from frappe.utils import cint, getdate, now_datetime
 
 from retailedge.coreedge_sales_quota import (
 	OPERATION_DOCTYPE,
@@ -26,6 +27,58 @@ _MUTATION_ROLES = {
 	"RetailEdgeManager",
 }
 _MAX_REPORT_ROWS = 1000
+
+
+@frappe.whitelist()
+@validate_and_sanitize_search_inputs
+def search_quota_reconciliation_branches(
+	doctype,
+	txt,
+	searchfield,
+	start,
+	page_len,
+	filters,
+):
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	company = str(filters.get("company") or "").strip()
+	if not company:
+		return []
+	if not frappe.has_permission("Company", "read", doc=company):
+		return []
+
+	try:
+		scope = get_report_branch_scope(company, user=frappe.session.user)
+	except (frappe.PermissionError, frappe.ValidationError):
+		return []
+
+	profile_filters: dict[str, Any] = {"company": company, "enabled": 1}
+	if txt:
+		profile_filters["branch"] = ["like", f"%{txt}%"]
+	if scope.get("restricted"):
+		allowed = [
+			str(value).strip()
+			for value in dict.fromkeys(scope.get("allowed_branches") or [])
+			if str(value or "").strip()
+		]
+		if not allowed:
+			return []
+		profile_filters["branch"] = ["in", allowed] if not txt else profile_filters["branch"]
+
+	start = max(cint(start), 0)
+	page_len = min(cint(page_len) or 20, 20)
+	rows = frappe.get_list(
+		"RetailEdge Branch Profile",
+		filters=profile_filters,
+		fields=["branch"],
+		order_by="branch asc",
+		limit_start=start,
+		limit_page_length=page_len,
+	)
+	branches = [row.get("branch") for row in rows if row.get("branch")]
+	if scope.get("restricted"):
+		allowed_set = set(scope.get("allowed_branches") or [])
+		branches = [branch for branch in branches if branch in allowed_set]
+	return [(branch,) for branch in dict.fromkeys(branches)]
 
 
 @frappe.whitelist()
