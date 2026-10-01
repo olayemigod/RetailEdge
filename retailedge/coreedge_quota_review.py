@@ -19,6 +19,7 @@ from retailedge.integrations.coreedge_remote_usage import (
 )
 from retailedge.operating_context import (
 	get_allowed_operating_branches,
+	get_operating_context,
 	get_operational_branch_scope,
 )
 
@@ -47,7 +48,11 @@ def get_quota_review_context() -> dict:
 		"can_reconcile": _can_mutate(),
 		"default_filters": {
 			"status": "Open",
-			"company": str(frappe.defaults.get_user_default("Company") or "").strip(),
+			"company": str(
+				(get_operating_context() or {}).get("company")
+				or frappe.defaults.get_user_default("Company")
+				or ""
+			).strip(),
 			"branch": "",
 			"source_doctype": "",
 			"from_date": "",
@@ -427,16 +432,35 @@ def _build_filters(filters: frappe._dict):
 
 	scope_filters: list[list[Any]] = []
 	company = str(filters.get("company") or "").strip()
+	if not company:
+		company = str(
+			(get_operating_context() or {}).get("company")
+			or frappe.defaults.get_user_default("Company")
+			or ""
+		).strip()
+	if not company:
+		frappe.throw(_("Choose a Company before reviewing quota operations."), frappe.ValidationError)
+
 	branch = str(filters.get("branch") or "").strip()
-	if company:
-		scope_filters.append([OPERATION_DOCTYPE, "company", "=", company])
-	if branch:
-		if not company:
-			frappe.throw(_("Choose a Company before filtering by Branch."), frappe.ValidationError)
-		scope = get_operational_branch_scope(company=company)
-		allowed = set(scope["allowed_branches"] or [])
-		if scope["restricted"] and branch not in allowed:
+	scope_filters.append([OPERATION_DOCTYPE, "company", "=", company])
+	branch_scope = get_operational_branch_scope(company=company)
+	allowed = list(branch_scope["allowed_branches"] or [])
+	if branch_scope["restricted"]:
+		if not allowed:
+			frappe.throw(
+				_("Your Branch operating access is not active for this Company."),
+				frappe.PermissionError,
+			)
+		if branch and branch not in set(allowed):
 			frappe.throw(_("You are not allowed to review that Branch."), frappe.PermissionError)
+		if branch:
+			scope_filters.append([OPERATION_DOCTYPE, "branch", "=", branch])
+		else:
+			scope_filters.append([OPERATION_DOCTYPE, "branch", "in", allowed])
+	elif branch:
+		known = set(get_allowed_operating_branches(company=company) or [])
+		if known and branch not in known:
+			frappe.throw(_("Branch is not valid for the selected Company."), frappe.ValidationError)
 		scope_filters.append([OPERATION_DOCTYPE, "branch", "=", branch])
 
 	source_doctype = str(filters.get("source_doctype") or "").strip()
