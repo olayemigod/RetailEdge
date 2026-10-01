@@ -1028,6 +1028,12 @@ export default {
 					values: this.values,
 					managed: this.allowMultiReferenceSupplierPayment ? 1 : 0,
 				});
+				if (result?.reused) {
+					frappe.show_alert?.({
+						message: __(`Existing draft Payment Entry ${result.name} matches this transaction. Opening it instead of creating another draft.`),
+						indicator: "blue",
+					});
+				}
 				this.$emit("draft-created", result);
 				if (this.isCustomerPayment) {
 					await this.loadCustomerReview(result.name);
