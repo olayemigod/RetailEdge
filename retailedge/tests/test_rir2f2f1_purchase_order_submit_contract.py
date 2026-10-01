@@ -44,6 +44,8 @@ def test_draft_purchase_order_edit_is_bounded_stale_safe_and_erpnext_validated()
 	assert "row.rate = rate" in update
 	assert "row.schedule_date = row_schedule" in update
 	assert "doc.save()" in update
+	assert "Subcontracting Purchase Orders require Advanced ERPNext review." in update
+	assert "Inter-company Purchase Orders require Advanced ERPNext review." in update
 	assert "ignore_permissions=True" not in update
 	assert "Company, Supplier, Branch, Stock Location, Buying Price List and item identity" in update
 	assert "update_standard_purchase_order_draft" in overlay
