@@ -281,6 +281,11 @@ def retry_pending_sales_quota_operations(limit: int = 50) -> int:
 	return queued
 
 
+def queue_sales_quota_finalization(operation_name: str) -> bool:
+	"""Queue one existing durable quota operation for safe post-commit finalization."""
+	return _enqueue_finalize_operation(operation_name)
+
+
 def _enqueue_finalize_operation(operation_name: str) -> bool:
 	try:
 		frappe.enqueue(
