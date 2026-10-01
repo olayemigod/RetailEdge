@@ -12,7 +12,6 @@ from frappe.utils import add_to_date, now_datetime
 
 from retailedge.coreedge_quota_review import (
 	_review_reason,
-	list_quota_operations,
 	reconcile_unreserved_quota_operation,
 	retry_quota_operation,
 )
@@ -54,6 +53,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 			_review_reason("x" * 1001)
 		self.assertEqual(_review_reason("Reviewed after connectivity recovery."), "Reviewed after connectivity recovery.")
 
+	@patch("retailedge.coreedge_quota_review._write_review_event")
 	@patch("retailedge.coreedge_quota_review._assert_mutation_access")
 	@patch("retailedge.coreedge_quota_review._require_post")
 	@patch("retailedge.coreedge_quota_review.frappe.get_doc")
@@ -64,6 +64,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		mock_get_doc,
 		_mock_post,
 		_mock_access,
+		_mock_event,
 	):
 		mock_get_doc.return_value = self._operation(status="Pending Finalize", reservation_reference="CEUR-1")
 		mock_finalize.return_value = {"status": "Finalized"}
@@ -85,6 +86,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		self.assertFalse(result["ok"])
 		self.assertEqual(result["reason_code"], "RECONCILIATION_RESERVATION_REQUIRED")
 
+	@patch("retailedge.coreedge_quota_review._write_review_event")
 	@patch("retailedge.coreedge_quota_review._assert_mutation_access")
 	@patch("retailedge.coreedge_quota_review._require_post")
 	@patch("retailedge.coreedge_quota_review.frappe.get_doc")
@@ -95,6 +97,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		mock_get_doc,
 		_mock_post,
 		_mock_access,
+		_mock_event,
 	):
 		mock_get_doc.return_value = self._operation(reservation_reference="CEUR-2")
 		with self.assertRaises(frappe.ValidationError):
@@ -146,6 +149,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		self.assertEqual(result["reason_code"], "LIMIT_EXCEEDED")
 		mock_record_failure.assert_called_once()
 
+	@patch("retailedge.coreedge_quota_review._write_review_event")
 	@patch("retailedge.coreedge_quota_review.finalize_sales_quota_operation")
 	@patch("retailedge.coreedge_quota_review._save_review_operation")
 	@patch("retailedge.coreedge_quota_review._lock_operation")
@@ -164,6 +168,7 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		_mock_lock,
 		mock_save,
 		mock_finalize,
+		_mock_event,
 	):
 		operation = self._operation()
 		mock_get_doc.return_value = operation
@@ -301,6 +306,10 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
 		frappe.set_user("Administrator")
+		frappe.db.delete(
+			"RetailEdge CoreEdge Quota Review Event",
+			{"event_key": ["like", "quota-review-event-%"]},
+		)
 		frappe.db.delete(OPERATION_DOCTYPE, {"operation_key": ["like", "quota-review-%"]})
 
 	def tearDown(self):
@@ -350,6 +359,37 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 		doc.flags.allow_retailedge_quota_operation_reconcile = True
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
+
+	def test_review_event_is_engine_created_and_append_only(self):
+		operation = self._make_needs_review("event-history")
+		event = frappe.get_doc(
+			{
+				"doctype": "RetailEdge CoreEdge Quota Review Event",
+				"event_key": "quota-review-event-history",
+				"quota_operation": operation.name,
+				"action": "Attempt Reconciliation",
+				"result_status": "Needs Review",
+				"source_doctype": operation.source_doctype,
+				"source_name": operation.source_name,
+				"reason": "Operator reviewed the failed quota reconciliation.",
+				"actor": "Administrator",
+				"occurred_on": now_datetime(),
+			}
+		)
+		with self.assertRaises(frappe.PermissionError):
+			event.insert(ignore_permissions=True)
+
+		event.flags.allow_retailedge_quota_review_event_create = True
+		event.insert(ignore_permissions=True)
+		event.message = "Attempted rewrite"
+		with self.assertRaises(frappe.PermissionError):
+			event.save(ignore_permissions=True)
+		with self.assertRaises(frappe.PermissionError):
+			frappe.delete_doc(
+				"RetailEdge CoreEdge Quota Review Event",
+				event.name,
+				ignore_permissions=True,
+			)
 
 	def test_needs_review_can_finalize_only_through_reconciliation_flag(self):
 		doc = self._make_needs_review("status-transition")
