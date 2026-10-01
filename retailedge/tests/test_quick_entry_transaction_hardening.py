@@ -629,9 +629,13 @@ def test_cached_persistent_transaction_pages_reload_when_a_new_quick_handoff_exi
 	purchase = RECORD_PURCHASE.read_text(encoding="utf-8")
 
 	assert "hasPendingHandoff()" in make_sale
-	assert "if (!this.loaded || this.hasPendingHandoff()) this.loadPage();" in make_sale
+	assert "const pendingHandoff = this.hasPendingHandoff();" in make_sale
+	assert "if (pendingHandoff) this.loaded = false;" in make_sale
 	assert "cleanStoredPayload(raw, HANDOFF_MAX_AGE_MS)" in make_sale
+	assert "this.recoveryCandidate = null;" in make_sale
 
 	assert "hasPendingHandoff()" in purchase
-	assert "(!this.loaded || this.hasPendingHandoff())" in purchase
+	assert "const pendingHandoff = this.hasPendingHandoff();" in purchase
+	assert "if (pendingHandoff) this.loaded = false;" in purchase
 	assert "stored(raw, 10 * 60 * 1000)" in purchase
+	assert "this.recoveryCandidate = null;" in purchase
