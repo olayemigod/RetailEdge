@@ -422,9 +422,9 @@ def _get_source_state(operation) -> dict:
 	)
 	if not row:
 		frappe.throw(_("The source sales document no longer exists."), frappe.DoesNotExistError)
-	if int(row.docstatus or 0) not in {1, 2}:
+	if int(row.docstatus or 0) != 1:
 		frappe.throw(
-			_("Only submitted or subsequently cancelled sales can be reconciled."),
+			_("Only currently submitted sales can be submitted as committed usage evidence."),
 			frappe.ValidationError,
 		)
 
