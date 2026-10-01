@@ -23,9 +23,9 @@
 			<div v-if="submitted" class="po-submit-review__success">
 				<strong>Purchase Order {{ submitted.name }} is submitted.</strong>
 				<span>Review the saved ERPNext order and continue with any permitted procurement action below.</span>
-				<div v-if="submitted.next_actions?.length" class="po-submit-review__next-actions">
+				<div class="po-submit-review__next-actions">
 					<button
-						v-for="action in submitted.next_actions"
+						v-for="action in submitted.next_actions || []"
 						:key="action.value"
 						type="button"
 						class="edge-button edge-button--primary"
@@ -34,6 +34,7 @@
 					>
 						{{ action.label }}
 					</button>
+					<button type="button" class="edge-button" @click="openDocumentOutput">Print & Share</button>
 				</div>
 			</div>
 			<div v-else-if="preview.blockers?.length" class="po-submit-review__blocked">
@@ -412,6 +413,10 @@ export default {
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 			} catch (error) { this.error = errorMessage(error, "Unable to apply this Purchase Order workflow action."); }
 			finally { this.submitting = false; }
+		},
+		openDocumentOutput() {
+			if (!this.submitted?.name) return;
+			window.retailedge?.openDocumentOutputSharing?.("purchase-order", this.submitted.name);
 		},
 		async runNextAction(action) {
 			if (!this.submitted?.name || !action || this.submitting) return;
