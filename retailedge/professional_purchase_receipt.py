@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
 
@@ -714,8 +714,13 @@ def get_professional_purchase_receipt_history(
 	branch: str | None = None,
 	supplier: str | None = None,
 	limit: int | str = 50,
+	start: int | str = 0,
+	page_length: int | str | None = None,
+	search: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
 ) -> dict[str, Any]:
-	"""Return a bounded, permission-aware list of submitted non-return Purchase Receipts."""
+	"""Return permission-aware submitted Purchase Receipt history with bounded pagination."""
 	_assert_read(PURCHASE_RECEIPT_DOCTYPE)
 	company, branch, allowed_branches, global_branch_access = _resolve_scope(company, branch)
 	supplier = str(supplier or "").strip()
@@ -732,7 +737,23 @@ def get_professional_purchase_receipt_history(
 	filters.update({"docstatus": 1, "is_return": 0})
 	if supplier:
 		filters["supplier"] = supplier
-	row_limit = max(1, min(cint(limit) or 50, MAX_RECEIPT_HISTORY))
+
+	from_text = str(from_date or "").strip()
+	to_text = str(to_date or "").strip()
+	if from_text and to_text:
+		from_value = getdate(from_text)
+		to_value = getdate(to_text)
+		if to_value < from_value:
+			frappe.throw(_("To Date cannot be before From Date."))
+		filters["posting_date"] = ["between", [from_value, to_value]]
+	elif from_text:
+		filters["posting_date"] = [">=", getdate(from_text)]
+	elif to_text:
+		filters["posting_date"] = ["<=", getdate(to_text)]
+
+	page_start = max(0, cint(start))
+	requested_length = page_length if page_length not in (None, "") else limit
+	row_limit = max(1, min(cint(requested_length) or 50, MAX_RECEIPT_HISTORY))
 	fields = [
 		"name",
 		"posting_date",
@@ -748,13 +769,27 @@ def get_professional_purchase_receipt_history(
 	if branch_field:
 		fields.append(branch_field)
 
+	search_text = str(search or "").strip()
+	or_filters = None
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters = [
+			["name", "like", like],
+			["supplier", "like", like],
+			["supplier_name", "like", like],
+		]
+
 	rows = frappe.get_list(
 		PURCHASE_RECEIPT_DOCTYPE,
 		filters=filters,
+		or_filters=or_filters,
 		fields=fields,
 		order_by="posting_date desc, posting_time desc, name desc",
-		limit_page_length=row_limit,
+		limit_start=page_start,
+		limit_page_length=row_limit + 1,
 	)
+	has_more = len(rows) > row_limit
+	rows = rows[:row_limit]
 	names = [str(row.get("name") or "") for row in rows if row.get("name")]
 	purchase_orders: dict[str, list[str]] = {name: [] for name in names}
 	if names:
@@ -772,7 +807,13 @@ def get_professional_purchase_receipt_history(
 		"company": company,
 		"branch": branch,
 		"supplier": supplier,
+		"search": search_text,
+		"from_date": from_text,
+		"to_date": to_text,
 		"limit": row_limit,
+		"start": page_start,
+		"has_more": has_more,
+		"next_start": page_start + len(rows),
 		"receipts": [
 			{
 				"name": str(row.get("name") or ""),
