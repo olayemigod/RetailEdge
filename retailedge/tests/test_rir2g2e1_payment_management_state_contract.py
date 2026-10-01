@@ -87,3 +87,4 @@ def test_customer_advance_bank_reference_is_validated_before_create_and_errors_a
 	assert "Enter the bank transaction or transfer reference before creating this advance." in source
 	assert "window.retailedge?.userErrorMessage?.(error, fallback)" in source
 	assert "error?.exc || error?.exception" not in source
+	assert "retailedge.stock_movement_filters.branch_query" in source
