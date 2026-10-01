@@ -1,5 +1,7 @@
 # RetailEdge Sales & Purchase Persistent Workflow Guide
 
+RetailEdge-wide list/action semantics are defined in `docs/retailedge_document_action_contract.md`. **View**, **Review/Edit**, **Print & Share**, and **Advanced ERPNext** are intentionally separate actions across the product.
+
 ## Purpose
 
 This guide defines the RetailEdge entry and completion contract for Sales Invoices and direct Purchase Invoices.
