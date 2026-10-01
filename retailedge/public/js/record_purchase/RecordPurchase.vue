@@ -242,7 +242,12 @@ export default {
 	},
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
-		this._pageShow = () => { if (!this.loading && (!this.loaded || this.hasPendingHandoff())) this.loadPage(); };
+		this._pageShow = () => {
+			if (this.loading) return;
+			const pendingHandoff = this.hasPendingHandoff();
+			if (pendingHandoff) this.loaded = false;
+			if (!this.loaded || pendingHandoff) this.loadPage();
+		};
 		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-record-purchase-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
@@ -250,7 +255,7 @@ export default {
 	methods: {
 		async loadPage() {
 			if (this.loading) return;
-			this.loading = true; this.loadError = ""; this.saveError = ""; this.workflowError = ""; this.savedDocument = null; this.entryIntent = "choose"; this.pricingCache.clear();
+			this.loading = true; this.loadError = ""; this.saveError = ""; this.workflowError = ""; this.savedDocument = null; this.recoveryCandidate = null; this.entryIntent = "choose"; this.pricingCache.clear();
 			try {
 				const [data, shell] = await Promise.all([callMethod(CONTEXT_METHOD), callMethod(SHELL_METHOD)]);
 				this.formContext = data || {}; this.applyShell(shell || {}); this.applyDefaults(data?.defaults || {});
