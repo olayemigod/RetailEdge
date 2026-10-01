@@ -23,6 +23,7 @@
 					<p>Record customer advances, settle submitted Sales Invoices, and keep ERPNext Payment Entry and Payment Reconciliation as the accounting source of truth.</p>
 				</div>
 				<div class="hero-actions">
+					<button class="edge-secondary-button" type="button" @click="openPaymentHistory">Payment History</button>
 					<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced ERPNext</button>
 					<button class="edge-primary-button" type="button" :disabled="!filters.company" @click="openAdvanceDialog">Record Advance</button>
 				</div>
@@ -31,6 +32,7 @@
 			<EdgeLoadingState v-if="metadataLoading" message="Loading Payment Management…" />
 			<EdgeErrorState v-else-if="metadataError" title="Payment Management failed to load" :message="metadataError" actionLabel="Retry" @retry="loadMetadata" />
 			<template v-else>
+			<div v-if="scopeNotice" class="accounting-warning" role="status">{{ scopeNotice }}</div>
 			<div class="payment-cards">
 				<article class="metric-card"><span>Available Advances</span><strong>{{ formatCurrency(context.available_advance || 0) }}</strong></article>
 				<article class="metric-card"><span>Unapplied Receipts</span><strong>{{ context.advance_count || 0 }}</strong></article>
@@ -267,7 +269,7 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 function optionRows(result) {
 	return Array.isArray(result)
 		? result.map((row) => ({
@@ -329,6 +331,7 @@ export default {
 			missingComponents: [],
 			metadataLoading: true,
 			metadataError: "",
+			scopeNotice: "",
 			loading: false,
 			advanceLoadError: "",
 			context: {},
@@ -393,7 +396,8 @@ export default {
 		canCreateReceipt() {
 			const amount = Number(this.settlement.receipt.amount || 0);
 			const outstanding = Number(this.settlement.context.outstanding_amount || 0);
-			return Boolean(this.settlement.receipt.mode_of_payment) && amount > 0 && amount <= outstanding;
+			const referenceReady = !this.settlement.receipt.referenceRequired || Boolean(String(this.settlement.receipt.reference_no || "").trim());
+			return Boolean(this.settlement.receipt.mode_of_payment) && referenceReady && amount > 0 && amount <= outstanding;
 		},
 	},
 	created() {
@@ -413,6 +417,7 @@ export default {
 		async loadMetadata() {
 			this.metadataLoading = true;
 			this.metadataError = "";
+			this.scopeNotice = "";
 			try {
 				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.("payment-management") || {};
 				const routeInvoice = String(handoff.sales_invoice || frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
@@ -426,10 +431,22 @@ export default {
 					navigationPromise,
 				]);
 				this.filters.company = handoff.company || receivablesContext.default_filters?.company || "";
-				this.filters.branch = routeBranch || receivablesContext.default_filters?.branch || "";
+				let validRouteBranch = routeBranch;
+				if (validRouteBranch && this.filters.company) {
+					try {
+						await callMethod("retailedge.operating_context.preview_operating_context", {
+							company: this.filters.company,
+							branch: validRouteBranch,
+						});
+					} catch (_error) {
+						this.scopeNotice = __("The previously selected Branch is no longer enabled for this Company. Payment Management has returned to your current valid Branch scope.");
+						validRouteBranch = "";
+					}
+				}
+				this.filters.branch = validRouteBranch || receivablesContext.default_filters?.branch || "";
 				this.filters.customer = routeCustomer || "";
 				this.tenantName = receivablesContext.tenant_name || this.filters.company;
-				this.branchName = routeBranch || receivablesContext.branch_name || this.filters.branch;
+				this.branchName = this.filters.branch || receivablesContext.branch_name || "";
 				this.userName = receivablesContext.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
@@ -731,39 +748,92 @@ export default {
 			} catch (error) { this.settlement.actionError = errorMessage(error, "Draft customer receipt could not be created."); }
 			finally { this.settlement.creatingReceipt = false; }
 		},
+		async syncAdvanceReferenceRequirement(dialog) {
+			if (!dialog) return false;
+			const company = String(dialog.get_value("company") || this.filters.company || "").trim();
+			const mode = String(dialog.get_value("mode_of_payment") || "").trim();
+			let required = false;
+			if (company && mode) {
+				const details = await callMethod("retailedge.guided_payment.get_simple_payment_mode_details", {
+					intent: RECEIVE_INTENT,
+					company,
+					mode_of_payment: mode,
+				});
+				required = Boolean(details.reference_required);
+			}
+			dialog.set_df_property("reference_no", "reqd", required ? 1 : 0);
+			dialog.set_df_property("reference_date", "reqd", required ? 1 : 0);
+			if (required && !dialog.get_value("reference_date")) dialog.set_value("reference_date", dialog.get_value("posting_date") || frappe.datetime.get_today());
+			dialog.refresh_field("reference_no");
+			dialog.refresh_field("reference_date");
+			return required;
+		},
 		async openAdvanceDialog() {
-			const dialog = new frappe.ui.Dialog({
+			let dialog = null;
+			dialog = new frappe.ui.Dialog({
 				title: __("Record Customer Advance"),
 				fields: [
 					{ fieldname: "company", fieldtype: "Link", options: "Company", label: __("Company"), reqd: 1, default: this.filters.company, read_only: 1 },
 					{ fieldname: "branch", fieldtype: "Link", options: "Branch", label: __("Branch"), default: this.filters.branch || "" },
 					{ fieldname: "customer", fieldtype: "Link", options: "Customer", label: __("Customer"), reqd: 1, default: this.filters.customer || "" },
 					{ fieldname: "posting_date", fieldtype: "Date", label: __("Posting Date"), reqd: 1, default: frappe.datetime.get_today() },
-					{ fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1 },
+					{ fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1, onchange: () => this.syncAdvanceReferenceRequirement(dialog).catch((error) => frappe.msgprint({ title: __("Payment mode needs attention"), message: errorMessage(error, "Payment mode details could not be loaded."), indicator: "red" })) },
 					{ fieldname: "amount", fieldtype: "Currency", label: __("Amount"), reqd: 1 },
-					{ fieldname: "reference_no", fieldtype: "Data", label: __("Reference No") },
-					{ fieldname: "reference_date", fieldtype: "Date", label: __("Reference Date") },
+					{ fieldname: "reference_no", fieldtype: "Data", label: __("Reference No"), description: __("Required for Bank payments.") },
+					{ fieldname: "reference_date", fieldtype: "Date", label: __("Reference Date"), default: frappe.datetime.get_today() },
 					{ fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") },
 				],
 				primary_action_label: __("Create Draft Payment"),
 				primary_action: async (values) => {
+					let referenceRequired = false;
 					try {
-						const result = await callMethod("retailedge.advanced_payments.create_customer_advance_draft", { values });
-						dialog.hide();
-						this.filters.company = result.company || this.filters.company;
-						this.filters.branch = result.branch || "";
-						this.filters.customer = result.customer || "";
-						this.branchName = result.branch || "";
-						this.customerLabel = result.customer || "";
-						this.clearSettlementInvoice();
-						frappe.show_alert({ message: __("Customer advance draft created. Review it below before submission."), indicator: "green" });
-						await this.loadAdvances();
-						await this.loadDraftPayments();
-						if (result.name) await this.reviewPaymentDraft(result.name);
-					} catch (error) { frappe.msgprint({ title: __("Could not create advance"), message: errorMessage(error, "Payment Entry draft could not be created."), indicator: "red" }); }
+						referenceRequired = await this.syncAdvanceReferenceRequirement(dialog);
+					} catch (error) {
+						frappe.msgprint({ title: __("Payment mode needs attention"), message: errorMessage(error, "Payment mode details could not be loaded."), indicator: "red" });
+						return;
+					}
+					const latestValues = dialog.get_values();
+					if (!latestValues) return;
+					if (referenceRequired && !String(latestValues.reference_no || "").trim()) {
+						frappe.msgprint({ title: __("Reference No required"), message: __("Enter the bank transaction or transfer reference before creating this advance."), indicator: "orange" });
+						dialog.fields_dict.reference_no?.set_focus?.();
+						return;
+					}
+					let result = null;
+					try {
+						result = await callMethod("retailedge.advanced_payments.create_customer_advance_draft", { values: latestValues });
+					} catch (error) {
+						frappe.msgprint({ title: __("Could not create advance"), message: errorMessage(error, "Payment Entry draft could not be created."), indicator: "red" });
+						return;
+					}
+
+					dialog.hide();
+					this.filters.company = result.company || this.filters.company;
+					this.filters.branch = result.branch || "";
+					this.filters.customer = result.customer || "";
+					this.branchName = result.branch || "";
+					this.customerLabel = result.customer || "";
+					this.clearSettlementInvoice();
+					frappe.show_alert({ message: __("Customer advance draft created. Review it before submission."), indicator: "green" });
+
+					await this.loadAdvances();
+					await this.loadDraftPayments();
+					if (result.name) await this.reviewPaymentDraft(result.name);
 				},
 			});
 			dialog.show();
+		},
+		openPaymentHistory() {
+			const filters = {
+				company: this.filters.company || "",
+				branch: this.filters.branch || "",
+				party_type: this.filters.customer ? "Customer" : "",
+				party: this.filters.customer || "",
+			};
+			const clean = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+			window.__retailedgeBusinessHubRouteHandoff = { target: "payment-history", filters: clean, createdAt: Date.now() };
+			frappe.route_options = { ...clean, retailedge_business_hub_handoff: 1, retailedge_business_hub_target: "payment-history" };
+			frappe.set_route("payment-history");
 		},
 		openPaymentEntries() { if (!this.canUseNativeDesk) return; frappe.set_route("List", "Payment Entry"); },
 		openPayment(name) { if (!this.canUseNativeDesk) return; frappe.set_route("Form", "Payment Entry", name); },
