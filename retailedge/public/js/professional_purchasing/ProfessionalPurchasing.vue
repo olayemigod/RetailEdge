@@ -290,7 +290,7 @@
 								<td><span class="status-pill">{{ row.status || (row.docstatus === 0 ? "Draft" : "Submitted") }}</span></td>
 								<td><div class="attention-badges"><span v-if="!row.attention_flags?.length" class="attention-badge attention-badge--clear">Clear</span><span v-for="flag in row.attention_flags || []" :key="flag.key" class="attention-badge" :class="`attention-badge--${flag.kind || 'readiness'}`">{{ flag.label }}</span></div></td>
 								<td class="num">{{ formatPercent(row.per_received) }}</td><td class="num">{{ formatPercent(row.per_billed) }}</td><td class="num strong">{{ formatMoney(row.grand_total, row.currency) }}</td>
-								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">{{ Number(row.docstatus || 0) === 0 ? "Review / Edit" : "Review" }}</button><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openPurchaseOrderAdvanced(row.name)">Advanced</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
+								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">{{ Number(row.docstatus || 0) === 0 ? "Review / Edit" : "View" }}</button><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openPurchaseOrderAdvanced(row.name)">Advanced</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
 							</tr></tbody>
 						</table>
 					</div>
@@ -548,8 +548,7 @@ export default {
 				return;
 			}
 			if (payload.action === "output") {
-				window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" };
-				frappe.set_route("document-output-sharing");
+				window.retailedge?.openDocumentOutputSharing?.("purchase-invoice", payload.name);
 			}
 		},
 		closeSupplierPayment() {
