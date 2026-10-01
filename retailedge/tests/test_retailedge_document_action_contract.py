@@ -42,6 +42,18 @@ def test_print_share_has_one_global_route_contract():
 	assert 'class="edge-panel output-actions"' in output
 
 
+def test_document_output_target_assignment_is_centralised():
+	for path, source in _sources():
+		if path == PUBLIC_JS / "retailedge.js":
+			continue
+		assert "retailedgeDocumentOutputTarget =" not in source, (
+			f"{path}: use window.retailedge.openDocumentOutputSharing(...) instead of assigning the output target directly"
+		)
+		assert 'frappe.set_route("document-output-sharing")' not in source, (
+			f"{path}: Print & Share routing must go through the shared RetailEdge helper"
+		)
+
+
 def test_core_transaction_lists_keep_view_review_and_output_meanings_separate():
 	selling = (PUBLIC_JS / "professional_selling" / "ProfessionalSelling.vue").read_text(encoding="utf-8")
 	purchasing = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text(encoding="utf-8")
