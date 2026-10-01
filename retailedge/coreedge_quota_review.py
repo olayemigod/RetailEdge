@@ -171,12 +171,13 @@ def get_quota_review_history(operation_name: str) -> dict:
 			"occurred_on",
 		],
 		order_by="occurred_on desc",
-		limit_page_length=100,
+		limit_page_length=101,
 	)
+	truncated = len(events) > 100
 	return {
 		"operation_name": name,
-		"events": [dict(row) for row in events],
-		"truncated": len(events) >= 100,
+		"events": [dict(row) for row in events[:100]],
+		"truncated": truncated,
 	}
 
 
