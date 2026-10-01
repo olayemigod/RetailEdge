@@ -16,6 +16,21 @@ export const PERSISTENT_TRANSACTION_PAGES = Object.freeze({
 
 let transactionEntryPreferenceCache = null;
 let transactionEntryPreferenceRequest = null;
+const TRANSACTION_ENTRY_PREFERENCE_CACHE_KEY = "__retailedgeTransactionEntryPreferenceCache";
+
+function readSharedTransactionEntryPreferenceCache() {
+	if (typeof window !== "undefined" && window[TRANSACTION_ENTRY_PREFERENCE_CACHE_KEY]) {
+		return { ...window[TRANSACTION_ENTRY_PREFERENCE_CACHE_KEY] };
+	}
+	return transactionEntryPreferenceCache ? { ...transactionEntryPreferenceCache } : null;
+}
+
+function writeSharedTransactionEntryPreferenceCache(value) {
+	transactionEntryPreferenceCache = value ? { ...value } : null;
+	if (typeof window !== "undefined") {
+		window[TRANSACTION_ENTRY_PREFERENCE_CACHE_KEY] = value ? { ...value } : null;
+	}
+}
 
 const PRICING_BATCH_METHODS = {
 	"retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing":
@@ -272,17 +287,18 @@ export function persistentTransactionPage(doctype) {
 }
 
 export async function getTransactionEntryPreference({ force = false } = {}) {
-	if (!force && transactionEntryPreferenceCache) return { ...transactionEntryPreferenceCache };
+	const sharedCache = readSharedTransactionEntryPreferenceCache();
+	if (!force && sharedCache) return sharedCache;
 	if (!force && transactionEntryPreferenceRequest) return transactionEntryPreferenceRequest;
 	transactionEntryPreferenceRequest = rawCall(TRANSACTION_ENTRY_PREFERENCE_METHOD, {}, "GET")
 		.then((result) => {
 			const value = ["smart", "quick", "full"].includes(result?.value) ? result.value : "smart";
-			transactionEntryPreferenceCache = { ...result, value };
-			return { ...transactionEntryPreferenceCache };
+			writeSharedTransactionEntryPreferenceCache({ ...result, value });
+			return readSharedTransactionEntryPreferenceCache();
 		})
 		.catch(() => {
-			transactionEntryPreferenceCache = { value: "smart", default: "smart", options: [], scope: "user" };
-			return { ...transactionEntryPreferenceCache };
+			writeSharedTransactionEntryPreferenceCache({ value: "smart", default: "smart", options: [], scope: "user" });
+			return readSharedTransactionEntryPreferenceCache();
 		})
 		.finally(() => {
 			transactionEntryPreferenceRequest = null;
@@ -292,9 +308,14 @@ export async function getTransactionEntryPreference({ force = false } = {}) {
 
 export async function setTransactionEntryPreference(value) {
 	const result = await rawCall(TRANSACTION_ENTRY_PREFERENCE_SAVE_METHOD, { value }, "POST");
-	transactionEntryPreferenceCache = {
+	writeSharedTransactionEntryPreferenceCache({
 		...result,
 		value: ["smart", "quick", "full"].includes(result?.value) ? result.value : "smart",
-	};
-	return { ...transactionEntryPreferenceCache };
+	});
+	return readSharedTransactionEntryPreferenceCache();
+}
+
+export function invalidateTransactionEntryPreferenceCache() {
+	writeSharedTransactionEntryPreferenceCache(null);
+	transactionEntryPreferenceRequest = null;
 }
