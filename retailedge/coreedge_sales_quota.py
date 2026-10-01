@@ -344,6 +344,7 @@ def get_sales_quota_review(filters=None, limit: int = 200) -> dict:
 
 @frappe.whitelist()
 def retry_sales_quota_review(operation_name: str) -> dict:
+	_require_post()
 	_assert_quota_review_manager()
 	operation_name = str(operation_name or "").strip()
 	if not operation_name:
@@ -366,6 +367,12 @@ def retry_sales_quota_review(operation_name: str) -> dict:
 		operation.name,
 		allow_review_retry=True,
 	)
+
+
+def _require_post() -> None:
+	request = getattr(frappe.local, "request", None)
+	if request is not None and str(getattr(request, "method", "")).upper() != "POST":
+		frappe.throw(_("This operation requires HTTP POST."), frappe.PermissionError)
 
 
 def _assert_quota_review_reader() -> None:
