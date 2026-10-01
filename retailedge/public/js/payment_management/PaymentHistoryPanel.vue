@@ -84,8 +84,8 @@
 
 		<EdgeModal
 			:open="detailOpen"
-			:title="paymentDetail.payment_entry ? `Payment Review · ${paymentDetail.payment_entry}` : 'Payment Review'"
-			subtitle="ERPNext Payment Entry remains the accounting source of truth."
+			:title="paymentDetailTitle"
+			:subtitle="paymentDetailSubtitle"
 			size="lg"
 			@close="clearPaymentDetail"
 		>
@@ -178,6 +178,15 @@ export default {
 		};
 	},
 	computed: {
+		paymentDetailTitle() {
+			const label = Number(this.paymentDetail.docstatus) === 0 ? "Payment Review" : "Payment View";
+			return this.paymentDetail.payment_entry ? `${label} · ${this.paymentDetail.payment_entry}` : label;
+		},
+		paymentDetailSubtitle() {
+			return Number(this.paymentDetail.docstatus) === 0
+				? "Review the ERPNext Payment Entry and submit it only when standard accounting controls permit."
+				: "Review the saved ERPNext Payment Entry. Submitted and cancelled accounting records remain read-only.";
+		},
 		standardReview() { return this.paymentDetail.standard_review || {}; },
 		canSubmitStandard() {
 			const review = this.standardReview.review || {};
