@@ -93,6 +93,30 @@ def get_columns():
 			"fieldtype": "Datetime",
 			"width": 155,
 		},
+		{
+			"label": _("Review Checked"),
+			"fieldname": "reconciliation_last_checked_on",
+			"fieldtype": "Datetime",
+			"width": 155,
+		},
+		{
+			"label": _("Decision"),
+			"fieldname": "reconciliation_decision_type",
+			"fieldtype": "Data",
+			"width": 120,
+		},
+		{
+			"label": _("Result Reason"),
+			"fieldname": "reconciliation_result_reason_code",
+			"fieldtype": "Data",
+			"width": 210,
+		},
+		{
+			"label": _("Usage Reconciliation"),
+			"fieldname": "reconciliation_reference",
+			"fieldtype": "Data",
+			"width": 190,
+		},
 		{"label": _("Reason Code"), "fieldname": "reason_code", "fieldtype": "Data", "width": 190},
 		{"label": _("Finalize Attempts"), "fieldname": "attempt_count", "fieldtype": "Int", "width": 110},
 		{
@@ -130,6 +154,18 @@ def get_report_summary(summary):
 			"value": summary.get("finalized", 0),
 			"datatype": "Int",
 			"indicator": "Green",
+		},
+		{
+			"label": _("Resolved"),
+			"value": summary.get("resolved", 0),
+			"datatype": "Int",
+			"indicator": "Green",
+		},
+		{
+			"label": _("Rejected"),
+			"value": summary.get("rejected", 0),
+			"datatype": "Int",
+			"indicator": "Red",
 		},
 		{
 			"label": _("Visible Rows"),

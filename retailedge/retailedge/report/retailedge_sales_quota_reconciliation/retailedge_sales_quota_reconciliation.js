@@ -27,7 +27,7 @@ frappe.query_reports["RetailEdge Sales Quota Reconciliation"] = {
 			fieldname: "status",
 			label: __("Status"),
 			fieldtype: "Select",
-			options: "\nNeeds Review\nPending Finalize\nFinalized",
+			options: "\nNeeds Review\nPending Finalize\nFinalized\nResolved\nRejected",
 		},
 		{
 			fieldname: "source_doctype",
@@ -56,7 +56,7 @@ frappe.query_reports["RetailEdge Sales Quota Reconciliation"] = {
 		},
 		{
 			fieldname: "include_finalized",
-			label: __("Include Finalized"),
+			label: __("Include Closed / Finalized"),
 			fieldtype: "Check",
 			default: 0,
 		},

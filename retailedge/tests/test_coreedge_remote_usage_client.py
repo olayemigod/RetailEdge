@@ -167,6 +167,42 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 		self.assertNotIn("tenant", payload)
 		self.assertNotIn("product_app", payload)
 
+	def test_reconciliation_case_status_uses_exact_read_only_contract(self):
+		calls = []
+
+		def transport(url, payload, headers, timeout):
+			calls.append((url, payload, headers, timeout))
+			return {
+				"message": {
+					"data": {
+						"ok": True,
+						"status": "Found",
+						"case": {
+							"case_reference": "ceurc-status-001",
+							"case_status": "Open",
+							"decision": None,
+						},
+					}
+				}
+			}
+
+		client = CoreEdgeRemoteUsageClient(self._config(), transport=transport)
+		result = client.get_reconciliation_case_status(
+			"ceurc-status-001",
+			request_id="status-read-001",
+			correlation_id="Sales Invoice:SINV-0009",
+		)
+
+		self.assertTrue(result["data"]["ok"])
+		url, payload, _headers, _timeout = calls[0]
+		self.assertTrue(url.endswith("service_entitlement_usage.get_reconciliation_case_status"))
+		self.assertEqual(payload["site_identifier"], "retail.example.com")
+		self.assertEqual(payload["case_reference"], "ceurc-status-001")
+		self.assertEqual(payload["request_id"], "status-read-001")
+		self.assertNotIn("tenant", payload)
+		self.assertNotIn("product_app", payload)
+		self.assertNotIn("service_client", payload)
+
 	def test_reconciliation_case_submission_uses_bound_scope_and_exact_business_evidence(self):
 		calls = []
 

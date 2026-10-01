@@ -24,6 +24,14 @@ _IMMUTABLE_FIELDS = {
 	"reconciliation_case_evidence_hash",
 	"reconciliation_submitted_on",
 	"reconciliation_last_idempotency_key",
+	"reconciliation_last_checked_on",
+	"reconciliation_decision_reference",
+	"reconciliation_decision_type",
+	"reconciliation_result_status",
+	"reconciliation_result_reason_code",
+	"reconciliation_applied_usage",
+	"reconciliation_reference",
+	"reconciliation_decided_on",
 }
 
 
@@ -70,6 +78,17 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 				"reconciliation_submitted_on",
 				"reconciliation_last_idempotency_key",
 			}
+			allowed_case_status_sync_fields = {
+				"reconciliation_case_status",
+				"reconciliation_last_checked_on",
+				"reconciliation_decision_reference",
+				"reconciliation_decision_type",
+				"reconciliation_result_status",
+				"reconciliation_result_reason_code",
+				"reconciliation_applied_usage",
+				"reconciliation_reference",
+				"reconciliation_decided_on",
+			}
 			changed_fields = set(immutable_changes)
 			reconciliation_allowed = bool(
 				self.flags.get("allow_retailedge_quota_reconciliation")
@@ -79,7 +98,15 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 				self.flags.get("allow_retailedge_quota_case_submission")
 				and changed_fields.issubset(allowed_case_submission_fields)
 			)
-			if not reconciliation_allowed and not case_submission_allowed:
+			case_status_sync_allowed = bool(
+				self.flags.get("allow_retailedge_quota_case_status_sync")
+				and changed_fields.issubset(allowed_case_status_sync_fields)
+			)
+			if (
+				not reconciliation_allowed
+				and not case_submission_allowed
+				and not case_status_sync_allowed
+			):
 				frappe.throw(
 					_(
 						"CoreEdge quota operation identity, reservation and reconciliation case fields "
@@ -89,18 +116,26 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 				)
 
 		previous_status = self.get_db_value("status") or "Pending Finalize"
-		if previous_status == "Finalized" and self.status != previous_status:
+		if previous_status in {"Finalized", "Resolved", "Rejected"} and self.status != previous_status:
 			frappe.throw(
-				_("A finalized CoreEdge quota operation cannot change status."),
+				_("A terminal CoreEdge quota operation cannot change status."),
 				frappe.ValidationError,
 			)
 		if previous_status == "Needs Review" and self.status != previous_status:
-			if not (
+			reopened_by_reservation = bool(
 				self.flags.get("allow_retailedge_quota_reconciliation")
 				and self.status in {"Pending Finalize", "Finalized"}
-			):
+			)
+			closed_by_case_status = bool(
+				self.flags.get("allow_retailedge_quota_case_status_sync")
+				and self.status in {"Resolved", "Rejected"}
+			)
+			if not reopened_by_reservation and not closed_by_case_status:
 				frappe.throw(
-					_("A Needs Review quota operation may only be reopened by reconciliation."),
+					_(
+						"A Needs Review quota operation may only be reopened by reservation "
+						"reconciliation or closed by authoritative CoreEdge case status."
+					),
 					frappe.ValidationError,
 				)
 		if previous_status == "Pending Finalize" and self.status not in {

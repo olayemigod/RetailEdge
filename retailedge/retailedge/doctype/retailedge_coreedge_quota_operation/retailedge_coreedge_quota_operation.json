@@ -26,6 +26,14 @@
   "reconciliation_case_evidence_hash",
   "reconciliation_submitted_on",
   "reconciliation_last_idempotency_key",
+  "reconciliation_last_checked_on",
+  "reconciliation_decision_reference",
+  "reconciliation_decision_type",
+  "reconciliation_result_status",
+  "reconciliation_result_reason_code",
+  "reconciliation_applied_usage",
+  "reconciliation_reference",
+  "reconciliation_decided_on",
   "idempotency_section",
   "reserve_idempotency_key",
   "finalize_idempotency_key",
@@ -60,7 +68,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Pending Finalize\nFinalized\nNeeds Review",
+   "options": "Pending Finalize\nFinalized\nNeeds Review\nResolved\nRejected",
    "reqd": 1
   },
   {
@@ -256,6 +264,54 @@
    "fieldname": "reconciliation_last_idempotency_key",
    "fieldtype": "Data",
    "label": "Reconciliation Submission Idempotency Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_last_checked_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Last Checked On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_decision_reference",
+   "fieldtype": "Data",
+   "label": "Reconciliation Decision Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_decision_type",
+   "fieldtype": "Data",
+   "label": "Reconciliation Decision Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_result_status",
+   "fieldtype": "Data",
+   "label": "Reconciliation Result Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_result_reason_code",
+   "fieldtype": "Data",
+   "label": "Reconciliation Result Reason Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_applied_usage",
+   "fieldtype": "Check",
+   "label": "Reconciliation Applied Usage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_reference",
+   "fieldtype": "Data",
+   "label": "CoreEdge Usage Reconciliation Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_decided_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Decided On",
    "read_only": 1
   }
  ],
