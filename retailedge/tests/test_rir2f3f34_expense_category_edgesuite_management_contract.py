@@ -168,3 +168,9 @@ def test_expense_category_list_coerces_json_filters_before_querying():
 	assert "frappe.parse_json(filters)" in source
 	assert '"company", "active_status", "search_text", "page_size"' in source
 	assert "Expense Category filters must be an object." in source
+
+
+def test_manager_errors_use_shared_friendly_error_parser():
+	manager = MANAGER_UI.read_text(encoding="utf-8")
+	assert "window.retailedge?.userErrorMessage?.(error, fallback)" in manager
+	assert "error?.exc || error?.exception" not in manager
