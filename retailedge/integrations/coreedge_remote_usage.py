@@ -24,6 +24,9 @@ _PATH_RESERVE = "/api/method/coreedge.api.v1.service_entitlement_usage.reserve_u
 _PATH_FINALIZE = "/api/method/coreedge.api.v1.service_entitlement_usage.finalize_usage"
 _PATH_RELEASE = "/api/method/coreedge.api.v1.service_entitlement_usage.release_usage"
 _PATH_SNAPSHOT = "/api/method/coreedge.api.v1.service_entitlement_usage.submit_usage_snapshot"
+_PATH_RECONCILIATION_CASE = (
+	"/api/method/coreedge.api.v1.service_entitlement_usage.submit_reconciliation_case"
+)
 
 
 class CoreEdgeRemoteUsageError(RuntimeError):
@@ -287,6 +290,48 @@ class CoreEdgeRemoteUsageClient:
 				"source_path": source_path,
 			},
 		)
+
+	def submit_reconciliation_case(
+		self,
+		entitlement_key: str,
+		product_case_key: str,
+		case_type: str,
+		units: int,
+		reference_doctype: str,
+		reference_name: str,
+		occurred_on: str,
+		idempotency_key: str,
+		*,
+		reservation_reference: str | None = None,
+		local_status: str | None = None,
+		local_reason_code: str | None = None,
+		error_summary: str | None = None,
+		request_id: str | None = None,
+		correlation_id: str | None = None,
+		source_path: str | None = None,
+	) -> dict:
+		return self._request(
+			_PATH_RECONCILIATION_CASE,
+			{
+				"site_identifier": self.config.site_identifier,
+				"entitlement_key": entitlement_key,
+				"product_case_key": product_case_key,
+				"case_type": case_type,
+				"units": units,
+				"reference_doctype": reference_doctype,
+				"reference_name": reference_name,
+				"occurred_on": occurred_on,
+				"idempotency_key": idempotency_key,
+				"reservation_reference": reservation_reference,
+				"local_status": local_status,
+				"local_reason_code": local_reason_code,
+				"error_summary": error_summary,
+				"request_id": request_id,
+				"correlation_id": correlation_id,
+				"source_path": source_path,
+			},
+		)
+
 
 	def submit_usage_snapshot(
 		self,
