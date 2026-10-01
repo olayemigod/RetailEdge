@@ -263,6 +263,7 @@ def _post_cashier_expense_to_accounts(
 			frappe.throw(_("The Journal Entry was not submitted."))
 
 		previous_status = str(getattr(doc, "expense_status", None) or "Submitted")
+		workflow_active = bool(_get_active_workflow("RetailEdge Cashier Expense"))
 		result_fields = {
 			"posting_reference_type": POSTING_DOCUMENT_TYPE,
 			"posting_reference": journal.name,
@@ -273,7 +274,7 @@ def _post_cashier_expense_to_accounts(
 		}
 		# Never mutate the state field of an active Frappe Workflow during
 		# accounting finalisation. The Workflow remains the approval truth.
-		if not _get_active_workflow("RetailEdge Cashier Expense"):
+		if not workflow_active:
 			result_fields["expense_status"] = "Posted"
 		frappe.db.set_value(
 			"RetailEdge Cashier Expense",
@@ -285,10 +286,12 @@ def _post_cashier_expense_to_accounts(
 			doc.name,
 			action="Posted to Accounts",
 			previous_status=previous_status,
-			new_status="Posted",
+			new_status=previous_status if workflow_active else "Posted",
 			context={
 				"posting_mode": settings["posting_mode"],
 				"journal_entry": journal.name,
+				"ledger_status": "Posted",
+				"workflow_status_preserved": workflow_active,
 			},
 		)
 		result = _posting_result(
