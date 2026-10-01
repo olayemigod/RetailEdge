@@ -286,6 +286,122 @@ def get_simple_payment_reference_details(
 	)
 
 
+def _payment_draft_response(doc, *, branch_field: str | None, existing: bool) -> dict[str, Any]:
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"docstatus": cint(doc.docstatus),
+		"payment_type": doc.payment_type,
+		"party_type": doc.party_type,
+		"party": doc.party,
+		"company": doc.company,
+		"branch": getattr(doc, branch_field, None) if branch_field else "",
+		"paid_amount": flt(doc.paid_amount),
+		"unallocated_amount": flt(getattr(doc, "unallocated_amount", 0)),
+		"route": f"/app/payment-entry/{doc.name}",
+		"existing": bool(existing),
+		"reused": bool(existing),
+	}
+
+
+def _draft_reference_signature(doc) -> list[tuple[str, str, float]]:
+	return sorted(
+		(
+			str(getattr(row, "reference_doctype", "") or "").strip(),
+			str(getattr(row, "reference_name", "") or "").strip(),
+			round(flt(getattr(row, "allocated_amount", 0)), 6),
+		)
+		for row in list(getattr(doc, "references", None) or [])
+		if str(getattr(row, "reference_name", "") or "").strip()
+	)
+
+
+def _requested_reference_signature(config: dict[str, str], snapshots: list[dict[str, Any]]) -> list[tuple[str, str, float]]:
+	return sorted(
+		(
+			config["reference_doctype"],
+			str(row.get("reference_name") or "").strip(),
+			round(flt(row.get("allocated_amount")), 6),
+		)
+		for row in snapshots
+		if str(row.get("reference_name") or "").strip()
+	)
+
+
+def _find_exact_reusable_payment_draft(
+	*,
+	config: dict[str, str],
+	company: str,
+	branch: str,
+	party: str,
+	mode_of_payment: str,
+	amount: float,
+	party_account: str,
+	bank_account: str,
+	snapshots: list[dict[str, Any]],
+	branch_field: str | None,
+) -> Any | None:
+	"""Return one exact compatible Payment Entry draft; never rewrite a different draft."""
+	# Unallocated advances are intentionally not auto-reused because the same
+	# party/mode/amount is not a sufficiently unique business reference.
+	requested_signature = _requested_reference_signature(config, snapshots)
+	if not requested_signature:
+		return None
+
+	filters: dict[str, Any] = {
+		"docstatus": 0,
+		"company": company,
+		"payment_type": config["payment_type"],
+		"party_type": config["party_type"],
+		"party": party,
+		"mode_of_payment": mode_of_payment,
+	}
+	if branch and branch_field:
+		filters[branch_field] = branch
+
+	rows = frappe.get_list(
+		PAYMENT_ENTRY_DOCTYPE,
+		filters=filters,
+		fields=["name"],
+		order_by="modified desc",
+		limit_page_length=10,
+	)
+	matches: list[Any] = []
+	for row in rows:
+		doc = frappe.get_doc(PAYMENT_ENTRY_DOCTYPE, row.name)
+		if not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "read", doc=doc):
+			continue
+		if branch_field and branch and str(getattr(doc, branch_field, None) or "").strip() != branch:
+			continue
+		if abs(flt(getattr(doc, "paid_amount", 0)) - amount) > 0.005:
+			continue
+		if abs(flt(getattr(doc, "received_amount", 0)) - amount) > 0.005:
+			continue
+		if config["payment_type"] == "Receive":
+			if str(getattr(doc, "paid_from", "") or "").strip() != party_account:
+				continue
+			if str(getattr(doc, "paid_to", "") or "").strip() != bank_account:
+				continue
+		else:
+			if str(getattr(doc, "paid_from", "") or "").strip() != bank_account:
+				continue
+			if str(getattr(doc, "paid_to", "") or "").strip() != party_account:
+				continue
+		if _draft_reference_signature(doc) != requested_signature:
+			continue
+		matches.append(doc)
+
+	if len(matches) > 1:
+		frappe.throw(
+			_(
+				"Multiple compatible draft Payment Entries already exist for this transaction: {0}. "
+				"Review them in Payment Management before creating or submitting another payment."
+			).format(", ".join(doc.name for doc in matches))
+		)
+	return matches[0] if matches else None
+
+
+
 @frappe.whitelist(methods=["POST"])
 def create_simple_payment_draft(
 	intent: str,
@@ -382,6 +498,22 @@ def create_simple_payment_draft(
 	if branch and resolved_branches and branch not in resolved_branches:
 		frappe.throw(_("Selected invoices do not belong to Branch {0}.").format(branch))
 
+	payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)
+	existing_draft = _find_exact_reusable_payment_draft(
+		config=config,
+		company=company,
+		branch=branch,
+		party=party,
+		mode_of_payment=mode_of_payment,
+		amount=amount,
+		party_account=party_account,
+		bank_account=bank_account,
+		snapshots=snapshots,
+		branch_field=payment_branch_field,
+	)
+	if existing_draft:
+		return _payment_draft_response(existing_draft, branch_field=payment_branch_field, existing=True)
+
 	doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)
 	doc.payment_type = config["payment_type"]
 	doc.company = company
@@ -397,7 +529,6 @@ def create_simple_payment_draft(
 	else:
 		doc.paid_from = bank_account
 		doc.paid_to = party_account
-	payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)
 	if branch and payment_branch_field:
 		doc.set(payment_branch_field, branch)
 
@@ -428,19 +559,7 @@ def create_simple_payment_draft(
 	# Insert as the current user. PaymentEntry.validate owns party account completion,
 	# exchange rates, current outstanding revalidation, totals, unallocated amount and ledger safety.
 	doc.insert()
-	return {
-		"doctype": doc.doctype,
-		"name": doc.name,
-		"docstatus": doc.docstatus,
-		"payment_type": doc.payment_type,
-		"party_type": doc.party_type,
-		"party": doc.party,
-		"company": doc.company,
-		"branch": getattr(doc, payment_branch_field, None) if payment_branch_field else "",
-		"paid_amount": doc.paid_amount,
-		"unallocated_amount": getattr(doc, "unallocated_amount", None),
-		"route": f"/app/payment-entry/{doc.name}",
-	}
+	return _payment_draft_response(doc, branch_field=payment_branch_field, existing=False)
 
 
 def _search_outstanding_references(
