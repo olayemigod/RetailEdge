@@ -108,3 +108,17 @@ def test_native_payment_open_is_explicit_and_double_gated():
 	assert 'v-if="canUseNativeDesk"' in panel
 	assert "if (!this.canUseNativeDesk || !name) return" in panel
 	assert 'frappe.set_route("Form", "Payment Entry", name)' in panel
+
+
+def test_payment_review_opens_in_modal_instead_of_inline_below_history():
+	panel = _read(PANEL)
+	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"]' in panel
+	assert ':open="detailOpen"' in panel
+	assert "Payment Review ·" in panel
+	assert "detailOpen = true" in panel
+	assert "payment-detail-panel" not in panel
+	assert "payment-review-footer" in panel
+	assert "Submit Standard Payment" in panel
+	assert "Advanced: ERPNext" in panel
+	assert "confirmAboveEdgeModal" in panel
+	assert "const paymentEntry = this.paymentDetail.payment_entry;" in panel
