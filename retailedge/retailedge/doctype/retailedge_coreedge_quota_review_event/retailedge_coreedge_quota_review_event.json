@@ -46,7 +46,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Action",
-   "options": "Retry Finalization\nReconcile Unreserved\nSubmit CoreEdge Review",
+   "options": "Retry Finalization\nReconcile Unreserved\nSubmit CoreEdge Review\nRefresh CoreEdge Review",
    "reqd": 1
   },
   {
@@ -54,7 +54,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Result",
-   "options": "Finalized\nPending Finalize\nNeeds Review\nSubmitted\nBlocked\nFailed",
+   "options": "Finalized\nPending Finalize\nNeeds Review\nSubmitted\nResolved\nRejected\nBlocked\nFailed",
    "reqd": 1
   },
   {
