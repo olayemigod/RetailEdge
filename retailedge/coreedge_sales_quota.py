@@ -361,15 +361,17 @@ def _release_rolled_back_reservation(
 	release_idempotency_key: str,
 	doc_doctype: str,
 	doc_name: str,
+	reason: str = "RetailEdge transaction rolled back before database commit.",
+	source_path: str = "RetailEdge Sales Rollback",
 ) -> None:
 	try:
 		response = get_remote_usage_client().release_usage(
 			reservation_reference,
 			release_idempotency_key,
-			"RetailEdge transaction rolled back before database commit.",
+			reason,
 			request_id=release_idempotency_key,
 			correlation_id=f"{doc_doctype}:{doc_name}",
-			source_path="RetailEdge Sales Rollback",
+			source_path=source_path,
 		)
 		data = response.get("data") or {}
 		if not data.get("ok"):
