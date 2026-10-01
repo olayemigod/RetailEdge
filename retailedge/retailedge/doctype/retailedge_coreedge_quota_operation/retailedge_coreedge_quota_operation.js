@@ -83,13 +83,16 @@ function run_reconciliation(frm, action, reason) {
 		freeze_message: __("Reconciling CoreEdge quota..."),
 		callback(r) {
 			const result = r.message || {};
-			const indicator = result.ok ? "green" : "orange";
-			frappe.show_alert({
-				message: result.ok
-					? __("Quota reconciliation completed.")
-					: __("Quota reconciliation still needs review."),
-				indicator,
-			});
+			let indicator = "orange";
+			let message = __("Quota reconciliation still needs review.");
+			if (result.status === "Finalized") {
+				indicator = "green";
+				message = __("Quota reconciliation completed.");
+			} else if (result.status === "Pending Finalize") {
+				indicator = "blue";
+				message = __("Reservation recovered. Finalization is queued after commit.");
+			}
+			frappe.show_alert({ message, indicator });
 			frm.reload_doc();
 		},
 	});
