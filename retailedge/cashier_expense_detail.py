@@ -177,7 +177,13 @@ def _workflow_actions(
 	)
 
 	reasons: list[str] = []
-	if docstatus == 0 and not can_submit_for_review:
+	if workflow_controlled:
+		if not workflow_actions:
+			reasons.append(
+				str(workflow_readiness.get("message") or "").strip()
+				or _("No Cashier Expense workflow action is currently available to this user.")
+			)
+	elif docstatus == 0 and not can_submit_for_review:
 		reasons.append(_("This draft requires submit permission before it can enter review."))
 	elif docstatus == 1 and status == "Submitted" and not reviewer:
 		reasons.append(_("This submitted expense requires a RetailEdge reviewer role before approval or rejection."))
