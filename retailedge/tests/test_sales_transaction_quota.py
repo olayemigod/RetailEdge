@@ -536,8 +536,10 @@ class SalesQuotaOperationTests(FrappeTestCase):
 	@patch("retailedge.coreedge_sales_quota._save_operation")
 	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=1)
 	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
-	def test_expired_reservation_moves_to_needs_review(
+	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
+	def test_coreedge_expired_reservation_moves_to_needs_review(
 		self,
+		mock_client,
 		mock_get_doc,
 		_mock_docstatus,
 		mock_save,
@@ -560,11 +562,70 @@ class SalesQuotaOperationTests(FrappeTestCase):
 			remote_message=None,
 		)
 		mock_get_doc.return_value = operation
+		client = MagicMock()
+		client.finalize_usage.return_value = {
+			"data": {
+				"ok": False,
+				"reason_code": "RESERVATION_EXPIRED",
+				"message": "Reservation expired",
+			}
+		}
+		mock_client.return_value = client
 
 		result = finalize_sales_quota_operation("op-expired")
 
 		self.assertEqual(result["status"], "Needs Review")
-		self.assertIn("expired", operation.last_error.lower())
+		self.assertEqual(operation.reason_code, "RESERVATION_EXPIRED")
+		client.finalize_usage.assert_called_once()
+		mock_save.assert_called_once()
+
+	@patch("retailedge.coreedge_sales_quota._lock_operation")
+	@patch("retailedge.coreedge_sales_quota._save_operation")
+	@patch("retailedge.coreedge_sales_quota.frappe.db.get_value", return_value=2)
+	@patch("retailedge.coreedge_sales_quota.frappe.get_doc")
+	@patch("retailedge.coreedge_sales_quota.get_remote_usage_client")
+	def test_cancelled_submitted_sale_still_finalizes_usage(
+		self,
+		mock_client,
+		mock_get_doc,
+		_mock_docstatus,
+		mock_save,
+		_mock_lock,
+	):
+		operation = SimpleNamespace(
+			name="op-cancelled",
+			status="Pending Finalize",
+			attempt_count=0,
+			last_attempt_on=None,
+			source_doctype="Sales Invoice",
+			source_name="SINV-CANCELLED",
+			reservation_expires_on=add_to_date(now_datetime(), minutes=-1),
+			reservation_reference="CEUR-cancelled",
+			finalize_idempotency_key="finalize-cancelled",
+			entitlement_key="SALES_TRANSACTIONS",
+			last_error=None,
+			finalized_on=None,
+			reason_code=None,
+			remote_message=None,
+		)
+		mock_get_doc.return_value = operation
+		client = MagicMock()
+		client.finalize_usage.return_value = {
+			"data": {
+				"ok": True,
+				"quota": {
+					"reason_code": "RESERVATION_ALREADY_FINALIZED",
+					"message": "Already finalized",
+				}
+			}
+		}
+		mock_client.return_value = client
+
+		result = finalize_sales_quota_operation("op-cancelled")
+
+		self.assertEqual(result["status"], "Finalized")
+		self.assertEqual(operation.status, "Finalized")
+		client.finalize_usage.assert_called_once()
 		mock_save.assert_called_once()
 
 	@patch("retailedge.coreedge_sales_quota._enqueue_finalize_operation")
