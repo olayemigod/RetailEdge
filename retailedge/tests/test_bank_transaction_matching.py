@@ -1911,7 +1911,11 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertFalse(candidate_document_has_active_confirmed_bank_match("Customer", "CUST-0001"))
 		mock_exists.assert_any_call(
 			"RetailEdge Bank Transaction Match",
-			{"sales_invoice": "SINV-0001", "decision_status": "Confirmed"},
+			{
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": "SINV-0001",
+				"decision_status": "Confirmed",
+			},
 		)
 
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
