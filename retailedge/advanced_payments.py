@@ -310,12 +310,14 @@ def get_sales_invoice_advance_context(sales_invoice: str, limit: int = 50) -> di
 
 	branch = _invoice_branch(invoice)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
-			company=invoice.company,
-			throw=True,
-		)
+		branch = str(
+			resolve_operational_branch(
+				invoice.company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
 
 	advances = list_customer_advances(
 		customer=invoice.customer,
