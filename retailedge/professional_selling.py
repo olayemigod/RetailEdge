@@ -742,18 +742,26 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
 
 	elif document == "sales-order":
-		actions.extend(
-			_existing_document_action(target)
-			for target in _sales_order_downstream_documents(str(row.get("name") or ""))
+		downstream = _sales_order_downstream_documents(str(row.get("name") or ""))
+		actions.extend(_existing_document_action(target) for target in downstream)
+		has_draft_delivery = any(
+			target.get("doctype") == "Delivery Note" and cint(target.get("docstatus")) == 0
+			for target in downstream
+		)
+		has_draft_invoice = any(
+			target.get("doctype") == "Sales Invoice" and cint(target.get("docstatus")) == 0
+			for target in downstream
 		)
 		if (
-			_permission("Delivery Note", "create")
+			not has_draft_delivery
+			and _permission("Delivery Note", "create")
 			and status not in {"Closed", "Completed", "Cancelled"}
 			and flt(row.get("per_delivered")) < 99.999
 		):
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
 		if (
-			_permission("Sales Invoice", "create")
+			not has_draft_invoice
+			and _permission("Sales Invoice", "create")
 			and status not in {"Closed", "Cancelled"}
 			and flt(row.get("per_billed")) < 99.999
 		):
@@ -767,12 +775,12 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
 	elif document == "delivery-note":
-		actions.extend(
-			_existing_document_action(target)
-			for target in _delivery_note_downstream_documents(str(row.get("name") or ""))
-		)
+		downstream = _delivery_note_downstream_documents(str(row.get("name") or ""))
+		actions.extend(_existing_document_action(target) for target in downstream)
+		has_draft_invoice = any(cint(target.get("docstatus")) == 0 for target in downstream)
 		if (
-			_permission("Sales Invoice", "create")
+			not has_draft_invoice
+			and _permission("Sales Invoice", "create")
 			and not cint(row.get("is_return"))
 			and status not in {"Closed", "Cancelled"}
 			and flt(row.get("per_billed")) < 99.999
@@ -780,19 +788,29 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
 
 	elif document == "sales-invoice":
-		actions.extend(
-			_existing_document_action(target)
-			for target in _sales_invoice_downstream_documents(str(row.get("name") or ""))
+		downstream = _sales_invoice_downstream_documents(str(row.get("name") or ""))
+		actions.extend(_existing_document_action(target) for target in downstream)
+		has_draft_delivery = any(
+			target.get("doctype") == "Delivery Note" and cint(target.get("docstatus")) == 0
+			for target in downstream
+		)
+		has_draft_return = any(
+			target.get("doctype") == "Sales Invoice"
+			and bool(cint(target.get("is_return")))
+			and cint(target.get("docstatus")) == 0
+			for target in downstream
 		)
 		if (
-			_permission("Delivery Note", "create")
+			not has_draft_delivery
+			and _permission("Delivery Note", "create")
 			and not cint(row.get("is_return"))
 			and not cint(row.get("update_stock"))
 			and status not in {"Cancelled", "Return"}
 		):
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
 		if (
-			_permission("Sales Invoice", "create")
+			not has_draft_return
+			and _permission("Sales Invoice", "create")
 			and _can_open_page("professional-selling")
 			and not cint(row.get("is_return"))
 			and status not in {"Cancelled", "Return"}
