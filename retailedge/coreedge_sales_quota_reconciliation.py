@@ -142,6 +142,14 @@ def retry_quota_finalization(operation_name: str, reason: str) -> dict:
 		"reconciliation_case_reference": operation.reconciliation_case_reference or "",
 		"reconciliation_case_status": operation.reconciliation_case_status or "",
 		"reconciliation_submitted_on": operation.reconciliation_submitted_on,
+		"reconciliation_last_checked_on": operation.reconciliation_last_checked_on,
+		"reconciliation_decision_reference": operation.reconciliation_decision_reference or "",
+		"reconciliation_decision_type": operation.reconciliation_decision_type or "",
+		"reconciliation_result_status": operation.reconciliation_result_status or "",
+		"reconciliation_result_reason_code": operation.reconciliation_result_reason_code or "",
+		"reconciliation_applied_usage": bool(operation.reconciliation_applied_usage),
+		"reconciliation_reference": operation.reconciliation_reference or "",
+		"reconciliation_decided_on": operation.reconciliation_decided_on,
 		"reason_code": operation.reason_code or "",
 		"message": operation.last_error or operation.remote_message or "",
 	}
@@ -269,6 +277,157 @@ def submit_unreserved_quota_reconciliation_case(operation_name: str, reason: str
 
 
 @frappe.whitelist()
+def refresh_reconciliation_case_status(operation_name: str, reason: str) -> dict:
+	_require_post()
+	_assert_reconciliation_operator()
+	reason = _required_reason(reason)
+	operation = _get_scoped_operation(operation_name)
+
+	if not operation.reconciliation_case_reference:
+		frappe.throw(
+			_("This quota operation has not been submitted to CoreEdge review."),
+			frappe.ValidationError,
+		)
+	if operation.status in {"Resolved", "Rejected"}:
+		return _reconciliation_response(operation, ok=True)
+	if operation.status != "Needs Review":
+		frappe.throw(
+			_("Only Needs Review quota operations can refresh CoreEdge review status."),
+			frappe.ValidationError,
+		)
+
+	previous_status = operation.status
+	attempt = _next_review_attempt(operation.name)
+	request_id = _review_idempotency_key(operation.name, "case-status", attempt)
+	client = get_remote_usage_client()
+
+	try:
+		response = client.get_reconciliation_case_status(
+			operation.reconciliation_case_reference,
+			request_id=request_id,
+			correlation_id=f"{operation.source_doctype}:{operation.source_name}",
+			source_path="RetailEdge Sales Quota Reconciliation Status",
+		)
+	except CoreEdgeRemoteUsageError as exc:
+		message = _safe_message(exc)
+		_update_case_submission_failure(operation, message)
+		_write_review_event(
+			operation=operation,
+			action="Refresh CoreEdge Review",
+			result="Failed",
+			previous_status=previous_status,
+			new_status=operation.status,
+			reason=reason,
+			reason_code="COREDGE_RECONCILIATION_STATUS_UNAVAILABLE",
+			message=message,
+		)
+		return _reconciliation_response(operation, ok=False)
+
+	data = response.get("data") or {}
+	if not data.get("ok"):
+		reason_code = data.get("reason_code") or "COREDGE_RECONCILIATION_STATUS_REJECTED"
+		message = data.get("message") or _("CoreEdge reconciliation status could not be read.")
+		_update_case_submission_failure(operation, message)
+		_write_review_event(
+			operation=operation,
+			action="Refresh CoreEdge Review",
+			result="Failed",
+			previous_status=previous_status,
+			new_status=operation.status,
+			reason=reason,
+			reason_code=reason_code,
+			message=message,
+		)
+		return _reconciliation_response(operation, ok=False)
+
+	case = data.get("case") or {}
+	case_reference = str(case.get("case_reference") or "").strip()
+	if case_reference != operation.reconciliation_case_reference:
+		return _record_case_status_contract_failure(
+			operation,
+			previous_status=previous_status,
+			reason=reason,
+			reason_code="COREDGE_RECONCILIATION_CASE_MISMATCH",
+			message=_("CoreEdge returned a different reconciliation Case Reference."),
+		)
+
+	case_status = str(case.get("case_status") or "").strip()
+	decision = case.get("decision") or {}
+	if case_status == "Open":
+		target_status = "Needs Review"
+	elif case_status == "Resolved":
+		if str(decision.get("decision_type") or "") != "Apply Usage":
+			return _record_case_status_contract_failure(
+				operation,
+				previous_status=previous_status,
+				reason=reason,
+				reason_code="COREDGE_RECONCILIATION_DECISION_INVALID",
+				message=_("Resolved CoreEdge case did not include an Apply Usage decision."),
+			)
+		target_status = "Resolved"
+	elif case_status == "Rejected":
+		if str(decision.get("decision_type") or "") != "Reject":
+			return _record_case_status_contract_failure(
+				operation,
+				previous_status=previous_status,
+				reason=reason,
+				reason_code="COREDGE_RECONCILIATION_DECISION_INVALID",
+				message=_("Rejected CoreEdge case did not include a Reject decision."),
+			)
+		target_status = "Rejected"
+	else:
+		return _record_case_status_contract_failure(
+			operation,
+			previous_status=previous_status,
+			reason=reason,
+			reason_code="COREDGE_RECONCILIATION_CASE_STATUS_UNKNOWN",
+			message=_("CoreEdge returned an unsupported reconciliation case status."),
+		)
+
+	operation.reconciliation_case_status = case_status
+	operation.reconciliation_last_checked_on = now_datetime()
+	if decision:
+		operation.reconciliation_decision_reference = (
+			str(decision.get("decision_reference") or "")[:140] or None
+		)
+		operation.reconciliation_decision_type = (
+			str(decision.get("decision_type") or "")[:140] or None
+		)
+		operation.reconciliation_result_status = (
+			str(decision.get("result_status") or "")[:140] or None
+		)
+		operation.reconciliation_result_reason_code = (
+			str(decision.get("result_reason_code") or decision.get("reason_code") or "")[:140]
+			or None
+		)
+		operation.reconciliation_applied_usage = cint(decision.get("applied_usage"))
+		operation.reconciliation_reference = (
+			str(decision.get("reconciliation_reference") or "")[:140] or None
+		)
+		operation.reconciliation_decided_on = decision.get("decided_on")
+	operation.status = target_status
+	operation.last_error = None
+	operation.flags.allow_retailedge_quota_operation_update = True
+	operation.flags.allow_retailedge_quota_case_status_sync = True
+	operation.save(ignore_permissions=True)
+
+	result_reason_code = (
+		str(decision.get("result_reason_code") or decision.get("reason_code") or case_status)[:140]
+	)
+	_write_review_event(
+		operation=operation,
+		action="Refresh CoreEdge Review",
+		result=target_status,
+		previous_status=previous_status,
+		new_status=operation.status,
+		reason=reason,
+		reason_code=result_reason_code,
+		message=_("Synchronized authoritative CoreEdge reconciliation case status."),
+	)
+	return _reconciliation_response(operation, ok=True)
+
+
+@frappe.whitelist()
 def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> dict:
 	"""Backward-compatible alias for the governed CoreEdge case-submission workflow."""
 	return submit_unreserved_quota_reconciliation_case(operation_name, reason)
@@ -348,6 +507,14 @@ def get_quota_reconciliation_rows(
 			"reconciliation_case_reference",
 			"reconciliation_case_status",
 			"reconciliation_submitted_on",
+			"reconciliation_last_checked_on",
+			"reconciliation_decision_reference",
+			"reconciliation_decision_type",
+			"reconciliation_result_status",
+			"reconciliation_result_reason_code",
+			"reconciliation_applied_usage",
+			"reconciliation_reference",
+			"reconciliation_decided_on",
 			"attempt_count",
 			"last_attempt_on",
 			"last_error",
@@ -459,6 +626,28 @@ def _reconciliation_evidence_summary(operation, source: dict) -> str:
 	return " ".join(parts)[:1000]
 
 
+def _record_case_status_contract_failure(
+	operation,
+	*,
+	previous_status: str,
+	reason: str,
+	reason_code: str,
+	message: str,
+) -> dict:
+	_update_case_submission_failure(operation, message)
+	_write_review_event(
+		operation=operation,
+		action="Refresh CoreEdge Review",
+		result="Failed",
+		previous_status=previous_status,
+		new_status=operation.status,
+		reason=reason,
+		reason_code=reason_code,
+		message=message,
+	)
+	return _reconciliation_response(operation, ok=False)
+
+
 def _update_case_submission_failure(operation, message: str) -> None:
 	operation.last_error = str(message or "")[:1000] or None
 	operation.flags.allow_retailedge_quota_operation_update = True
@@ -563,6 +752,10 @@ def _recommended_action(row: dict) -> str:
 	reason_code = str(row.get("reason_code") or "")
 	if status == "Finalized":
 		return _("No action required")
+	if status == "Resolved":
+		return _("CoreEdge usage review resolved")
+	if status == "Rejected":
+		return _("CoreEdge evidence rejected")
 	if reservation:
 		return _("Retry CoreEdge finalization")
 	if status == "Needs Review" and reason_code == "FAIL_OPEN_UNRESERVED":
@@ -579,6 +772,8 @@ def _build_summary(rows: list[dict], *, truncated: bool) -> dict:
 		"needs_review": sum(1 for row in rows if row.get("status") == "Needs Review"),
 		"pending_finalize": sum(1 for row in rows if row.get("status") == "Pending Finalize"),
 		"finalized": sum(1 for row in rows if row.get("status") == "Finalized"),
+		"resolved": sum(1 for row in rows if row.get("status") == "Resolved"),
+		"rejected": sum(1 for row in rows if row.get("status") == "Rejected"),
 		"visible_rows": len(rows),
 		"truncated": int(truncated),
 	}
