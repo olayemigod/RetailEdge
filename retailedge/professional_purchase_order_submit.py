@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
 from retailedge.professional_purchasing import (
@@ -105,6 +105,7 @@ def _item_preview(doc: Any) -> list[dict[str, Any]]:
 			continue
 		items.append(
 			{
+				"name": str(getattr(row, "name", "") or ""),
 				"item_code": str(getattr(row, "item_code", "") or ""),
 				"item_name": str(getattr(row, "item_name", "") or getattr(row, "item_code", "") or ""),
 				"qty": qty,
@@ -145,12 +146,20 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 		"supplier": str(getattr(doc, "supplier", "") or ""),
 		"supplier_name": str(getattr(doc, "supplier_name", "") or getattr(doc, "supplier", "") or ""),
 		"currency": str(getattr(doc, "currency", "") or ""),
+		"transaction_date": str(getattr(doc, "transaction_date", "") or ""),
+		"schedule_date": str(getattr(doc, "schedule_date", "") or ""),
+		"terms": str(getattr(doc, "terms", "") or ""),
 		"grand_total": flt(getattr(doc, "grand_total", 0)),
 		"total_qty": flt(getattr(doc, "total_qty", 0)),
 		"item_count": len(items),
 		"tax_row_count": len(getattr(doc, "taxes", None) or []),
 		"items": items,
 		"blockers": blockers,
+		"can_edit": bool(
+			cint(getattr(doc, "docstatus", 0)) == 0
+			and str(getattr(doc, "status", "") or "") not in BLOCKED_DRAFT_STATUSES
+			and frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc)
+		),
 		"can_submit": not blockers,
 		"workflow_readiness": workflow_readiness,
 		"workflow_eligible": workflow_eligible,
@@ -164,6 +173,87 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 def get_purchase_order_submit_preview(purchase_order: str) -> dict[str, Any]:
 	"""Review one Purchase Order before standard submit/workflow action; no writes occur."""
 	return _build_preview(_get_purchase_order(purchase_order))
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_purchase_order_draft(
+	purchase_order: str,
+	values: dict | str | None = None,
+	expected_purchase_order_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Update bounded fields on an existing draft Purchase Order before completion.
+
+	Company, Supplier, Branch, Stock Location, Buying Price List and item identity
+	remain protected. ERPNext recalculates totals and validates the draft on save.
+	"""
+	purchase_order = str(purchase_order or "").strip()
+	if not purchase_order:
+		frappe.throw(_("Purchase Order is required."))
+	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, purchase_order):
+		frappe.throw(_("Purchase Order {0} does not exist.").format(purchase_order))
+
+	frappe.db.sql(
+		"SELECT name FROM `tabPurchase Order` WHERE name = %s FOR UPDATE",
+		(purchase_order,),
+	)
+	doc = _get_purchase_order(purchase_order)
+	_validate_purchase_order_branch(doc)
+	if cint(getattr(doc, "docstatus", 0)) != 0:
+		frappe.throw(_("Only draft Purchase Orders can be edited here."))
+	if str(getattr(doc, "status", "") or "") in BLOCKED_DRAFT_STATUSES:
+		frappe.throw(_("Purchase Order status {0} is not editable in standard purchasing.").format(doc.status))
+	if not frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Purchase Order."), frappe.PermissionError)
+
+	expected_modified = str(expected_purchase_order_modified or "").strip()
+	current_modified = str(getattr(doc, "modified", "") or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(_("Purchase Order {0} changed after it was opened. Refresh before saving.").format(doc.name))
+
+	values = frappe.parse_json(values) if isinstance(values, str) else dict(values or {})
+	transaction_date = getdate(values.get("transaction_date") or getattr(doc, "transaction_date", None))
+	parent_schedule = values.get("schedule_date") or getattr(doc, "schedule_date", None) or transaction_date
+	parent_schedule = getdate(parent_schedule)
+	if parent_schedule < transaction_date:
+		frappe.throw(_("Required By date cannot be before the Order Date."))
+
+	doc.transaction_date = transaction_date
+	if doc.meta.has_field("schedule_date"):
+		doc.schedule_date = parent_schedule
+	if doc.meta.has_field("terms"):
+		doc.terms = str(values.get("terms") or "").strip()
+
+	current_rows = {
+		str(getattr(row, "name", "") or ""): row
+		for row in list(getattr(doc, "items", None) or [])
+		if str(getattr(row, "name", "") or "")
+	}
+	requested_rows = values.get("items") or []
+	if not isinstance(requested_rows, list):
+		frappe.throw(_("Purchase Order items are invalid."))
+	for index, requested in enumerate(requested_rows, start=1):
+		if not isinstance(requested, dict):
+			frappe.throw(_("Purchase Order item row {0} is invalid.").format(index))
+		row_name = str(requested.get("name") or "").strip()
+		row = current_rows.get(row_name)
+		if not row:
+			frappe.throw(_("Purchase Order item row {0} is no longer part of this draft. Refresh and try again.").format(index))
+		qty = flt(requested.get("qty"))
+		rate = flt(requested.get("rate"))
+		row_schedule = getdate(requested.get("schedule_date") or parent_schedule)
+		if qty <= 0:
+			frappe.throw(_("Quantity on row {0} must be greater than zero.").format(index))
+		if rate < 0:
+			frappe.throw(_("Buying Rate on row {0} cannot be negative.").format(index))
+		if row_schedule < transaction_date:
+			frappe.throw(_("Required By date on row {0} cannot be before the Order Date.").format(index))
+		row.qty = qty
+		row.rate = rate
+		row.schedule_date = row_schedule
+
+	doc.save()
+	doc.reload()
+	return _build_preview(doc)
 
 
 @frappe.whitelist(methods=["POST"])
