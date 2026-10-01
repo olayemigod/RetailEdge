@@ -82,8 +82,13 @@ class TestProfessionalPurchasingUIContract(TestCase):
 
 	def test_edgesuite_only_purchasing_has_no_dead_native_actions(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
-		self.assertIn('{{ canUseNativeDesk ? "Open" : "Review" }}', component)
+		self.assertIn('Number(row.docstatus || 0) === 0 ? "Review / Edit" : "Review"', component)
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name })", component)
+		open_method = component.split("\t\topenPurchaseOrder(name) {", 1)[1].split("\n\t\topenPurchaseOrderAdvanced(name)", 1)[0]
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT", open_method)
+		self.assertNotIn('frappe.set_route("Form", "Purchase Order"', open_method)
+		self.assertIn("openPurchaseOrderAdvanced(name)", component)
+		self.assertIn('frappe.set_route("Form", "Purchase Order", name)', component)
 		self.assertIn('v-if="canUseNativeDesk && capabilities.can_compare_supplier_quotations"', component)
 		self.assertIn('v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis"', component)
 		self.assertIn('v-if="canUseNativeDesk && procurementTracker.available"', component)
