@@ -48,6 +48,13 @@ ACTION_CENTER_ROLES = {
 	"Sales Manager",
 	"Purchase Manager",
 }
+USAGE_RECONCILIATION_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+}
 
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
@@ -230,6 +237,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
 			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
+			{"label": "Usage Reconciliation", "target_type": "Page", "target": "usage-reconciliation", "icon": "shield", "required_roles": tuple(sorted(USAGE_RECONCILIATION_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},

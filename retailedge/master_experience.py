@@ -348,6 +348,7 @@ SUPPLIER_OPERATION_TARGETS = {
 }
 OPERATIONS_REVIEW_TARGETS = {
 	"business-control-center",
+	"usage-reconciliation",
 	"action-center",
 	"supplier-document-review",
 	"daily-sales-audit",
