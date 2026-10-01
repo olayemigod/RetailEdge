@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
 
-from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.professional_purchasing import (
 	PURCHASE_ORDER_DOCTYPE,
 	_assert_read,
@@ -30,15 +30,21 @@ def _get_purchase_order(name: str) -> Any:
 
 def _validate_purchase_order_branch(doc: Any) -> str:
 	branch = _document_branch(doc)
-	global_access = user_has_global_branch_access(user=frappe.session.user)
+	company = str(getattr(doc, "company", "") or "").strip()
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if branch:
-		validate_user_branch_access(
-			branch,
+		validate_operating_branch(
+			company=company,
+			branch=branch,
 			user=frappe.session.user,
-			company=doc.company,
 			throw=True,
 		)
-	elif not global_access:
+		if scope.get("restricted") and branch not in (scope.get("allowed_branches") or []):
+			frappe.throw(
+				_("You do not have active operational access to Branch {0}.").format(branch),
+				frappe.PermissionError,
+			)
+	elif scope.get("restricted"):
 		frappe.throw(
 			_("Purchase Order {0} has no Branch attribution for your restricted access.").format(doc.name),
 			frappe.PermissionError,
