@@ -1211,8 +1211,7 @@ export default {
 					const result = await callMethod(CREATE_DELIVERY_METHOD, { sales_invoice: payload.name }, "POST");
 					if (!result?.name) throw new Error("Delivery Note draft was not returned.");
 					this.deliveryCompletionDocument = { doctype: "Delivery Note", name: result.name };
-					if (Number(result.docstatus || 0) === 0) this.deliveryCompletionOpen = true;
-					else this.openDocumentOutput("delivery-note", result.name, "view");
+					this.deliveryCompletionOpen = true;
 				} catch (error) {
 					this.saveError = errorMessage(error, "Unable to continue to Delivery Note.");
 				}
@@ -1234,7 +1233,7 @@ export default {
 				}
 				return;
 			}
-			if (payload.action === "output") this.openDocumentOutput("sales-invoice", payload.name, "share");
+			if (payload.action === "output") this.openDocumentOutput("sales-invoice", payload.name);
 		},
 		closePayment() {
 			this.paymentOpen = false;
@@ -1259,13 +1258,12 @@ export default {
 		handleDeliveryNextAction(payload) {
 			if (payload?.action === "output" && payload?.name) {
 				this.closeDeliveryCompletion();
-				this.openDocumentOutput("delivery-note", payload.name, "share");
+				this.openDocumentOutput("delivery-note", payload.name);
 			}
 		},
-		openDocumentOutput(document, name, mode = "share") {
+		openDocumentOutput(document, name) {
 			if (!document || !name) return;
-			window.retailedgeDocumentOutputTarget = { document, name, mode };
-			frappe.set_route("document-output-sharing");
+			window.retailedge?.openDocumentOutputSharing?.(document, name);
 		},
 		async startAnother() {
 			this.savedDocument = null;
