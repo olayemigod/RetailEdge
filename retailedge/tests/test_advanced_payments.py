@@ -184,12 +184,14 @@ class TestAdvancedPayments(unittest.TestCase):
 
 	@patch("retailedge.advanced_payments._company_currency", return_value="NGN")
 	@patch("retailedge.advanced_payments.list_customer_advances")
+	@patch("retailedge.advanced_payments.resolve_operational_branch")
 	@patch("retailedge.advanced_payments._assert_read")
 	@patch("retailedge.advanced_payments.frappe.get_doc")
 	def test_multi_currency_invoice_does_not_offer_simple_advance_application(
 		self,
 		mock_get_doc,
 		_mock_read,
+		mock_branch_resolver,
 		mock_list_advances,
 		_mock_currency,
 	):
@@ -202,6 +204,7 @@ class TestAdvancedPayments(unittest.TestCase):
 			outstanding_amount=100,
 		)
 		mock_list_advances.return_value = [{"name": "ACC-PAY-1", "unallocated_amount": 100.0}]
+		mock_branch_resolver.return_value = {"branch": "Lagos"}
 
 		context = get_sales_invoice_advance_context("SINV-USD-1")
 
