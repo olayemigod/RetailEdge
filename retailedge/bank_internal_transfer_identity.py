@@ -343,12 +343,21 @@ def install_internal_transfer_bank_leg_identity():
 	original_first_confirmed_conflict = workflow._get_first_active_confirmed_conflict
 	original_validate_no_confirmed = workflow._validate_no_other_active_confirmed_match
 
-	def find_active_candidate_review_match(suggested_document_type, suggested_document):
-		legacy_match = original_find_active_candidate_review(suggested_document_type, suggested_document)
+	def find_active_candidate_review_match(
+		suggested_document_type,
+		suggested_document,
+		bank_transaction=None,
+	):
+		"""Preserve workflow helper signature while scoping Internal Transfers by bank leg."""
+		bank_transaction = bank_transaction or _get_context_bank_transaction()
+		legacy_match = original_find_active_candidate_review(
+			suggested_document_type,
+			suggested_document,
+			bank_transaction=bank_transaction,
+		)
 		if not legacy_match:
 			return None
 		if cstr(suggested_document_type).strip() == "Payment Entry":
-			bank_transaction = _get_context_bank_transaction()
 			if bank_transaction and _is_submitted_internal_transfer(suggested_document):
 				rows = _same_leg_match_rows(suggested_document, bank_transaction, confirmed_only=False)
 				return cstr(rows[0].get("name")).strip() if rows else None
