@@ -82,7 +82,9 @@ class TestProfessionalPurchasingUIContract(TestCase):
 
 	def test_edgesuite_only_purchasing_has_no_dead_native_actions(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
-		self.assertIn('Number(row.docstatus || 0) === 0 ? "Review / Edit" : "Review"', component)
+		self.assertIn('Number(row.docstatus || 0) === 0 ? "Review / Edit" : "View"', component)
+		self.assertIn("openDocumentOutput('purchase-order', row.name)", component)
+		self.assertIn(">Print & Share</button>", component)
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name })", component)
 		open_method = component.split("\t\topenPurchaseOrder(name) {", 1)[1].split("\n\t\topenPurchaseOrderAdvanced(name)", 1)[0]
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT", open_method)
