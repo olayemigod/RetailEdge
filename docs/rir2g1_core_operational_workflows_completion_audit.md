@@ -188,3 +188,19 @@ Earlier RIR2G1A2, G1B, G1C and G1D exact-head freeze evidence remains recorded i
 Phase 2 is not release-frozen. Browser/persona and cross-workflow acceptance remain part of consolidated RIR2E before final MVP freeze.
 
 The next execution phase is **Phase 3 — EdgeSuite UI Completion**, beginning with an audit/reconciliation of remaining ordinary-user Native Desk dependencies and incomplete EdgeSuite operational surfaces. Do not rebuild surfaces already proven complete by F3 and G1 checkpoints.
+
+
+## 2026-10-01 Runtime QA correction: persistent invoice workflow ownership
+
+Browser QA identified a UX ownership defect after the original completion audit: Quick Sale and Quick Purchase were saving a draft and then opening a second Sales/Purchase Invoice completion modal. The Sales completion footer also had a contradictory direct-submit visibility condition.
+
+The corrected contract is:
+
+- Quick Sale / Quick Purchase create drafts only.
+- Saved quick drafts hand off by document name to Make Sale / Record Purchase.
+- Sales Invoice and direct Purchase Invoice Workflow/submission controls render on those persistent pages.
+- Professional Selling/Purchasing retain their governed completion surfaces for source-driven and advanced flows.
+- active Frappe Workflow still has precedence over direct submit;
+- the existing server-side completion APIs remain authoritative, so this is a UI ownership correction rather than a new accounting path.
+
+Detailed QA and operating guidance: `docs/retailedge_sales_purchase_persistent_workflow_qa.md`.
