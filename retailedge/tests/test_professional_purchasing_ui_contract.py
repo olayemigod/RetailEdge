@@ -50,12 +50,11 @@ class TestProfessionalPurchasingUIContract(TestCase):
 			"retailedge-open-professional-purchase-order",
 			"retailedge-open-purchase-order-submit",
 			"retailedge-open-professional-rfq-preview",
-			"retailedge-open-professional-rfq-history",
-			"retailedge-open-professional-supplier-quotation-history",
 			"retailedge-open-professional-purchase-receipt-preview",
-			"retailedge-open-professional-purchase-receipt-history",
 		):
 			self.assertIn(event_name, component)
+		for persistent_route in ("rfq-history", "supplier-quotation-history", "purchase-receipt-history"):
+			self.assertIn(f'frappe.set_route("{persistent_route}")', component)
 		self.assertNotIn('frappe.new_doc("Purchase Order")', component)
 		self.assertNotIn('frappe.set_route("Form", "Request for Quotation", result.name)', component)
 
@@ -121,11 +120,11 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
 
 	def test_receipt_history_can_continue_to_purchase_invoice_inside_edgesuite(self):
-		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue").read_text()
+		page = (APP_ROOT / "public/js/professional_purchasing/PurchaseReceiptHistoryPage.vue").read_text()
 		backend = (APP_ROOT / "professional_purchase_receipt.py").read_text()
-		self.assertIn("Create Invoice", overlay)
-		self.assertIn("prepare_purchase_invoice_from_purchase_receipt", overlay)
-		self.assertIn("retailedge-professional-purchasing-purchase-invoice-ready", overlay)
+		self.assertIn("Create Invoice", page)
+		self.assertIn("prepare_purchase_invoice_from_purchase_receipt", page)
+		self.assertIn('action: "purchase-invoice-ready"', page)
 		self.assertIn('"can_prepare_invoice"', backend)
 		self.assertIn('"per_billed"', backend)
 
