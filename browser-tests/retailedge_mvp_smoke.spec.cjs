@@ -80,7 +80,7 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "action-center", "Action Centre", "Review & Approvals");
+		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -202,13 +202,13 @@ test("canonical RetailEdge cashier reaches Business Hub but not banking control 
 	}
 });
 
-test("Accounts User reaches Action Centre and both banking EdgeSuite pages with Money sidebar", async ({ browser }) => {
+test("Accounts User reaches Action Centre and both banking EdgeSuite pages with reconciliation sidebar", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.accounts);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "action-center", "Action Centre", "Review & Approvals");
-		await openProductPage(page, "banking-readiness", "Banking Setup & Readiness", "Money");
-		await openProductPage(page, "bank-matching-reconciliation", "Bank Matching & Reconciliation", "Money");
+		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
+		await openProductPage(page, "banking-readiness", "Banking Setup & Readiness", "Banking & Reconciliation");
+		await openProductPage(page, "bank-matching-reconciliation", "Bank Matching & Reconciliation", "Banking & Reconciliation");
 	} finally {
 		await context.close().catch(() => {});
 	}

@@ -131,10 +131,10 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "shopping-bag",
 		"items": (
 			{"label": "Purchase Operations", "target_type": "Page", "target": "professional-purchasing", "icon": "shopping-bag"},
-			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
-			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "truck"},
 			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice", "icon": "clipboard"},
 			{"label": "Purchase Register", "target_type": "Page", "target": "purchase-register", "icon": "report"},
+			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
+			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "truck"},
 		),
 	},
 	{
@@ -413,14 +413,14 @@ def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> 
 	if runtime_target == "pos_opening":
 		if not pos_capabilities.opening_doctype:
 			return None
-		resolved["label"] = pos_capabilities.opening_doctype
+		resolved["label"] = _("POS Opening Shift")
 		resolved["target_type"] = "DocType"
 		resolved["target"] = pos_capabilities.opening_doctype
 		return resolved
 	if runtime_target == "pos_closing":
 		if not pos_capabilities.closing_doctype:
 			return None
-		resolved["label"] = pos_capabilities.closing_doctype
+		resolved["label"] = _("POS Closing Shift")
 		resolved["target_type"] = "DocType"
 		resolved["target"] = pos_capabilities.closing_doctype
 		return resolved
