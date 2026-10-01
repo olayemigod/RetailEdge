@@ -33,6 +33,11 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 	def validate(self) -> None:
 		if int(self.units or 0) <= 0:
 			frappe.throw(_("Quota operation Units must be greater than zero."), frappe.ValidationError)
+		if self.status in {"Pending Finalize", "Finalized"} and not self.reservation_reference:
+			frappe.throw(
+				_("A quota reservation reference is required for active/finalized operations."),
+				frappe.ValidationError,
+			)
 		if self.is_new():
 			return
 		if not self.flags.get("allow_retailedge_quota_operation_update"):
