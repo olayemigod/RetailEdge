@@ -201,6 +201,14 @@ def test_dialog_uses_server_authoritative_submit_and_workflow_actions():
 	assert 'v-if="canUseNativeDesk && document?.name"' in source
 
 
+def test_purchase_completion_save_draft_action_is_in_footer():
+	dialog = _read(DIALOG)
+	editor = dialog[dialog.index('class="invoice-draft-editor"'):dialog.index("<template #footer>")]
+	footer = dialog[dialog.index("<template #footer>"):]
+	assert "Save Draft Changes" not in editor
+	assert "Save Draft Changes" in footer
+
+
 def test_professional_purchasing_source_mode_preserves_source_ownership_and_allows_governed_completion():
 	source = _read(SERVICE)
 	for marker in (
