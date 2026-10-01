@@ -249,6 +249,7 @@ def install_internal_transfer_bank_leg_identity():
 
 	original_find_payment_entries = matching.find_payment_entry_candidates_for_bank_transaction
 	original_candidate_confirmed = matching.candidate_document_has_active_confirmed_bank_match
+	original_payment_confirmed = matching.payment_entry_has_active_confirmed_bank_match
 	original_active_review = matching._active_review_match_for_candidate
 	original_candidate_key = matching.get_candidate_document_key
 
@@ -286,7 +287,11 @@ def install_internal_transfer_bank_leg_identity():
 					exclude_match=exclude_match,
 				)
 			)
-		return candidate_document_has_active_confirmed_bank_match("Payment Entry", payment_entry)
+		return original_payment_confirmed(
+			payment_entry,
+			bank_transaction=bank_transaction,
+			exclude_match=exclude_match,
+		)
 
 	def active_review_match_for_candidate(document_type, document_name):
 		legacy_match = original_active_review(document_type, document_name)
