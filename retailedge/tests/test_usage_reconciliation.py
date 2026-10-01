@@ -146,6 +146,15 @@ class UsageReconciliationApiTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			retry_sales_quota_review(operation.name)
 
+	def test_retry_api_requires_post(self):
+		source = Path(
+			frappe.get_app_path("retailedge", "coreedge_sales_quota.py")
+		).read_text()
+		start = source.index("def retry_sales_quota_review")
+		end = source.index("def _require_post", start)
+		section = source[start:end]
+		self.assertIn("_require_post()", section)
+
 	def test_review_query_source_uses_permission_aware_get_list(self):
 		source = Path(
 			frappe.get_app_path("retailedge", "coreedge_sales_quota.py")
