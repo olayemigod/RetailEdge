@@ -210,6 +210,35 @@ Verify all of the following fail closed without losing the saved ERPNext draft:
 - source-linked Purchase Invoice is presented to Direct Purchase;
 - submitted document is reopened for editing.
 
+### J. Payment Management and Payment History
+
+1. Open **Payment Management** and confirm historical records are not rendered inline below the transaction workspace.
+2. Select Company, Branch and Customer, then click **Payment History**.
+3. Confirm routing to `/app/payment-history` and that the Company/Branch/Customer scope is carried into the history page.
+4. Return to Payment Management and create a Customer Advance using a Bank mode without Reference No.
+5. Confirm the frontend marks Reference No/Reference Date as required and blocks creation with a friendly message; no traceback should be shown.
+6. Enter a reference and create the draft.
+7. Confirm the success message remains visible even if a later list refresh encounters a recoverable scope issue.
+8. Confirm a stale/disabled Branch handoff is replaced by a valid operating Branch scope rather than exposing a raw Branch Setup traceback.
+9. Confirm Payment History continues to use permission-aware ERPNext Payment Entry truth and does not mutate submitted payments.
+
+### K. Draft Purchase Order editing
+
+1. Open **Professional Purchasing** and click a draft Purchase Order row.
+2. Confirm the review overlay exposes **Edit draft before completion** when the user has write permission.
+3. Change Order Date, Terms, Qty, Rate or Required By date and confirm **Save Draft Changes** appears in the footer.
+4. Confirm Company, Supplier, Branch, Buying Price List, Stock Location and item identity are not editable from this bounded editor.
+5. Save and confirm ERPNext recalculates totals and the Purchase Order queue refreshes.
+6. Change a value without saving and attempt Submit/Workflow; confirm completion remains blocked until the draft is saved.
+7. Close with unsaved changes and confirm the discard warning appears.
+8. Open a submitted Purchase Order and confirm it is read-only in this surface.
+
+### L. Direct-purchase inventory account warning
+
+For **Receive & Bill Now** (Purchase Invoice with Update Stock), ERPNext may replace a row account such as **Stock Received But Not Billed** with the Warehouse inventory account (for example **Stock In Hand**) when the selected account is not the Warehouse/default inventory account. This is ERPNext preserving perpetual-inventory accounting truth. Confirm RetailEdge does not override that correction.
+
+For the normal **Purchase Receipt → Purchase Invoice** flow, the Purchase Invoice should not repost stock merely to avoid this warning; ERPNext's Stock Received But Not Billed clearing flow remains authoritative.
+
 ## Focused automated QA
 
 Run:
@@ -219,6 +248,9 @@ bench --site retail.local run-tests --app retailedge --module retailedge.tests.t
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2g1d_standard_sales_invoice_completion_contract
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2g2b_guided_purchase_invoice_completion_continuity
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_purchase_workflow_alignment
+bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2f2f1_purchase_order_submit_contract
+bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2f3f5_payment_history_revisit_contract
+bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2g2e1_payment_management_state_contract
 ```
 
 Then rebuild the focused RetailEdge assets used by Make Sale, Record Purchase and Business Hub, clear site cache, and hard-refresh the browser before manual QA.
