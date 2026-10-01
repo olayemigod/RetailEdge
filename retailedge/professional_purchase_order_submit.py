@@ -255,8 +255,9 @@ def update_standard_purchase_order_draft(
 ) -> dict[str, Any]:
 	"""Update bounded fields on an existing draft Purchase Order before completion.
 
-	Company, Supplier, Branch, Stock Location, Buying Price List and item identity
-	remain protected. ERPNext recalculates totals and validates the draft on save.
+	Company, Supplier, Branch, Stock Location, Buying Price List and existing item
+	identity remain protected. New item rows may be added through the governed item
+	search and ERPNext recalculates totals and validates the draft on save.
 	"""
 	purchase_order = str(purchase_order or "").strip()
 	if not purchase_order:
