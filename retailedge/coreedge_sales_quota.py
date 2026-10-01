@@ -195,12 +195,17 @@ def make_sales_quota_operation_key(doctype: str, name: str) -> str:
 	return f"resq-{hashlib.sha256(value.encode('utf-8')).hexdigest()[:40]}"
 
 
-def finalize_sales_quota_operation(operation_name: str) -> dict:
+def finalize_sales_quota_operation(
+	operation_name: str,
+	*,
+	allow_needs_review: bool = False,
+) -> dict:
 	_lock_operation(operation_name)
 	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
 	if operation.status == "Finalized":
 		return _serialize_operation(operation)
-	if operation.status == "Needs Review":
+	started_needs_review = operation.status == "Needs Review"
+	if started_needs_review and not allow_needs_review:
 		return _serialize_operation(operation)
 
 	operation.attempt_count = int(operation.attempt_count or 0) + 1
@@ -244,7 +249,7 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		operation.reason_code = quota.get("reason_code") or "RESERVATION_FINALIZED"
 		operation.remote_message = quota.get("message") or ""
 		operation.last_error = None
-		_save_operation(operation)
+		_save_operation(operation, allow_reconciliation=started_needs_review)
 		return _serialize_operation(operation)
 
 	operation.reason_code = data.get("reason_code") or quota.get("reason_code") or ""
@@ -407,8 +412,10 @@ def _mark_needs_review(operation, message: str) -> None:
 	_save_operation(operation)
 
 
-def _save_operation(operation) -> None:
+def _save_operation(operation, *, allow_reconciliation: bool = False) -> None:
 	operation.flags.allow_retailedge_quota_operation_update = True
+	if allow_reconciliation:
+		operation.flags.allow_retailedge_quota_reconciliation = True
 	operation.save(ignore_permissions=True)
 
 
