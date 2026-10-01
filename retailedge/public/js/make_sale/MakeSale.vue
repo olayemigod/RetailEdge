@@ -44,7 +44,7 @@
 						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Sales Invoice. Continue with the next valid customer workflow or start another sale." : "The ERPNext Sales Invoice draft now owns the saved work. You can complete it or start another sale." }}</p>
 					</div>
 					<div class="make-sale-inline-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0" type="button" class="edge-button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" type="button" class="edge-button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
@@ -679,10 +679,6 @@ export default {
 					return true;
 				}
 				this.savedDocument = { ...preview, doctype: "Sales Invoice" };
-				if (!preview?.can_edit) {
-					this.saveError = (preview?.blockers || [])[0] || "This Sales Invoice draft cannot be edited on the standard Make Sale page.";
-					return true;
-				}
 				this.syncPageFromDraftPreview(preview);
 				this.editingSavedDraft = false;
 				this.recoveryCandidate = null;
