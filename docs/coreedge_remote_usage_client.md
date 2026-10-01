@@ -28,32 +28,46 @@ transaction behaviour.
 Credentials must be stored in protected site configuration or a secret manager, not in `RetailEdge Settings`,
 Custom Fields, client scripts, browser bundles, logs, or source control.
 
-Supported keys:
+Canonical shared Service Client keys:
 
-- `coreedge_remote_usage_enabled` — default 0;
-- `coreedge_base_url` — CoreEdge service root URL;
-- `coreedge_site_identifier` — exact site identifier registered on the CoreEdge Service Client;
-- `coreedge_api_key` — dedicated Service Client integration-user API key;
-- `coreedge_api_secret` — dedicated Service Client integration-user API secret;
-- `coreedge_remote_usage_allow_insecure_http` — default 0; use only for controlled local QA;
-- `coreedge_timeout_seconds` — 1–120 seconds, default 8.
+- `coreedge_remote_usage_enabled` — quota-client switch, default 0;
+- `coreedge_service_url` — CoreEdge service root URL;
+- `coreedge_service_site_identifier` — exact site identifier registered on the CoreEdge Service Client;
+- `coreedge_service_api_key` — dedicated Service Client integration-user API key;
+- `coreedge_service_api_secret` — dedicated Service Client integration-user API secret;
+- `coreedge_service_allow_insecure_http` — default 0; controlled local QA only;
+- `coreedge_service_timeout_seconds` — 1–120 seconds for this client, default 8.
+
+These are the same credential names used by the V2.4E context-inventory client, so a RetailEdge site does
+not need a second CoreEdge Service Client credential set.
+
+Backward-compatible aliases are accepted when the canonical key is absent:
+
+- `coreedge_base_url`;
+- `coreedge_site_identifier`;
+- `coreedge_api_key`;
+- `coreedge_api_secret`;
+- `coreedge_remote_usage_allow_insecure_http`;
+- `coreedge_timeout_seconds`.
+
+Canonical `coreedge_service_*` values take precedence when both families are present.
 
 The API secret is excluded from the configuration object's representation and never returned by readiness diagnostics.
 
 HTTPS is required by default. Plain HTTP is rejected unless
-`coreedge_remote_usage_allow_insecure_http = 1` is explicitly set for controlled local QA.
+`coreedge_service_allow_insecure_http = 1` is explicitly set for controlled local QA.
 
 Example configuration shape:
 
 ```json
 {
   "coreedge_remote_usage_enabled": 1,
-  "coreedge_base_url": "https://coreedge.example.com",
-  "coreedge_site_identifier": "retail.example.com",
-  "coreedge_api_key": "<protected-api-key>",
-  "coreedge_api_secret": "<protected-api-secret>",
-  "coreedge_remote_usage_allow_insecure_http": 0,
-  "coreedge_timeout_seconds": 8
+  "coreedge_service_url": "https://coreedge.example.com",
+  "coreedge_service_site_identifier": "retail.example.com",
+  "coreedge_service_api_key": "<protected-api-key>",
+  "coreedge_service_api_secret": "<protected-api-secret>",
+  "coreedge_service_allow_insecure_http": 0,
+  "coreedge_service_timeout_seconds": 8
 }
 ```
 
@@ -148,7 +162,9 @@ Coverage includes:
 - timeout bounds;
 - malformed URL rejection;
 - HTTPS required by default;
-- explicit insecure-HTTP local-QA override.
+- explicit insecure-HTTP local-QA override;
+- canonical shared Service Client config;
+- legacy short-key compatibility and canonical-key precedence.
 
 ## Out of scope
 

@@ -88,15 +88,37 @@ class CoreEdgeRemoteUsageConfig:
 		values = values or {}
 		return cls(
 			enabled=_parse_bool(values.get("coreedge_remote_usage_enabled"), default=False),
-			base_url=str(values.get("coreedge_base_url") or "").strip().rstrip("/"),
-			site_identifier=str(values.get("coreedge_site_identifier") or "").strip().lower(),
-			api_key=str(values.get("coreedge_api_key") or "").strip(),
-			api_secret=str(values.get("coreedge_api_secret") or "").strip(),
+			base_url=str(
+				values.get("coreedge_service_url")
+				or values.get("coreedge_base_url")
+				or ""
+			).strip().rstrip("/"),
+			site_identifier=str(
+				values.get("coreedge_service_site_identifier")
+				or values.get("coreedge_site_identifier")
+				or ""
+			).strip().lower(),
+			api_key=str(
+				values.get("coreedge_service_api_key")
+				or values.get("coreedge_api_key")
+				or ""
+			).strip(),
+			api_secret=str(
+				values.get("coreedge_service_api_secret")
+				or values.get("coreedge_api_secret")
+				or ""
+			).strip(),
 			allow_insecure_http=_parse_bool(
-				values.get("coreedge_remote_usage_allow_insecure_http"),
+				values.get("coreedge_service_allow_insecure_http")
+				if values.get("coreedge_service_allow_insecure_http") is not None
+				else values.get("coreedge_remote_usage_allow_insecure_http"),
 				default=False,
 			),
-			timeout_seconds=_parse_timeout(values.get("coreedge_timeout_seconds")),
+			timeout_seconds=_parse_timeout(
+				values.get("coreedge_service_timeout_seconds")
+				if values.get("coreedge_service_timeout_seconds") is not None
+				else values.get("coreedge_timeout_seconds")
+			),
 		)
 
 	def readiness(self) -> dict:
