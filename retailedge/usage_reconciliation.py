@@ -382,7 +382,11 @@ def _assert_operation_scope(operation) -> None:
 			frappe.PermissionError,
 		)
 	scope = _resolve_scope(frappe._dict(company=company, branch=branch))
-	if scope["requires_company"] or scope["no_branch_access"]:
+	if (
+		scope["requires_company"]
+		or scope["no_branch_access"]
+		or (scope["restricted"] and not branch)
+	):
 		frappe.throw(_("You do not have access to this usage operation."), frappe.PermissionError)
 
 
