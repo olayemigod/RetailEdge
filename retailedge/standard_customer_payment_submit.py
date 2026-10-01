@@ -372,15 +372,23 @@ def list_standard_customer_payment_drafts(
 		order_by="modified desc",
 		limit_page_length=max(1, min(cint(limit) or 25, MAX_DRAFT_ROWS)),
 	)
-	return [
-		_build_preview(
-			_get_payment_entry(row.name),
-			company=company,
-			customer=customer,
-			branch=branch or None,
-		)
-		for row in rows
-	]
+	result: list[dict[str, Any]] = []
+	for row in rows:
+		try:
+			result.append(
+				_build_preview(
+					_get_payment_entry(row.name),
+					company=company,
+					customer=customer,
+					branch=branch or None,
+				)
+			)
+		except (frappe.PermissionError, frappe.ValidationError):
+			# A legacy/stale draft may still reference a Branch that has since
+			# been disabled. It must not make every other permitted draft
+			# disappear from Payment Management; direct review still fails closed.
+			continue
+	return result
 
 
 @frappe.whitelist(methods=["POST"])
