@@ -46,18 +46,43 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 				frappe.PermissionError,
 			)
 
-		if any(self.has_value_changed(fieldname) for fieldname in _IMMUTABLE_FIELDS):
-			frappe.throw(
-				_("CoreEdge quota operation identity and reservation fields are immutable."),
-				frappe.ValidationError,
-			)
-
 		previous_status = self.get_db_value("status") or "Pending Finalize"
-		if previous_status in {"Finalized", "Needs Review"} and self.status != previous_status:
+		changed_immutable = {
+			fieldname
+			for fieldname in _IMMUTABLE_FIELDS
+			if self.has_value_changed(fieldname)
+		}
+		if changed_immutable:
+			previous_reservation = self.get_db_value("reservation_reference")
+			allowed_reconciliation_attach = (
+				self.flags.get("allow_retailedge_quota_operation_reconcile")
+				and previous_status == "Needs Review"
+				and not previous_reservation
+				and bool(self.reservation_reference)
+				and changed_immutable.issubset(
+					{"reservation_reference", "reservation_expires_on"}
+				)
+			)
+			if not allowed_reconciliation_attach:
+				frappe.throw(
+					_("CoreEdge quota operation identity and reservation fields are immutable."),
+					frappe.ValidationError,
+				)
+
+		if previous_status == "Finalized" and self.status != previous_status:
 			frappe.throw(
-				_("A terminal CoreEdge quota operation cannot change status."),
+				_("A finalized CoreEdge quota operation cannot change status."),
 				frappe.ValidationError,
 			)
+		if previous_status == "Needs Review" and self.status != previous_status:
+			if not (
+				self.flags.get("allow_retailedge_quota_operation_reconcile")
+				and self.status == "Finalized"
+			):
+				frappe.throw(
+					_("A Needs Review quota operation may only finalize through governed reconciliation."),
+					frappe.ValidationError,
+				)
 		if previous_status == "Pending Finalize" and self.status not in {
 			"Pending Finalize",
 			"Finalized",
