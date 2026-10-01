@@ -160,7 +160,7 @@ function callMethod(method, args = {}, type = null) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?.exception || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 function blankForm() {
