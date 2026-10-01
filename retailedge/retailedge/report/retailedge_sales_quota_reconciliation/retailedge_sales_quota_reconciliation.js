@@ -17,7 +17,7 @@ frappe.query_reports["RetailEdge Sales Quota Reconciliation"] = {
 				const company = frappe.query_report.get_filter_value("company");
 				return company
 					? {
-						query: "retailedge.operating_context.search_operating_branches",
+						query: "retailedge.coreedge_sales_quota_reconciliation.search_quota_reconciliation_branches",
 						filters: { company },
 					}
 					: {};
