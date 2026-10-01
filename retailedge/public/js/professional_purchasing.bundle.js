@@ -21,6 +21,7 @@ const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
 const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
 
 function normaliseButtonLabel(button) {
 	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
@@ -193,10 +194,15 @@ function consumeProfessionalPurchasingTarget() {
 	if (!target || typeof target !== "object") return;
 	delete window.retailedgeProfessionalPurchasingTarget;
 	if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
-	if (target.action !== "supplier-debit-note" || !target.source_name) return;
-	window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
-		detail: { source_type: "purchase_invoice", source_name: String(target.source_name) },
-	}));
+	if (target.action === "supplier-debit-note" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+			detail: { source_type: "purchase_invoice", source_name: String(target.source_name) },
+		}));
+		return;
+	}
+	if (target.action === "purchase-invoice-ready" && target.result?.name) {
+		window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: target.result }));
+	}
 }
 
 
