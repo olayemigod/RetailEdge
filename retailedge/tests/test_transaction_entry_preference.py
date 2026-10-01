@@ -9,6 +9,7 @@ import frappe
 
 from retailedge.transaction_entry_preference import (
 	DEFAULT_PREFERENCE,
+	LEGACY_USER_DEFAULT_KEY,
 	USER_DEFAULT_KEY,
 	get_transaction_entry_style,
 	set_transaction_entry_preference,
@@ -19,14 +20,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestTransactionEntryPreference(unittest.TestCase):
-	@patch("retailedge.transaction_entry_preference.frappe.defaults.get_user_default", return_value=None)
+	@patch("retailedge.transaction_entry_preference.frappe.defaults.get_user_default", side_effect=[None, None])
 	def test_missing_preference_defaults_to_smart(self, mock_get):
 		self.assertEqual(get_transaction_entry_style(user="user@example.com"), DEFAULT_PREFERENCE)
-		mock_get.assert_called_once_with(USER_DEFAULT_KEY, user="user@example.com")
+		self.assertEqual(
+			mock_get.call_args_list,
+			[
+				unittest.mock.call(USER_DEFAULT_KEY, user="user@example.com"),
+				unittest.mock.call(LEGACY_USER_DEFAULT_KEY, user="user@example.com"),
+			],
+		)
 
 	@patch("retailedge.transaction_entry_preference.frappe.defaults.get_user_default", return_value="full")
 	def test_saved_preference_is_user_scoped(self, _mock_get):
 		self.assertEqual(get_transaction_entry_style(user="user@example.com"), "full")
+
+	def test_preference_key_is_neutral_scrubbed_default_key(self):
+		self.assertEqual(USER_DEFAULT_KEY, "retailedge_transaction_entry_style")
+		self.assertNotEqual(USER_DEFAULT_KEY, LEGACY_USER_DEFAULT_KEY)
+
+	@patch("retailedge.transaction_entry_preference.frappe.defaults.get_user_default", side_effect=[None, "quick"])
+	def test_legacy_preference_remains_readable(self, _mock_get):
+		self.assertEqual(get_transaction_entry_style(user="user@example.com"), "quick")
 
 	@patch("retailedge.transaction_entry_preference.frappe.defaults.set_user_default")
 	def test_set_preference_writes_only_current_user_default(self, mock_set):
