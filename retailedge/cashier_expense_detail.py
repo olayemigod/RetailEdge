@@ -165,7 +165,6 @@ def _workflow_actions(
 		and ledger_status != "Posted"
 		and posting_enabled
 		and posting.get("posting_document_type") == "Journal Entry"
-		and posting_role
 		and can_post_permissions
 		and bool(expense.get("posting_ready"))
 	)
