@@ -317,6 +317,18 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["pos_profile"], "Lagos POS")
 		self.assertFalse(result["allow_rate_change"])
 		self.assertEqual(result["rate_policy_source"], "pos_profile")
+		self.assertIn("Lagos POS", result["rate_change_lock_reason"])
+
+
+	def test_sales_surfaces_explain_read_only_rate_policy(self):
+		root = Path(__file__).resolve().parents[1]
+		for relative in (
+			"public/js/retailedge_business_hub/SimpleSalesInvoiceDialog.vue",
+			"public/js/make_sale/MakeSale.vue",
+		):
+			source = (root / relative).read_text(encoding="utf-8")
+			self.assertIn("Selling rate is read-only.", source)
+			self.assertIn("rate_change_lock_reason", source)
 
 	@patch("retailedge.guided_pricing._erpnext_item_details")
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
