@@ -50,7 +50,7 @@
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
 					<div class="page-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" class="edge-button" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button><button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-supplier-debit-note')" class="edge-button" type="button" @click="runSavedNextAction('create-supplier-debit-note')">Supplier Debit Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('supplier-payables')">Supplier Payables</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('output')">Print / Share</button>
@@ -322,10 +322,6 @@ export default {
 				this.savedDocument = { ...preview, doctype: "Purchase Invoice" };
 				if (Number(preview?.docstatus || 0) !== 0) {
 					this.handoffNotice = `Purchase Invoice ${name} is no longer a draft. Review its current status instead of editing it.`;
-					return true;
-				}
-				if (!preview?.can_edit) {
-					this.saveError = (preview?.blockers || [])[0] || "This direct Purchase Invoice draft cannot be edited on Record Purchase.";
 					return true;
 				}
 				this.syncPageFromDraftPreview(preview);
