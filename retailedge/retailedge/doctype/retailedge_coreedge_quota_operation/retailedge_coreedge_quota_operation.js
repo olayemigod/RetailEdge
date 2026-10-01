@@ -27,6 +27,16 @@ frappe.ui.form.on("RetailEdge CoreEdge Quota Operation", {
 				__("Reconciliation")
 			);
 		}
+		if (
+			frm.doc.status === "Needs Review" &&
+			frm.doc.reconciliation_case_reference
+		) {
+			frm.add_custom_button(
+				__("Refresh CoreEdge Review Status"),
+				() => prompt_reconciliation_reason(frm, "refresh_status"),
+				__("Reconciliation")
+			);
+		}
 	},
 });
 
@@ -69,10 +79,15 @@ function prompt_reconciliation_reason(frm, action) {
 
 
 function run_reconciliation(frm, action, reason) {
-	const method =
-		action === "submit_review"
-			? "retailedge.coreedge_sales_quota_reconciliation.submit_unreserved_quota_reconciliation_case"
-			: "retailedge.coreedge_sales_quota_reconciliation.retry_quota_finalization";
+	let method =
+		"retailedge.coreedge_sales_quota_reconciliation.retry_quota_finalization";
+	if (action === "submit_review") {
+		method =
+			"retailedge.coreedge_sales_quota_reconciliation.submit_unreserved_quota_reconciliation_case";
+	} else if (action === "refresh_status") {
+		method =
+			"retailedge.coreedge_sales_quota_reconciliation.refresh_reconciliation_case_status";
+	}
 
 	frappe.call({
 		method,
@@ -84,14 +99,28 @@ function run_reconciliation(frm, action, reason) {
 		freeze_message:
 			action === "submit_review"
 				? __("Submitting evidence to CoreEdge review...")
-				: __("Reconciling CoreEdge quota..."),
+				: action === "refresh_status"
+					? __("Refreshing CoreEdge review status...")
+					: __("Reconciling CoreEdge quota..."),
 		callback(r) {
 			const result = r.message || {};
 			let indicator = "orange";
 			let message = __("Quota reconciliation still needs review.");
-			if (result.reconciliation_case_reference) {
+			if (result.status === "Resolved") {
+				indicator = "green";
+				message = __("CoreEdge usage review is resolved.");
+			} else if (result.status === "Rejected") {
+				indicator = "red";
+				message = __("CoreEdge rejected the submitted usage evidence.");
+			} else if (
+				action === "submit_review" &&
+				result.reconciliation_case_reference
+			) {
 				indicator = "blue";
 				message = __("CoreEdge reconciliation case submitted for platform review.");
+			} else if (action === "refresh_status" && result.reconciliation_case_status === "Open") {
+				indicator = "orange";
+				message = __("CoreEdge review is still open.");
 			} else if (result.status === "Finalized") {
 				indicator = "green";
 				message = __("Quota reconciliation completed.");
