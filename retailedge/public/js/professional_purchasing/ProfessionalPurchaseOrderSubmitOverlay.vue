@@ -190,9 +190,11 @@ function draftSnapshot(transactionDate, scheduleDate, terms, items) {
 		terms: terms || "",
 		items: (items || []).map((row) => ({
 			name: row.name || "",
+			item_code: row.item_code || "",
 			qty: Number(row.qty || 0),
-			rate: Number(row.rate || 0),
+			rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
 			schedule_date: row.schedule_date || "",
+			warehouse: row.warehouse || "",
 		})),
 	});
 }
