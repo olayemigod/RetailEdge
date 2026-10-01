@@ -167,6 +167,56 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 		self.assertNotIn("tenant", payload)
 		self.assertNotIn("product_app", payload)
 
+	def test_reconciliation_case_submission_uses_bound_scope_and_exact_business_evidence(self):
+		calls = []
+
+		def transport(url, payload, headers, timeout):
+			calls.append((url, payload, headers, timeout))
+			return {
+				"message": {
+					"data": {
+						"ok": True,
+						"status": "Accepted",
+						"case": {
+							"case_reference": "ceurc-001",
+							"case_status": "Open",
+						},
+					}
+				}
+			}
+
+		client = CoreEdgeRemoteUsageClient(self._config(), transport=transport)
+		result = client.submit_reconciliation_case(
+			"SALES_TRANSACTIONS",
+			"resq-abc123",
+			"FAIL_OPEN_UNRESERVED",
+			1,
+			"Sales Invoice",
+			"SINV-0007",
+			"2026-09-30 14:25:00",
+			"case-submit-001",
+			local_status="Needs Review",
+			local_reason_code="FAIL_OPEN_UNRESERVED",
+			error_summary="Original CoreEdge reservation request was unavailable.",
+			request_id="case-submit-001",
+			correlation_id="Sales Invoice:SINV-0007",
+		)
+
+		self.assertTrue(result["data"]["ok"])
+		url, payload, _headers, _timeout = calls[0]
+		self.assertTrue(url.endswith("service_entitlement_usage.submit_reconciliation_case"))
+		self.assertEqual(payload["site_identifier"], "retail.example.com")
+		self.assertEqual(payload["entitlement_key"], "SALES_TRANSACTIONS")
+		self.assertEqual(payload["product_case_key"], "resq-abc123")
+		self.assertEqual(payload["case_type"], "FAIL_OPEN_UNRESERVED")
+		self.assertEqual(payload["reference_doctype"], "Sales Invoice")
+		self.assertEqual(payload["reference_name"], "SINV-0007")
+		self.assertEqual(payload["occurred_on"], "2026-09-30 14:25:00")
+		self.assertEqual(payload["idempotency_key"], "case-submit-001")
+		self.assertNotIn("tenant", payload)
+		self.assertNotIn("product_app", payload)
+		self.assertNotIn("service_client", payload)
+
 	def test_finalize_release_and_snapshot_use_exact_contract_paths(self):
 		paths = []
 

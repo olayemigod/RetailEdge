@@ -18,6 +18,7 @@
   "source_name",
   "entitlement_key",
   "reservation_reference",
+  "reconciliation_case_reference",
   "review_section",
   "reason",
   "reason_code",
@@ -45,7 +46,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Action",
-   "options": "Retry Finalization\nReconcile Unreserved",
+   "options": "Retry Finalization\nReconcile Unreserved\nSubmit CoreEdge Review",
    "reqd": 1
   },
   {
@@ -53,7 +54,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Result",
-   "options": "Finalized\nPending Finalize\nNeeds Review\nBlocked\nFailed",
+   "options": "Finalized\nPending Finalize\nNeeds Review\nSubmitted\nBlocked\nFailed",
    "reqd": 1
   },
   {
@@ -106,6 +107,12 @@
    "fieldname": "reservation_reference",
    "fieldtype": "Data",
    "label": "Reservation Reference"
+  },
+  {
+   "fieldname": "reconciliation_case_reference",
+   "fieldtype": "Data",
+   "label": "Reconciliation Case Reference",
+   "in_standard_filter": 1
   },
   {
    "fieldname": "review_section",

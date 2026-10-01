@@ -18,11 +18,12 @@ frappe.ui.form.on("RetailEdge CoreEdge Quota Operation", {
 		if (
 			frm.doc.status === "Needs Review" &&
 			!frm.doc.reservation_reference &&
-			frm.doc.reason_code === "FAIL_OPEN_UNRESERVED"
+			frm.doc.reason_code === "FAIL_OPEN_UNRESERVED" &&
+			!frm.doc.reconciliation_case_reference
 		) {
 			frm.add_custom_button(
-				__("Reconcile Current Quota Period"),
-				() => prompt_reconciliation_reason(frm, "unreserved"),
+				__("Submit to CoreEdge Review"),
+				() => prompt_reconciliation_reason(frm, "submit_review"),
 				__("Reconciliation")
 			);
 		}
@@ -69,8 +70,8 @@ function prompt_reconciliation_reason(frm, action) {
 
 function run_reconciliation(frm, action, reason) {
 	const method =
-		action === "unreserved"
-			? "retailedge.coreedge_sales_quota_reconciliation.reconcile_unreserved_quota_operation"
+		action === "submit_review"
+			? "retailedge.coreedge_sales_quota_reconciliation.submit_unreserved_quota_reconciliation_case"
 			: "retailedge.coreedge_sales_quota_reconciliation.retry_quota_finalization";
 
 	frappe.call({
@@ -80,17 +81,23 @@ function run_reconciliation(frm, action, reason) {
 			reason,
 		},
 		freeze: true,
-		freeze_message: __("Reconciling CoreEdge quota..."),
+		freeze_message:
+			action === "submit_review"
+				? __("Submitting evidence to CoreEdge review...")
+				: __("Reconciling CoreEdge quota..."),
 		callback(r) {
 			const result = r.message || {};
 			let indicator = "orange";
 			let message = __("Quota reconciliation still needs review.");
-			if (result.status === "Finalized") {
+			if (result.reconciliation_case_reference) {
+				indicator = "blue";
+				message = __("CoreEdge reconciliation case submitted for platform review.");
+			} else if (result.status === "Finalized") {
 				indicator = "green";
 				message = __("Quota reconciliation completed.");
 			} else if (result.status === "Pending Finalize") {
 				indicator = "blue";
-				message = __("Reservation recovered. Finalization is queued after commit.");
+				message = __("Quota reservation is pending finalization.");
 			}
 			frappe.show_alert({ message, indicator });
 			frm.reload_doc();

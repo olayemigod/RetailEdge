@@ -1,28 +1,27 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from retailedge.coreedge_sales_quota_reconciliation import (
 	REVIEW_EVENT_DOCTYPE,
 	_can_mutate_quota_review,
-	_check_source_in_current_quota_period,
 	_recommended_action,
 	get_quota_reconciliation_rows,
-	reconcile_unreserved_quota_operation,
 	retry_quota_finalization,
+	submit_unreserved_quota_reconciliation_case,
 )
 from retailedge.coreedge_quota_permissions import (
 	get_operation_permission_query_conditions,
 	has_operation_permission,
 )
+from retailedge.integrations.coreedge_remote_usage import CoreEdgeRemoteUsageError
 
 
 OPERATION_DOCTYPE = "RetailEdge CoreEdge Quota Operation"
@@ -32,6 +31,7 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 	def _operation(self, **overrides):
 		values = {
 			"name": "quota-op-test",
+			"operation_key": "resq-test-case",
 			"status": "Needs Review",
 			"company": "RetailEdge Consulting",
 			"branch": "Ketu",
@@ -42,8 +42,13 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 			"reservation_reference": None,
 			"reservation_expires_on": None,
 			"reason_code": "FAIL_OPEN_UNRESERVED",
-			"remote_message": "",
+			"remote_message": "COREDGE_REMOTE_USAGE_UNAVAILABLE",
 			"last_error": "",
+			"reconciliation_case_reference": None,
+			"reconciliation_case_status": None,
+			"reconciliation_case_evidence_hash": None,
+			"reconciliation_submitted_on": None,
+			"reconciliation_last_idempotency_key": None,
 			"attempt_count": 0,
 			"finalized_on": None,
 			"warning": 0,
@@ -54,30 +59,6 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		op.save = MagicMock()
 		op.reload = MagicMock()
 		return op
-
-	def test_period_check_allows_only_current_bounded_period(self):
-		inside = _check_source_in_current_quota_period(
-			source_date=date(2026, 10, 1),
-			quota={"period_start": "2026-10-01", "period_end": "2026-10-31"},
-		)
-		before = _check_source_in_current_quota_period(
-			source_date=date(2026, 9, 30),
-			quota={"period_start": "2026-10-01", "period_end": "2026-10-31"},
-		)
-		after = _check_source_in_current_quota_period(
-			source_date=date(2026, 11, 1),
-			quota={"period_start": "2026-10-01", "period_end": "2026-10-31"},
-		)
-		unbounded = _check_source_in_current_quota_period(
-			source_date=date(2025, 1, 1),
-			quota={"period_start": None, "period_end": None},
-		)
-
-		self.assertTrue(inside["allowed"])
-		self.assertFalse(before["allowed"])
-		self.assertFalse(after["allowed"])
-		self.assertTrue(unbounded["allowed"])
-		self.assertEqual(before["reason_code"], "OUTSIDE_CURRENT_QUOTA_PERIOD")
 
 	def test_recommended_actions_are_state_specific(self):
 		self.assertEqual(
@@ -90,9 +71,21 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 					"status": "Needs Review",
 					"reservation_reference": "",
 					"reason_code": "FAIL_OPEN_UNRESERVED",
+					"reconciliation_case_reference": "",
 				}
 			),
-			"Reconcile current CoreEdge quota period",
+			"Submit to CoreEdge review",
+		)
+		self.assertEqual(
+			_recommended_action(
+				{
+					"status": "Needs Review",
+					"reservation_reference": "",
+					"reason_code": "FAIL_OPEN_UNRESERVED",
+					"reconciliation_case_reference": "ceurc-existing",
+				}
+			),
+			"CoreEdge review submitted",
 		)
 		self.assertEqual(
 			_recommended_action(
@@ -228,202 +221,236 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		self.assertEqual(mock_event.call_args.kwargs["action"], "Retry Finalization")
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Finalized")
 
-	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._update_review_failure")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._get_source_state")
-	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
-	def test_unreserved_older_period_is_not_auto_reconciled(
+	@patch("retailedge.coreedge_sales_quota_reconciliation.frappe.db.get_value")
+	@patch("retailedge.coreedge_sales_quota_reconciliation.frappe.get_meta")
+	def test_cancelled_sale_is_not_eligible_for_coreedge_usage_evidence(
 		self,
-		_mock_post,
-		_mock_operator,
-		mock_get_operation,
-		mock_client_factory,
-		mock_source,
-		mock_failure,
-		mock_event,
+		mock_meta,
+		mock_get_value,
 	):
-		op = self._operation()
-		mock_get_operation.return_value = op
-		mock_source.return_value = {"docstatus": 1, "event_date": date(2026, 9, 30)}
-		client = MagicMock()
-		client.get_usage_status.return_value = {
-			"data": {
-				"ok": True,
-				"quota": {
-					"allowed": True,
-					"period_start": "2026-10-01",
-					"period_end": "2026-10-31",
-				},
-			}
+		mock_meta.return_value.has_field.side_effect = lambda fieldname: fieldname in {
+			"posting_date",
+			"posting_time",
 		}
-		mock_client_factory.return_value = client
-
-		def update_failure(operation, reason_code, message):
-			operation.reason_code = reason_code
-			operation.last_error = message
-
-		mock_failure.side_effect = update_failure
-		result = reconcile_unreserved_quota_operation(
-			op.name,
-			"Reconcile the audited fail-open sale after platform recovery.",
+		mock_get_value.return_value = frappe._dict(
+			{
+				"docstatus": 2,
+				"posting_date": "2026-09-30",
+				"posting_time": "14:25:00",
+				"creation": "2026-09-30 14:20:00",
+			}
 		)
-		self.assertFalse(result["ok"])
-		self.assertEqual(result["reason_code"], "OUTSIDE_CURRENT_QUOTA_PERIOD")
-		client.reserve_usage.assert_not_called()
-		self.assertEqual(mock_event.call_args.kwargs["result"], "Blocked")
+		from retailedge.coreedge_sales_quota_reconciliation import _get_source_state
 
-	@patch("retailedge.coreedge_sales_quota_reconciliation._release_rolled_back_reservation")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._enqueue_finalize_operation")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_rollback")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_commit")
+		with self.assertRaises(frappe.ValidationError):
+			_get_source_state(self._operation())
+
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
-	@patch("retailedge.coreedge_sales_quota_reconciliation.finalize_sales_quota_operation")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
-	@patch("retailedge.coreedge_sales_quota_reconciliation.get_sales_transaction_quota_config")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._get_source_state")
 	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
-	def test_unreserved_current_period_can_reserve_and_finalize(
+	def test_historical_fail_open_sale_submits_original_occurrence_without_new_reservation(
 		self,
 		_mock_post,
 		_mock_operator,
 		mock_get_operation,
 		mock_client_factory,
 		mock_source,
-		mock_config,
 		_mock_attempt,
-		mock_finalize,
 		mock_event,
-		mock_after_commit,
-		mock_after_rollback,
-		mock_enqueue,
-		mock_release,
 	):
 		op = self._operation()
 		mock_get_operation.return_value = op
-		mock_source.return_value = {"docstatus": 1, "event_date": date(2026, 10, 1)}
-		mock_config.return_value = SimpleNamespace(reservation_seconds=3600)
-		client = MagicMock()
-		client.get_usage_status.return_value = {
-			"data": {
-				"ok": True,
-				"quota": {
-					"allowed": True,
-					"period_start": "2026-10-01",
-					"period_end": "2026-10-31",
-				},
-			}
+		mock_source.return_value = {
+			"docstatus": 1,
+			"event_date": get_datetime("2026-09-30").date(),
+			"occurred_on": get_datetime("2026-09-30 14:25:00"),
 		}
-		client.reserve_usage.return_value = {
+		client = MagicMock()
+		client.submit_reconciliation_case.return_value = {
 			"data": {
 				"ok": True,
-				"quota": {
-					"status": "Active",
-					"reservation_reference": "CEUR-RECOVERED",
-					"expires_on": "2026-10-01 15:00:00",
-					"warning": False,
-					"reason_code": "WITHIN_LIMIT",
-					"message": "Reserved",
+				"status": "Accepted",
+				"case": {
+					"accepted": True,
+					"case_reference": "ceurc-historical-001",
+					"case_status": "Open",
+					"evidence_hash": "a" * 64,
+					"submitted_on": "2026-10-01 20:00:00",
 				},
 			}
 		}
 		mock_client_factory.return_value = client
 
-		result = reconcile_unreserved_quota_operation(
+		result = submit_unreserved_quota_reconciliation_case(
 			op.name,
-			"Recover this audited fail-open sale in the current quota period.",
+			"Verified the original sale committed during the CoreEdge outage.",
 		)
+
 		self.assertTrue(result["ok"])
-		self.assertEqual(op.reservation_reference, "CEUR-RECOVERED")
-		self.assertEqual(op.status, "Pending Finalize")
-		self.assertTrue(
-			op.flags.allow_retailedge_quota_reconciliation
-		)
+		self.assertEqual(result["status"], "Needs Review")
+		self.assertIsNone(op.reservation_reference)
+		self.assertEqual(op.reconciliation_case_reference, "ceurc-historical-001")
+		self.assertEqual(op.reconciliation_case_status, "Open")
+		self.assertEqual(op.reconciliation_case_evidence_hash, "a" * 64)
+		self.assertTrue(op.flags.allow_retailedge_quota_case_submission)
 		op.save.assert_called_once()
-		mock_finalize.assert_not_called()
-		mock_after_commit.assert_called_once()
-		mock_after_rollback.assert_called_once()
+		client.reserve_usage.assert_not_called()
+		client.get_usage_status.assert_not_called()
 
-		commit_callback = mock_after_commit.call_args.args[0]
-		commit_callback()
-		mock_enqueue.assert_called_once_with(op.name)
-
-		rollback_callback = mock_after_rollback.call_args.args[0]
-		rollback_callback()
-		mock_release.assert_called_once()
-		release_kwargs = mock_release.call_args.kwargs
-		self.assertEqual(release_kwargs["reservation_reference"], "CEUR-RECOVERED")
-		self.assertEqual(release_kwargs["doc_doctype"], "Sales Invoice")
-		self.assertEqual(release_kwargs["doc_name"], "SINV-0001")
-		self.assertIn("reconciliation rolled back", release_kwargs["reason"].lower())
-		self.assertEqual(
-			release_kwargs["source_path"],
-			"RetailEdge Sales Quota Reconciliation Rollback",
-		)
-		self.assertEqual(mock_event.call_args.kwargs["result"], "Pending Finalize")
+		call = client.submit_reconciliation_case.call_args
+		self.assertEqual(call.args[0], "SALES_TRANSACTIONS")
+		self.assertEqual(call.args[1], "resq-test-case")
+		self.assertEqual(call.args[2], "FAIL_OPEN_UNRESERVED")
+		self.assertEqual(call.args[4], "Sales Invoice")
+		self.assertEqual(call.args[5], "SINV-0001")
+		self.assertEqual(call.args[6], "2026-09-30 14:25:00")
+		self.assertEqual(call.kwargs["local_status"], "Needs Review")
+		self.assertEqual(call.kwargs["local_reason_code"], "FAIL_OPEN_UNRESERVED")
+		self.assertEqual(mock_event.call_args.kwargs["action"], "Submit CoreEdge Review")
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Submitted")
 
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
-	@patch("retailedge.coreedge_sales_quota_reconciliation._update_review_failure")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
-	@patch("retailedge.coreedge_sales_quota_reconciliation.get_sales_transaction_quota_config")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._get_source_state")
 	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
-	def test_unreserved_reconciliation_respects_current_block_limit(
+	def test_missing_reconcile_submit_capability_keeps_fail_open_case_in_review(
 		self,
 		_mock_post,
 		_mock_operator,
 		mock_get_operation,
 		mock_client_factory,
 		mock_source,
-		mock_config,
 		_mock_attempt,
-		mock_failure,
 		mock_event,
 	):
 		op = self._operation()
 		mock_get_operation.return_value = op
-		mock_source.return_value = {"docstatus": 1, "event_date": date(2026, 10, 1)}
-		mock_config.return_value = SimpleNamespace(reservation_seconds=3600)
-		client = MagicMock()
-		client.get_usage_status.return_value = {
-			"data": {
-				"ok": True,
-				"quota": {
-					"allowed": False,
-					"period_start": "2026-10-01",
-					"period_end": "2026-10-31",
-				},
-			}
+		mock_source.return_value = {
+			"docstatus": 1,
+			"event_date": get_datetime("2026-10-01").date(),
+			"occurred_on": get_datetime("2026-10-01 10:30:00"),
 		}
-		client.reserve_usage.return_value = {
+		client = MagicMock()
+		client.submit_reconciliation_case.return_value = {
 			"data": {
 				"ok": False,
-				"reason_code": "LIMIT_EXCEEDED",
-				"message": "Transaction quota exceeded.",
+				"reason_code": "CAPABILITY_NOT_ACTIVATED",
+				"message": "The required CoreEdge capability is not active.",
 			}
 		}
 		mock_client_factory.return_value = client
 
-		def update_failure(operation, reason_code, message):
-			operation.reason_code = reason_code
-			operation.last_error = message
-
-		mock_failure.side_effect = update_failure
-		result = reconcile_unreserved_quota_operation(
+		result = submit_unreserved_quota_reconciliation_case(
 			op.name,
-			"Attempt current-period reconciliation without bypassing the Block limit.",
+			"Submit the audited fail-open evidence to CoreEdge.",
 		)
+
 		self.assertFalse(result["ok"])
-		self.assertEqual(result["reason_code"], "LIMIT_EXCEEDED")
+		self.assertEqual(op.status, "Needs Review")
+		self.assertEqual(op.reason_code, "FAIL_OPEN_UNRESERVED")
+		self.assertIsNone(op.reconciliation_case_reference)
+		self.assertIn("capability", op.last_error.lower())
+		client.reserve_usage.assert_not_called()
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Blocked")
+		self.assertEqual(
+			mock_event.call_args.kwargs["reason_code"],
+			"CAPABILITY_NOT_ACTIVATED",
+		)
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", side_effect=[1, 2])
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_source_state")
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_case_submission_retry_uses_new_request_key_but_same_business_identity(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		mock_source,
+		_mock_attempt,
+		_mock_event,
+	):
+		op = self._operation(remote_message="Original reserve request timed out.")
+		mock_get_operation.return_value = op
+		mock_source.return_value = {
+			"docstatus": 1,
+			"event_date": get_datetime("2026-10-01").date(),
+			"occurred_on": get_datetime("2026-10-01 11:45:00"),
+		}
+		client = MagicMock()
+		client.submit_reconciliation_case.side_effect = [
+			CoreEdgeRemoteUsageError("COREDGE_REMOTE_USAGE_UNAVAILABLE"),
+			{
+				"data": {
+					"ok": True,
+					"status": "Accepted",
+					"case": {
+						"case_reference": "ceurc-retry-001",
+						"case_status": "Open",
+						"evidence_hash": "b" * 64,
+						"submitted_on": "2026-10-01 20:10:00",
+					},
+				}
+			},
+		]
+		mock_client_factory.return_value = client
+
+		first = submit_unreserved_quota_reconciliation_case(
+			op.name,
+			"First governed submission attempt.",
+		)
+		second = submit_unreserved_quota_reconciliation_case(
+			op.name,
+			"Retry after the transport failure.",
+		)
+
+		self.assertFalse(first["ok"])
+		self.assertTrue(second["ok"])
+		self.assertEqual(op.reconciliation_case_reference, "ceurc-retry-001")
+		self.assertEqual(client.submit_reconciliation_case.call_count, 2)
+		first_call, second_call = client.submit_reconciliation_case.call_args_list
+		self.assertEqual(first_call.args[1], second_call.args[1])
+		self.assertEqual(first_call.args[1], "resq-test-case")
+		self.assertNotEqual(first_call.args[7], second_call.args[7])
+		self.assertEqual(first_call.kwargs["error_summary"], second_call.kwargs["error_summary"])
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_already_submitted_case_does_not_create_another_remote_request(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-existing",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+
+		result = submit_unreserved_quota_reconciliation_case(
+			op.name,
+			"Confirm the already-submitted CoreEdge review case.",
+		)
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(result["reconciliation_case_reference"], "ceurc-existing")
+		mock_client_factory.assert_not_called()
+
 
 	def test_report_and_form_surface_contracts_exist(self):
 		report_center = Path(frappe.get_app_path("retailedge", "report_center.py")).read_text()
@@ -438,7 +465,7 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		).read_text()
 		self.assertIn("RetailEdge Sales Quota Reconciliation", report_center)
 		self.assertIn("Retry CoreEdge Finalization", form_js)
-		self.assertIn("Reconcile Current Quota Period", form_js)
+		self.assertIn("Submit to CoreEdge Review", form_js)
 		self.assertNotIn("RetailEdge Auditor\") || roles.has", form_js)
 
 
@@ -484,6 +511,31 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
 
+	def test_normal_engine_update_cannot_attach_reconciliation_case(self):
+		doc = self._operation("case-immutable")
+		doc.reconciliation_case_reference = "ceurc-forged"
+		doc.reconciliation_case_status = "Open"
+		doc.reconciliation_case_evidence_hash = "c" * 64
+		doc.reconciliation_submitted_on = now_datetime()
+		doc.reconciliation_last_idempotency_key = "case-submit-forged"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		with self.assertRaises(frappe.ValidationError):
+			doc.save(ignore_permissions=True)
+
+	def test_case_submission_flag_attaches_case_without_reopening_needs_review(self):
+		doc = self._operation("case-governed")
+		doc.reconciliation_case_reference = "ceurc-governed"
+		doc.reconciliation_case_status = "Open"
+		doc.reconciliation_case_evidence_hash = "d" * 64
+		doc.reconciliation_submitted_on = now_datetime()
+		doc.reconciliation_last_idempotency_key = "case-submit-governed"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		doc.flags.allow_retailedge_quota_case_submission = True
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.status, "Needs Review")
+		self.assertIsNone(doc.reservation_reference)
+		self.assertEqual(doc.reconciliation_case_reference, "ceurc-governed")
+
 	def test_reconciliation_flag_can_attach_reservation_and_reopen_needs_review(self):
 		doc = self._operation("governed")
 		doc.status = "Pending Finalize"
@@ -504,11 +556,12 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 			{
 				"doctype": REVIEW_EVENT_DOCTYPE,
 				"quota_operation": op.name,
-				"action": "Reconcile Unreserved",
-				"result": "Needs Review",
+				"action": "Submit CoreEdge Review",
+				"result": "Submitted",
 				"source_doctype": "User",
 				"source_name": "Administrator",
 				"entitlement_key": "SALES_TRANSACTIONS",
+				"reconciliation_case_reference": "ceurc-forged",
 				"reason": "Manual forged event should be blocked.",
 				"reviewed_on": now_datetime(),
 				"reviewed_by": "Administrator",
@@ -521,11 +574,12 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 			{
 				"doctype": REVIEW_EVENT_DOCTYPE,
 				"quota_operation": op.name,
-				"action": "Reconcile Unreserved",
-				"result": "Needs Review",
+				"action": "Submit CoreEdge Review",
+				"result": "Submitted",
 				"source_doctype": "User",
 				"source_name": "Administrator",
 				"entitlement_key": "SALES_TRANSACTIONS",
+				"reconciliation_case_reference": "ceurc-governed",
 				"reason": "Reviewed through governed reconciliation.",
 				"reviewed_on": now_datetime(),
 				"reviewed_by": "Administrator",
