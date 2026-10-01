@@ -127,5 +127,7 @@ def test_payment_review_opens_in_modal_instead_of_inline_below_history():
 def test_submitted_payment_entries_use_view_while_drafts_keep_review():
 	panel = _read(PANEL)
 	assert 'Number(row.docstatus || 0) === 0 ? "Review" : "View"' in panel
+	assert '"Payment Review" : "Payment View"' in panel
 	assert ':open="detailOpen"' in panel
+	assert "Submitted and cancelled accounting records remain read-only." in panel
 	assert "Submit Standard Payment" in panel
