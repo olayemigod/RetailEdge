@@ -1,0 +1,179 @@
+.retailedge-usage-reconciliation-shell {
+	display: grid;
+	gap: var(--edge-space-4, 1rem);
+	width: 100%;
+}
+
+.retailedge-usage-reconciliation-shell .edge-filter-bar__fields {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+	align-items: end;
+}
+
+.retailedge-usage-summary {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-usage-list {
+	display: grid;
+	gap: var(--edge-space-4, 1rem);
+}
+
+.retailedge-usage-card {
+	display: grid;
+	gap: var(--edge-space-4, 1rem);
+	padding: var(--edge-space-4, 1rem);
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-xl, 1rem);
+	background: var(--edge-color-surface, var(--card-bg));
+}
+
+.retailedge-usage-card.is-danger {
+	border-color: var(--edge-color-danger-border, var(--red-200));
+}
+
+.retailedge-usage-card.is-warning {
+	border-color: var(--edge-color-warning-border, var(--yellow-200));
+}
+
+.retailedge-usage-card.is-success {
+	border-color: var(--edge-color-success-border, var(--green-200));
+}
+
+.retailedge-usage-card__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-usage-card__header h2 {
+	margin: 0;
+	font-size: var(--edge-font-size-lg, 1.125rem);
+	color: var(--edge-color-heading, var(--heading-color));
+}
+
+.retailedge-usage-card__header p {
+	margin: .25rem 0 0;
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+.retailedge-usage-context-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-usage-context-item {
+	display: grid;
+	gap: .35rem;
+	min-width: 0;
+	padding: var(--edge-space-3, .75rem);
+	border: 1px solid var(--edge-color-border-subtle, var(--border-color));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-raised, var(--subtle-fg));
+}
+
+.retailedge-usage-context-item > span,
+.retailedge-usage-search > span {
+	font-size: var(--edge-font-size-xs, .75rem);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .02em;
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+.retailedge-usage-context-item strong {
+	overflow-wrap: anywhere;
+}
+
+.retailedge-usage-guidance {
+	display: grid;
+	gap: var(--edge-space-2, .5rem);
+	padding: var(--edge-space-3, .75rem);
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-raised, var(--subtle-fg));
+}
+
+.retailedge-usage-guidance p {
+	margin: 0;
+	line-height: 1.5;
+}
+
+.retailedge-usage-guidance small {
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+.retailedge-usage-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--edge-space-2, .5rem);
+}
+
+.retailedge-usage-search {
+	display: grid;
+	gap: .35rem;
+	min-width: 0;
+}
+
+.retailedge-usage-load-more {
+	display: flex;
+	justify-content: center;
+}
+
+:root[data-edge-appearance="dark"] :is(
+	.page-container,
+	.page-body,
+	.page-body > .container,
+	.layout-main,
+	.layout-main-section-wrapper,
+	.layout-main-section,
+	.page-content
+):has(.retailedge-usage-reconciliation-shell) {
+	background: var(--edge-color-surface-soft, var(--edge-color-surface-muted, var(--edge-color-surface))) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-usage-reconciliation-shell {
+	--text-color: var(--edge-color-ink-950);
+	--heading-color: var(--edge-color-ink-950);
+	color: var(--edge-color-ink-800);
+}
+
+:root[data-edge-appearance="dark"] .retailedge-usage-reconciliation-shell :is(h1, h2, h3, h4, h5, h6),
+:root[data-edge-appearance="dark"] .retailedge-usage-reconciliation-shell .retailedge-usage-context-item strong {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-usage-reconciliation-shell .retailedge-usage-context-item,
+:root[data-edge-appearance="dark"] .retailedge-usage-reconciliation-shell .retailedge-usage-guidance {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	border-color: var(--edge-color-border) !important;
+	color: var(--edge-color-ink-800) !important;
+}
+
+@media (max-width: 1200px) {
+	.retailedge-usage-reconciliation-shell .edge-filter-bar__fields {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.retailedge-usage-summary,
+	.retailedge-usage-context-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 700px) {
+	.retailedge-usage-reconciliation-shell .edge-filter-bar__fields,
+	.retailedge-usage-summary,
+	.retailedge-usage-context-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-usage-card__header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+}
