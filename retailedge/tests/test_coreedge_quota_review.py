@@ -241,12 +241,18 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 				)
 			)
 
+	@patch("retailedge.coreedge_quota_review.get_allowed_operating_branches")
 	@patch("retailedge.coreedge_quota_review.get_operational_branch_scope")
-	def test_unrestricted_branch_scope_allows_explicit_branch_filter(self, mock_scope):
+	def test_unrestricted_branch_scope_allows_explicit_branch_filter(
+		self,
+		mock_scope,
+		mock_allowed,
+	):
 		mock_scope.return_value = {
 			"restricted": False,
 			"allowed_branches": [],
 		}
+		mock_allowed.return_value = ["Main", "Ikeja"]
 		filters, _scope, _or_filters = _build_filters(
 			frappe._dict(
 				{
@@ -258,6 +264,29 @@ class QuotaReviewServiceContractTests(unittest.TestCase):
 		)
 		self.assertIn(
 			[OPERATION_DOCTYPE, "branch", "=", "Main"],
+			filters,
+		)
+
+	@patch("retailedge.coreedge_quota_review.get_operational_branch_scope")
+	def test_restricted_scope_without_branch_filters_to_all_allowed_branches(
+		self,
+		mock_scope,
+	):
+		mock_scope.return_value = {
+			"restricted": True,
+			"allowed_branches": ["Main", "Ikeja"],
+		}
+		filters, _scope, _or_filters = _build_filters(
+			frappe._dict(
+				{
+					"status": "Open",
+					"company": "Test Company",
+					"branch": "",
+				}
+			)
+		)
+		self.assertIn(
+			[OPERATION_DOCTYPE, "branch", "in", ["Main", "Ikeja"]],
 			filters,
 		)
 
@@ -358,6 +387,7 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 		super().tearDown()
 
 	def _make_needs_review(self, suffix: str):
+		company = frappe.db.get_value("Company", {}, "name")
 		doc = frappe.get_doc(
 			{
 				"doctype": OPERATION_DOCTYPE,
@@ -365,6 +395,7 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 				"status": "Needs Review",
 				"source_doctype": "User",
 				"source_name": "Administrator",
+				"company": company,
 				"entitlement_key": "SALES_TRANSACTIONS",
 				"units": 1,
 				"reservation_reference": None,
@@ -402,8 +433,9 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 
 	def test_review_list_returns_permission_aware_summary_and_pagination(self):
 		operation = self._make_needs_review("list-summary")
+		self.assertTrue(operation.company)
 		result = list_quota_operations(
-			filters={"status": "All"},
+			filters={"status": "All", "company": operation.company},
 			page=1,
 			page_size=25,
 		)
