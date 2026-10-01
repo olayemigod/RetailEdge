@@ -14,6 +14,7 @@ from retailedge.coreedge_sales_quota_reconciliation import (
 	_can_mutate_quota_review,
 	_recommended_action,
 	get_quota_reconciliation_rows,
+	refresh_reconciliation_case_status,
 	retry_quota_finalization,
 	submit_unreserved_quota_reconciliation_case,
 )
@@ -49,6 +50,14 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 			"reconciliation_case_evidence_hash": None,
 			"reconciliation_submitted_on": None,
 			"reconciliation_last_idempotency_key": None,
+			"reconciliation_last_checked_on": None,
+			"reconciliation_decision_reference": None,
+			"reconciliation_decision_type": None,
+			"reconciliation_result_status": None,
+			"reconciliation_result_reason_code": None,
+			"reconciliation_applied_usage": 0,
+			"reconciliation_reference": None,
+			"reconciliation_decided_on": None,
 			"attempt_count": 0,
 			"finalized_on": None,
 			"warning": 0,
@@ -92,6 +101,14 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 				{"status": "Needs Review", "reservation_reference": "", "reason_code": "OTHER"}
 			),
 			"Manual CoreEdge review required",
+		)
+		self.assertEqual(
+			_recommended_action({"status": "Resolved", "reservation_reference": ""}),
+			"CoreEdge usage review resolved",
+		)
+		self.assertEqual(
+			_recommended_action({"status": "Rejected", "reservation_reference": ""}),
+			"CoreEdge evidence rejected",
 		)
 
 	@patch("retailedge.coreedge_quota_permissions._readable_companies", return_value=["RetailEdge Consulting"])
@@ -452,6 +469,335 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		mock_client_factory.assert_not_called()
 
 
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_open_coreedge_case_refresh_stays_needs_review_without_reservation(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-open-001",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.return_value = {
+			"data": {
+				"ok": True,
+				"status": "Found",
+				"case": {
+					"case_reference": "ceurc-open-001",
+					"case_status": "Open",
+					"decision": None,
+				},
+			}
+		}
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Check whether CoreEdge has completed the platform review.",
+		)
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(result["status"], "Needs Review")
+		self.assertEqual(op.reconciliation_case_status, "Open")
+		self.assertIsNotNone(op.reconciliation_last_checked_on)
+		self.assertIsNone(op.reservation_reference)
+		self.assertEqual(op.reason_code, "FAIL_OPEN_UNRESERVED")
+		self.assertTrue(op.flags.allow_retailedge_quota_case_status_sync)
+		client.reserve_usage.assert_not_called()
+		client.finalize_usage.assert_not_called()
+		self.assertEqual(mock_event.call_args.kwargs["action"], "Refresh CoreEdge Review")
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Needs Review")
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_resolved_coreedge_case_closes_local_review_without_reservation(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-resolved-001",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.return_value = {
+			"data": {
+				"ok": True,
+				"status": "Found",
+				"case": {
+					"case_reference": "ceurc-resolved-001",
+					"case_status": "Resolved",
+					"decision": {
+						"decision_reference": "CEURD-RESOLVED",
+						"decision_type": "Apply Usage",
+						"reason_code": "COREEDGE_UNAVAILABLE",
+						"result_status": "Recorded Historical",
+						"result_reason_code": "HISTORICAL_USAGE_RECORDED",
+						"applied_usage": True,
+						"reconciliation_reference": "CEURC-USAGE-001",
+						"decided_on": "2026-10-01 20:30:00",
+					},
+				},
+			}
+		}
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Refresh the submitted fail-open sale after CoreEdge review.",
+		)
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(result["status"], "Resolved")
+		self.assertEqual(op.status, "Resolved")
+		self.assertEqual(op.reconciliation_case_status, "Resolved")
+		self.assertEqual(op.reconciliation_decision_reference, "CEURD-RESOLVED")
+		self.assertEqual(op.reconciliation_decision_type, "Apply Usage")
+		self.assertEqual(op.reconciliation_result_status, "Recorded Historical")
+		self.assertEqual(
+			op.reconciliation_result_reason_code,
+			"HISTORICAL_USAGE_RECORDED",
+		)
+		self.assertEqual(op.reconciliation_reference, "CEURC-USAGE-001")
+		self.assertTrue(op.reconciliation_applied_usage)
+		self.assertIsNone(op.reservation_reference)
+		self.assertEqual(op.reason_code, "FAIL_OPEN_UNRESERVED")
+		client.reserve_usage.assert_not_called()
+		client.finalize_usage.assert_not_called()
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Resolved")
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_rejected_coreedge_case_closes_local_review_as_rejected(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-rejected-001",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.return_value = {
+			"data": {
+				"ok": True,
+				"status": "Found",
+				"case": {
+					"case_reference": "ceurc-rejected-001",
+					"case_status": "Rejected",
+					"decision": {
+						"decision_reference": "CEURD-REJECTED",
+						"decision_type": "Reject",
+						"reason_code": "INVALID_EVIDENCE",
+						"result_status": "Rejected",
+						"result_reason_code": "INVALID_EVIDENCE",
+						"applied_usage": False,
+						"reconciliation_reference": "",
+						"decided_on": "2026-10-01 20:31:00",
+					},
+				},
+			}
+		}
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Refresh the submitted evidence after platform review.",
+		)
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(result["status"], "Rejected")
+		self.assertEqual(op.status, "Rejected")
+		self.assertEqual(op.reconciliation_decision_type, "Reject")
+		self.assertFalse(op.reconciliation_applied_usage)
+		self.assertIsNone(op.reservation_reference)
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Rejected")
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_mismatched_coreedge_case_reference_fails_closed(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-expected",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.return_value = {
+			"data": {
+				"ok": True,
+				"case": {
+					"case_reference": "ceurc-other",
+					"case_status": "Resolved",
+					"decision": {"decision_type": "Apply Usage"},
+				},
+			}
+		}
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Verify the exact CoreEdge case identity before closure.",
+		)
+
+		self.assertFalse(result["ok"])
+		self.assertEqual(op.status, "Needs Review")
+		self.assertIn("different", op.last_error.lower())
+		self.assertEqual(
+			mock_event.call_args.kwargs["reason_code"],
+			"COREDGE_RECONCILIATION_CASE_MISMATCH",
+		)
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_invalid_coreedge_decision_pair_fails_closed(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-invalid-pair",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.return_value = {
+			"data": {
+				"ok": True,
+				"case": {
+					"case_reference": "ceurc-invalid-pair",
+					"case_status": "Resolved",
+					"decision": {"decision_type": "Reject"},
+				},
+			}
+		}
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Verify the authoritative decision contract before closure.",
+		)
+
+		self.assertFalse(result["ok"])
+		self.assertEqual(op.status, "Needs Review")
+		self.assertEqual(
+			mock_event.call_args.kwargs["reason_code"],
+			"COREDGE_RECONCILIATION_DECISION_INVALID",
+		)
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_remote_status_error_keeps_case_in_review(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+		_mock_attempt,
+		mock_event,
+	):
+		op = self._operation(
+			reconciliation_case_reference="ceurc-error",
+			reconciliation_case_status="Open",
+		)
+		mock_get_operation.return_value = op
+		client = MagicMock()
+		client.get_reconciliation_case_status.side_effect = CoreEdgeRemoteUsageError(
+			"COREDGE_REMOTE_USAGE_UNAVAILABLE"
+		)
+		mock_client_factory.return_value = client
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Retry the platform status read after a service outage.",
+		)
+
+		self.assertFalse(result["ok"])
+		self.assertEqual(op.status, "Needs Review")
+		self.assertIn("UNAVAILABLE", op.last_error)
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Failed")
+
+	@patch("retailedge.coreedge_sales_quota_reconciliation.get_remote_usage_client")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._get_scoped_operation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._assert_reconciliation_operator")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._require_post")
+	def test_terminal_local_case_status_returns_without_remote_call(
+		self,
+		_mock_post,
+		_mock_operator,
+		mock_get_operation,
+		mock_client_factory,
+	):
+		op = self._operation(
+			status="Resolved",
+			reconciliation_case_reference="ceurc-terminal",
+			reconciliation_case_status="Resolved",
+			reconciliation_decision_type="Apply Usage",
+		)
+		mock_get_operation.return_value = op
+
+		result = refresh_reconciliation_case_status(
+			op.name,
+			"Confirm the already-synchronized terminal review result.",
+		)
+
+		self.assertTrue(result["ok"])
+		self.assertEqual(result["status"], "Resolved")
+		mock_client_factory.assert_not_called()
+
 	def test_report_and_form_surface_contracts_exist(self):
 		report_center = Path(frappe.get_app_path("retailedge", "report_center.py")).read_text()
 		form_js = Path(
@@ -466,6 +812,7 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		self.assertIn("RetailEdge Sales Quota Reconciliation", report_center)
 		self.assertIn("Retry CoreEdge Finalization", form_js)
 		self.assertIn("Submit to CoreEdge Review", form_js)
+		self.assertIn("Refresh CoreEdge Review Status", form_js)
 		self.assertNotIn("RetailEdge Auditor\") || roles.has", form_js)
 
 
@@ -535,6 +882,51 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 		self.assertEqual(doc.status, "Needs Review")
 		self.assertIsNone(doc.reservation_reference)
 		self.assertEqual(doc.reconciliation_case_reference, "ceurc-governed")
+
+	def test_normal_update_cannot_forge_coreedge_review_resolution(self):
+		doc = self._operation("status-forged")
+		doc.reconciliation_case_reference = "ceurc-status-forged"
+		doc.reconciliation_case_status = "Open"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		doc.flags.allow_retailedge_quota_case_submission = True
+		doc.save(ignore_permissions=True)
+
+		doc.status = "Resolved"
+		doc.reconciliation_case_status = "Resolved"
+		doc.reconciliation_decision_reference = "CEURD-FORGED"
+		doc.reconciliation_decision_type = "Apply Usage"
+		doc.reconciliation_applied_usage = 1
+		doc.flags.allow_retailedge_quota_case_submission = False
+		doc.flags.allow_retailedge_quota_operation_update = True
+		with self.assertRaises(frappe.ValidationError):
+			doc.save(ignore_permissions=True)
+
+	def test_case_status_sync_flag_can_close_needs_review_without_reservation(self):
+		doc = self._operation("status-governed")
+		doc.reconciliation_case_reference = "ceurc-status-governed"
+		doc.reconciliation_case_status = "Open"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		doc.flags.allow_retailedge_quota_case_submission = True
+		doc.save(ignore_permissions=True)
+
+		doc.status = "Resolved"
+		doc.reconciliation_case_status = "Resolved"
+		doc.reconciliation_last_checked_on = now_datetime()
+		doc.reconciliation_decision_reference = "CEURD-GOVERNED"
+		doc.reconciliation_decision_type = "Apply Usage"
+		doc.reconciliation_result_status = "Recorded Historical"
+		doc.reconciliation_result_reason_code = "HISTORICAL_USAGE_RECORDED"
+		doc.reconciliation_applied_usage = 1
+		doc.reconciliation_reference = "CEURC-USAGE-GOVERNED"
+		doc.reconciliation_decided_on = now_datetime()
+		doc.flags.allow_retailedge_quota_case_submission = False
+		doc.flags.allow_retailedge_quota_operation_update = True
+		doc.flags.allow_retailedge_quota_case_status_sync = True
+		doc.save(ignore_permissions=True)
+
+		self.assertEqual(doc.status, "Resolved")
+		self.assertIsNone(doc.reservation_reference)
+		self.assertEqual(doc.reconciliation_decision_type, "Apply Usage")
 
 	def test_reconciliation_flag_can_attach_reservation_and_reopen_needs_review(self):
 		doc = self._operation("governed")
