@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import frappe
 
@@ -26,8 +26,8 @@ class TestTransactionEntryPreference(unittest.TestCase):
 		self.assertEqual(
 			mock_get.call_args_list,
 			[
-				unittest.mock.call(USER_DEFAULT_KEY, user="user@example.com"),
-				unittest.mock.call(LEGACY_USER_DEFAULT_KEY, user="user@example.com"),
+				call(USER_DEFAULT_KEY, user="user@example.com"),
+				call(LEGACY_USER_DEFAULT_KEY, user="user@example.com"),
 			],
 		)
 
