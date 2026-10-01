@@ -20,17 +20,44 @@ def is_coreedge_enabled() -> bool:
 	return bool(settings.enable_coreedge_integration)
 
 
-def get_coreedge_status() -> dict[str, int]:
+def get_coreedge_status() -> dict:
 	settings = get_retailedge_settings()
 	enabled = is_coreedge_enabled()
+	try:
+		from retailedge.integrations.coreedge_remote import get_remote_service_status
+
+		remote = get_remote_service_status()
+	except Exception:
+		remote = {
+			"enabled": bool(
+				int(getattr(settings, "enable_coreedge_remote_services", 0) or 0)
+			),
+			"configured": False,
+			"quota_enabled": False,
+			"credentials_present": False,
+		}
 
 	return {
 		"installed": int(is_coreedge_installed()),
 		"enabled": int(enabled),
-		"payments_enabled": int(enabled and bool(settings.enable_coreedge_payment_requests)),
-		"notifications_enabled": int(enabled and bool(settings.enable_coreedge_notifications)),
-		"branch_context_enabled": int(enabled and bool(settings.enable_coreedge_branch_context)),
-		"portal_required": int(enabled and bool(settings.coreedge_required_for_portal)),
+		"payments_enabled": int(
+			enabled and bool(settings.enable_coreedge_payment_requests)
+		),
+		"notifications_enabled": int(
+			enabled and bool(settings.enable_coreedge_notifications)
+		),
+		"branch_context_enabled": int(
+			enabled and bool(settings.enable_coreedge_branch_context)
+		),
+		"portal_required": int(
+			enabled and bool(settings.coreedge_required_for_portal)
+		),
+		"remote_services_enabled": int(bool(remote.get("enabled"))),
+		"remote_services_configured": int(bool(remote.get("configured"))),
+		"quota_enabled": int(bool(remote.get("quota_enabled"))),
+		"remote_credentials_present": int(
+			bool(remote.get("credentials_present"))
+		),
 	}
 
 
