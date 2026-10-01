@@ -697,6 +697,10 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		return_value=[],
 	)
 	@patch(
+		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
 		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[
 			{
@@ -1363,6 +1367,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		_mock_normalize,
 		_mock_invoice_candidates,
 		_mock_payment_candidates,
+		_mock_journal_candidates,
 		_mock_roles,
 		_mock_access,
 	):
@@ -2903,6 +2908,10 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_matching.nowdate", return_value="2026-05-24")
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch(
+		"retailedge.bank_transaction_matching.find_journal_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
 		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[],
 	)
@@ -2951,6 +2960,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		_mock_normalize,
 		_mock_invoice_candidates,
 		_mock_payment_candidates,
+		_mock_journal_candidates,
 		mock_get_all,
 		_mock_nowdate,
 		_mock_first_day,
