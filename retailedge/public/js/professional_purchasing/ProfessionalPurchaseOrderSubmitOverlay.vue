@@ -21,8 +21,8 @@
 			</div>
 
 			<div v-if="submitted" class="po-submit-review__success">
-				<strong>Purchase Order {{ submitted.name }} submitted.</strong>
-				<span>ERPNext has applied its normal Purchase Order submission rules and procurement status updates.</span>
+				<strong>Purchase Order {{ submitted.name }} is submitted.</strong>
+				<span>Review the saved ERPNext order and continue with any permitted procurement action below.</span>
 				<div v-if="submitted.next_actions?.length" class="po-submit-review__next-actions">
 					<button
 						v-for="action in submitted.next_actions"
