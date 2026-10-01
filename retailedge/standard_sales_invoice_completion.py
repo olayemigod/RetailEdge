@@ -969,9 +969,9 @@ def apply_standard_sales_invoice_workflow_action(
 
 	if source_mode == SOURCE_MODE_SALES_RETURN:
 		source = frappe.get_doc(SALES_INVOICE_DOCTYPE, source_context["source_name"])
+		previous_update_outstanding = cint(doc.get("update_outstanding_for_self")) if doc.meta.has_field("update_outstanding_for_self") else 0
 		policy = apply_sales_return_outstanding_policy(source, doc)
-		if doc.meta.has_field("update_outstanding_for_self") and cint(doc.get("update_outstanding_for_self")) != cint(policy["update_outstanding_for_self"]):
-			doc.update_outstanding_for_self = policy["update_outstanding_for_self"]
+		if doc.meta.has_field("update_outstanding_for_self") and previous_update_outstanding != cint(policy["update_outstanding_for_self"]):
 			doc.save()
 			doc.reload()
 			expected_modified = _clean(doc.get("modified"))
