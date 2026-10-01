@@ -122,7 +122,7 @@ def test_submit_overlay_requires_review_and_stays_inside_edgesuite():
 	assert "Review & Submit Purchase Order" in overlay
 	assert "get_purchase_order_submit_preview" in overlay
 	assert "submit_standard_purchase_order" in overlay
-	assert "preview?.can_submit && !submitted" in overlay
+	assert "preview?.can_submit && !preview?.workflow_eligible && !submitted" in overlay
 	assert "Submit Purchase Order" in overlay
 	assert '}, "POST")' in overlay
 	assert "expected_purchase_order_modified" in overlay
