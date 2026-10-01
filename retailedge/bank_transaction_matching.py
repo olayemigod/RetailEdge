@@ -512,9 +512,11 @@ def _build_scored_payment_entries(bank_transaction, payment_entries, filters, se
 	) or _get_payment_entry_sales_invoice_references([row.get("name") for row in payment_entries])
 	results = []
 	for payment_entry in payment_entries:
-		if payment_entry_has_active_confirmed_bank_match(payment_entry.get("name")) and not cint(
-			filters.get("include_confirmed_matches")
-		):
+		bank_transaction_name = bank_transaction.get("bank_transaction")
+		if payment_entry_has_active_confirmed_bank_match(
+			payment_entry.get("name"),
+			bank_transaction_name,
+		) and not cint(filters.get("include_confirmed_matches")):
 			continue
 		candidate = _build_payment_entry_candidate(
 			bank_transaction,
@@ -525,7 +527,9 @@ def _build_scored_payment_entries(bank_transaction, payment_entries, filters, se
 		if candidate.get("exception_only") and not cint(filters.get("include_exception_candidates")):
 			continue
 		active_review_match = _active_review_match_for_candidate(
-			"Payment Entry", candidate.get("document_name")
+			"Payment Entry",
+			candidate.get("document_name"),
+			bank_transaction_name=bank_transaction_name,
 		)
 		if active_review_match:
 			status = cstr(active_review_match.get("decision_status")).strip()
@@ -637,12 +641,135 @@ def find_payment_entry_candidates_for_bank_transaction(
 	return safe_results[: int(limit or 20)]
 
 
+def _payment_entry_match_rows(payment_entry, *, confirmed_only=False):
+	payment_entry = cstr(payment_entry).strip()
+	if not payment_entry or not has_doctype("RetailEdge Bank Transaction Match"):
+		return []
+	status_filter = ACTIVE_CONFIRMED_MATCH_STATUS if confirmed_only else ["not in", sorted(RELEASED_REVIEW_MATCH_STATUSES)]
+	fields = [
+		"name",
+		"bank_transaction",
+		"suggested_document_type",
+		"suggested_document",
+		"payment_entry",
+		"resolved_bank_account",
+		"bank_direction",
+		"decision_status",
+		"modified",
+	]
+	rows = frappe.get_all(
+		"RetailEdge Bank Transaction Match",
+		filters={
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": payment_entry,
+			"decision_status": status_filter,
+		},
+		fields=fields,
+		limit_page_length=0,
+		order_by="modified desc",
+	)
+	legacy = frappe.get_all(
+		"RetailEdge Bank Transaction Match",
+		filters={"payment_entry": payment_entry, "decision_status": status_filter},
+		fields=fields,
+		limit_page_length=0,
+		order_by="modified desc",
+	)
+	seen = set()
+	result = []
+	for row in [*rows, *legacy]:
+		name = cstr(row.get("name")).strip()
+		if not name or name in seen:
+			continue
+		seen.add(name)
+		result.append(row)
+	return result
+
+
+def _bank_transaction_match_leg(bank_transaction):
+	if not bank_transaction:
+		return {"bank_transaction": "", "account": "", "direction": ""}
+	row = (
+		normalize_bank_transaction(bank_transaction)
+		if isinstance(bank_transaction, str)
+		else frappe._dict(bank_transaction or {})
+	)
+	name = cstr(row.get("bank_transaction") or row.get("name")).strip()
+	account = cstr(
+		_resolve_bank_transaction_canonical_account(row).get("canonical_account")
+	).strip()
+	return {
+		"bank_transaction": name,
+		"account": account,
+		"direction": cstr(row.get("direction")).strip(),
+	}
+
+
+def payment_entry_active_match_conflict(
+	payment_entry,
+	bank_transaction=None,
+	*,
+	exclude_match=None,
+	confirmed_only=False,
+):
+	"""Return a conflicting active review for one Payment Entry.
+
+	Normal Receive/Pay entries remain single-bank-leg candidates. Internal
+	Transfers may legitimately reconcile one submitted Payment Entry against two
+	different Bank Transactions, one for each bank ledger leg. ERPNext keeps the
+	voucher uncleared until all related bank GL legs are allocated, so RetailEdge
+	must scope Internal Transfer conflicts by bank ledger rather than by document.
+	"""
+	payment_entry = cstr(payment_entry).strip()
+	if not payment_entry:
+		return None
+	payment_type = cstr(
+		frappe.db.get_value("Payment Entry", payment_entry, "payment_type")
+	).strip()
+	rows = _payment_entry_match_rows(payment_entry, confirmed_only=confirmed_only)
+	if exclude_match:
+		rows = [row for row in rows if cstr(row.get("name")).strip() != cstr(exclude_match).strip()]
+	if not rows:
+		return None
+	if payment_type != "Internal Transfer" or not bank_transaction:
+		return rows[0]
+
+	current_leg = _bank_transaction_match_leg(bank_transaction)
+	current_account = cstr(current_leg.get("account")).strip()
+	current_name = cstr(current_leg.get("bank_transaction")).strip()
+	if not current_account:
+		# Fail closed if the bank ledger cannot be resolved.
+		return rows[0]
+
+	for row in rows:
+		if current_name and cstr(row.get("bank_transaction")).strip() == current_name:
+			return row
+		match_account = cstr(row.get("resolved_bank_account")).strip()
+		if not match_account and row.get("bank_transaction"):
+			match_account = cstr(
+				_bank_transaction_match_leg(row.get("bank_transaction")).get("account")
+			).strip()
+		if not match_account:
+			# Historical review without bank-leg identity: conservative conflict.
+			return row
+		if match_account == current_account:
+			return row
+	return None
+
+
 def sales_invoice_has_active_confirmed_bank_match(sales_invoice):
 	return candidate_document_has_active_confirmed_bank_match("Sales Invoice", sales_invoice)
 
 
-def payment_entry_has_active_confirmed_bank_match(payment_entry):
-	return candidate_document_has_active_confirmed_bank_match("Payment Entry", payment_entry)
+def payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction=None, exclude_match=None):
+	return bool(
+		payment_entry_active_match_conflict(
+			payment_entry,
+			bank_transaction,
+			exclude_match=exclude_match,
+			confirmed_only=True,
+		)
+	)
 
 
 def candidate_document_has_active_confirmed_bank_match(document_type, document_name):
@@ -791,6 +918,11 @@ def get_auto_match_status_for_row(row, settings=None):
 				category="manual_review",
 			)
 	elif suggested_document_type == "Payment Entry":
+		if cstr(row.get("payment_entry_payment_type")).strip() == "Internal Transfer":
+			return manual(
+				"Internal Transfer Payment Entries require human review for the relevant bank ledger leg.",
+				category="manual_review",
+			)
 		if not settings.get("allow_auto_match_payment_entry"):
 			return blocked("Payment Entry auto-match is disabled in Settings.")
 		if amount_scenario_key not in AUTO_MATCH_EXACT_PAYMENT_ENTRY_SCENARIOS:
@@ -1901,6 +2033,13 @@ def get_candidate_document_key(row):
 	document_name = cstr(row.get("suggested_document") or row.get("document_name")).strip()
 	if document_type not in {"Sales Invoice", "Payment Entry", "Journal Entry"} or not document_name:
 		return None
+	if (
+		document_type == "Payment Entry"
+		and cstr(row.get("payment_entry_payment_type")).strip() == "Internal Transfer"
+	):
+		payment_account = cstr(row.get("payment_account") or row.get("account")).strip()
+		if payment_account:
+			return (document_type, document_name, payment_account)
 	return (document_type, document_name)
 
 
@@ -2414,6 +2553,7 @@ def _build_payment_entry_candidate(bank_transaction, payment_entry, references):
 		"payment_event_source": "Payment Entry",
 		"payment_entry_paid_amount": candidate_amount,
 		"payment_entry_allocated_amount": allocated_total,
+		"payment_entry_payment_type": payment_entry.get("payment_type"),
 		"payment_mode": payment_entry.get("mode_of_payment"),
 		"payment_account": payment_entry.get("paid_to")
 		if direction == "Inflow"
@@ -2495,6 +2635,7 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		"sales_invoice_grand_total": flt(candidate.get("sales_invoice_grand_total")),
 		"payment_entry_paid_amount": flt(candidate.get("payment_entry_paid_amount")),
 		"payment_entry_allocated_amount": flt(candidate.get("payment_entry_allocated_amount")),
+		"payment_entry_payment_type": candidate.get("payment_entry_payment_type"),
 		"payment_entry_invoice_context": candidate.get("payment_entry_invoice_context"),
 		"multi_invoice_references": ", ".join(candidate.get("multi_invoice_references") or [])
 		if isinstance(candidate.get("multi_invoice_references"), list)
@@ -3045,9 +3186,15 @@ def _first_active_review_match(matches, include_confirmed=True):
 	return None
 
 
-def _active_review_match_for_candidate(document_type, document_name):
+def _active_review_match_for_candidate(document_type, document_name, bank_transaction_name=None):
 	document_name = cstr(document_name).strip()
 	document_type = cstr(document_type).strip()
+	if document_type == "Payment Entry" and bank_transaction_name:
+		return payment_entry_active_match_conflict(
+			document_name,
+			bank_transaction_name,
+			confirmed_only=False,
+		)
 	context = getattr(frappe.local, "_retailedge_bank_match_context", None)
 	active_map = (context or {}).get("active_review_by_candidate")
 	if active_map is not None and (document_type, document_name) in active_map:
