@@ -49,6 +49,8 @@ AMOUNT_SCENARIO_LABELS = {
 	"payment_entry_unallocated": "Payment Entry / Advance",
 	"submitted_payment_entry_amount": "Submitted Payment Entry Amount",
 	"payment_entry_amount_variance": "Amount Variance",
+	"submitted_journal_entry_amount": "Submitted Journal Entry Amount",
+	"journal_entry_amount_variance": "Journal Entry Amount Variance",
 	"weak_match": "Weak Match",
 	"needs_review": "Needs Manual Review",
 	"date_mismatch": "Date Mismatch",
@@ -66,6 +68,7 @@ AMOUNT_SCENARIO_LABELS = {
 
 CANDIDATE_CATEGORY_LABELS = {
 	"payment_entry_match": "Payment Entry Match",
+	"journal_entry_match": "Journal Entry Match",
 	"invoice_payment_row_match": "Invoice Payment Row Match",
 	"pos_payment_match": "POS Payment Match",
 	"invoice_context_only": "Invoice Context Only",
@@ -79,6 +82,7 @@ MANUAL_REVIEW_AMOUNT_SCENARIOS = {
 	"amount_variance",
 	"multi_invoice_payment",
 	"payment_entry_amount_variance",
+	"journal_entry_amount_variance",
 	"date_mismatch",
 	"period_mismatch",
 	"account_mismatch",
@@ -107,7 +111,7 @@ AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES = {
 	"pos_payment_match",
 }
 
-REVIEW_CREATION_ELIGIBLE_CANDIDATE_CATEGORIES = set(AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES)
+REVIEW_CREATION_ELIGIBLE_CANDIDATE_CATEGORIES = set(AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES) | {"journal_entry_match"}
 
 
 def assert_can_access_bank_transaction_matching(user: str | None = None):
@@ -174,6 +178,7 @@ def get_review_creation_block_reason(candidate):
 	if cstr(candidate.get("document_type") or candidate.get("suggested_document_type")).strip() not in {
 		"Sales Invoice",
 		"Payment Entry",
+		"Journal Entry",
 	}:
 		return "No match candidate found."
 	if not cstr(candidate.get("document_name") or candidate.get("suggested_document")).strip():
@@ -649,13 +654,18 @@ def candidate_document_has_active_confirmed_bank_match(document_type, document_n
 		return True
 	if not document_name or not has_doctype("RetailEdge Bank Transaction Match"):
 		return False
+	filters = {
+		"suggested_document_type": document_type,
+		"suggested_document": document_name,
+		"decision_status": ACTIVE_CONFIRMED_MATCH_STATUS,
+	}
+	if frappe.db.exists("RetailEdge Bank Transaction Match", filters):
+		return True
 	if document_type == "Sales Invoice":
-		filters = {"sales_invoice": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}
-	elif document_type == "Payment Entry":
-		filters = {"payment_entry": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}
-	else:
-		return False
-	return bool(frappe.db.exists("RetailEdge Bank Transaction Match", filters))
+		return bool(frappe.db.exists("RetailEdge Bank Transaction Match", {"sales_invoice": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}))
+	if document_type == "Payment Entry":
+		return bool(frappe.db.exists("RetailEdge Bank Transaction Match", {"payment_entry": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}))
+	return False
 
 
 def get_auto_match_status_for_row(row, settings=None):
@@ -792,9 +802,11 @@ def get_auto_match_status_for_row(row, settings=None):
 				"Payment Entry with multiple invoice allocations requires manual review.",
 				category="manual_review",
 			)
+	elif suggested_document_type == "Journal Entry":
+		return manual("Journal Entry candidates require human review before reconciliation.", category="manual_review")
 	else:
 		return blocked(
-			"Only Sales Invoice and Payment Entry suggestions are supported for auto-match.",
+			"Unsupported accounting document type for auto-match.",
 			category="unsafe",
 		)
 	if settings.get("require_exact_reference_for_auto_match") and not cint(row.get("reference_match_exact")):
@@ -886,6 +898,7 @@ def build_matching_report_context(bank_transaction_rows, filters=None, settings=
 			},
 			"payment_entries_by_bank_transaction": {},
 			"payment_entry_references_by_entry": {},
+			"journal_entries_by_bank_transaction": {},
 			"sales_invoices_by_bank_transaction": {},
 			"invoice_payment_rows_by_invoice": {},
 			"active_review_by_candidate": {},
@@ -898,6 +911,9 @@ def build_matching_report_context(bank_transaction_rows, filters=None, settings=
 	_prefetch_payment_entry_context(
 		context, normalized_transactions, filters, settings, debug_timings=debug_timings
 	)
+	_prefetch_journal_entry_context(
+		context, normalized_transactions, filters, settings, debug_timings=debug_timings
+	)
 	_prefetch_sales_invoice_context(
 		context, normalized_transactions, filters, settings, debug_timings=debug_timings
 	)
@@ -907,6 +923,9 @@ def build_matching_report_context(bank_transaction_rows, filters=None, settings=
 		debug_timings["bank_transactions_selected"] = len(bank_transaction_rows or [])
 		debug_timings["payment_entries_prefetched"] = sum(
 			len(rows or []) for rows in context.payment_entries_by_bank_transaction.values()
+		)
+		debug_timings["journal_entries_prefetched"] = sum(
+			len(rows or []) for rows in context.journal_entries_by_bank_transaction.values()
 		)
 		debug_timings["sales_invoices_prefetched"] = sum(
 			len(rows or []) for rows in context.sales_invoices_by_bank_transaction.values()
@@ -1079,6 +1098,203 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 			)
 	finally:
 		_finish_timing(debug_timings, "payment_entry_prefetch", start)
+
+
+
+def _journal_entry_branch_field():
+	for fieldname in ("retailedge_branch", "branch"):
+		if has_field("Journal Entry", fieldname):
+			return fieldname
+	return None
+
+
+def _prefetch_journal_entry_context(context, bank_transactions, filters, settings, debug_timings=None):
+	"""Prefetch submitted Journal Entries that actually touch the statement bank account."""
+	if not bank_transactions or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
+		return
+	start = _timing_bucket(debug_timings, "journal_entry_prefetch")
+	try:
+		fields = ["name", "posting_date", "company", "voucher_type"]
+		for fieldname in ("cheque_no", "cheque_date", "user_remark", "remark", "total_debit", "total_credit"):
+			if has_field("Journal Entry", fieldname) and fieldname not in fields:
+				fields.append(fieldname)
+		branch_field = _journal_entry_branch_field()
+		if branch_field:
+			fields.append(branch_field)
+		filters_payload = {"docstatus": 1}
+		if filters.get("company") and has_field("Journal Entry", "company"):
+			filters_payload["company"] = filters.get("company")
+		else:
+			companies = sorted({row.get("company") for row in bank_transactions if row.get("company")})
+			if len(companies) == 1:
+				filters_payload["company"] = companies[0]
+			elif len(companies) > 1:
+				filters_payload["company"] = ["in", companies]
+		if filters.get("branch") and branch_field:
+			filters_payload[branch_field] = filters.get("branch")
+		window = _candidate_search_date_window(filters, settings)
+		bounds = _date_bounds_for_transactions(bank_transactions, window)
+		if bounds and has_field("Journal Entry", "posting_date"):
+			filters_payload["posting_date"] = ["between", bounds]
+
+		entries = frappe.get_all(
+			"Journal Entry",
+			filters=filters_payload,
+			fields=fields,
+			limit_page_length=0,
+			order_by="posting_date desc, modified desc",
+		)
+		names = [row.get("name") for row in entries if row.get("name")]
+		if not names:
+			return
+		account_fields = ["parent", "account", "debit_in_account_currency", "credit_in_account_currency"]
+		for fieldname in ("party_type", "party", "reference_type", "reference_name"):
+			if has_field("Journal Entry Account", fieldname):
+				account_fields.append(fieldname)
+		account_rows = frappe.get_all(
+			"Journal Entry Account",
+			filters={"parent": ["in", names]},
+			fields=account_fields,
+			limit_page_length=0,
+			order_by="parent asc, idx asc",
+		)
+		accounts_by_parent = defaultdict(list)
+		for row in account_rows:
+			accounts_by_parent[row.get("parent")].append(row)
+
+		for bank_transaction in bank_transactions:
+			bank_name = bank_transaction.get("bank_transaction")
+			canonical = _resolve_bank_transaction_canonical_account(bank_transaction).get("canonical_account")
+			if not canonical:
+				context.journal_entries_by_bank_transaction[bank_name] = []
+				continue
+			date_filter = _date_range_filter(bank_transaction.get("transaction_date"), window)
+			candidates = []
+			for entry in entries:
+				if bank_transaction.get("company") and entry.get("company") != bank_transaction.get("company"):
+					continue
+				if date_filter and entry.get("posting_date"):
+					posting_date = str(getdate(entry.get("posting_date")))
+					if posting_date < date_filter[1][0] or posting_date > date_filter[1][1]:
+						continue
+				matching_lines = [
+					line for line in accounts_by_parent.get(entry.get("name"), [])
+					if cstr(line.get("account")).strip() == cstr(canonical).strip()
+				]
+				if not matching_lines:
+					continue
+				if bank_transaction.get("direction") == "Inflow":
+					amount = sum(flt(line.get("debit_in_account_currency")) for line in matching_lines)
+				else:
+					amount = sum(flt(line.get("credit_in_account_currency")) for line in matching_lines)
+				if amount <= 0:
+					continue
+				party_lines = [
+					line for line in accounts_by_parent.get(entry.get("name"), [])
+					if cstr(line.get("party")).strip()
+				]
+				candidate = frappe._dict(dict(entry))
+				candidate["_bank_line_amount"] = amount
+				candidate["_bank_account"] = canonical
+				candidate["_party_type"] = party_lines[0].get("party_type") if len(party_lines) == 1 else None
+				candidate["_party"] = party_lines[0].get("party") if len(party_lines) == 1 else None
+				candidates.append(candidate)
+			candidates.sort(
+				key=lambda row: (
+					abs(flt(bank_transaction.get("amount")) - flt(row.get("_bank_line_amount"))),
+					abs((getdate(bank_transaction.get("transaction_date")) - getdate(row.get("posting_date"))).days)
+					if bank_transaction.get("transaction_date") and row.get("posting_date") else 9999,
+					cstr(row.get("name")),
+				)
+			)
+			context.journal_entries_by_bank_transaction[bank_name] = candidates[:60]
+	finally:
+		_finish_timing(debug_timings, "journal_entry_prefetch", start)
+
+
+def _build_journal_entry_candidate(bank_transaction, journal_entry):
+	candidate_amount = flt(journal_entry.get("_bank_line_amount"))
+	amount_difference = abs(flt(bank_transaction.get("amount")) - candidate_amount)
+	amount_scenario = "Submitted Journal Entry Amount" if amount_difference <= 0.01 else "Journal Entry Amount Variance"
+	return {
+		"document_type": "Journal Entry",
+		"document_name": journal_entry.get("name"),
+		"suggested_document": journal_entry.get("name"),
+		"posting_date": journal_entry.get("posting_date"),
+		"party": journal_entry.get("_party"),
+		"party_type": journal_entry.get("_party_type"),
+		"customer_display": journal_entry.get("_party"),
+		"candidate_amount": candidate_amount,
+		"amount_difference": amount_difference,
+		"amount_scenario": amount_scenario,
+		"amount_scenario_label": get_amount_scenario_label(amount_scenario),
+		"candidate_category": "journal_entry_match",
+		"candidate_category_label": get_candidate_category_label("journal_entry_match"),
+		"payment_event_found": 1,
+		"payment_event_source": "Journal Entry",
+		"payment_account": journal_entry.get("_bank_account"),
+		"account": journal_entry.get("_bank_account"),
+		"reference": journal_entry.get("cheque_no") or journal_entry.get("name"),
+		"branch": journal_entry.get(_journal_entry_branch_field()) if _journal_entry_branch_field() else None,
+		"supports_partial_match": False,
+		"remarks": journal_entry.get("user_remark") or journal_entry.get("remark"),
+		"reason": "Submitted Journal Entry candidate touching the statement bank account.",
+	}
+
+
+def _build_scored_journal_entries(bank_transaction, journal_entries, filters, settings):
+	results = []
+	for journal_entry in journal_entries or []:
+		if candidate_document_has_active_confirmed_bank_match("Journal Entry", journal_entry.get("name")) and not cint(
+			filters.get("include_confirmed_matches")
+		):
+			continue
+		candidate = _build_journal_entry_candidate(bank_transaction, journal_entry)
+		_apply_exception_classification(bank_transaction, candidate, filters, settings)
+		if candidate.get("exception_only") and not cint(filters.get("include_exception_candidates")):
+			continue
+		active_review_match = _active_review_match_for_candidate("Journal Entry", candidate.get("document_name"))
+		if active_review_match:
+			status = cstr(active_review_match.get("decision_status")).strip()
+			if status == "Confirmed":
+				candidate.setdefault("decision_status", "Confirmed")
+				candidate.setdefault("action_status", "Already Confirmed")
+				candidate.setdefault("reason", "This Journal Entry already has a confirmed bank match.")
+			elif _review_queue_status_mode(filters) == "Open Suggestions Only":
+				continue
+			else:
+				candidate.setdefault("decision_status", status)
+				candidate.setdefault("action_status", "Existing Active Review")
+				candidate.setdefault("match_record", active_review_match.get("name"))
+		score_payload = score_bank_transaction_candidate(bank_transaction, candidate)
+		candidate.update(score_payload)
+		if candidate["score"] >= 30:
+			results.append(candidate)
+	results.sort(
+		key=lambda row: (
+			-int(row.get("score") or 0),
+			-1 if abs(flt(row.get("amount_difference"))) <= 0.01 else 0,
+			abs(flt(row.get("amount_difference"))),
+			cstr(row.get("document_name")),
+		)
+	)
+	return results
+
+
+def find_journal_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
+	filters = frappe._dict(filters or {})
+	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
+	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
+	bank_transaction = ((context or {}).get("bank_transactions_by_name") or {}).get(
+		bank_transaction_name
+	) or normalize_bank_transaction(bank_transaction_name)
+	prefetched = ((context or {}).get("journal_entries_by_bank_transaction") or {}).get(
+		bank_transaction.get("bank_transaction")
+	)
+	if prefetched is None:
+		return []
+	results = _build_scored_journal_entries(bank_transaction, prefetched, filters, settings)
+	return results[: int(limit or 20)]
 
 
 def _prefetch_sales_invoice_context(context, bank_transactions, filters, settings, debug_timings=None):
@@ -1267,8 +1483,10 @@ def _prefetch_active_review_context(context, debug_timings=None):
 			candidate_keys.update(("Sales Invoice", row.get("name")) for row in rows if row.get("name"))
 		for rows in context.payment_entries_by_bank_transaction.values():
 			candidate_keys.update(("Payment Entry", row.get("name")) for row in rows if row.get("name"))
+		for rows in context.journal_entries_by_bank_transaction.values():
+			candidate_keys.update(("Journal Entry", row.get("name")) for row in rows if row.get("name"))
 		all_matches = []
-		for doctype in ("Sales Invoice", "Payment Entry"):
+		for doctype in ("Sales Invoice", "Payment Entry", "Journal Entry"):
 			names = sorted(name for candidate_doctype, name in candidate_keys if candidate_doctype == doctype)
 			if not names:
 				continue
@@ -1285,16 +1503,17 @@ def _prefetch_active_review_context(context, debug_timings=None):
 					order_by="modified desc",
 				)
 			)
-			legacy_field = "sales_invoice" if doctype == "Sales Invoice" else "payment_entry"
-			all_matches.extend(
-				frappe.get_all(
-					"RetailEdge Bank Transaction Match",
-					filters={legacy_field: ["in", names], "decision_status": status_filter},
-					fields=fields,
-					limit_page_length=0,
-					order_by="modified desc",
+			legacy_field = "sales_invoice" if doctype == "Sales Invoice" else "payment_entry" if doctype == "Payment Entry" else None
+			if legacy_field:
+				all_matches.extend(
+					frappe.get_all(
+						"RetailEdge Bank Transaction Match",
+						filters={legacy_field: ["in", names], "decision_status": status_filter},
+						fields=fields,
+						limit_page_length=0,
+						order_by="modified desc",
+					)
 				)
-			)
 		for match_row in all_matches:
 			keys = []
 			if match_row.get("suggested_document_type") and match_row.get("suggested_document"):
@@ -1413,40 +1632,16 @@ def get_bank_transaction_matching_rows(filters=None, limit=500, debug_timings=No
 						continue
 					if bank_transaction.get("is_reconciled") and not filters.get("include_reconciled"):
 						continue
-					if bank_transaction.get("direction") == "Outflow":
-						if confirmed_match and filters.get("include_confirmed_matches"):
-							row = _build_matching_row(
-								bank_transaction,
-								candidate=None,
-								action_status="Outflow / Not Sales Receipt",
-								match_reason="Outflow transactions are not eligible for customer receipt bank matching in this phase.",
-							)
-							_apply_selected_match_to_row(
-								row,
-								confirmed_match,
-								include_confirmed=filters.get("include_confirmed_matches"),
-							)
-							auto_match_status = get_auto_match_status_for_row(row, settings=settings)
-							row["auto_match_status"] = auto_match_status.get("status")
-							row["auto_match_reason"] = auto_match_status.get("reason")
-							row["auto_match_category"] = auto_match_status.get("category")
-							row["eligible_for_auto_prepare"] = (
-								1 if auto_match_status.get("eligible_prepare") else 0
-							)
-							row["eligible_for_auto_confirm"] = (
-								1 if auto_match_status.get("eligible_confirm") else 0
-							)
-							if not _matching_row_passes_optional_filters(row, filters):
-								continue
-							chunk_candidate_rows.append(row)
-						continue
-
 					sales_start = _timing_bucket(debug_timings, "sales_invoice_resolution")
-					sales_candidates = find_sales_invoice_candidates_for_bank_transaction(
-						bank_transaction.get("bank_transaction"),
-						filters=filters,
-						limit=20,
-						context=context,
+					sales_candidates = (
+						find_sales_invoice_candidates_for_bank_transaction(
+							bank_transaction.get("bank_transaction"),
+							filters=filters,
+							limit=20,
+							context=context,
+						)
+						if bank_transaction.get("direction") == "Inflow"
+						else []
 					)
 					_finish_timing(debug_timings, "sales_invoice_resolution", sales_start)
 					payment_start = _timing_bucket(debug_timings, "payment_entry_resolution")
@@ -1457,8 +1652,16 @@ def get_bank_transaction_matching_rows(filters=None, limit=500, debug_timings=No
 						context=context,
 					)
 					_finish_timing(debug_timings, "payment_entry_resolution", payment_start)
+					journal_start = _timing_bucket(debug_timings, "journal_entry_resolution")
+					journal_candidates = find_journal_entry_candidates_for_bank_transaction(
+						bank_transaction.get("bank_transaction"),
+						filters=filters,
+						limit=20,
+						context=context,
+					)
+					_finish_timing(debug_timings, "journal_entry_resolution", journal_start)
 					candidates = sorted(
-						sales_candidates + payment_candidates,
+						sales_candidates + payment_candidates + journal_candidates,
 						key=_queue_candidate_rank,
 						reverse=True,
 					)
@@ -1691,7 +1894,7 @@ def get_candidate_document_key(row):
 	row = row or {}
 	document_type = cstr(row.get("suggested_document_type") or row.get("document_type")).strip()
 	document_name = cstr(row.get("suggested_document") or row.get("document_name")).strip()
-	if document_type not in {"Sales Invoice", "Payment Entry"} or not document_name:
+	if document_type not in {"Sales Invoice", "Payment Entry", "Journal Entry"} or not document_name:
 		return None
 	return (document_type, document_name)
 
@@ -2318,8 +2521,6 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 def _derive_action_status(bank_transaction, candidate):
 	if bank_transaction.get("is_reconciled"):
 		return "Already Reconciled"
-	if bank_transaction.get("direction") != "Inflow":
-		return "Outflow / Not Sales Receipt"
 	if not candidate:
 		return "No Match"
 	if candidate.get("exception_only"):
@@ -2844,11 +3045,11 @@ def _active_review_match_for_candidate(document_type, document_name):
 	active_map = (context or {}).get("active_review_by_candidate")
 	if active_map is not None and (document_type, document_name) in active_map:
 		return active_map.get((document_type, document_name))
-	if active_map is not None and document_type in {"Sales Invoice", "Payment Entry"}:
+	if active_map is not None and document_type in {"Sales Invoice", "Payment Entry", "Journal Entry"}:
 		return None
 	if (
 		not document_name
-		or document_type not in {"Sales Invoice", "Payment Entry"}
+		or document_type not in {"Sales Invoice", "Payment Entry", "Journal Entry"}
 		or not has_doctype("RetailEdge Bank Transaction Match")
 	):
 		return None
