@@ -6,6 +6,8 @@ Replace the temporary current-period reservation workaround for `FAIL_OPEN_UNRES
 
 A RetailEdge sale that already committed during an allowed CoreEdge outage is historical business truth. RetailEdge must not create a new current-period quota reservation later just to account for that sale.
 
+This implementation supersedes the temporary unreserved-recovery workflow previously proposed in RetailEdge PR #110; the corrected branch contains the valid review/finalization work plus central case submission.
+
 ## Dependency
 
 This slice is stacked on RetailEdge sales-quota reconciliation PR #110.
