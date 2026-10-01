@@ -30,7 +30,6 @@
 							<strong>Edit draft before completion</strong>
 							<p>Company, Supplier, Branch, stock mode, warehouses and PO/Receipt source links remain protected. ERPNext recalculates the draft when saved.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">{{ busy ? "Saving..." : "Save Draft Changes" }}</button>
 					</div>
 					<div class="invoice-editor-grid">
 						<EdgeInput v-model="draftPostingDate" id="purchase-invoice-posting-date" label="Posting Date" type="date" :disabled="busy" required />
@@ -136,6 +135,15 @@
 					Advanced: Open in ERPNext
 				</button>
 				<div class="invoice-completion-actions">
+					<button
+						v-if="preview?.can_edit && !completedResult"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy || !draftDirty || !draftValid"
+						@click="saveDraftChanges"
+					>
+						{{ busy ? "Saving..." : "Save Draft Changes" }}
+					</button>
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
