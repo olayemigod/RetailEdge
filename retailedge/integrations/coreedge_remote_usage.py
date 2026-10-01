@@ -27,6 +27,9 @@ _PATH_SNAPSHOT = "/api/method/coreedge.api.v1.service_entitlement_usage.submit_u
 _PATH_RECONCILIATION_CASE = (
 	"/api/method/coreedge.api.v1.service_entitlement_usage.submit_reconciliation_case"
 )
+_PATH_RECONCILIATION_CASE_STATUS = (
+	"/api/method/coreedge.api.v1.service_entitlement_usage.get_reconciliation_case_status"
+)
 
 
 class CoreEdgeRemoteUsageError(RuntimeError):
@@ -290,6 +293,26 @@ class CoreEdgeRemoteUsageClient:
 				"source_path": source_path,
 			},
 		)
+
+	def get_reconciliation_case_status(
+		self,
+		case_reference: str,
+		*,
+		request_id: str | None = None,
+		correlation_id: str | None = None,
+		source_path: str | None = None,
+	) -> dict:
+		return self._request(
+			_PATH_RECONCILIATION_CASE_STATUS,
+			{
+				"site_identifier": self.config.site_identifier,
+				"case_reference": case_reference,
+				"request_id": request_id,
+				"correlation_id": correlation_id,
+				"source_path": source_path,
+			},
+		)
+
 
 	def submit_reconciliation_case(
 		self,
