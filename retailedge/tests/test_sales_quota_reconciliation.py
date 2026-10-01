@@ -221,6 +221,30 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		self.assertEqual(mock_event.call_args.kwargs["action"], "Retry Finalization")
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Finalized")
 
+	@patch("retailedge.coreedge_sales_quota_reconciliation.frappe.db.get_value")
+	@patch("retailedge.coreedge_sales_quota_reconciliation.frappe.get_meta")
+	def test_cancelled_sale_is_not_eligible_for_coreedge_usage_evidence(
+		self,
+		mock_meta,
+		mock_get_value,
+	):
+		mock_meta.return_value.has_field.side_effect = lambda fieldname: fieldname in {
+			"posting_date",
+			"posting_time",
+		}
+		mock_get_value.return_value = frappe._dict(
+			{
+				"docstatus": 2,
+				"posting_date": "2026-09-30",
+				"posting_time": "14:25:00",
+				"creation": "2026-09-30 14:20:00",
+			}
+		)
+		from retailedge.coreedge_sales_quota_reconciliation import _get_source_state
+
+		with self.assertRaises(frappe.ValidationError):
+			_get_source_state(self._operation())
+
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
 	@patch("retailedge.coreedge_sales_quota_reconciliation._get_source_state")
