@@ -130,6 +130,30 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		)
 		self.assertEqual(status, "Suggested")
 
+	def test_internal_transfer_bank_matching_is_leg_aware_and_manual_review_first(self):
+		matching = (APP_ROOT / "bank_transaction_matching.py").read_text(encoding="utf-8")
+		workflow = (APP_ROOT / "bank_transaction_match_workflow.py").read_text(encoding="utf-8")
+		self.assertIn("def payment_entry_active_match_conflict(", matching)
+		self.assertIn('payment_type != "Internal Transfer"', matching)
+		self.assertIn("current_account", matching)
+		self.assertIn("resolved_bank_account", matching)
+		self.assertIn('"payment_entry_payment_type": payment_entry.get("payment_type")', matching)
+		self.assertIn("Internal Transfer Payment Entries require human review", matching)
+		self.assertIn("payment_entry_active_match_conflict(", workflow)
+		self.assertIn("Payment Entry bank leg already has a confirmed bank match", workflow)
+
+	def test_journal_entry_candidates_can_reach_review_with_live_revalidation(self):
+		workflow = (APP_ROOT / "bank_transaction_match_workflow.py").read_text(encoding="utf-8")
+		self.assertIn("find_journal_entry_candidates_for_bank_transaction", workflow)
+		self.assertIn('candidate_doctype not in {"Sales Invoice", "Payment Entry", "Journal Entry"}', workflow)
+		self.assertIn('elif candidate_doctype == "Journal Entry":', workflow)
+		self.assertIn('"Journal Entry Account"', workflow)
+		self.assertIn('"Submitted Journal Entry Amount"', workflow)
+		self.assertIn('"journal_entry_match"', workflow)
+		self.assertIn('cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry", "Journal Entry"}', workflow)
+		self.assertIn("doc.payment_event_source = candidate.get", workflow)
+		self.assertIn("doc.payment_account = candidate.get", workflow)
+
 	def test_exact_payment_draft_reuse_is_bounded_and_never_rewrites_other_drafts(self):
 		source = (APP_ROOT / "guided_payment.py").read_text(encoding="utf-8")
 		self.assertIn("def _find_exact_reusable_payment_draft(", source)
