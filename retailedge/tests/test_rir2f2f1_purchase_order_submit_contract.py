@@ -47,13 +47,31 @@ def test_draft_purchase_order_edit_is_bounded_stale_safe_and_erpnext_validated()
 	assert "Subcontracting Purchase Orders require Advanced ERPNext review." in update
 	assert "Inter-company Purchase Orders require Advanced ERPNext review." in update
 	assert "ignore_permissions=True" not in update
-	assert "Company, Supplier, Branch, Stock Location, Buying Price List and item identity" in update
+	assert "Company, Supplier, Branch, Stock Location, Buying Price List and existing item" in update
 	assert "update_standard_purchase_order_draft" in overlay
 	assert "Edit draft before completion" in overlay
 	assert "Save Draft Changes" in overlay
 	assert "draftDirty" in overlay
 	assert "Discard unsaved Purchase Order changes?" in overlay
 	assert "confirmAboveEdgeModal" in overlay
+
+
+def test_draft_purchase_order_editor_can_add_new_items_safely():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	update = _function_source(source, "update_standard_purchase_order_draft", "apply_standard_purchase_order_workflow_action")
+	assert "search_purchase_order_draft_items" in source
+	assert "get_purchase_order_draft_item_pricing" in source
+	assert "resolve_purchase_item_pricing" in source
+	assert "doc.append(\"items\", {\"item_code\": item_code})" in update
+	assert "Existing Purchase Order item identity cannot be replaced here" in update
+	assert "MAX_ITEMS" in update
+	assert "set_missing_values" in update
+	assert "Add Item" in overlay
+	assert "searchDraftItem" in overlay
+	assert "refreshDraftItemPricing" in overlay
+	assert "item_code: row.item_code || \"\"" in overlay
+	assert "v-if=\"!row.name\"" in overlay
 
 
 def test_standard_submit_blocks_workflows_and_advanced_po_cases():
