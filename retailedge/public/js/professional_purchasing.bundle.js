@@ -14,7 +14,6 @@ const SUPPLIER_QUOTATION_HISTORY_LABEL = "Supplier Quote History";
 const COMPARE_QUOTATIONS_LABEL = "Compare Quotations";
 const ADVANCED_COMPARE_QUOTATIONS_LABEL = "Advanced: Compare Quotations in ERPNext";
 const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
-const PURCHASE_ORDER_SUBMIT_LABEL = "Review & Submit";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
 const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
@@ -40,32 +39,11 @@ function materialRequestFromRow(button) {
 	return String(reference?.textContent || "").trim();
 }
 
-function purchaseOrderFromRow(button) {
-	const row = button?.closest?.(".purchasing-table--orders tbody tr");
-	if (!row) return "";
-	const reference = row.querySelector("td .retailedge-po-reference, td .link-button");
-	return String(reference?.textContent || "").trim();
-}
 
-function applyPurchaseOrderSubmitOwnership(target) {
+function removeLegacyPurchaseOrderSubmitButtons(target) {
 	if (!target) return;
-	for (const row of target.querySelectorAll(".purchasing-table--orders tbody tr")) {
-		const actions = row.querySelector(".actions-cell");
-		if (!actions) continue;
-		const status = normaliseButtonLabel(row.querySelector(".status-pill"));
-		const existing = actions.querySelector('[data-retailedge-po-submit="true"]');
-		if (status !== "Draft") {
-			existing?.remove();
-			continue;
-		}
-		if (existing) continue;
-		const button = document.createElement("button");
-		button.type = "button";
-		button.className = "edge-small-button edge-small-button--primary";
-		button.textContent = __(PURCHASE_ORDER_SUBMIT_LABEL);
-		button.setAttribute("title", __("Review this draft Purchase Order before standard ERPNext submission."));
-		button.setAttribute("data-retailedge-po-submit", "true");
-		actions.appendChild(button);
+	for (const button of target.querySelectorAll('[data-retailedge-po-submit="true"]')) {
+		button.remove();
 	}
 }
 
@@ -126,7 +104,7 @@ function applySourcingOwnership(target) {
 			button.setAttribute("data-retailedge-advanced-native", "Material Request");
 		}
 	}
-	applyPurchaseOrderSubmitOwnership(target);
+	removeLegacyPurchaseOrderSubmitButtons(target);
 }
 
 function installSourcingOwnership(target) {
@@ -171,15 +149,6 @@ function installSourcingOwnership(target) {
 			event.stopPropagation();
 			event.stopImmediatePropagation();
 			window.dispatchEvent(new CustomEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT));
-			return;
-		}
-		if (label === PURCHASE_ORDER_SUBMIT_LABEL || button.getAttribute("data-retailedge-po-submit") === "true") {
-			const purchaseOrder = purchaseOrderFromRow(button);
-			if (!purchaseOrder) return;
-			event.preventDefault();
-			event.stopPropagation();
-			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { detail: { purchase_order: purchaseOrder } }));
 			return;
 		}
 		if (!nativeDeskEnabled() && [ADVANCED_MATERIAL_REQUEST_LABEL, COMPARE_QUOTATIONS_LABEL, ADVANCED_COMPARE_QUOTATIONS_LABEL].includes(label)) {
