@@ -32,19 +32,27 @@ def test_view_actions_never_use_document_output_sharing_as_their_preview_surface
 		assert 'outputMode !== "view"' not in source
 
 
-def test_print_share_has_one_global_route_contract():
+def test_print_share_has_one_shared_route_contract():
 	runtime = (PUBLIC_JS / "retailedge.js").read_text(encoding="utf-8")
+	navigation = (PUBLIC_JS / "documentOutputNavigation.js").read_text(encoding="utf-8")
 	output = (PUBLIC_JS / "document_output_sharing" / "DocumentOutputSharing.vue").read_text(encoding="utf-8")
 	assert "openDocumentOutputSharing = function" in runtime
 	assert 'mode: "share"' in runtime
 	assert 'frappe.set_route("document-output-sharing")' in runtime
+	assert "export function openDocumentOutputSharing" in navigation
+	assert 'mode: "share"' in navigation
+	assert 'frappe.set_route("document-output-sharing")' in navigation
 	assert "outputMode" not in output
 	assert 'class="edge-panel output-actions"' in output
 
 
 def test_document_output_target_assignment_is_centralised():
+	approved_routing_files = {
+		PUBLIC_JS / "retailedge.js",
+		PUBLIC_JS / "documentOutputNavigation.js",
+	}
 	for path, source in _sources():
-		if path == PUBLIC_JS / "retailedge.js":
+		if path in approved_routing_files:
 			continue
 		assert "retailedgeDocumentOutputTarget =" not in source, (
 			f"{path}: use window.retailedge.openDocumentOutputSharing(...) instead of assigning the output target directly"
