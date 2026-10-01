@@ -192,7 +192,41 @@
 									>
 										Attempt Reconciliation
 									</button>
-									<span v-if="row.status === 'Needs Review' && !actionKind(row)" class="quota-manual">Platform review required</span>
+									<span
+										v-if="row.status === 'Needs Review' && !actionKind(row)"
+										class="quota-manual"
+									>
+										Platform review required
+									</span>
+									<button
+										class="edge-button edge-button--secondary"
+										type="button"
+										:disabled="historyLoading === row.name"
+										@click="toggleHistory(row)"
+									>
+										{{ historyByOperation[row.name] ? "Hide history" : "History" }}
+									</button>
+									<div
+										v-if="historyByOperation[row.name]"
+										class="quota-history"
+									>
+										<div
+											v-if="!historyByOperation[row.name].length"
+											class="quota-history-empty"
+										>
+											No review actions recorded yet.
+										</div>
+										<div
+											v-for="event in historyByOperation[row.name]"
+											:key="event.name"
+											class="quota-history-event"
+										>
+											<strong>{{ event.action }}</strong>
+											<span>{{ event.result_status }}</span>
+											<small>{{ event.reason || event.reason_code || event.message || "No note" }}</small>
+											<small>{{ event.actor }} · {{ dateTime(event.occurred_on) }}</small>
+										</div>
+									</div>
 								</td>
 							</tr>
 						</tbody>
@@ -253,6 +287,8 @@ export default {
 			pagination: { page: 1, page_size: 25, total_rows: 0, total_pages: 1 },
 			loading: false,
 			acting: "",
+			historyLoading: "",
+			historyByOperation: {},
 			error: "",
 			notice: "",
 			menuItems: [],
@@ -405,6 +441,30 @@ export default {
 				this.acting = "";
 			}
 		},
+		async toggleHistory(row) {
+			if (this.historyByOperation[row.name]) {
+				const next = { ...this.historyByOperation };
+				delete next[row.name];
+				this.historyByOperation = next;
+				return;
+			}
+			if (this.historyLoading) return;
+			this.historyLoading = row.name;
+			try {
+				const result = await callMethod(
+					"retailedge.coreedge_quota_review.get_quota_review_history",
+					{ operation_name: row.name }
+				);
+				this.historyByOperation = {
+					...this.historyByOperation,
+					[row.name]: result.events || [],
+				};
+			} catch (error) {
+				this.error = userError(error, "Quota review history could not be loaded.");
+			} finally {
+				this.historyLoading = "";
+			}
+		},
 		openSource(row) {
 			if (!row.source_doctype || !row.source_name) return;
 			frappe.set_route("Form", row.source_doctype, row.source_name);
@@ -487,7 +547,29 @@ export default {
 .quota-review-table td small { display:block; margin-top:4px; color:var(--edge-text-muted,#667085); max-width:260px; white-space:normal; }
 .quota-link { border:0; padding:0; background:transparent; color:var(--primary,#2563eb); cursor:pointer; font-weight:600; text-align:left; }
 .quota-actions { display:flex; flex-wrap:wrap; gap:6px; min-width:190px; }
-.quota-manual { font-size:.76rem; color:var(--edge-text-muted,#667085); align-self:center; }
+.quota-manual {
+	font-size:.76rem;
+	color:var(--edge-text-muted,#667085);
+	align-self:center;
+}
+.quota-history {
+	flex-basis:100%;
+	display:grid;
+	gap:8px;
+	padding:8px 0 0;
+}
+.quota-history-event {
+	display:grid;
+	gap:2px;
+	padding:8px;
+	border:1px solid var(--edge-border,var(--border-color));
+	border-radius:8px;
+	background:var(--edge-surface-subtle,var(--subtle-fg,#f8fafc));
+}
+.quota-history-event span,.quota-history-event small,.quota-history-empty {
+	color:var(--edge-text-muted,#667085);
+	font-size:.74rem;
+}
 .quota-status { display:inline-flex; padding:4px 8px; border-radius:999px; font-size:.75rem; font-weight:700; white-space:nowrap; }
 .quota-status--review { background:rgba(220,38,38,.1); }
 .quota-status--pending { background:rgba(217,119,6,.12); }
