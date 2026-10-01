@@ -157,7 +157,7 @@ export default {
 				company: "",
 				branch: "",
 				status: "Open",
-				source_doctype: "",
+				source_doctype: "All",
 				search: "",
 				page_size: 50,
 			},
@@ -168,7 +168,7 @@ export default {
 				"Finalized",
 				"All",
 			],
-			sourceOptions: ["Sales Invoice", "POS Invoice"],
+			sourceOptions: ["All", "Sales Invoice", "POS Invoice"],
 		};
 	},
 	computed: {
