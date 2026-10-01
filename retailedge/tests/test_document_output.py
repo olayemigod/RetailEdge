@@ -10,13 +10,17 @@ class TestDocumentOutput(unittest.TestCase):
 	def read(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_registry_covers_customer_facing_sales_documents(self):
+	def test_registry_covers_retailedge_business_documents(self):
 		source = self.read("document_output.py")
 		for contract in (
 			'"doctype": "Quotation"',
 			'"doctype": "Sales Order"',
 			'"doctype": "Delivery Note"',
 			'"doctype": "Sales Invoice"',
+			'"doctype": "Purchase Order"',
+			'"native_route": "/app/purchase-order"',
+			'"doctype": "Purchase Receipt"',
+			'"native_route": "/app/purchase-receipt"',
 			'"doctype": "Purchase Invoice"',
 			'"party_field": "supplier"',
 			'"native_route": "/app/purchase-invoice"',
