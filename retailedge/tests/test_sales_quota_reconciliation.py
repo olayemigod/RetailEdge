@@ -275,6 +275,8 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		client.reserve_usage.assert_not_called()
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Blocked")
 
+	@patch("retailedge.coreedge_sales_quota_reconciliation._release_rolled_back_reservation")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._enqueue_finalize_operation")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_rollback")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_commit")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
@@ -299,6 +301,8 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		mock_event,
 		mock_after_commit,
 		mock_after_rollback,
+		mock_enqueue,
+		mock_release,
 	):
 		op = self._operation()
 		mock_get_operation.return_value = op
@@ -344,6 +348,23 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		mock_finalize.assert_not_called()
 		mock_after_commit.assert_called_once()
 		mock_after_rollback.assert_called_once()
+
+		commit_callback = mock_after_commit.call_args.args[0]
+		commit_callback()
+		mock_enqueue.assert_called_once_with(op.name)
+
+		rollback_callback = mock_after_rollback.call_args.args[0]
+		rollback_callback()
+		mock_release.assert_called_once()
+		release_kwargs = mock_release.call_args.kwargs
+		self.assertEqual(release_kwargs["reservation_reference"], "CEUR-RECOVERED")
+		self.assertEqual(release_kwargs["doc_doctype"], "Sales Invoice")
+		self.assertEqual(release_kwargs["doc_name"], "SINV-0001")
+		self.assertIn("reconciliation rolled back", release_kwargs["reason"].lower())
+		self.assertEqual(
+			release_kwargs["source_path"],
+			"RetailEdge Sales Quota Reconciliation Rollback",
+		)
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Pending Finalize")
 
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
