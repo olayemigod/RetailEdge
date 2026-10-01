@@ -24,6 +24,7 @@ _PATH_RESERVE = "/api/method/coreedge.api.v1.service_entitlement_usage.reserve_u
 _PATH_FINALIZE = "/api/method/coreedge.api.v1.service_entitlement_usage.finalize_usage"
 _PATH_RELEASE = "/api/method/coreedge.api.v1.service_entitlement_usage.release_usage"
 _PATH_SNAPSHOT = "/api/method/coreedge.api.v1.service_entitlement_usage.submit_usage_snapshot"
+_PATH_RECONCILE = "/api/method/coreedge.api.v1.service_entitlement_usage.reconcile_usage"
 
 
 class CoreEdgeRemoteUsageError(RuntimeError):
@@ -304,6 +305,39 @@ class CoreEdgeRemoteUsageClient:
 				"idempotency_key": idempotency_key,
 				"reference_doctype": reference_doctype,
 				"reference_name": reference_name,
+				"request_id": request_id,
+				"correlation_id": correlation_id,
+				"source_path": source_path,
+			},
+		)
+
+	def reconcile_usage(
+		self,
+		entitlement_key: str,
+		units: int,
+		business_occurred_on,
+		reason: str,
+		idempotency_key: str,
+		reference_doctype: str,
+		reference_name: str,
+		*,
+		source_reason_code: str | None = None,
+		request_id: str | None = None,
+		correlation_id: str | None = None,
+		source_path: str | None = None,
+	) -> dict:
+		return self._request(
+			_PATH_RECONCILE,
+			{
+				"site_identifier": self.config.site_identifier,
+				"entitlement_key": entitlement_key,
+				"units": units,
+				"business_occurred_on": business_occurred_on,
+				"reason": reason,
+				"idempotency_key": idempotency_key,
+				"reference_doctype": reference_doctype,
+				"reference_name": reference_name,
+				"source_reason_code": source_reason_code,
 				"request_id": request_id,
 				"correlation_id": correlation_id,
 				"source_path": source_path,
