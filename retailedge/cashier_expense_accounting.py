@@ -153,8 +153,9 @@ def attempt_direct_cashier_expense_posting(expense_doc_or_name) -> dict[str, Any
 	"""Best-effort direct posting without losing an already-recorded till expense.
 
 	Direct Posting is an explicit merchant policy, but it does not bypass ERPNext
-	Journal Entry permissions. If accounting permission/readiness fails, the
-	physical Cashier Expense remains submitted and is marked Failed for follow-up.
+	Journal Entry permissions. Policy/readiness/permission deferrals keep the
+	physical Cashier Expense submitted with Pending Ledger status. Only a real
+	posting attempt that raises an accounting error is marked Failed.
 	"""
 	settings = get_cashier_expense_posting_settings()
 	if not settings["enabled"] or settings["posting_mode"] != "Direct Posting":
