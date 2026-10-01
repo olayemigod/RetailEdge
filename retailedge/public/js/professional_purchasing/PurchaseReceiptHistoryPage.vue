@@ -233,7 +233,7 @@ export default {
 		routeForItem(item) {
 			if (item.target_type === "Page") return `/app/${item.target}`;
 			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
-			if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\\s+/g, "-")}`;
+			if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`;
 			return item.target || "";
 		},
 		handleNavigation(route) {
