@@ -12,6 +12,7 @@ from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_settings,
 )
 from retailedge.operating_context import get_operational_branch_scope
+from retailedge.workflow_readiness import _get_active_workflow
 
 POSTING_DOCUMENT_TYPE = "Journal Entry"
 CONTROLLED_POSTING_ROLES = {
@@ -27,6 +28,113 @@ DIRECT_CAPTURE_ROLES = CONTROLLED_POSTING_ROLES | {
 	"RetailEdge Cashier",
 	"RetailEdgeCashier",
 }
+
+
+def get_effective_cashier_expense_posting_roles(
+	settings: dict[str, Any] | None = None,
+	*,
+	automatic: bool = False,
+) -> set[str]:
+	settings = settings or get_cashier_expense_posting_settings()
+	configured = set(settings.get("posting_roles") or set())
+	if configured:
+		return configured
+	if automatic and settings.get("posting_mode") == "Direct Posting":
+		return set(DIRECT_CAPTURE_ROLES)
+	return set(CONTROLLED_POSTING_ROLES)
+
+
+def get_cashier_expense_posting_permissions(
+	doc,
+	*,
+	settings: dict[str, Any] | None = None,
+	automatic: bool = False,
+) -> dict[str, bool]:
+	settings = settings or get_cashier_expense_posting_settings()
+	roles = get_effective_cashier_expense_posting_roles(settings, automatic=automatic)
+	role_allowed = user_has_any_role(roles=roles)
+	try:
+		write_allowed = bool(doc.has_permission("write"))
+		journal_read_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "read"))
+		journal_create_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "create"))
+		journal_submit_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "submit"))
+		company = str(getattr(doc, "company", None) or "").strip()
+		branch = str(getattr(doc, "branch", None) or "").strip()
+		branch_allowed = True
+		if company:
+			scope = get_operational_branch_scope(company, user=frappe.session.user)
+			branch_allowed = not scope.get("restricted") or branch in set(scope.get("allowed_branches") or [])
+	except Exception:
+		write_allowed = False
+		journal_read_allowed = False
+		journal_create_allowed = False
+		journal_submit_allowed = False
+		branch_allowed = False
+	return {
+		"role_allowed": role_allowed,
+		"write_allowed": write_allowed,
+		"journal_read_allowed": journal_read_allowed,
+		"journal_create_allowed": journal_create_allowed,
+		"journal_submit_allowed": journal_submit_allowed,
+		"branch_allowed": branch_allowed,
+		"can_post": all(
+			(
+				role_allowed,
+				write_allowed,
+				journal_read_allowed,
+				journal_create_allowed,
+				journal_submit_allowed,
+				branch_allowed,
+			)
+		),
+	}
+
+
+def _posting_permission_block_reason(permissions: dict[str, bool]) -> str:
+	if not permissions.get("role_allowed"):
+		return _("Your role is not configured to post Cashier Expenses to accounts.")
+	if not permissions.get("write_allowed"):
+		return _("You do not have permission to update this Cashier Expense.")
+	if not permissions.get("branch_allowed"):
+		return _("You do not have active Branch access to post this Cashier Expense.")
+	for key, label in (
+		("journal_read_allowed", _("read")),
+		("journal_create_allowed", _("create")),
+		("journal_submit_allowed", _("submit")),
+	):
+		if not permissions.get(key):
+			return _("You do not have permission to {0} Journal Entries.").format(label)
+	return _("Cashier Expense accounting posting permission is not available.")
+
+
+def _defer_direct_cashier_expense_posting(doc, message: str, *, posting_ready: bool) -> dict[str, Any]:
+	message = str(message or _("Cashier Expense accounting posting is pending an authorised poster.")).strip()
+	frappe.db.set_value(
+		"RetailEdge Cashier Expense",
+		doc.name,
+		{
+			"ledger_status": "Pending Ledger",
+			"posting_ready": 1 if posting_ready else 0,
+			"posting_block_reason": None if posting_ready else message,
+			"user_message": _("Expense recorded against the till. Accounting posting is pending: {0}").format(message),
+		},
+		update_modified=False,
+	)
+	append_cashier_expense_action_log(
+		doc.name,
+		action="Direct Posting Deferred",
+		previous_status=getattr(doc, "expense_status", None),
+		new_status=getattr(doc, "expense_status", None),
+		remarks=message,
+		context={"posting_mode": "Direct Posting", "posting_ready": bool(posting_ready)},
+	)
+	return {
+		"attempted": False,
+		"posted": False,
+		"deferred": True,
+		"ledger_status": "Pending Ledger",
+		"message": message,
+	}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -55,6 +163,21 @@ def attempt_direct_cashier_expense_posting(expense_doc_or_name) -> dict[str, Any
 	doc = _coerce_expense_doc(expense_doc_or_name)
 	if cint(getattr(doc, "docstatus", 0)) != 1:
 		return {"attempted": False, "posted": False}
+
+	preview = build_cashier_expense_posting_preview(doc)
+	if not preview.get("posting_ready"):
+		return _defer_direct_cashier_expense_posting(
+			doc,
+			preview.get("posting_block_reason") or _("Cashier Expense is not yet ready for accounting posting."),
+			posting_ready=False,
+		)
+	permissions = get_cashier_expense_posting_permissions(doc, settings=settings, automatic=True)
+	if not permissions.get("can_post"):
+		return _defer_direct_cashier_expense_posting(
+			doc,
+			_posting_permission_block_reason(permissions),
+			posting_ready=True,
+		)
 
 	try:
 		result = _post_cashier_expense_to_accounts(doc.name, automatic=True)
@@ -139,18 +262,22 @@ def _post_cashier_expense_to_accounts(
 			frappe.throw(_("The Journal Entry was not submitted."))
 
 		previous_status = str(getattr(doc, "expense_status", None) or "Submitted")
+		result_fields = {
+			"posting_reference_type": POSTING_DOCUMENT_TYPE,
+			"posting_reference": journal.name,
+			"ledger_status": "Posted",
+			"posting_ready": 0,
+			"posting_block_reason": None,
+			"user_message": None,
+		}
+		# Never mutate the state field of an active Frappe Workflow during
+		# accounting finalisation. The Workflow remains the approval truth.
+		if not _get_active_workflow("RetailEdge Cashier Expense"):
+			result_fields["expense_status"] = "Posted"
 		frappe.db.set_value(
 			"RetailEdge Cashier Expense",
 			doc.name,
-			{
-				"posting_reference_type": POSTING_DOCUMENT_TYPE,
-				"posting_reference": journal.name,
-				"ledger_status": "Posted",
-				"expense_status": "Posted",
-				"posting_ready": 0,
-				"posting_block_reason": None,
-				"user_message": None,
-			},
+			result_fields,
 			update_modified=True,
 		)
 		append_cashier_expense_action_log(
@@ -179,32 +306,13 @@ def _post_cashier_expense_to_accounts(
 
 
 def _assert_posting_access(doc, *, settings: dict[str, Any], automatic: bool) -> None:
-	roles = DIRECT_CAPTURE_ROLES if automatic and settings["posting_mode"] == "Direct Posting" else CONTROLLED_POSTING_ROLES
-	if not user_has_any_role(roles=roles):
-		frappe.throw(
-			_("You do not have Cashier Expense accounting-posting access."),
-			frappe.PermissionError,
-		)
-	if not doc.has_permission("write"):
-		frappe.throw(
-			_("You do not have permission to update this Cashier Expense."),
-			frappe.PermissionError,
-		)
-	company = str(getattr(doc, "company", None) or "").strip()
-	branch = str(getattr(doc, "branch", None) or "").strip()
-	if company:
-		scope = get_operational_branch_scope(company, user=frappe.session.user)
-		if scope.get("restricted") and branch not in set(scope.get("allowed_branches") or []):
-			frappe.throw(
-				_("You do not have active Branch access to post this Cashier Expense."),
-				frappe.PermissionError,
-			)
-	for ptype, label in (("read", "read"), ("create", "create"), ("submit", "submit")):
-		if not frappe.has_permission(POSTING_DOCUMENT_TYPE, ptype):
-			frappe.throw(
-				_("You do not have permission to {0} Journal Entries.").format(label),
-				frappe.PermissionError,
-			)
+	permissions = get_cashier_expense_posting_permissions(doc, settings=settings, automatic=automatic)
+	if permissions.get("can_post"):
+		return
+	frappe.throw(
+		_posting_permission_block_reason(permissions),
+		frappe.PermissionError,
+	)
 
 
 def _build_journal_entry(doc, preview: dict[str, Any]):
