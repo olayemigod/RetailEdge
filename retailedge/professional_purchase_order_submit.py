@@ -4,9 +4,11 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate
 
 from retailedge.guided_pricing import resolve_purchase_item_pricing
+from retailedge.guided_purchase_invoice import MAX_ITEMS
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.professional_purchasing import (
 	PURCHASE_ORDER_DOCTYPE,
@@ -188,6 +190,63 @@ def get_purchase_order_submit_preview(purchase_order: str) -> dict[str, Any]:
 	return _build_preview(_get_purchase_order(purchase_order))
 
 
+@frappe.whitelist()
+def search_purchase_order_draft_items(
+	purchase_order: str,
+	txt: str = "",
+	limit: int = 20,
+) -> list[dict[str, Any]]:
+	"""Search permitted purchase Items while editing one existing draft Purchase Order."""
+	doc = _get_purchase_order(purchase_order)
+	_validate_purchase_order_branch(doc)
+	if cint(getattr(doc, "docstatus", 0)) != 0 or not frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Purchase Order."), frappe.PermissionError)
+	filters: dict[str, Any] = {"is_purchase_item": 1, "disabled": 0}
+	supplier = str(getattr(doc, "supplier", "") or "").strip()
+	if supplier:
+		filters["supplier"] = supplier
+	return list(
+		search_link(
+			"Item",
+			str(txt or ""),
+			query="erpnext.controllers.queries.item_query",
+			filters=filters,
+			page_length=max(1, min(cint(limit) or 20, 50)),
+			reference_doctype="Purchase Order Item",
+			link_fieldname="item_code",
+		)
+	)
+
+
+@frappe.whitelist()
+def get_purchase_order_draft_item_pricing(
+	purchase_order: str,
+	item_code: str,
+	qty: float | int = 1,
+) -> dict[str, Any]:
+	"""Resolve buying price for a new row using the saved Purchase Order context."""
+	doc = _get_purchase_order(purchase_order)
+	branch = _validate_purchase_order_branch(doc)
+	if cint(getattr(doc, "docstatus", 0)) != 0 or not frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Purchase Order."), frappe.PermissionError)
+	item_code = str(item_code or "").strip()
+	if not item_code:
+		frappe.throw(_("Item is required."))
+	_assert_read("Item", item_code)
+	return resolve_purchase_item_pricing(
+		item_code=item_code,
+		company=str(getattr(doc, "company", "") or ""),
+		supplier=str(getattr(doc, "supplier", "") or ""),
+		branch=branch,
+		warehouse=str(getattr(doc, "set_warehouse", "") or ""),
+		posting_date=str(getattr(doc, "transaction_date", "") or ""),
+		qty=flt(qty or 1),
+		selected_price_list=str(getattr(doc, "buying_price_list", "") or ""),
+		user=frappe.session.user,
+		requested_price_list=str(getattr(doc, "buying_price_list", "") or ""),
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def update_standard_purchase_order_draft(
 	purchase_order: str,
@@ -248,6 +307,10 @@ def update_standard_purchase_order_draft(
 	requested_rows = values.get("items") or []
 	if not isinstance(requested_rows, list):
 		frappe.throw(_("Purchase Order items are invalid."))
+	if not requested_rows:
+		frappe.throw(_("Add at least one Purchase Order item."))
+	if len(requested_rows) > MAX_ITEMS:
+		frappe.throw(_("A Purchase Order can contain at most {0} items here.").format(MAX_ITEMS))
 	for index, requested in enumerate(requested_rows, start=1):
 		if not isinstance(requested, dict):
 			frappe.throw(_("Purchase Order item row {0} is invalid.").format(index))
