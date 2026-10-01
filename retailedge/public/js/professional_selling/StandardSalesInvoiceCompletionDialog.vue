@@ -26,9 +26,6 @@
 							<strong>Edit draft before completion</strong>
 							<p>Update permitted draft fields here. Customer, Company, Branch, item identity and source links remain protected; Stock Location stays branch-governed.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
-							{{ busy ? "Saving..." : "Save Draft Changes" }}
-						</button>
 					</div>
 					<div class="invoice-editor-grid">
 						<EdgeInput id="invoice-posting-date" v-model="draftPostingDate" label="Posting Date" type="date" :disabled="busy" required />
@@ -126,6 +123,15 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !document?.name" @click="downloadPdf">PDF</button>
 				</div>
 				<div class="invoice-completion-actions">
+					<button
+						v-if="preview?.can_edit && !completedResult"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy || !draftDirty || !draftValid"
+						@click="saveDraftChanges"
+					>
+						{{ busy ? "Saving..." : "Save Draft Changes" }}
+					</button>
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
