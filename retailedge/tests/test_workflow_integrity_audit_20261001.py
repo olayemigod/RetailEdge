@@ -90,6 +90,16 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 			source,
 		)
 
+	def test_operational_reconciliation_readiness_preserves_direction_and_journal_entries(self):
+		source = (APP_ROOT / "bank_matching_operational_reports.py").read_text(encoding="utf-8")
+		self.assertIn("find_journal_entry_candidates_for_bank_transaction", source)
+		self.assertIn('"journal_entry_match"', source)
+		self.assertIn('"bank_direction"', source)
+		self.assertIn('"candidate_docstatus"', source)
+		self.assertIn('loaded.get("bank_context")', source)
+		self.assertIn('loaded.get("candidate_context")', source)
+		self.assertNotIn('"direction": "Inflow",\n\t\t\t"is_reconciled"', source)
+
 	def test_journal_entry_candidate_is_payment_event_but_not_sales_invoice_context(self):
 		candidate = _build_journal_entry_candidate(
 			{
