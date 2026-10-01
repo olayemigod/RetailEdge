@@ -100,8 +100,8 @@
 
 				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
-						<strong>Purchase Invoice submitted</strong>
-						<p>Continue with the next permitted payable workflow without reopening the transaction.</p>
+						<strong>Purchase Invoice is submitted</strong>
+						<p>Review the saved invoice and continue with the next permitted payable workflow.</p>
 					</div>
 					<div class="invoice-next-buttons">
 						<button
