@@ -36,7 +36,7 @@ Canonical shared Service Client keys:
 - `coreedge_service_api_key` — dedicated Service Client integration-user API key;
 - `coreedge_service_api_secret` — dedicated Service Client integration-user API secret;
 - `coreedge_service_allow_insecure_http` — default 0; controlled local QA only;
-- `coreedge_service_timeout_seconds` — 1–120 seconds for this client, default 8.
+- `coreedge_service_timeout_seconds` — 3–60 seconds, default 15.
 
 These are the same credential names used by the V2.4E context-inventory client, so a RetailEdge site does
 not need a second CoreEdge Service Client credential set.
@@ -57,6 +57,9 @@ The API secret is excluded from the configuration object's representation and ne
 HTTPS is required by default. Plain HTTP is rejected unless
 `coreedge_service_allow_insecure_http = 1` is explicitly set for controlled local QA.
 
+The HTTP transport does not follow redirects. This prevents the Service Client Authorization token from being
+forwarded to a redirected endpoint or host.
+
 Example configuration shape:
 
 ```json
@@ -67,7 +70,7 @@ Example configuration shape:
   "coreedge_service_api_key": "<protected-api-key>",
   "coreedge_service_api_secret": "<protected-api-secret>",
   "coreedge_service_allow_insecure_http": 0,
-  "coreedge_service_timeout_seconds": 8
+  "coreedge_service_timeout_seconds": 15
 }
 ```
 
@@ -164,7 +167,8 @@ Coverage includes:
 - HTTPS required by default;
 - explicit insecure-HTTP local-QA override;
 - canonical shared Service Client config;
-- legacy short-key compatibility and canonical-key precedence.
+- legacy short-key compatibility and canonical-key precedence;
+- redirect refusal so Service Client credentials are not forwarded across redirects.
 
 ## Out of scope
 

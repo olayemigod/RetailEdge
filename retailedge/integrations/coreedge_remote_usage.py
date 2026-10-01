@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from urllib.parse import urlparse
 from collections.abc import Callable, Mapping
+from urllib.parse import urlparse
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,8 +15,9 @@ Transport = Callable[[str, dict, dict, int], dict]
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
-_DEFAULT_TIMEOUT_SECONDS = 8
-_MAX_TIMEOUT_SECONDS = 120
+_DEFAULT_TIMEOUT_SECONDS = 15
+_MIN_TIMEOUT_SECONDS = 3
+_MAX_TIMEOUT_SECONDS = 60
 
 _PATH_STATUS = "/api/method/coreedge.api.v1.service_entitlement_usage.get_usage_status"
 _PATH_RESERVE = "/api/method/coreedge.api.v1.service_entitlement_usage.reserve_usage"
@@ -45,6 +46,11 @@ class CoreEdgeRemoteUsageResponseInvalid(CoreEdgeRemoteUsageError):
 	pass
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+	def redirect_request(self, req, fp, code, msg, headers, newurl):
+		return None
+
+
 def _parse_bool(value: Any, default: bool = False) -> bool:
 	if value is None:
 		return default
@@ -65,7 +71,7 @@ def _parse_timeout(value: Any) -> int:
 		parsed = int(value)
 	except (TypeError, ValueError):
 		return _DEFAULT_TIMEOUT_SECONDS
-	if 1 <= parsed <= _MAX_TIMEOUT_SECONDS:
+	if _MIN_TIMEOUT_SECONDS <= parsed <= _MAX_TIMEOUT_SECONDS:
 		return parsed
 	return _DEFAULT_TIMEOUT_SECONDS
 
@@ -346,8 +352,9 @@ class CoreEdgeRemoteUsageClient:
 			headers=headers,
 			method="POST",
 		)
+		opener = urllib.request.build_opener(_NoRedirectHandler())
 		try:
-			with urllib.request.urlopen(request, timeout=timeout) as response:
+			with opener.open(request, timeout=timeout) as response:
 				body = response.read().decode("utf-8")
 		except urllib.error.HTTPError as exc:
 			if exc.code in {401, 403}:
