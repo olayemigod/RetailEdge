@@ -1120,6 +1120,23 @@ export default {
 				this.workflowBusy = false;
 			}
 		},
+		async refreshSubmittedSalesDocumentState() {
+			if (!this.savedDocument?.name) return;
+			try {
+				const [preview, resolved] = await Promise.all([
+					callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "standard" }, "GET"),
+					callMethod(SALES_ACTIONS_METHOD, { document: "sales-invoice", name: this.savedDocument.name }, "GET"),
+				]);
+				this.savedDocument = {
+					...this.savedDocument,
+					...preview,
+					doctype: "Sales Invoice",
+					next_actions: resolved?.actions || [],
+				};
+			} catch (error) {
+				this.workflowError = errorMessage(error, "Sales Invoice was completed, but its next actions could not be refreshed.");
+			}
+		},
 		async submitSavedDocument() {
 			if (!this.savedDocument?.name || !this.savedDocument?.can_submit || this.workflowBusy) return;
 			this.workflowBusy = true;
@@ -1132,6 +1149,7 @@ export default {
 				}, "POST");
 				this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 				this.editingSavedDraft = false;
+				await this.refreshSubmittedSalesDocumentState();
 				frappe.show_alert?.({ message: `Sales Invoice ${result.name || this.savedDocument.name} submitted`, indicator: "green" }, 7);
 			} catch (error) {
 				this.workflowError = errorMessage(error, "Unable to submit this Sales Invoice.");
@@ -1154,6 +1172,7 @@ export default {
 				if (Number(result?.docstatus || 0) === 1) {
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 					this.editingSavedDraft = false;
+					await this.refreshSubmittedSalesDocumentState();
 					frappe.show_alert?.({ message: `Sales Invoice ${result.name || this.savedDocument.name} submitted through Workflow`, indicator: "green" }, 7);
 					return;
 				}
