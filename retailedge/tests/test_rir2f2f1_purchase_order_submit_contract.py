@@ -51,6 +51,7 @@ def test_draft_purchase_order_edit_is_bounded_stale_safe_and_erpnext_validated()
 	assert "Save Draft Changes" in overlay
 	assert "draftDirty" in overlay
 	assert "Discard unsaved Purchase Order changes?" in overlay
+	assert "confirmAboveEdgeModal" in overlay
 
 
 def test_standard_submit_blocks_workflows_and_advanced_po_cases():
