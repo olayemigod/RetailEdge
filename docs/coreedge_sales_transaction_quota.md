@@ -206,10 +206,14 @@ When the integration is enabled, the default is fail closed:
 If CoreEdge cannot be reached before reservation, submission is blocked because RetailEdge cannot prove
 capacity.
 
-An operator may explicitly configure fail-open behavior.
+An operator may explicitly configure fail-open behavior for a genuine temporary CoreEdge availability/network
+failure only.
 
-Fail-open is a deliberate commercial-risk setting. The sale proceeds without a CoreEdge reservation, but
-RetailEdge now writes a durable local `Needs Review` quota operation with reason
+Authentication failure, missing/invalid remote configuration, or an invalid CoreEdge response always blocks
+submission even when fail-open is configured.
+
+When the permitted availability-only fail-open path is used, the sale proceeds without a CoreEdge reservation,
+but RetailEdge writes a durable local `Needs Review` quota operation with reason
 `FAIL_OPEN_UNRESERVED`.
 
 That record commits with the sale and gives operators a reconciliation queue instead of silently losing the
@@ -298,7 +302,8 @@ Coverage includes:
 - after-rollback release registration;
 - explicit central denial;
 - fail-closed outage handling;
-- explicit fail-open outage handling;
+- explicit availability-only fail-open outage handling;
+- authentication failure always blocking;
 - durable fail-open `Needs Review` audit;
 - stable local operation identity;
 - direct operation creation blocking;
