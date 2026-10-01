@@ -152,10 +152,21 @@ def resolve_price_list_context(
 
 	if default_candidate:
 		context = _price_context(default_name, mode=mode, source=default_source)
+		allow_rate_change = bool(default_candidate.get("allow_rate_change", True))
+		pos_profile = str(default_candidate.get("pos_profile") or "").strip()
 		context.update(
 			{
-				"pos_profile": default_candidate.get("pos_profile") or "",
-				"allow_rate_change": bool(default_candidate.get("allow_rate_change", True)),
+				"pos_profile": pos_profile,
+				"allow_rate_change": allow_rate_change,
+				"rate_change_lock_reason": (
+					""
+					if allow_rate_change
+					else (
+						_("Selling rate editing is disabled by POS Profile {0}.").format(frappe.bold(pos_profile))
+						if default_source == "pos_profile" and pos_profile
+						else _("Rate editing is disabled by the current Price List Governance source.")
+					)
+				),
 				"branch_default": (
 					default_name if default_source == "branch_default" else _branch_default_price_list(
 						mode=mode, company=company, branch=branch, user=user
@@ -587,6 +598,13 @@ def resolve_sales_item_pricing(
 			context["pos_profile"] = str(pos.get("name") or "").strip()
 			context["allow_rate_change"] = bool(pos.get("allow_rate_change"))
 			context["rate_policy_source"] = "pos_profile"
+			context["rate_change_lock_reason"] = (
+				""
+				if context["allow_rate_change"]
+				else _("Selling rate editing is disabled by POS Profile {0}.").format(
+					frappe.bold(str(pos.get("name") or "").strip())
+				)
+			)
 	if context.get("selection_required"):
 		frappe.throw(_("Choose a Selling Price List before pricing items."))
 	details = _erpnext_item_details(
@@ -880,6 +898,7 @@ def _price_context(name: str, *, mode: PriceMode, source: str) -> dict[str, Any]
 		"mode": mode,
 		"pos_profile": "",
 		"allow_rate_change": True,
+		"rate_change_lock_reason": "",
 	}
 
 
