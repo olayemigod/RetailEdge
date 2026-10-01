@@ -21,7 +21,7 @@
 			<div v-if="submitted" class="receipt-preview__ready">
 				<strong>Purchase Receipt {{ submitted.name }} submitted.</strong>
 				<span>ERPNext has posted the receipt stock movement. Continue to supplier billing when applicable.</span>
-				<div v-if="submitted.next_actions?.length" class="receipt-preview__next-actions">
+				<div class="receipt-preview__next-actions">
 					<button
 						v-for="action in submitted.next_actions"
 						:key="action.value"
@@ -32,6 +32,7 @@
 					>
 						{{ action.label }}
 					</button>
+					<button type="button" class="edge-button" @click="openDocumentOutput">Print & Share</button>
 				</div>
 			</div>
 			<div v-else-if="preview.blockers?.length" class="receipt-preview__warning" role="alert">
@@ -221,6 +222,10 @@ export default {
 			const handoff = result?.landed_cost_handoff || {};
 			if (!handoff.available || handoff.source_type !== "purchase_receipt" || !handoff.source_name) return;
 			window.dispatchEvent(new CustomEvent(LANDED_COST_HANDOFF_EVENT, { detail: handoff }));
+		},
+		openDocumentOutput() {
+			if (!this.submitted?.name) return;
+			window.retailedge?.openDocumentOutputSharing?.("purchase-receipt", this.submitted.name);
 		},
 		async runNextAction(action) {
 			if (!this.submitted?.name || !action || this.posting) return;
