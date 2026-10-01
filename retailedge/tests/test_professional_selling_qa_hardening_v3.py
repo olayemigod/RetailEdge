@@ -59,8 +59,7 @@ def test_submitted_rows_have_operational_view_and_print_share_while_drafts_keep_
 		assert contract in records
 	assert 'if (action === "view") { this.openRecordPreview(document, row); return; }' in workspace
 	assert 'if (action === "output") { this.openDocumentOutput(document, row); return; }' in workspace
-	assert 'mode: "share"' in workspace
-	assert 'frappe.set_route("document-output-sharing")' in workspace
+	assert "openDocumentOutputSharing" in workspace
 	assert 'this.openDocumentOutput(document, row, "view")' not in workspace
 	assert "Document Output & Sharing" in output
 
