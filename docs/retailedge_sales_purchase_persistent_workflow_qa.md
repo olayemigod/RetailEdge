@@ -215,6 +215,8 @@ Verify all of the following fail closed without losing the saved ERPNext draft:
 1. Open **Payment Management** and confirm historical records are not rendered inline below the transaction workspace.
 2. Select Company, Branch and Customer, then click **Payment History**.
 3. Confirm routing to `/app/payment-history` and that the Company/Branch/Customer scope is carried into the history page.
+4. Click **Review** on a payment and confirm the Payment Review opens immediately in an EdgeSuite popup rather than below the history table.
+5. Confirm Submit/Advanced/Close actions remain in the popup footer and submitted/cancelled Payment Entries stay read-only.
 4. Return to Payment Management and create a Customer Advance using a Bank mode without Reference No.
 5. Confirm the frontend marks Reference No/Reference Date as required and blocks creation with a friendly message; no traceback should be shown.
 6. Enter a reference and create the draft.
@@ -227,8 +229,10 @@ Verify all of the following fail closed without losing the saved ERPNext draft:
 1. Open **Professional Purchasing** and click a draft Purchase Order row.
 2. Confirm the review overlay exposes **Edit draft before completion** when the user has write permission.
 3. Change Order Date, Terms, Qty, Rate or Required By date and confirm **Save Draft Changes** appears in the footer.
-4. Confirm Company, Supplier, Branch, Buying Price List, Stock Location and item identity are not editable from this bounded editor.
-5. Save and confirm ERPNext recalculates totals and the Purchase Order queue refreshes.
+4. Click **Add Item**, search only permitted purchase Items, select an Item and confirm buying rate resolves in the saved Purchase Order context.
+5. Confirm the new row inherits the governed Supplier, Branch, Buying Price List and receiving Stock Location. Existing item identity must remain protected.
+6. Confirm Company, Supplier, Branch, Buying Price List and Stock Location are not editable from this bounded editor.
+7. Save and confirm ERPNext adds the new line, recalculates totals and refreshes the Purchase Order queue.
 6. Change a value without saving and attempt Submit/Workflow; confirm completion remains blocked until the draft is saved.
 7. Close with unsaved changes and confirm the discard warning appears.
 8. Open a submitted Purchase Order and confirm it is read-only in this surface.
