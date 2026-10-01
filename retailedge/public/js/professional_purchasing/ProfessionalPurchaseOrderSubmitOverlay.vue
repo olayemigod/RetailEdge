@@ -287,6 +287,7 @@ export default {
 				}, "POST");
 				this.preview = await callMethod(PREVIEW_METHOD, { purchase_order: this.purchaseOrder });
 				this.submitted = Number(result.docstatus || 0) === 1 ? result : null;
+				this.hydrateDraft(this.preview);
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 			} catch (error) { this.error = errorMessage(error, "Unable to apply this Purchase Order workflow action."); }
 			finally { this.submitting = false; }
