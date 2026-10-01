@@ -114,6 +114,15 @@
 			<div class="po-submit-review__footer">
 				<div class="po-submit-review__footer-actions">
 					<button
+						v-if="nativeDeskAllowed && purchaseOrder"
+						type="button"
+						class="edge-button"
+						:disabled="submitting || saving"
+						@click="openAdvanced"
+					>
+						Advanced: ERPNext
+					</button>
+					<button
 						v-if="preview?.can_edit && !submitted"
 						type="button"
 						class="edge-button"
@@ -195,6 +204,10 @@ export default {
 		};
 	},
 	computed: {
+		nativeDeskAllowed() {
+			const access = frappe.boot?.edgesuite_ui_access || {};
+			return String(access.mode || "").trim() !== "edgesuite_only" && Boolean(access.can_use_native_desk);
+		},
 		draftDirty() {
 			if (!this.preview?.can_edit || this.submitted) return false;
 			return draftSnapshot(this.draftTransactionDate, this.draftScheduleDate, this.draftTerms, this.draftItems) !== this.draftBaseline;
@@ -331,6 +344,10 @@ export default {
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 			} catch (error) { this.error = errorMessage(error, "Unable to submit this Purchase Order."); }
 			finally { this.submitting = false; }
+		},
+		openAdvanced() {
+			if (!this.nativeDeskAllowed || !this.purchaseOrder) return;
+			frappe.set_route("Form", "Purchase Order", this.purchaseOrder);
 		},
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatMoney(value, currency) { try { return format_currency(Number(value || 0), currency || frappe.boot?.sysdefaults?.currency || ""); } catch (_error) { return `${currency || ""} ${Number(value || 0).toLocaleString()}`.trim(); } },
