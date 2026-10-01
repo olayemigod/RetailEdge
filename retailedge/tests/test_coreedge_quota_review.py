@@ -13,6 +13,8 @@ from frappe.utils import add_to_date, now_datetime
 from retailedge.coreedge_quota_review import (
 	_build_filters,
 	_review_reason,
+	get_quota_review_history,
+	list_quota_operations,
 	reconcile_unreserved_quota_operation,
 	retry_quota_operation,
 )
@@ -398,6 +400,18 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
 
+	def test_review_list_returns_permission_aware_summary_and_pagination(self):
+		operation = self._make_needs_review("list-summary")
+		result = list_quota_operations(
+			filters={"status": "All"},
+			page=1,
+			page_size=25,
+		)
+		self.assertEqual(result["pagination"]["total_rows"], 1)
+		self.assertEqual(result["summary"]["needs_review"], 1)
+		self.assertEqual(result["summary"]["total"], 1)
+		self.assertEqual(result["rows"][0]["name"], operation.name)
+
 	def test_review_event_is_engine_created_and_append_only(self):
 		operation = self._make_needs_review("event-history")
 		event = frappe.get_doc(
@@ -419,6 +433,10 @@ class QuotaReviewLifecycleTests(FrappeTestCase):
 
 		event.flags.allow_retailedge_quota_review_event_create = True
 		event.insert(ignore_permissions=True)
+		history = get_quota_review_history(operation.name)
+		self.assertEqual(len(history["events"]), 1)
+		self.assertEqual(history["events"][0]["action"], "Attempt Reconciliation")
+
 		event.message = "Attempted rewrite"
 		with self.assertRaises(frappe.PermissionError):
 			event.save(ignore_permissions=True)
