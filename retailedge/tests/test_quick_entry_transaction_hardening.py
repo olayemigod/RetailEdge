@@ -292,7 +292,7 @@ def test_business_hub_quick_sale_and_purchase_handoff_saved_drafts_to_persistent
 			"create-delivery-note",
 			"create-return-credit-note",
 			"receive-customer-payment",
-			"document-output-sharing",
+			"openDocumentOutputSharing",
 		)),
 		(purchase, (
 			"Workflow & submission",
@@ -300,7 +300,7 @@ def test_business_hub_quick_sale_and_purchase_handoff_saved_drafts_to_persistent
 			"apply_standard_purchase_invoice_workflow_action",
 			"pay-supplier",
 			"supplier-payables",
-			"document-output-sharing",
+			"openDocumentOutputSharing",
 		)),
 	):
 		for contract in contracts:
