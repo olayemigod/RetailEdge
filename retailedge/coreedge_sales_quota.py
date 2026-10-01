@@ -110,6 +110,20 @@ def before_submit_sales_transaction_quota(doc, method=None):
 		)
 	except CoreEdgeRemoteUsageError as exc:
 		_handle_remote_unavailable(config, doc, exc)
+		_insert_quota_operation(
+			doc=doc,
+			operation_key=operation_key,
+			entitlement_key=config.entitlement_key,
+			reservation_reference=None,
+			reservation_expires_on=None,
+			reserve_idempotency_key=reserve_key,
+			finalize_idempotency_key=finalize_key,
+			release_idempotency_key=release_key,
+			warning=False,
+			reason_code="FAIL_OPEN_UNRESERVED",
+			remote_message=_safe_error(exc),
+			status="Needs Review",
+		)
 		return
 
 	data = response.get("data") or {}
@@ -306,7 +320,7 @@ def _insert_quota_operation(
 	doc,
 	operation_key: str,
 	entitlement_key: str,
-	reservation_reference: str,
+	reservation_reference: str | None,
 	reservation_expires_on,
 	reserve_idempotency_key: str,
 	finalize_idempotency_key: str,
@@ -314,12 +328,13 @@ def _insert_quota_operation(
 	warning: bool,
 	reason_code,
 	remote_message,
+	status: str = "Pending Finalize",
 ):
 	operation = frappe.get_doc(
 		{
 			"doctype": OPERATION_DOCTYPE,
 			"operation_key": operation_key,
-			"status": "Pending Finalize",
+			"status": status,
 			"source_doctype": doc.doctype,
 			"source_name": doc.name,
 			"company": getattr(doc, "company", None),
