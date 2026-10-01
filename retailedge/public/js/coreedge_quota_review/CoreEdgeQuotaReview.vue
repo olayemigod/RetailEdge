@@ -95,11 +95,21 @@
 				/>
 				<label class="quota-input-field">
 					<span>From date</span>
-					<input class="edge-input" type="date" :value="filters.from_date || ''" @input="setFilter('from_date', $event.target.value)" />
+					<input
+						class="edge-input"
+						type="date"
+						:value="filters.from_date || ''"
+						@input="setFilter('from_date', $event.target.value)"
+					/>
 				</label>
 				<label class="quota-input-field">
 					<span>To date</span>
-					<input class="edge-input" type="date" :value="filters.to_date || ''" @input="setFilter('to_date', $event.target.value)" />
+					<input
+						class="edge-input"
+						type="date"
+						:value="filters.to_date || ''"
+						@input="setFilter('to_date', $event.target.value)"
+					/>
 				</label>
 				<label class="quota-input-field quota-input-field--search">
 					<span>Search</span>
@@ -235,11 +245,26 @@
 			</section>
 
 			<footer class="quota-review-pagination">
-				<span>{{ pagination.total_rows || 0 }} matching operation{{ Number(pagination.total_rows || 0) === 1 ? "" : "s" }}</span>
+				<span>
+					{{ pagination.total_rows || 0 }} matching
+					operation{{ Number(pagination.total_rows || 0) === 1 ? "" : "s" }}
+				</span>
 				<div>
-					<button class="edge-button edge-button--secondary" :disabled="pagination.page <= 1 || loading" @click="goToPage(pagination.page - 1)">Previous</button>
+					<button
+						class="edge-button edge-button--secondary"
+						:disabled="pagination.page <= 1 || loading"
+						@click="goToPage(pagination.page - 1)"
+					>
+						Previous
+					</button>
 					<span>Page {{ pagination.page || 1 }} of {{ pagination.total_pages || 1 }}</span>
-					<button class="edge-button edge-button--secondary" :disabled="pagination.page >= pagination.total_pages || loading" @click="goToPage(pagination.page + 1)">Next</button>
+					<button
+						class="edge-button edge-button--secondary"
+						:disabled="pagination.page >= pagination.total_pages || loading"
+						@click="goToPage(pagination.page + 1)"
+					>
+						Next
+					</button>
 				</div>
 			</footer>
 		</div>
@@ -524,28 +549,82 @@ export default {
 .quota-review-header { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
 .quota-review-header h2 { margin:2px 0 6px; }
 .quota-review-header p { margin:0; color:var(--edge-text-muted,#667085); max-width:780px; }
-.quota-review-eyebrow { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--edge-text-muted,#667085); }
-.quota-review-alert { padding:12px 14px; border:1px solid var(--edge-border,var(--border-color)); border-radius:10px; background:var(--edge-surface,var(--card-bg)); }
+.quota-review-eyebrow {
+	font-size:.75rem;
+	font-weight:700;
+	text-transform:uppercase;
+	letter-spacing:.08em;
+	color:var(--edge-text-muted,#667085);
+}
+.quota-review-alert {
+	padding:12px 14px;
+	border:1px solid var(--edge-border,var(--border-color));
+	border-radius:10px;
+	background:var(--edge-surface,var(--card-bg));
+}
 .quota-review-alert--danger { border-color:var(--red-300,#fca5a5); }
 .quota-review-status { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.quota-review-status > div { padding:12px 14px; border:1px solid var(--edge-border,var(--border-color)); border-radius:10px; display:grid; gap:4px; }
+.quota-review-status > div {
+	padding:12px 14px;
+	border:1px solid var(--edge-border,var(--border-color));
+	border-radius:10px;
+	display:grid;
+	gap:4px;
+}
 .quota-review-status span { color:var(--edge-text-muted,#667085); }
 .quota-review-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-.quota-summary-card { border:1px solid var(--edge-border,var(--border-color)); border-radius:12px; padding:14px; background:var(--edge-surface,var(--card-bg)); display:grid; gap:6px; }
+.quota-summary-card {
+	border:1px solid var(--edge-border,var(--border-color));
+	border-radius:12px;
+	padding:14px;
+	background:var(--edge-surface,var(--card-bg));
+	display:grid;
+	gap:6px;
+}
 .quota-summary-card span { color:var(--edge-text-muted,#667085); font-size:.8rem; }
 .quota-summary-card strong { font-size:1.45rem; }
 .quota-review-filters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }
 .quota-input-field { display:grid; gap:6px; min-width:0; }
 .quota-input-field > span { font-size:.78rem; font-weight:600; color:var(--edge-text-muted,#667085); }
 .quota-input-field--search { grid-column:span 2; }
-.quota-review-table-card { border:1px solid var(--edge-border,var(--border-color)); border-radius:12px; background:var(--edge-surface,var(--card-bg)); overflow:hidden; }
+.quota-review-table-card {
+	border:1px solid var(--edge-border,var(--border-color));
+	border-radius:12px;
+	background:var(--edge-surface,var(--card-bg));
+	overflow:hidden;
+}
 .quota-review-table-wrap { overflow:auto; }
 .quota-review-table { width:100%; border-collapse:collapse; min-width:1200px; }
-.quota-review-table th,.quota-review-table td { padding:11px 12px; border-bottom:1px solid var(--edge-border,var(--border-color)); text-align:left; vertical-align:top; }
-.quota-review-table th { font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:var(--edge-text-muted,#667085); background:var(--edge-surface-subtle,var(--subtle-fg,#f8fafc)); }
+.quota-review-table th,.quota-review-table td {
+	padding:11px 12px;
+	border-bottom:1px solid var(--edge-border,var(--border-color));
+	text-align:left;
+	vertical-align:top;
+}
+.quota-review-table th {
+	font-size:.74rem;
+	text-transform:uppercase;
+	letter-spacing:.04em;
+	color:var(--edge-text-muted,#667085);
+	background:var(--edge-surface-subtle,var(--subtle-fg,#f8fafc));
+}
 .quota-review-table td { font-size:.86rem; }
-.quota-review-table td small { display:block; margin-top:4px; color:var(--edge-text-muted,#667085); max-width:260px; white-space:normal; }
-.quota-link { border:0; padding:0; background:transparent; color:var(--primary,#2563eb); cursor:pointer; font-weight:600; text-align:left; }
+.quota-review-table td small {
+	display:block;
+	margin-top:4px;
+	color:var(--edge-text-muted,#667085);
+	max-width:260px;
+	white-space:normal;
+}
+.quota-link {
+	border:0;
+	padding:0;
+	background:transparent;
+	color:var(--primary,#2563eb);
+	cursor:pointer;
+	font-weight:600;
+	text-align:left;
+}
 .quota-actions { display:flex; flex-wrap:wrap; gap:6px; min-width:190px; }
 .quota-manual {
 	font-size:.76rem;
@@ -570,14 +649,40 @@ export default {
 	color:var(--edge-text-muted,#667085);
 	font-size:.74rem;
 }
-.quota-status { display:inline-flex; padding:4px 8px; border-radius:999px; font-size:.75rem; font-weight:700; white-space:nowrap; }
+.quota-status {
+	display:inline-flex;
+	padding:4px 8px;
+	border-radius:999px;
+	font-size:.75rem;
+	font-weight:700;
+	white-space:nowrap;
+}
 .quota-status--review { background:rgba(220,38,38,.1); }
 .quota-status--pending { background:rgba(217,119,6,.12); }
 .quota-status--finalized { background:rgba(22,163,74,.1); }
-.quota-review-empty { padding:36px 20px; display:grid; gap:6px; text-align:center; color:var(--edge-text-muted,#667085); }
-.quota-review-pagination { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--edge-text-muted,#667085); }
+.quota-review-empty {
+	padding:36px 20px;
+	display:grid;
+	gap:6px;
+	text-align:center;
+	color:var(--edge-text-muted,#667085);
+}
+.quota-review-pagination {
+	display:flex;
+	justify-content:space-between;
+	align-items:center;
+	gap:12px;
+	color:var(--edge-text-muted,#667085);
+}
 .quota-review-pagination > div { display:flex; align-items:center; gap:10px; }
-.quota-review-fallback { margin:20px; padding:16px; border:1px solid var(--edge-border,#d9d9d9); border-radius:10px; display:grid; gap:6px; }
+.quota-review-fallback {
+	margin:20px;
+	padding:16px;
+	border:1px solid var(--edge-border,#d9d9d9);
+	border-radius:10px;
+	display:grid;
+	gap:6px;
+}
 @media (max-width:1000px) {
 	.quota-review-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
 	.quota-review-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
