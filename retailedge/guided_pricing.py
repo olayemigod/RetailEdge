@@ -162,7 +162,7 @@ def resolve_price_list_context(
 					""
 					if allow_rate_change
 					else (
-						_("Selling rate editing is disabled by POS Profile {0}.").format(frappe.bold(pos_profile))
+						_("Selling rate editing is disabled by POS Profile {0}.").format(pos_profile)
 						if default_source == "pos_profile" and pos_profile
 						else _("Rate editing is disabled by the current Price List Governance source.")
 					)
@@ -602,7 +602,7 @@ def resolve_sales_item_pricing(
 				""
 				if context["allow_rate_change"]
 				else _("Selling rate editing is disabled by POS Profile {0}.").format(
-					frappe.bold(str(pos.get("name") or "").strip())
+					str(pos.get("name") or "").strip()
 				)
 			)
 	if context.get("selection_required"):
