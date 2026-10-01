@@ -46,6 +46,8 @@
   "cashier_expense_posting_tab",
   "cashier_expense_ledger_controls_section",
   "cashier_expense_posting_document_type",
+  "cashier_expense_posting_roles",
+  "cashier_expense_posting_workflow_state",
   "default_cashier_expense_payable_account",
   "require_cashier_expense_approval_before_posting",
   "allow_rejected_cashier_expense_posting",
@@ -406,11 +408,27 @@
   {
    "default": "Journal Entry",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Accounting document type used by the configured cashier expense posting workflow.",
+   "description": "Cashier Expenses post through ERPNext Journal Entry. Payment Entry is not used for expense accounting because the expense and cash/bank credit must post as one balanced accounting voucher.",
    "fieldname": "cashier_expense_posting_document_type",
    "fieldtype": "Select",
    "label": "Cashier Expense Posting Document Type",
-   "options": "Journal Entry\nPayment Entry"
+   "options": "Journal Entry"
+  },
+  {
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "description": "Roles allowed to create and submit the accounting Journal Entry for Cashier Expenses. Leave empty to preserve the legacy RetailEdge role policy. Include the Cashier role only when the merchant intentionally allows cashier posting.",
+   "fieldname": "cashier_expense_posting_roles",
+   "fieldtype": "Table",
+   "label": "Roles Allowed to Post Cashier Expenses",
+   "options": "RetailEdge Cashier Expense Posting Role"
+  },
+  {
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting && doc.cashier_expense_posting_mode == 'Controlled Posting'",
+   "description": "When an active Frappe Workflow controls Cashier Expense, accounting posting is allowed only after the expense reaches this submitted Workflow State. The Workflow may contain any number of merchant-defined approvals.",
+   "fieldname": "cashier_expense_posting_workflow_state",
+   "fieldtype": "Link",
+   "label": "Workflow State Allowed for Accounting Posting",
+   "options": "Workflow State"
   },
   {
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
@@ -425,7 +443,10 @@
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
    "fieldname": "require_cashier_expense_approval_before_posting",
    "fieldtype": "Check",
-   "label": "Require Approval Before Posting"
+   "label": "Require Approval Before Posting",
+   "hidden": 1,
+   "read_only": 1,
+   "description": "Legacy compatibility field synchronized from Cashier Expense Posting Mode."
   },
   {
    "default": "0",
