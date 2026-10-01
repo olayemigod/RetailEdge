@@ -540,6 +540,8 @@ def _readiness_for_match_row(match_row):
 		return READINESS_NEEDS_REVIEW, "Decision is not confirmed yet."
 	if match_row.get("is_reconciled"):
 		return READINESS_ALREADY_RECONCILED, "Bank Transaction already appears reconciled/settled."
+	if match_row.get("candidate_clearance_date"):
+		return READINESS_ALREADY_RECONCILED, "The candidate accounting voucher already has a clearance date."
 	if cstr(match_row.get("candidate_category")).strip() not in {"payment_entry_match", "journal_entry_match", "invoice_payment_row_match", "pos_payment_match"}:
 		return READINESS_NOT_READY, "No bank-matchable payment event found."
 	candidate_docstatus = match_row.get("candidate_docstatus")
@@ -1600,6 +1602,8 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 			fields.append("mode_of_payment")
 		if has_field("Payment Entry", "reference_no"):
 			fields.append("reference_no")
+		if has_field("Payment Entry", "clearance_date"):
+			fields.append("clearance_date")
 		if has_field("Payment Entry", "company"):
 			fields.append("company")
 		if has_field("Payment Entry", "retailedge_branch"):
@@ -1635,6 +1639,8 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 	journal_entry_map = {}
 	if journal_entry_names and has_doctype("Journal Entry"):
 		fields = ["name", "posting_date", "docstatus"]
+		if has_field("Journal Entry", "clearance_date"):
+			fields.append("clearance_date")
 		if has_field("Journal Entry", "retailedge_branch"):
 			fields.append("retailedge_branch")
 		elif has_field("Journal Entry", "branch"):
@@ -1681,6 +1687,7 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 				"party": payload.get("party") or row.get("party") or row.get("customer"),
 				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date"),
 				"candidate_docstatus": payload.get("docstatus"),
+				"candidate_clearance_date": payload.get("clearance_date"),
 			}
 			continue
 		if cstr(row.get("suggested_document_type")).strip() == "Journal Entry":
@@ -1695,6 +1702,7 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 				"party": row.get("party") or row.get("customer"),
 				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date") or details.get("posting_date"),
 				"candidate_docstatus": payload.get("docstatus"),
+				"candidate_clearance_date": payload.get("clearance_date"),
 			}
 			continue
 		invoice_name = cstr(row.get("sales_invoice") or row.get("suggested_document")).strip()
@@ -1821,6 +1829,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 		combined["branch_match_available"] = details.get("branch_match_available")
 		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date") or details.get("posting_date")
 		combined["candidate_docstatus"] = context.get("candidate_docstatus")
+		combined["candidate_clearance_date"] = context.get("candidate_clearance_date")
 		combined["bank_direction"] = bank_direction
 		readiness, reason = _readiness_for_match_row(combined)
 		if not _report_boolean(filters.get("include_rejected_cancelled"), 0) and cstr(row.get("decision_status")).strip() in {"Rejected", "Cancelled"}:
