@@ -29,7 +29,17 @@
   "finalized_on",
   "last_attempt_on",
   "attempt_count",
-  "last_error"
+  "last_error",
+  "reconciliation_section",
+  "reconciliation_reference",
+  "reconciliation_status",
+  "reconciliation_result_code",
+  "reconciliation_reason",
+  "reconciliation_attempt_count",
+  "last_reconciliation_attempt_on",
+  "reconciled_on",
+  "reconciled_by",
+  "reconciliation_last_error"
  ],
  "fields": [
   {
@@ -54,7 +64,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "Pending Finalize\nFinalized\nNeeds Review",
+   "options": "Pending Finalize\nFinalized\nNeeds Review\nReconciled",
    "reqd": 1
   },
   {
@@ -211,6 +221,69 @@
    "fieldtype": "Small Text",
    "label": "Last Error",
    "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_section",
+   "fieldtype": "Section Break",
+   "label": "Usage Reconciliation"
+  },
+  {
+   "fieldname": "reconciliation_reference",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Reconciliation Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_status",
+   "fieldtype": "Data",
+   "label": "Reconciliation Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_result_code",
+   "fieldtype": "Data",
+   "label": "Reconciliation Result Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_reason",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Reason",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "reconciliation_attempt_count",
+   "fieldtype": "Int",
+   "label": "Reconciliation Attempts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_reconciliation_attempt_on",
+   "fieldtype": "Datetime",
+   "label": "Last Reconciliation Attempt",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciled_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Reconciled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciled_by",
+   "fieldtype": "Link",
+   "label": "Reconciled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_last_error",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Last Error",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
@@ -252,7 +325,7 @@
    "role": "RetailEdgeAuditor"
   }
  ],
- "search_fields": "operation_key,status,source_doctype,source_name,company,branch,entitlement_key,reservation_reference",
+ "search_fields": "operation_key,status,source_doctype,source_name,company,branch,entitlement_key,reservation_reference,reconciliation_reference,reconciliation_result_code",
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": [],
