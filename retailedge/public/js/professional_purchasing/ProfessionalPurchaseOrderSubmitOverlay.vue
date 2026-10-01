@@ -139,6 +139,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_submit_preview";
 const SUBMIT_METHOD = "retailedge.professional_purchase_order_submit.submit_standard_purchase_order";
 const UPDATE_METHOD = "retailedge.professional_purchase_order_submit.update_standard_purchase_order_draft";
@@ -343,7 +345,7 @@ export default {
 		close() {
 			if (this.loading || this.submitting || this.saving) return;
 			if (this.draftDirty) {
-				frappe.confirm(
+				confirmAboveEdgeModal(
 					__("Discard unsaved Purchase Order changes?"),
 					() => this.forceClose(),
 				);
