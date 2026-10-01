@@ -65,6 +65,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 const HISTORY_METHOD = "retailedge.professional_purchase_receipt.get_professional_purchase_receipt_history";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const OPEN_EVENT = "retailedge-open-professional-purchase-receipt-history";
@@ -165,7 +166,7 @@ export default {
 		},
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatQty(value) { const number = Number(value || 0); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 3 }) : "0"; },
-		openDocumentOutput(name) { if (name) window.retailedge?.openDocumentOutputSharing?.("purchase-receipt", name); },
+		openDocumentOutput(name) { if (name) openDocumentOutputSharing("purchase-receipt", name); },
 		openAdvancedReceipt(name) { if (this.nativeFallbackEnabled && name) frappe.set_route("Form", "Purchase Receipt", name); },
 		openAdvancedList() { if (this.nativeFallbackEnabled) frappe.set_route("List", "Purchase Receipt"); },
 		close() { if (!this.loading) { this.open = false; this.error = ""; } },
