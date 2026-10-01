@@ -21,13 +21,36 @@ def _function_source(source: str, name: str, next_name: str | None = None) -> st
 
 def test_submit_preview_is_read_only_and_exposes_blockers():
 	source = _read(BACKEND)
-	preview = _function_source(source, "get_purchase_order_submit_preview", "submit_standard_purchase_order")
+	preview = _function_source(source, "get_purchase_order_submit_preview", "update_standard_purchase_order_draft")
 	assert '"persistence": "none"' in preview
 	assert '"blockers": blockers' in preview
 	assert '"can_submit": not blockers' in preview
 	assert "doc.submit(" not in preview
 	assert "doc.save(" not in preview
 	assert "frappe.db.commit" not in preview
+
+
+def test_draft_purchase_order_edit_is_bounded_stale_safe_and_erpnext_validated():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	update = _function_source(source, "update_standard_purchase_order_draft", "apply_standard_purchase_order_workflow_action")
+	assert '@frappe.whitelist(methods=["POST"])' in source
+	assert "FOR UPDATE" in update
+	assert "expected_purchase_order_modified" in update
+	assert "changed after it was opened" in update
+	assert 'frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc)' in update
+	assert "doc.transaction_date = transaction_date" in update
+	assert "row.qty = qty" in update
+	assert "row.rate = rate" in update
+	assert "row.schedule_date = row_schedule" in update
+	assert "doc.save()" in update
+	assert "ignore_permissions=True" not in update
+	assert "Company, Supplier, Branch, Stock Location, Buying Price List and item identity" in update
+	assert "update_standard_purchase_order_draft" in overlay
+	assert "Edit draft before completion" in overlay
+	assert "Save Draft Changes" in overlay
+	assert "draftDirty" in overlay
+	assert "Discard unsaved Purchase Order changes?" in overlay
 
 
 def test_standard_submit_blocks_workflows_and_advanced_po_cases():
