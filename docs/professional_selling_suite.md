@@ -68,6 +68,17 @@ These stages share the same customer, item, pricing, Operating Context, Stock Lo
 - Source Stock Location and Shipping Rule remain ERPNext fields.
 - No mutation of submitted Sales Orders.
 
+## List action contract
+
+Professional Selling list actions have distinct responsibilities:
+
+- **Edit / Complete** opens the governed draft completion surface. It may edit only permitted draft fields and complete through ERPNext/Frappe Workflow.
+- **View** opens the RetailEdge operational review popup for a saved non-draft document. It shows the submitted document summary/items and any permitted next business actions such as Order, Delivery, Invoice, Payment or Return. It does **not** route to Document Output & Sharing.
+- **Print & Share** opens the dedicated **Document Output & Sharing** page with the selected document preloaded. The user may still choose another permitted document, print format, PDF, email or WhatsApp handoff there.
+- **Advanced: Open in ERPNext** is the explicit native Desk fallback when the user is allowed to use native Desk.
+
+This separation keeps document review/workflow distinct from output formatting and customer sharing.
+
 ## QA gates
 
 - Unit/source contracts for permission, bounded queries and no accounting side effects.
