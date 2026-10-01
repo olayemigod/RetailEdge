@@ -27,6 +27,7 @@ from retailedge.operating_context import (
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
+from retailedge.quotation_invoice_conversion import get_quotation_conversion
 
 
 MAX_LINK_RESULTS = 20
@@ -566,6 +567,160 @@ def _can_open_page(page_name: str) -> bool:
 		return False
 
 
+
+def _readable_linked_documents(
+	parent_doctype: str,
+	child_doctype: str,
+	child_field: str,
+	source_name: str,
+	*,
+	limit: int = 5,
+) -> list[dict[str, Any]]:
+	"""Return linked parent documents only after normal read permission succeeds."""
+	rows = frappe.db.sql(
+		f"""
+		SELECT DISTINCT child.parent AS name
+		FROM `tab{child_doctype}` child
+		WHERE child.{child_field} = %s
+		ORDER BY child.creation ASC
+		LIMIT %s
+		""",
+		(source_name, max(1, min(cint(limit) or 5, 20))),
+		as_dict=True,
+	)
+	result: list[dict[str, Any]] = []
+	for row in rows:
+		name = str(row.get("name") or "").strip()
+		if not name or not frappe.db.exists(parent_doctype, name):
+			continue
+		doc = frappe.get_doc(parent_doctype, name)
+		if not frappe.has_permission(parent_doctype, "read", doc=doc):
+			continue
+		result.append(
+			{
+				"doctype": parent_doctype,
+				"name": name,
+				"docstatus": cint(getattr(doc, "docstatus", 0)),
+				"status": str(doc.get("status") or "").strip(),
+				"is_return": bool(cint(doc.get("is_return"))),
+			}
+		)
+	return result
+
+
+def _readable_parent_linked_documents(
+	doctype: str,
+	fieldname: str,
+	source_name: str,
+	*,
+	limit: int = 5,
+) -> list[dict[str, Any]]:
+	rows = frappe.get_list(
+		doctype,
+		filters={fieldname: source_name},
+		fields=["name", "docstatus", "status"] + (["is_return"] if frappe.get_meta(doctype).has_field("is_return") else []),
+		order_by="creation asc",
+		limit_page_length=max(1, min(cint(limit) or 5, 20)),
+	)
+	return [dict(row) for row in rows]
+
+
+def _existing_document_action(target: dict[str, Any]) -> dict[str, Any]:
+	doctype = str(target.get("doctype") or "").strip()
+	name = str(target.get("name") or "").strip()
+	status_suffix = " · Cancelled" if cint(target.get("docstatus")) == 2 else ""
+	return {
+		"value": "open-existing-document",
+		"label": _("View {0} {1}{2}").format(doctype, name, status_suffix),
+		"target_doctype": doctype,
+		"target_name": name,
+		"target_docstatus": cint(target.get("docstatus")),
+		"target_is_return": bool(cint(target.get("is_return"))),
+	}
+
+
+def _quotation_downstream_documents(quotation: str) -> list[dict[str, Any]]:
+	result: list[dict[str, Any]] = []
+	conversion = get_quotation_conversion(quotation) or {}
+	invoice_name = str(conversion.get("sales_invoice") or "").strip()
+	if invoice_name and frappe.db.exists("Sales Invoice", invoice_name):
+		invoice = frappe.get_doc("Sales Invoice", invoice_name)
+		if frappe.has_permission("Sales Invoice", "read", doc=invoice):
+			result.append(
+				{
+					"doctype": "Sales Invoice",
+					"name": invoice.name,
+					"docstatus": cint(invoice.docstatus),
+					"status": str(invoice.get("status") or "").strip(),
+					"is_return": bool(cint(invoice.get("is_return"))),
+				}
+			)
+	result.extend(
+		{
+			**row,
+			"doctype": "Sales Order",
+		}
+		for row in _readable_linked_documents(
+			"Sales Order",
+			"Sales Order Item",
+			"prevdoc_docname",
+			quotation,
+		)
+	)
+	seen: set[tuple[str, str]] = set()
+	unique: list[dict[str, Any]] = []
+	for row in result:
+		key = (str(row.get("doctype") or ""), str(row.get("name") or ""))
+		if key in seen:
+			continue
+		seen.add(key)
+		unique.append(row)
+	return unique
+
+
+def _sales_order_downstream_documents(sales_order: str) -> list[dict[str, Any]]:
+	rows = [
+		*[
+			{**row, "doctype": "Delivery Note"}
+			for row in _readable_linked_documents(
+				"Delivery Note", "Delivery Note Item", "against_sales_order", sales_order
+			)
+		],
+		*[
+			{**row, "doctype": "Sales Invoice"}
+			for row in _readable_linked_documents(
+				"Sales Invoice", "Sales Invoice Item", "sales_order", sales_order
+			)
+		],
+	]
+	return rows
+
+
+def _delivery_note_downstream_documents(delivery_note: str) -> list[dict[str, Any]]:
+	return [
+		{**row, "doctype": "Sales Invoice"}
+		for row in _readable_linked_documents(
+			"Sales Invoice", "Sales Invoice Item", "delivery_note", delivery_note
+		)
+	]
+
+
+def _sales_invoice_downstream_documents(sales_invoice: str) -> list[dict[str, Any]]:
+	rows = [
+		*[
+			{**row, "doctype": "Delivery Note"}
+			for row in _readable_linked_documents(
+				"Delivery Note", "Delivery Note Item", "against_sales_invoice", sales_invoice
+			)
+		],
+		*[
+			{**row, "doctype": "Sales Invoice"}
+			for row in _readable_parent_linked_documents("Sales Invoice", "return_against", sales_invoice)
+		],
+	]
+	return rows
+
+
 def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str, str]]:
 	"""Return permission/status-aware secondary actions for one submitted selling record.
 
@@ -578,12 +733,19 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 	actions: list[dict[str, str]] = []
 	status = str(row.get("status") or "").strip()
 	if document == "quotation":
-		if _permission("Sales Order", "create") and status not in {"Ordered", "Lost", "Cancelled", "Expired"}:
+		downstream = _quotation_downstream_documents(str(row.get("name") or ""))
+		actions.extend(_existing_document_action(target) for target in downstream)
+		has_lineage = bool(downstream)
+		if not has_lineage and _permission("Sales Order", "create") and status not in {"Ordered", "Lost", "Cancelled", "Expired"}:
 			actions.append({"value": "create-sales-order", "label": _("Create Sales Order")})
-		if _permission("Sales Invoice", "create") and status not in {"Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"}:
+		if not has_lineage and _permission("Sales Invoice", "create") and status not in {"Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"}:
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
 
 	elif document == "sales-order":
+		actions.extend(
+			_existing_document_action(target)
+			for target in _sales_order_downstream_documents(str(row.get("name") or ""))
+		)
 		if (
 			_permission("Delivery Note", "create")
 			and status not in {"Closed", "Completed", "Cancelled"}
@@ -605,6 +767,10 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
 	elif document == "delivery-note":
+		actions.extend(
+			_existing_document_action(target)
+			for target in _delivery_note_downstream_documents(str(row.get("name") or ""))
+		)
 		if (
 			_permission("Sales Invoice", "create")
 			and not cint(row.get("is_return"))
@@ -614,6 +780,10 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
 
 	elif document == "sales-invoice":
+		actions.extend(
+			_existing_document_action(target)
+			for target in _sales_invoice_downstream_documents(str(row.get("name") or ""))
+		)
 		if (
 			_permission("Delivery Note", "create")
 			and not cint(row.get("is_return"))
