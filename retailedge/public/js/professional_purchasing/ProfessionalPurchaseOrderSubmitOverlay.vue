@@ -139,6 +139,16 @@
 						Advanced: ERPNext
 					</button>
 					<button
+						v-for="action in submittedNextActions"
+						:key="action.value"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting || saving || nextActionBusy"
+						@click="runSubmittedNextAction(action.value)"
+					>
+						{{ nextActionBusy === action.value ? "Preparing..." : action.label }}
+					</button>
+					<button
 						v-if="preview?.can_edit && !submitted"
 						type="button"
 						class="edge-button"
@@ -223,9 +233,13 @@ export default {
 			draftItems: [],
 			draftBaseline: "",
 			pricingTokens: {},
+			nextActionBusy: "",
 		};
 	},
 	computed: {
+		submittedNextActions() {
+			return Number(this.preview?.docstatus || 0) === 1 ? (this.preview?.next_actions || []) : [];
+		},
 		nativeDeskAllowed() {
 			const access = frappe.boot?.edgesuite_ui_access || {};
 			return String(access.mode || "").trim() !== "edgesuite_only" && Boolean(access.can_use_native_desk);
@@ -345,6 +359,33 @@ export default {
 				if (this.pricingTokens[index] === token) this.error = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
+		async runSubmittedNextAction(action) {
+			if (!action || Number(this.preview?.docstatus || 0) !== 1 || this.nextActionBusy) return;
+			this.nextActionBusy = action;
+			try {
+				if (action === "receive-stock") {
+					this.forceClose();
+					window.dispatchEvent(new CustomEvent("retailedge-open-professional-purchase-receipt-preview", {
+						detail: { purchase_order: this.purchaseOrder || this.preview?.purchase_order },
+					}));
+					return;
+				}
+				if (action === "create-purchase-invoice") {
+					const result = await callMethod(
+						"retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_order",
+						{ purchase_order: this.purchaseOrder || this.preview?.purchase_order },
+						"POST",
+					);
+					if (!result?.name) throw new Error("Purchase Invoice draft was not returned.");
+					this.forceClose();
+					window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-purchase-invoice-ready", { detail: result }));
+				}
+			} catch (error) {
+				this.error = errorMessage(error, "Unable to continue this Purchase Order workflow.");
+			} finally {
+				this.nextActionBusy = "";
+			}
+		},
 		async saveDraft() {
 			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.saving || this.submitting) return;
 			this.saving = true;
@@ -455,7 +496,7 @@ export default {
 			this.resetDraft();
 		},
 		close() {
-			if (this.loading || this.submitting || this.saving) return;
+			if (this.loading || this.submitting || this.saving || this.nextActionBusy) return;
 			if (this.draftDirty) {
 				confirmAboveEdgeModal(
 					__("Discard unsaved Purchase Order changes?"),
