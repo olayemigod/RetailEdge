@@ -122,3 +122,10 @@ def test_payment_review_opens_in_modal_instead_of_inline_below_history():
 	assert "Advanced: ERPNext" in panel
 	assert "confirmAboveEdgeModal" in panel
 	assert "const paymentEntry = this.paymentDetail.payment_entry;" in panel
+
+
+def test_submitted_payment_entries_use_view_while_drafts_keep_review():
+	panel = _read(PANEL)
+	assert 'Number(row.docstatus || 0) === 0 ? "Review" : "View"' in panel
+	assert ':open="detailOpen"' in panel
+	assert "Submit Standard Payment" in panel
