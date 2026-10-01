@@ -22,6 +22,7 @@ const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for
 const ACCESS_MODE = "edgesuite_only";
 const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
 const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
+const SUPPLIER_QUOTATION_PURCHASE_ORDER_EVENT = "retailedge-open-supplier-quotation-purchase-order";
 
 function normaliseButtonLabel(button) {
 	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
@@ -141,14 +142,14 @@ function installSourcingOwnership(target) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_RFQ_HISTORY_EVENT));
+			frappe.set_route("rfq-history");
 			return;
 		}
 		if ([SUPPLIER_QUOTATIONS_LABEL, SUPPLIER_QUOTATION_HISTORY_LABEL].includes(label) || button.getAttribute("data-retailedge-supplier-quotation-history") === "true") {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT));
+			frappe.set_route("supplier-quotation-history");
 			return;
 		}
 		if (!nativeDeskEnabled() && [ADVANCED_MATERIAL_REQUEST_LABEL, COMPARE_QUOTATIONS_LABEL, ADVANCED_COMPARE_QUOTATIONS_LABEL].includes(label)) {
@@ -202,6 +203,14 @@ function consumeProfessionalPurchasingTarget() {
 	}
 	if (target.action === "purchase-invoice-ready" && target.result?.name) {
 		window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: target.result }));
+		return;
+	}
+	if (target.action === "rfq-capture" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(OPEN_RFQ_HISTORY_EVENT, { detail: { request_for_quotation: String(target.source_name), capture: true } }));
+		return;
+	}
+	if (target.action === "supplier-quotation-purchase-order" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(SUPPLIER_QUOTATION_PURCHASE_ORDER_EVENT, { detail: { supplier_quotation: String(target.source_name) } }));
 	}
 }
 
