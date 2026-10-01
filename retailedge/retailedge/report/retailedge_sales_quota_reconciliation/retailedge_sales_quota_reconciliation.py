@@ -75,6 +75,24 @@ def get_columns():
 			"fieldtype": "Datetime",
 			"width": 155,
 		},
+		{
+			"label": _("CoreEdge Case"),
+			"fieldname": "reconciliation_case_reference",
+			"fieldtype": "Data",
+			"width": 190,
+		},
+		{
+			"label": _("Case Status"),
+			"fieldname": "reconciliation_case_status",
+			"fieldtype": "Data",
+			"width": 120,
+		},
+		{
+			"label": _("Case Submitted"),
+			"fieldname": "reconciliation_submitted_on",
+			"fieldtype": "Datetime",
+			"width": 155,
+		},
 		{"label": _("Reason Code"), "fieldname": "reason_code", "fieldtype": "Data", "width": 190},
 		{"label": _("Finalize Attempts"), "fieldname": "attempt_count", "fieldtype": "Int", "width": 110},
 		{
