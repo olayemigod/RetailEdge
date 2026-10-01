@@ -105,7 +105,7 @@
 					</div>
 				</section>
 
-				<section v-if="hasWorkflowActions || actionError" class="detail-section workflow-section">
+				<section v-if="workflowVisible" class="detail-section workflow-section">
 					<div class="workflow-heading">
 						<div>
 							<h4>Workflow Actions</h4>
@@ -115,6 +115,9 @@
 					</div>
 
 					<div v-if="actionError" class="workflow-error" role="alert">{{ actionError }}</div>
+					<ul v-if="!hasWorkflowActions && actions.reasons?.length" class="workflow-reasons">
+						<li v-for="reason in actions.reasons" :key="reason">{{ reason }}</li>
+					</ul>
 
 					<div v-if="reviewAction" class="workflow-editor">
 						<strong>{{ reviewActionTitle }}</strong>
@@ -141,6 +144,9 @@
 					</div>
 
 					<div v-else class="workflow-buttons">
+						<button v-if="actions.can_submit_for_review" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="submitForReview">
+							{{ actionBusy ? "Working..." : "Submit for Review" }}
+						</button>
 						<button v-if="actions.can_approve" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="beginReviewAction('approve')">Approve</button>
 						<button v-if="actions.can_reject" type="button" class="edge-button" :disabled="actionBusy" @click="beginReviewAction('reject')">Reject</button>
 						<button v-if="actions.can_reopen" type="button" class="edge-button" :disabled="actionBusy" @click="beginReviewAction('reopen')">Reopen</button>
@@ -173,6 +179,7 @@
 import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
 
 const DETAIL_METHOD = "retailedge.cashier_expense_detail.get_cashier_expense_detail";
+const SUBMIT_FOR_REVIEW_METHOD = "retailedge.cashier_expense_detail.submit_cashier_expense_for_review";
 const REVIEW_METHODS = Object.freeze({
 	approve: "retailedge.api.approve_cashier_expense",
 	reject: "retailedge.api.reject_cashier_expense",
@@ -251,14 +258,19 @@ export default {
 		},
 		hasWorkflowActions() {
 			return Boolean(
-				this.actions.can_approve
+				this.actions.can_submit_for_review
+				|| this.actions.can_approve
 				|| this.actions.can_reject
 				|| this.actions.can_reopen
 				|| this.actions.can_refresh_posting
 				|| this.actions.can_post_to_accounts
 			);
 		},
+		workflowVisible() {
+			return Boolean(this.detail && (this.hasWorkflowActions || this.actions.reasons?.length || this.actionError));
+		},
 		workflowHelper() {
+			if (this.actions.can_submit_for_review) return "Submit this draft into the governed Cashier Expense review workflow.";
 			if (this.actions.can_post_to_accounts) return "This expense is ready for ERPNext Journal Entry posting.";
 			if (this.actions.posting_enabled && this.detail?.posting_block_reason) return this.detail.posting_block_reason;
 			if (this.actions.posting_enabled) return "Review status and posting readiness remain governed by RetailEdge and ERPNext permissions.";
@@ -349,6 +361,13 @@ export default {
 			if (!value) return "—";
 			try { return frappe.datetime.str_to_user(value); }
 			catch (_error) { return String(value); }
+		},
+		async submitForReview() {
+			if (!this.actions.can_submit_for_review || !this.detail?.name || this.actionBusy) return;
+			await this.runWorkflowAction("submit-for-review", SUBMIT_FOR_REVIEW_METHOD, {
+				expense_name: this.detail.name,
+				expected_modified: this.detail.modified || null,
+			});
 		},
 		beginReviewAction(action) {
 			if (!REVIEW_METHODS[action]) return;
@@ -441,7 +460,7 @@ export default {
 .detail-note { display:grid; gap:.25rem; padding-top:.2rem; }
 .detail-note p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .evidence-link { width:max-content; max-width:100%; overflow-wrap:anywhere; font-weight:600; }
-.workflow-section{gap:.8rem}.workflow-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem}.workflow-heading>div{display:grid;gap:.2rem}.workflow-heading small{color:var(--text-muted);font-size:.76rem}.workflow-mode{padding:.25rem .5rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:999px;color:var(--text-muted);font-size:.72rem;white-space:nowrap}.workflow-error{padding:.65rem .75rem;border:1px solid var(--red-400,#f04438);border-radius:.5rem;background:var(--red-50,#fef3f2);color:var(--red-700,#b42318)}.workflow-buttons,.workflow-editor-actions{display:flex;gap:.55rem;flex-wrap:wrap}.workflow-editor{display:grid;gap:.7rem;padding:.75rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:.6rem;background:var(--edge-surface-subtle,var(--subtle-fg))}.workflow-editor label{display:grid;gap:.35rem}.workflow-editor label span{font-size:.76rem;color:var(--text-muted)}.workflow-editor-actions{justify-content:flex-end}.detail-actions { display:flex; justify-content:flex-end; gap:.6rem; flex-wrap:wrap; }
+.workflow-section{gap:.8rem}.workflow-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem}.workflow-heading>div{display:grid;gap:.2rem}.workflow-heading small{color:var(--text-muted);font-size:.76rem}.workflow-mode{padding:.25rem .5rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:999px;color:var(--text-muted);font-size:.72rem;white-space:nowrap}.workflow-error{padding:.65rem .75rem;border:1px solid var(--red-400,#f04438);border-radius:.5rem;background:var(--red-50,#fef3f2);color:var(--red-700,#b42318)}.workflow-buttons,.workflow-editor-actions{display:flex;gap:.55rem;flex-wrap:wrap}.workflow-reasons{margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:.8rem}.workflow-editor{display:grid;gap:.7rem;padding:.75rem;border:1px solid var(--edge-border-color,var(--border-color));border-radius:.6rem;background:var(--edge-surface-subtle,var(--subtle-fg))}.workflow-editor label{display:grid;gap:.35rem}.workflow-editor label span{font-size:.76rem;color:var(--text-muted)}.workflow-editor-actions{justify-content:flex-end}.detail-actions { display:flex; justify-content:flex-end; gap:.6rem; flex-wrap:wrap; }
 @media (max-width:900px) {
 	.detail-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
 	.detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
