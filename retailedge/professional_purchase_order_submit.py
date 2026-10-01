@@ -150,6 +150,7 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 	return {
 		"purchase_order": doc.name,
 		"purchase_order_modified": str(getattr(doc, "modified", "") or ""),
+		"docstatus": cint(getattr(doc, "docstatus", 0)),
 		"company": str(getattr(doc, "company", "") or ""),
 		"branch": branch,
 		"supplier": str(getattr(doc, "supplier", "") or ""),
@@ -162,6 +163,9 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 		"terms": str(getattr(doc, "terms", "") or ""),
 		"grand_total": flt(getattr(doc, "grand_total", 0)),
 		"total_qty": flt(getattr(doc, "total_qty", 0)),
+		"per_received": flt(getattr(doc, "per_received", 0)),
+		"per_billed": flt(getattr(doc, "per_billed", 0)),
+		"next_actions": _submitted_next_actions(doc),
 		"item_count": len(items),
 		"tax_row_count": len(getattr(doc, "taxes", None) or []),
 		"items": items,
@@ -179,7 +183,7 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 		"workflow_readiness": workflow_readiness,
 		"workflow_eligible": workflow_eligible,
 		"persistence": "none",
-		"status": "Review only",
+		"status": str(getattr(doc, "status", "") or ("Draft" if cint(getattr(doc, "docstatus", 0)) == 0 else "Submitted")),
 		"source_of_truth": "ERPNext Purchase Order",
 	}
 
