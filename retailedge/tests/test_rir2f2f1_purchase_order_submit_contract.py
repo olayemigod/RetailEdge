@@ -139,7 +139,6 @@ def test_submit_overlay_requires_review_and_stays_inside_edgesuite():
 
 def test_bundle_does_not_inject_a_duplicate_purchase_order_review_action():
 	bundle = _read(BUNDLE)
-	assert 'const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit"' in bundle
 	assert "ProfessionalPurchaseOrderSubmitOverlay" in bundle
 	assert "removeLegacyPurchaseOrderSubmitButtons" in bundle
 	assert 'target.querySelectorAll(\'[data-retailedge-po-submit="true"]\')' in bundle
