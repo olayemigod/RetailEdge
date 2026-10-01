@@ -2186,7 +2186,11 @@ def _resolve_matching_candidate(
 		"Sales Invoice" if sales_invoice else "Payment Entry" if payment_entry else None
 	)
 
-	if (getattr(frappe.flags, "retailedge_fast_validation", False) or not allow_fallback) and explicit_target:
+	# An explicit selected document is a locked candidate, never an invitation to
+	# run broad discovery and silently substitute another document. Validate the
+	# selected candidate directly in every mode. Broad discovery is only for
+	# calls that did not supply a candidate.
+	if explicit_target:
 		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
 		if doc:
 			payment_row_index = getattr(doc, "payment_row_index", None)
@@ -2262,7 +2266,7 @@ def _resolve_matching_candidate(
 			return res.get("candidate")
 		return None
 
-	search_filters = {"include_exception_candidates": 1} if explicit_target else None
+	search_filters = None
 	candidates = find_sales_invoice_candidates_for_bank_transaction(
 		bank_transaction_name,
 		filters=search_filters,
@@ -2293,13 +2297,6 @@ def _resolve_matching_candidate(
 		)
 	)
 
-	if explicit_target:
-		for candidate in candidates:
-			if cstr(candidate.get("document_name")) == cstr(explicit_target) and (
-				not explicit_type or cstr(candidate.get("document_type")) == cstr(explicit_type)
-			):
-				return candidate
-		return None
 
 	return candidates[0] if candidates else None
 
