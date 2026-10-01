@@ -16,11 +16,11 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 	def _config(self, **overrides):
 		values = {
 			"coreedge_remote_usage_enabled": 1,
-			"coreedge_base_url": "https://coreedge.example.com",
-			"coreedge_site_identifier": "retail.example.com",
-			"coreedge_api_key": "api-key-123",
-			"coreedge_api_secret": "secret-456",
-			"coreedge_timeout_seconds": 9,
+			"coreedge_service_url": "https://coreedge.example.com",
+			"coreedge_service_site_identifier": "retail.example.com",
+			"coreedge_service_api_key": "api-key-123",
+			"coreedge_service_api_secret": "secret-456",
+			"coreedge_service_timeout_seconds": 9,
 		}
 		values.update(overrides)
 		return CoreEdgeRemoteUsageConfig.from_mapping(values)
@@ -51,12 +51,52 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 			return {"message": {"data": {"ok": True}}}
 
 		client = CoreEdgeRemoteUsageClient(
-			self._config(coreedge_api_secret=""),
+			self._config(coreedge_service_api_secret=""),
 			transport=transport,
 		)
 		with self.assertRaises(CoreEdgeRemoteUsageNotConfigured):
 			client.get_usage_status("SALES_TRANSACTIONS")
 		self.assertEqual(called, [])
+
+	def test_legacy_short_config_aliases_remain_supported(self):
+		config = CoreEdgeRemoteUsageConfig.from_mapping(
+			{
+				"coreedge_remote_usage_enabled": 1,
+				"coreedge_base_url": "https://legacy-coreedge.example.com",
+				"coreedge_site_identifier": "legacy-retail.example.com",
+				"coreedge_api_key": "legacy-key",
+				"coreedge_api_secret": "legacy-secret",
+				"coreedge_timeout_seconds": 11,
+			}
+		)
+		self.assertTrue(config.readiness()["ready"])
+		self.assertEqual(config.base_url, "https://legacy-coreedge.example.com")
+		self.assertEqual(config.site_identifier, "legacy-retail.example.com")
+		self.assertEqual(config.api_key, "legacy-key")
+		self.assertEqual(config.api_secret, "legacy-secret")
+		self.assertEqual(config.timeout_seconds, 11)
+
+	def test_canonical_service_config_wins_over_legacy_aliases(self):
+		config = CoreEdgeRemoteUsageConfig.from_mapping(
+			{
+				"coreedge_remote_usage_enabled": 1,
+				"coreedge_service_url": "https://canonical.example.com",
+				"coreedge_base_url": "https://legacy.example.com",
+				"coreedge_service_site_identifier": "canonical-site.example.com",
+				"coreedge_site_identifier": "legacy-site.example.com",
+				"coreedge_service_api_key": "canonical-key",
+				"coreedge_api_key": "legacy-key",
+				"coreedge_service_api_secret": "canonical-secret",
+				"coreedge_api_secret": "legacy-secret",
+				"coreedge_service_timeout_seconds": 17,
+				"coreedge_timeout_seconds": 29,
+			}
+		)
+		self.assertEqual(config.base_url, "https://canonical.example.com")
+		self.assertEqual(config.site_identifier, "canonical-site.example.com")
+		self.assertEqual(config.api_key, "canonical-key")
+		self.assertEqual(config.api_secret, "canonical-secret")
+		self.assertEqual(config.timeout_seconds, 17)
 
 	def test_status_uses_frappe_token_auth_and_bound_site_only(self):
 		calls = []
@@ -180,7 +220,7 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 			client.get_usage_status("SALES_TRANSACTIONS")
 
 	def test_http_base_url_is_rejected_by_default(self):
-		config = self._config(coreedge_base_url="http://coreedge.local")
+		config = self._config(coreedge_service_url="http://coreedge.local")
 		self.assertFalse(config.readiness()["ready"])
 		self.assertTrue(
 			any("HTTPS" in blocker for blocker in config.readiness()["blockers"])
@@ -190,29 +230,29 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 
 	def test_http_base_url_requires_explicit_local_qa_override(self):
 		config = self._config(
-			coreedge_base_url="http://coreedge.local",
-			coreedge_remote_usage_allow_insecure_http=1,
+			coreedge_service_url="http://coreedge.local",
+			coreedge_service_allow_insecure_http=1,
 		)
 		self.assertTrue(config.readiness()["ready"])
 		self.assertTrue(config.sanitized()["allow_insecure_http"])
 
 	def test_malformed_base_url_is_rejected(self):
-		config = self._config(coreedge_base_url="coreedge-without-scheme")
+		config = self._config(coreedge_service_url="coreedge-without-scheme")
 		self.assertFalse(config.readiness()["ready"])
 		with self.assertRaises(CoreEdgeRemoteUsageNotConfigured):
 			config.assert_ready()
 
 	def test_timeout_is_bounded_to_safe_default(self):
 		self.assertEqual(
-			self._config(coreedge_timeout_seconds=0).timeout_seconds,
+			self._config(coreedge_service_timeout_seconds=0).timeout_seconds,
 			8,
 		)
 		self.assertEqual(
-			self._config(coreedge_timeout_seconds=121).timeout_seconds,
+			self._config(coreedge_service_timeout_seconds=121).timeout_seconds,
 			8,
 		)
 		self.assertEqual(
-			self._config(coreedge_timeout_seconds=30).timeout_seconds,
+			self._config(coreedge_service_timeout_seconds=30).timeout_seconds,
 			30,
 		)
 
