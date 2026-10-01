@@ -165,6 +165,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
@@ -454,7 +456,7 @@ export default {
 		requestClose() {
 			if (this.busy) return;
 			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
-				frappe.confirm(__("Discard unsaved Purchase Invoice draft changes?"), () => this.$emit("close"));
+				confirmAboveEdgeModal(__("Discard unsaved Purchase Invoice draft changes?"), () => this.$emit("close"));
 				return;
 			}
 			this.$emit("close");
