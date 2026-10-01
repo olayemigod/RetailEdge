@@ -51,9 +51,14 @@ def search_quota_reconciliation_branches(
 	except (frappe.PermissionError, frappe.ValidationError):
 		return []
 
-	profile_filters: dict[str, Any] = {"company": company, "enabled": 1}
+	profile_filters: list[list[Any]] = [
+		["RetailEdge Branch Profile", "company", "=", company],
+		["RetailEdge Branch Profile", "enabled", "=", 1],
+	]
 	if txt:
-		profile_filters["branch"] = ["like", f"%{txt}%"]
+		profile_filters.append(
+			["RetailEdge Branch Profile", "branch", "like", f"%{txt}%"]
+		)
 	if scope.get("restricted"):
 		allowed = [
 			str(value).strip()
@@ -62,7 +67,9 @@ def search_quota_reconciliation_branches(
 		]
 		if not allowed:
 			return []
-		profile_filters["branch"] = ["in", allowed] if not txt else profile_filters["branch"]
+		profile_filters.append(
+			["RetailEdge Branch Profile", "branch", "in", allowed]
+		)
 
 	start = max(cint(start), 0)
 	page_len = min(cint(page_len) or 20, 20)
@@ -75,9 +82,6 @@ def search_quota_reconciliation_branches(
 		limit_page_length=page_len,
 	)
 	branches = [row.get("branch") for row in rows if row.get("branch")]
-	if scope.get("restricted"):
-		allowed_set = set(scope.get("allowed_branches") or [])
-		branches = [branch for branch in branches if branch in allowed_set]
 	return [(branch,) for branch in dict.fromkeys(branches)]
 
 
