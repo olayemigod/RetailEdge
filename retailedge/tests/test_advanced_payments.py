@@ -73,7 +73,7 @@ class TestAdvancedPayments(unittest.TestCase):
 	@patch("retailedge.advanced_payments.get_simple_payment_mode_details")
 	@patch("retailedge.advanced_payments.get_party_details")
 	@patch("retailedge.advanced_payments._company_currency", return_value="NGN")
-	@patch("retailedge.advanced_payments.validate_user_branch_access")
+	@patch("retailedge.advanced_payments.resolve_operational_branch")
 	@patch("retailedge.advanced_payments._assert_read")
 	@patch("retailedge.advanced_payments._assert_create_payment_entry")
 	@patch("retailedge.advanced_payments.frappe.new_doc")
@@ -82,7 +82,7 @@ class TestAdvancedPayments(unittest.TestCase):
 		mock_new_doc,
 		_mock_create_permission,
 		_mock_read,
-		mock_branch_access,
+		mock_branch_resolver,
 		_mock_currency,
 		mock_party_details,
 		mock_mode_details,
@@ -100,6 +100,7 @@ class TestAdvancedPayments(unittest.TestCase):
 			"account_currency": "NGN",
 			"reference_required": True,
 		}
+		mock_branch_resolver.return_value = {"branch": "Lagos"}
 
 		result = create_customer_advance_draft(
 			{
@@ -114,7 +115,7 @@ class TestAdvancedPayments(unittest.TestCase):
 			}
 		)
 
-		mock_branch_access.assert_called_once()
+		mock_branch_resolver.assert_called_once()
 		mock_new_doc.assert_called_once_with("Payment Entry")
 		self.assertEqual(doc.insert_calls, 1)
 		self.assertEqual(doc.payment_type, "Receive")
@@ -141,14 +142,14 @@ class TestAdvancedPayments(unittest.TestCase):
 
 	@patch("retailedge.advanced_payments._company_currency", return_value="NGN")
 	@patch("retailedge.advanced_payments.list_customer_advances")
-	@patch("retailedge.advanced_payments.validate_user_branch_access")
+	@patch("retailedge.advanced_payments.resolve_operational_branch")
 	@patch("retailedge.advanced_payments._assert_read")
 	@patch("retailedge.advanced_payments.frappe.get_doc")
 	def test_sales_invoice_advance_context_is_read_only_and_scoped(
 		self,
 		mock_get_doc,
 		_mock_read,
-		mock_branch_access,
+		mock_branch_resolver,
 		mock_list_advances,
 		_mock_currency,
 	):
@@ -165,10 +166,11 @@ class TestAdvancedPayments(unittest.TestCase):
 			{"name": "ACC-PAY-1", "unallocated_amount": 500.0},
 			{"name": "ACC-PAY-2", "unallocated_amount": 250.0},
 		]
+		mock_branch_resolver.return_value = {"branch": "Lagos"}
 
 		context = get_sales_invoice_advance_context("SINV-0001")
 
-		mock_branch_access.assert_called_once()
+		mock_branch_resolver.assert_called_once()
 		mock_list_advances.assert_called_once_with(
 			customer="CUST-001",
 			company="Demo Company",
