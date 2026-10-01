@@ -10,6 +10,7 @@ from frappe.utils import now_datetime
 
 from retailedge.integrations.coreedge_remote_usage import (
 	CoreEdgeRemoteUsageError,
+	CoreEdgeRemoteUsageUnavailable,
 	get_remote_usage_client,
 )
 
@@ -389,11 +390,12 @@ def _handle_remote_unavailable(config, doc, exc: Exception) -> None:
 		"CoreEdge sales transaction quota service is unavailable.",
 		_safe_error(exc),
 	)
-	if config.fail_closed:
+	availability_failure = isinstance(exc, CoreEdgeRemoteUsageUnavailable)
+	if config.fail_closed or not availability_failure:
 		frappe.throw(
 			_(
 				"This sale cannot be submitted because transaction-limit verification "
-				"is temporarily unavailable."
+				"is unavailable or not safely configured."
 			),
 			title=_("Sales Transaction Access Unavailable"),
 		)
