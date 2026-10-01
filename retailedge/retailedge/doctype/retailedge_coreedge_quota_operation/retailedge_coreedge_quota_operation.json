@@ -20,6 +20,12 @@
   "warning",
   "reason_code",
   "remote_message",
+  "reconciliation_section",
+  "reconciliation_case_reference",
+  "reconciliation_case_status",
+  "reconciliation_case_evidence_hash",
+  "reconciliation_submitted_on",
+  "reconciliation_last_idempotency_key",
   "idempotency_section",
   "reserve_idempotency_key",
   "finalize_idempotency_key",
@@ -211,6 +217,46 @@
    "fieldtype": "Small Text",
    "label": "Last Error",
    "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_section",
+   "fieldtype": "Section Break",
+   "label": "CoreEdge Reconciliation Review"
+  },
+  {
+   "fieldname": "reconciliation_case_reference",
+   "fieldtype": "Data",
+   "label": "Reconciliation Case Reference",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reconciliation_case_status",
+   "fieldtype": "Data",
+   "label": "Reconciliation Case Status",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reconciliation_case_evidence_hash",
+   "fieldtype": "Data",
+   "label": "Reconciliation Evidence Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Submitted On",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reconciliation_last_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Reconciliation Submission Idempotency Key",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
@@ -250,6 +296,18 @@
    "read": 1,
    "report": 1,
    "role": "RetailEdgeAuditor"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager"
   }
  ],
  "search_fields": "operation_key,status,source_doctype,source_name,company,branch,entitlement_key,reservation_reference",
