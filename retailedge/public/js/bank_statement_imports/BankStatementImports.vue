@@ -397,7 +397,7 @@ export default {
 				allow_multiple: false,
 				restrictions: { allowed_file_types: [".csv", ".xlsx"] },
 				on_success: async (file) => {
-					const fileUrl = file?.file_url || file?.file_url;
+					const fileUrl = file?.file_url || file?.fileUrl || "";
 					if (!fileUrl) { this.actionError = "Uploaded file URL was not returned."; return; }
 					this.actionBusy = true; this.actionError = "";
 					try {
