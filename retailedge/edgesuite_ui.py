@@ -34,6 +34,14 @@ SUPPLIER_DOCUMENT_REVIEW_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 }
+USAGE_RECONCILIATION_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+}
+
 ACTION_CENTER_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -242,6 +250,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Unmatched Bank Payments", "target_type": "Page", "target": "unmatched-bank-payments", "icon": "report"},
 			{"label": "Banking Readiness", "target_type": "Page", "target": "banking-readiness", "icon": "shield"},
 			{"label": "Reconciliation Handoff", "target_type": "Page", "target": "reconciliation-handoff", "icon": "report"},
+			{"label": "Usage Reconciliation", "target_type": "Page", "target": "usage-reconciliation", "icon": "repeat", "required_roles": tuple(sorted(USAGE_RECONCILIATION_ROLES))},
 			{"label": "Daily Sales Audit Register", "target_type": "Page", "target": "daily-sales-audit-register", "icon": "report"},
 		),
 	},
