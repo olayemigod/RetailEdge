@@ -6,16 +6,11 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import validate_and_sanitize_search_inputs
-from frappe.utils import cint, getdate, now_datetime
+from frappe.utils import cint, get_datetime, getdate, now_datetime
 
 from retailedge.coreedge_sales_quota import (
 	OPERATION_DOCTYPE,
-	_enqueue_finalize_operation,
-	_register_after_commit,
-	_register_after_rollback,
-	_release_rolled_back_reservation,
 	finalize_sales_quota_operation,
-	get_sales_transaction_quota_config,
 )
 from retailedge.integrations.coreedge_remote_usage import (
 	CoreEdgeRemoteUsageError,
@@ -144,13 +139,16 @@ def retry_quota_finalization(operation_name: str, reason: str) -> dict:
 		"source_doctype": operation.source_doctype,
 		"source_name": operation.source_name,
 		"reservation_reference": operation.reservation_reference,
+		"reconciliation_case_reference": operation.reconciliation_case_reference or "",
+		"reconciliation_case_status": operation.reconciliation_case_status or "",
+		"reconciliation_submitted_on": operation.reconciliation_submitted_on,
 		"reason_code": operation.reason_code or "",
 		"message": operation.last_error or operation.remote_message or "",
 	}
 
 
 @frappe.whitelist()
-def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> dict:
+def submit_unreserved_quota_reconciliation_case(operation_name: str, reason: str) -> dict:
 	_require_post()
 	_assert_reconciliation_operator()
 	reason = _required_reason(reason)
@@ -158,7 +156,7 @@ def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> di
 
 	if operation.status != "Needs Review":
 		frappe.throw(
-			_("Only Needs Review quota operations can use unreserved reconciliation."),
+			_("Only Needs Review quota operations can be submitted for CoreEdge review."),
 			frappe.ValidationError,
 		)
 	if operation.reservation_reference:
@@ -168,119 +166,60 @@ def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> di
 		)
 	if operation.reason_code != "FAIL_OPEN_UNRESERVED":
 		frappe.throw(
-			_("Only audited fail-open sales can use unreserved reconciliation."),
+			_("Only audited fail-open sales can use unreserved CoreEdge review."),
 			frappe.ValidationError,
 		)
 
+	if operation.reconciliation_case_reference:
+		return _reconciliation_response(operation, ok=True)
+
 	previous_status = operation.status
 	source = _get_source_state(operation)
-	client = get_remote_usage_client()
-	status_key = _review_idempotency_key(operation.name, "status")
-	try:
-		status_response = client.get_usage_status(
-			operation.entitlement_key,
-			requested_units=int(operation.units or 1),
-			request_id=status_key,
-			correlation_id=f"{operation.source_doctype}:{operation.source_name}",
-			source_path="RetailEdge Sales Quota Reconciliation",
-		)
-	except CoreEdgeRemoteUsageError as exc:
-		message = _safe_message(exc)
-		_update_review_failure(operation, "QUOTA_STATUS_UNAVAILABLE", message)
-		_write_review_event(
-			operation=operation,
-			action="Reconcile Unreserved",
-			result="Failed",
-			previous_status=previous_status,
-			new_status=operation.status,
-			reason=reason,
-			reason_code="QUOTA_STATUS_UNAVAILABLE",
-			message=message,
-		)
-		return _reconciliation_response(operation, ok=False)
-
-	status_data = status_response.get("data") or {}
-	quota_status = status_data.get("quota") or {}
-	if not status_data.get("ok"):
-		reason_code = status_data.get("reason_code") or "QUOTA_STATUS_REJECTED"
-		message = status_data.get("message") or _("CoreEdge quota status could not be evaluated.")
-		_update_review_failure(operation, reason_code, message)
-		_write_review_event(
-			operation=operation,
-			action="Reconcile Unreserved",
-			result="Blocked",
-			previous_status=previous_status,
-			new_status=operation.status,
-			reason=reason,
-			reason_code=reason_code,
-			message=message,
-		)
-		return _reconciliation_response(operation, ok=False)
-
-	period_check = _check_source_in_current_quota_period(
-		source_date=source["event_date"],
-		quota=quota_status,
-	)
-	if not period_check["allowed"]:
-		_update_review_failure(
-			operation,
-			period_check["reason_code"],
-			period_check["message"],
-		)
-		_write_review_event(
-			operation=operation,
-			action="Reconcile Unreserved",
-			result="Blocked",
-			previous_status=previous_status,
-			new_status=operation.status,
-			reason=reason,
-			reason_code=period_check["reason_code"],
-			message=period_check["message"],
-		)
-		return _reconciliation_response(operation, ok=False)
-
 	attempt = _next_review_attempt(operation.name)
-	reserve_key = _review_idempotency_key(operation.name, "reserve", attempt)
-	finalize_key = _review_idempotency_key(operation.name, "finalize", attempt)
-	release_key = _review_idempotency_key(operation.name, "release", attempt)
-	config = get_sales_transaction_quota_config()
+	request_key = _review_idempotency_key(operation.name, "case-submit", attempt)
+	client = get_remote_usage_client()
 
 	try:
-		reserve_response = client.reserve_usage(
+		response = client.submit_reconciliation_case(
 			operation.entitlement_key,
+			operation.operation_key,
+			"FAIL_OPEN_UNRESERVED",
 			int(operation.units or 1),
-			reserve_key,
-			expires_in_seconds=config.reservation_seconds,
-			reference_doctype=operation.source_doctype,
-			reference_name=operation.source_name,
-			request_id=reserve_key,
+			operation.source_doctype,
+			operation.source_name,
+			str(source["occurred_on"]),
+			request_key,
+			local_status=operation.status,
+			local_reason_code=operation.reason_code,
+			error_summary=_reconciliation_evidence_summary(operation, source),
+			request_id=request_key,
 			correlation_id=f"{operation.source_doctype}:{operation.source_name}",
 			source_path="RetailEdge Sales Quota Reconciliation",
 		)
 	except CoreEdgeRemoteUsageError as exc:
 		message = _safe_message(exc)
-		_update_review_failure(operation, "QUOTA_RESERVE_UNAVAILABLE", message)
+		_update_case_submission_failure(operation, message)
 		_write_review_event(
 			operation=operation,
-			action="Reconcile Unreserved",
+			action="Submit CoreEdge Review",
 			result="Failed",
 			previous_status=previous_status,
 			new_status=operation.status,
 			reason=reason,
-			reason_code="QUOTA_RESERVE_UNAVAILABLE",
+			reason_code="COREDGE_RECONCILIATION_SUBMISSION_UNAVAILABLE",
 			message=message,
 		)
 		return _reconciliation_response(operation, ok=False)
 
-	reserve_data = reserve_response.get("data") or {}
-	quota = reserve_data.get("quota") or {}
-	if not reserve_data.get("ok"):
-		reason_code = reserve_data.get("reason_code") or quota.get("reason_code") or "QUOTA_RESERVE_BLOCKED"
-		message = reserve_data.get("message") or quota.get("message") or _("CoreEdge quota reservation was blocked.")
-		_update_review_failure(operation, reason_code, message)
+	data = response.get("data") or {}
+	case = data.get("case") or {}
+	if not data.get("ok"):
+		reason_code = data.get("reason_code") or "COREDGE_RECONCILIATION_SUBMISSION_REJECTED"
+		message = data.get("message") or _("CoreEdge rejected the reconciliation evidence.")
+		_update_case_submission_failure(operation, message)
 		_write_review_event(
 			operation=operation,
-			action="Reconcile Unreserved",
+			action="Submit CoreEdge Review",
 			result="Blocked",
 			previous_status=previous_status,
 			new_status=operation.status,
@@ -290,65 +229,49 @@ def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> di
 		)
 		return _reconciliation_response(operation, ok=False)
 
-	reservation_reference = str(quota.get("reservation_reference") or "").strip()
-	if quota.get("status") != "Active" or not reservation_reference:
-		message = _("CoreEdge did not return an active quota reservation.")
-		_update_review_failure(operation, "QUOTA_RESERVATION_NOT_ACTIVE", message)
+	case_reference = str(case.get("case_reference") or "").strip()
+	if not case_reference:
+		message = _("CoreEdge accepted the request without returning a reconciliation Case Reference.")
+		_update_case_submission_failure(operation, message)
 		_write_review_event(
 			operation=operation,
-			action="Reconcile Unreserved",
+			action="Submit CoreEdge Review",
 			result="Failed",
 			previous_status=previous_status,
 			new_status=operation.status,
 			reason=reason,
-			reason_code="QUOTA_RESERVATION_NOT_ACTIVE",
+			reason_code="COREDGE_RECONCILIATION_CASE_REFERENCE_MISSING",
 			message=message,
 		)
 		return _reconciliation_response(operation, ok=False)
 
-	_register_after_rollback(
-		lambda: _release_rolled_back_reservation(
-			reservation_reference=reservation_reference,
-			release_idempotency_key=release_key,
-			doc_doctype=operation.source_doctype,
-			doc_name=operation.source_name,
-			reason=(
-				"RetailEdge quota reconciliation rolled back before recovered "
-				"reservation state committed."
-			),
-			source_path="RetailEdge Sales Quota Reconciliation Rollback",
-		)
-	)
-
-	operation.status = "Pending Finalize"
-	operation.reservation_reference = reservation_reference
-	operation.reservation_expires_on = quota.get("expires_on")
-	operation.reserve_idempotency_key = reserve_key
-	operation.finalize_idempotency_key = finalize_key
-	operation.release_idempotency_key = release_key
-	operation.reserved_on = now_datetime()
-	operation.warning = 1 if quota.get("warning") else 0
-	operation.reason_code = quota.get("reason_code") or "RECONCILIATION_RESERVED"
-	operation.remote_message = quota.get("message") or ""
+	operation.reconciliation_case_reference = case_reference
+	operation.reconciliation_case_status = str(case.get("case_status") or "Open")[:140]
+	operation.reconciliation_case_evidence_hash = str(case.get("evidence_hash") or "")[:140] or None
+	operation.reconciliation_submitted_on = case.get("submitted_on") or now_datetime()
+	operation.reconciliation_last_idempotency_key = request_key
 	operation.last_error = None
 	operation.flags.allow_retailedge_quota_operation_update = True
-	operation.flags.allow_retailedge_quota_reconciliation = True
+	operation.flags.allow_retailedge_quota_case_submission = True
 	operation.save(ignore_permissions=True)
 
-	_register_after_commit(
-		lambda: _enqueue_finalize_operation(operation.name)
-	)
 	_write_review_event(
 		operation=operation,
-		action="Reconcile Unreserved",
-		result="Pending Finalize",
+		action="Submit CoreEdge Review",
+		result="Submitted",
 		previous_status=previous_status,
 		new_status=operation.status,
 		reason=reason,
-		reason_code=operation.reason_code,
-		message=_("Recovered reservation committed locally; finalization is queued after commit."),
+		reason_code=str(data.get("reason_code") or case.get("case_status") or "RECONCILIATION_CASE_SUBMITTED"),
+		message=str(data.get("message") or _("CoreEdge reconciliation case submitted for platform review.")),
 	)
 	return _reconciliation_response(operation, ok=True)
+
+
+@frappe.whitelist()
+def reconcile_unreserved_quota_operation(operation_name: str, reason: str) -> dict:
+	"""Backward-compatible alias for the governed CoreEdge case-submission workflow."""
+	return submit_unreserved_quota_reconciliation_case(operation_name, reason)
 
 
 def get_quota_reconciliation_rows(
@@ -422,6 +345,9 @@ def get_quota_reconciliation_rows(
 			"reservation_expires_on",
 			"reason_code",
 			"remote_message",
+			"reconciliation_case_reference",
+			"reconciliation_case_status",
+			"reconciliation_submitted_on",
 			"attempt_count",
 			"last_attempt_on",
 			"last_error",
@@ -485,7 +411,7 @@ def _get_scoped_operation(operation_name: str):
 def _get_source_state(operation) -> dict:
 	meta = frappe.get_meta(operation.source_doctype)
 	fields = ["docstatus", "creation"]
-	for fieldname in ("posting_date", "transaction_date"):
+	for fieldname in ("posting_date", "posting_time", "transaction_date"):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
 	row = frappe.db.get_value(
@@ -501,31 +427,42 @@ def _get_source_state(operation) -> dict:
 			_("Only submitted or subsequently cancelled sales can be reconciled."),
 			frappe.ValidationError,
 		)
-	candidate = row.get("posting_date") or row.get("transaction_date") or row.get("creation")
-	if not candidate:
+
+	if row.get("posting_date"):
+		posting_time = str(row.get("posting_time") or "00:00:00")
+		occurred_on = get_datetime(f"{row.get('posting_date')} {posting_time}")
+	elif row.get("transaction_date"):
+		occurred_on = get_datetime(row.get("transaction_date"))
+	elif row.get("creation"):
+		occurred_on = get_datetime(row.get("creation"))
+	else:
 		frappe.throw(
-			_("The source sale has no reliable transaction date for quota reconciliation."),
+			_("The source sale has no reliable transaction timestamp for quota reconciliation."),
 			frappe.ValidationError,
 		)
-	return {"docstatus": int(row.docstatus or 0), "event_date": getdate(candidate)}
+
+	return {
+		"docstatus": int(row.docstatus or 0),
+		"event_date": getdate(occurred_on),
+		"occurred_on": occurred_on,
+	}
 
 
-def _check_source_in_current_quota_period(*, source_date, quota: dict) -> dict:
-	period_start = getdate(quota.get("period_start")) if quota.get("period_start") else None
-	period_end = getdate(quota.get("period_end")) if quota.get("period_end") else None
-	if period_start and source_date < period_start:
-		return {
-			"allowed": False,
-			"reason_code": "OUTSIDE_CURRENT_QUOTA_PERIOD",
-			"message": _("The original sale belongs to an earlier CoreEdge quota period."),
-		}
-	if period_end and source_date > period_end:
-		return {
-			"allowed": False,
-			"reason_code": "OUTSIDE_CURRENT_QUOTA_PERIOD",
-			"message": _("The original sale does not belong to the current CoreEdge quota period."),
-		}
-	return {"allowed": True, "reason_code": "CURRENT_QUOTA_PERIOD", "message": ""}
+def _reconciliation_evidence_summary(operation, source: dict) -> str:
+	message = str(operation.remote_message or "").strip()
+	parts = [
+		"RetailEdge recorded FAIL_OPEN_UNRESERVED after the original CoreEdge quota reservation was unavailable.",
+		f"Source document status: {int(source.get('docstatus') or 0)}.",
+	]
+	if message:
+		parts.append(f"Original CoreEdge error: {message}")
+	return " ".join(parts)[:1000]
+
+
+def _update_case_submission_failure(operation, message: str) -> None:
+	operation.last_error = str(message or "")[:1000] or None
+	operation.flags.allow_retailedge_quota_operation_update = True
+	operation.save(ignore_permissions=True)
 
 
 def _update_review_failure(operation, reason_code: str, message: str) -> None:
@@ -561,6 +498,7 @@ def _write_review_event(
 			"source_name": operation.source_name,
 			"entitlement_key": operation.entitlement_key,
 			"reservation_reference": operation.reservation_reference,
+			"reconciliation_case_reference": operation.reconciliation_case_reference,
 			"reason": reason,
 			"reason_code": str(reason_code or "")[:140] or None,
 			"message": str(message or "")[:1000] or None,
@@ -628,7 +566,9 @@ def _recommended_action(row: dict) -> str:
 	if reservation:
 		return _("Retry CoreEdge finalization")
 	if status == "Needs Review" and reason_code == "FAIL_OPEN_UNRESERVED":
-		return _("Reconcile current CoreEdge quota period")
+		if row.get("reconciliation_case_reference"):
+			return _("CoreEdge review submitted")
+		return _("Submit to CoreEdge review")
 	if status == "Pending Finalize":
 		return _("Retry finalization")
 	return _("Manual CoreEdge review required")
