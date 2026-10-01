@@ -3005,12 +3005,16 @@ class BankTransactionMatchStandaloneFormTests(unittest.TestCase):
 		return doc
 
 	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.db.get_value",
+		return_value=1,
+	)
+	@patch(
 		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_bank_transaction_canonical_account"
 	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.normalize_bank_transaction"
 	)
-	def test_bank_transaction_context_autofills_bank_side_fields(self, mock_normalize, mock_account):
+	def test_bank_transaction_context_autofills_bank_side_fields(self, mock_normalize, mock_account, _mock_docstatus):
 		from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import (
 			get_bank_transaction_match_form_context,
 		)
@@ -3035,6 +3039,10 @@ class BankTransactionMatchStandaloneFormTests(unittest.TestCase):
 		self.assertEqual(context["bank_party"], "West View Software Ltd.")
 
 	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.db.get_value",
+		return_value=1,
+	)
+	@patch(
 		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_account_match_payload"
 	)
 	@patch(
@@ -3047,7 +3055,7 @@ class BankTransactionMatchStandaloneFormTests(unittest.TestCase):
 		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.normalize_bank_transaction"
 	)
 	def test_payment_entry_context_autofills_candidate_side_fields(
-		self, mock_normalize, mock_bank_account, mock_candidate, mock_account_payload
+		self, mock_normalize, mock_bank_account, mock_candidate, mock_account_payload, _mock_docstatus
 	):
 		from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import (
 			get_bank_transaction_match_form_context,
