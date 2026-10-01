@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		title="Complete Delivery Note"
-		subtitle="Review the saved ERPNext Delivery Note and complete it through native stock submission or the active Frappe Workflow."
+		:title="dialogTitle"
+		:subtitle="dialogSubtitle"
 		size="xl"
 		@close="requestClose"
 	>
@@ -77,7 +77,7 @@
 					</p>
 				</div>
 
-				<div v-if="preview.blockers?.length" class="delivery-completion-blockers">
+				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="delivery-completion-blockers">
 					<strong>Standard delivery completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
@@ -111,7 +111,7 @@
 						>
 							{{ action.label }}
 						</button>
-						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Send</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Share</button>
 					</div>
 				</div>
 
@@ -225,6 +225,14 @@ export default {
 		};
 	},
 	computed: {
+		dialogTitle() {
+			return Number(this.preview?.docstatus || 0) === 0 ? "Complete Delivery Note" : "View Delivery Note";
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 0
+				? "Review the saved ERPNext Delivery Note and complete it through native stock submission or the active Frappe Workflow."
+				: "Review the saved ERPNext Delivery Note and continue with any permitted next workflow.";
+		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
 		},
@@ -273,6 +281,10 @@ export default {
 				if (Number(this.preview?.docstatus || 0) === 0) {
 					this.completedResult = null;
 					this.hydrateDraft();
+				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.completedResult = await this.decorateCompletedResult(this.preview);
+				} else {
+					this.completedResult = null;
 				}
 			} catch (error) {
 				this.preview = null;
