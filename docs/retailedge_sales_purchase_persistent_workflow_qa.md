@@ -243,6 +243,18 @@ For **Receive & Bill Now** (Purchase Invoice with Update Stock), ERPNext may rep
 
 For the normal **Purchase Receipt → Purchase Invoice** flow, the Purchase Invoice should not repost stock merely to avoid this warning; ERPNext's Stock Received But Not Billed clearing flow remains authoritative.
 
+### M. Selling list View versus Print & Share
+
+1. Open **Professional Selling** and select each submitted-document tab: Quotation, Sales Order, Delivery Note and Sales Invoice.
+2. Click the primary **View** action.
+3. Confirm RetailEdge opens the governed operational review popup and does **not** route to `/app/document-output-sharing`.
+4. Confirm the popup is read-only for submitted accounting/stock documents and shows permitted next business actions when available.
+5. For a submitted Sales Invoice, verify actions such as Payment, Delivery or Return appear only when the server says they are permitted.
+6. Close the preview and open **More → Print & Share** for the same row.
+7. Confirm route changes to `/app/document-output-sharing`, the selected document is preloaded, and the document type/search controls remain usable.
+8. Confirm Print Format, PDF, Email and WhatsApp options are available according to permissions/configuration.
+9. Confirm **Advanced: Open in ERPNext** remains separate from both View and Print & Share.
+
 ## Focused automated QA
 
 Run:
@@ -255,6 +267,8 @@ bench --site retail.local run-tests --app retailedge --module retailedge.tests.t
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2f2f1_purchase_order_submit_contract
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2f3f5_payment_history_revisit_contract
 bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_rir2g2e1_payment_management_state_contract
+bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_professional_selling_records_workspace
+bench --site retail.local run-tests --app retailedge --module retailedge.tests.test_professional_selling_qa_hardening_v3
 ```
 
 Then rebuild the focused RetailEdge assets used by Make Sale, Record Purchase and Business Hub, clear site cache, and hard-refresh the browser before manual QA.
