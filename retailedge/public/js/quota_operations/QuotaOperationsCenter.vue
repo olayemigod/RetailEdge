@@ -18,7 +18,11 @@
 		<EdgeReportShell
 			title="Quota Operations"
 			eyebrow="Operations Review"
-			subtitle="Review sales quota finalization, retry safe pending operations, and surface transactions that require platform reconciliation without changing ERPNext accounting truth."
+			:subtitle="[
+				'Review sales quota finalization, retry safe pending operations, and',
+				'surface transactions that require platform reconciliation without',
+				'changing ERPNext accounting truth.',
+			].join(' ')"
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -94,7 +98,11 @@
 				</div>
 			</template>
 			<template #resultMeta>
-				<span>{{ pagination.total_rows || 0 }} matching operation{{ Number(pagination.total_rows || 0) === 1 ? "" : "s" }}</span>
+				<span>
+					{{ pagination.total_rows || 0 }} matching operation{{
+						Number(pagination.total_rows || 0) === 1 ? "" : "s"
+					}}
+				</span>
 				<span>Bounded permission-aware dataset · {{ datasetLimit.toLocaleString() }} row cap</span>
 				<span>Submitted accounting documents are never changed from this page</span>
 			</template>
