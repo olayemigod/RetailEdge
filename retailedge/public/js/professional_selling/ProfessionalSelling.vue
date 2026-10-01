@@ -379,8 +379,8 @@ export default {
 			const document = payload?.document;
 			const row = payload?.row;
 			if (!document?.key || !row?.name) return;
-			if (action === "view") { this.openDocumentOutput(document, row, "view"); return; }
-			if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }
+			if (action === "view") { this.openRecordPreview(document, row); return; }
+			if (action === "output") { this.openDocumentOutput(document, row); return; }
 			if (action === "advanced") { this.openAdvancedRecord(document, row.name); return; }
 			if (action === "make-payment") { this.openCustomerPayment(document, row); return; }
 			if (["create-sales-order", "create-delivery-note", "create-sales-invoice", "create-return-credit-note"].includes(action)) {
@@ -441,11 +441,11 @@ export default {
 						else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result, result.is_return ? "sales_return" : "standard");
 						else {
 							const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
-							this.openDocumentOutput(existingDocument, result, "view");
+							this.openRecordPreview(existingDocument, result);
 						}
 					} else {
 						const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
-						this.openDocumentOutput(existingDocument, result, "view");
+						this.openRecordPreview(existingDocument, result);
 					}
 					return;
 				}
@@ -505,9 +505,31 @@ export default {
 			});
 		},
 
-		openDocumentOutput(document, row, mode = "share") {
+		openRecordPreview(document, row) {
 			if (!document?.key || !row?.name) return;
-			window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode };
+			if (document.key === "quotation") {
+				this.openStandardCompletion({ doctype: "Quotation", name: row.name });
+				return;
+			}
+			if (document.key === "sales-order") {
+				this.openStandardCompletion({ doctype: "Sales Order", name: row.name });
+				return;
+			}
+			if (document.key === "delivery-note") {
+				this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });
+				return;
+			}
+			if (document.key === "sales-invoice") {
+				this.openSalesInvoiceCompletion(
+					{ doctype: "Sales Invoice", name: row.name },
+					row.is_return ? "sales_return" : "standard",
+				);
+			}
+		},
+
+		openDocumentOutput(document, row) {
+			if (!document?.key || !row?.name) return;
+			window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode: "share" };
 			frappe.set_route("document-output-sharing");
 		},
 
