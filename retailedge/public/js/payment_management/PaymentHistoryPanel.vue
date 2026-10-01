@@ -70,7 +70,7 @@
 						<td>{{ row.mode_of_payment || "—" }}</td>
 						<td class="num">{{ formatCurrency(paymentAmount(row)) }}</td>
 						<td>{{ row.status || documentState(row.docstatus) }}</td>
-						<td><button class="edge-small-button" type="button" @click="reviewHistoryPayment(row.payment_entry)">Review</button></td>
+						<td><button class="edge-small-button" type="button" @click="reviewHistoryPayment(row.payment_entry)">{{ Number(row.docstatus || 0) === 0 ? "Review" : "View" }}</button></td>
 					</tr>
 				</tbody>
 			</table>
