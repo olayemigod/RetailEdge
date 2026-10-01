@@ -46,6 +46,11 @@ class CoreEdgeRemoteUsageResponseInvalid(CoreEdgeRemoteUsageError):
 	pass
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+	def redirect_request(self, req, fp, code, msg, headers, newurl):
+		return None
+
+
 def _parse_bool(value: Any, default: bool = False) -> bool:
 	if value is None:
 		return default
@@ -347,8 +352,9 @@ class CoreEdgeRemoteUsageClient:
 			headers=headers,
 			method="POST",
 		)
+		opener = urllib.request.build_opener(_NoRedirectHandler())
 		try:
-			with urllib.request.urlopen(request, timeout=timeout) as response:
+			with opener.open(request, timeout=timeout) as response:
 				body = response.read().decode("utf-8")
 		except urllib.error.HTTPError as exc:
 			if exc.code in {401, 403}:
