@@ -338,6 +338,18 @@ This slice does not:
 - debit CoreEdge wallet balances;
 - change payment/accounting workflows.
 
+## Operational review surface
+
+Pending and exceptional quota operations are surfaced through:
+
+`RetailEdge CoreEdge Quota Review`
+
+under Reports Centre -> Controls & Audit.
+
+Managers may retry only `Pending Finalize` operations. `Needs Review` remains report-first and cannot be
+auto-corrected from RetailEdge because historical quota reconciliation requires authoritative CoreEdge period
+and audit semantics.
+
 ## QA sequence before enabling on a site
 
 1. Validate CoreEdge PR #31 migration and focused/full suites.
