@@ -164,6 +164,10 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 		"can_edit": bool(
 			cint(getattr(doc, "docstatus", 0)) == 0
 			and str(getattr(doc, "status", "") or "") not in BLOCKED_DRAFT_STATUSES
+			and not cint(getattr(doc, "is_subcontracted", 0))
+			and not cint(getattr(doc, "is_old_subcontracting_flow", 0))
+			and not cint(getattr(doc, "is_internal_supplier", 0))
+			and not str(getattr(doc, "inter_company_order_reference", "") or "")
 			and frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc)
 		),
 		"can_submit": not blockers,
@@ -208,6 +212,10 @@ def update_standard_purchase_order_draft(
 		frappe.throw(_("Only draft Purchase Orders can be edited here."))
 	if str(getattr(doc, "status", "") or "") in BLOCKED_DRAFT_STATUSES:
 		frappe.throw(_("Purchase Order status {0} is not editable in standard purchasing.").format(doc.status))
+	if cint(getattr(doc, "is_subcontracted", 0)) or cint(getattr(doc, "is_old_subcontracting_flow", 0)):
+		frappe.throw(_("Subcontracting Purchase Orders require Advanced ERPNext review."))
+	if cint(getattr(doc, "is_internal_supplier", 0)) or str(getattr(doc, "inter_company_order_reference", "") or ""):
+		frappe.throw(_("Inter-company Purchase Orders require Advanced ERPNext review."))
 	if not frappe.has_permission(PURCHASE_ORDER_DOCTYPE, "write", doc=doc):
 		frappe.throw(_("You do not have permission to edit this Purchase Order."), frappe.PermissionError)
 
