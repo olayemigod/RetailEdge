@@ -22,6 +22,7 @@ from retailedge.bank_transaction_matching import (
 	get_review_creation_block_reason,
 	is_payment_basis_review_candidate,
 	normalize_bank_transaction,
+	payment_entry_active_match_conflict,
 	payment_entry_has_active_confirmed_bank_match,
 	sales_invoice_has_active_confirmed_bank_match,
 	split_duplicate_candidate_suggestions,
@@ -1059,9 +1060,11 @@ def _validate_locked_candidate_from_selected_row(row):
 				"party",
 				"party_type",
 				"mode_of_payment",
+				"payment_type",
 				"paid_to",
 				"paid_from",
 				"reference_no",
+				"clearance_date",
 				"retailedge_branch",
 			],
 			as_dict=True,
@@ -1078,13 +1081,25 @@ def _validate_locked_candidate_from_selected_row(row):
 				"reason": f"Payment Entry {candidate_name} is not submitted (docstatus={pe.docstatus})",
 				"do_not_substitute": True,
 			}
-
-		# Check conflict
-		conflict = frappe.db.get_value("RetailEdge Bank Transaction Match", conflict_filter, "name")
-		if conflict:
+		if pe.clearance_date:
 			return {
 				"valid": False,
-				"reason": f"Payment Entry is already confirmed in match review {conflict}",
+				"reason": f"Payment Entry {candidate_name} already has clearance date {pe.clearance_date}",
+				"do_not_substitute": True,
+			}
+
+		# Receive/Pay entries are single-leg candidates. Internal Transfer conflicts
+		# are scoped to the current Bank Transaction ledger leg.
+		conflict_row = payment_entry_active_match_conflict(
+			candidate_name,
+			bank_transaction_name,
+			exclude_match=match_record,
+			confirmed_only=True,
+		)
+		if conflict_row:
+			return {
+				"valid": False,
+				"reason": f"Payment Entry bank leg is already confirmed in match review {conflict_row.get('name')}",
 				"do_not_substitute": True,
 			}
 
@@ -1140,6 +1155,7 @@ def _validate_locked_candidate_from_selected_row(row):
 		candidate["party_type"] = pe.party_type or "Customer"
 		candidate["customer"] = pe.party if pe.party_type == "Customer" else None
 		candidate["payment_mode"] = pe.mode_of_payment
+		candidate["payment_entry_payment_type"] = pe.payment_type
 		candidate["payment_account"] = pe_account
 		candidate["branch"] = pe.retailedge_branch
 		candidate["candidate_amount"] = pe_amount
@@ -1485,10 +1501,13 @@ def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False
 			"status": "already_matched",
 			"row": _preparation_summary_row(row, reason="Sales Invoice already has a confirmed bank match."),
 		}
-	if payment_entry and payment_entry_has_active_confirmed_bank_match(payment_entry):
+	if payment_entry and payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction):
 		return {
 			"status": "already_matched",
-			"row": _preparation_summary_row(row, reason="Payment Entry already has a confirmed bank match."),
+			"row": _preparation_summary_row(
+				row,
+				reason="This Payment Entry bank ledger leg already has a confirmed bank match.",
+			),
 		}
 	active_bank_transaction_match = _find_active_bank_transaction_review_match(bank_transaction)
 	if active_bank_transaction_match:
@@ -1523,6 +1542,7 @@ def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False
 	active_candidate_match = _find_active_candidate_review_match(
 		suggested_document_type=suggested_document_type,
 		suggested_document=suggested_document,
+		bank_transaction=bank_transaction,
 	)
 	if active_candidate_match:
 		return {
@@ -1550,9 +1570,16 @@ def _find_active_bank_transaction_review_match(bank_transaction):
 	)
 
 
-def _find_active_candidate_review_match(suggested_document_type, suggested_document):
+def _find_active_candidate_review_match(suggested_document_type, suggested_document, bank_transaction=None):
 	if not suggested_document_type or not suggested_document:
 		return None
+	if suggested_document_type == "Payment Entry" and bank_transaction:
+		conflict = payment_entry_active_match_conflict(
+			suggested_document,
+			bank_transaction,
+			confirmed_only=False,
+		)
+		return conflict.get("name") if conflict else None
 	status_filter = ["not in", ["Rejected", "Cancelled", "Reopened"]]
 	name = frappe.db.get_value(
 		"RetailEdge Bank Transaction Match",
@@ -1927,17 +1954,14 @@ def _get_first_active_confirmed_conflict(doc):
 		if other_invoice_match:
 			return f"Sales Invoice already has confirmed match {other_invoice_match}."
 	if getattr(doc, "payment_entry", None):
-		other_payment_match = frappe.db.get_value(
-			"RetailEdge Bank Transaction Match",
-			{
-				"payment_entry": doc.payment_entry,
-				"decision_status": "Confirmed",
-				"name": ["!=", doc.name],
-			},
-			"name",
+		other_payment_match = payment_entry_active_match_conflict(
+			doc.payment_entry,
+			doc.bank_transaction,
+			exclude_match=doc.name,
+			confirmed_only=True,
 		)
 		if other_payment_match:
-			return f"Payment Entry already has confirmed match {other_payment_match}."
+			return f"Payment Entry bank leg already has confirmed match {other_payment_match.get('name')}."
 	return None
 
 
@@ -2036,18 +2060,16 @@ def _validate_no_other_active_confirmed_match(doc):
 			)
 
 	if getattr(doc, "payment_entry", None):
-		other_payment_entry_match = frappe.db.get_value(
-			"RetailEdge Bank Transaction Match",
-			{
-				"payment_entry": doc.payment_entry,
-				"decision_status": "Confirmed",
-				"name": ["!=", doc.name],
-			},
-			"name",
+		other_payment_entry_match = payment_entry_active_match_conflict(
+			doc.payment_entry,
+			doc.bank_transaction,
+			exclude_match=doc.name,
+			confirmed_only=True,
 		)
-		if other_payment_entry_match or payment_entry_has_active_confirmed_bank_match(doc.payment_entry):
+		if other_payment_entry_match:
 			frappe.throw(
-				"Payment Entry already has a confirmed bank match. Reopen, reject, or cancel the existing match before confirming another."
+				"Payment Entry bank leg already has a confirmed bank match. "
+				"Reopen, reject, or cancel the existing match before confirming another for this bank ledger."
 			)
 
 
