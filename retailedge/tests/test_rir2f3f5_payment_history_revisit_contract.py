@@ -75,7 +75,7 @@ def test_payment_history_is_a_separate_edgesuite_page_linked_from_payment_manage
 	assert "canUseNativeDesk" in panel
 	assert "retailedge.edgesuite_ui.get_retailedge_business_hub_context" in panel
 	assert "retailedge.master_experience.get_master_retailedge_business_hub_context" not in panel
-	assert 'v-if="canUseNativeDesk"' in panel
+	assert 'v-if="canUseNativeDesk && paymentDetail.payment_entry"' in panel
 	assert "PaymentHistoryPanel.vue" not in management_bundle
 	assert "mountPaymentHistoryPanel" not in management_loader
 	assert "PaymentHistoryPage.vue" in history_bundle
