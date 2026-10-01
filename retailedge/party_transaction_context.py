@@ -106,9 +106,9 @@ def _summary(filters: dict[str, Any], doctype: str) -> dict[str, Any]:
 		doctype,
 		filters=filters,
 		fields=[
-			"count(name) as document_count",
-			"sum(base_net_total) as total_value",
-			"max(posting_date) as last_transaction_date",
+			{"COUNT": "*", "as": "document_count"},
+			{"SUM": "base_net_total", "as": "total_value"},
+			{"MAX": "posting_date", "as": "last_transaction_date"},
 		],
 		limit_page_length=1,
 	)
@@ -126,14 +126,17 @@ def _outstanding_summary(filters: dict[str, Any], doctype: str) -> dict[str, Any
 		rows = frappe.get_list(
 			doctype,
 			filters=open_filters,
-			fields=["sum(outstanding_amount) as current_balance", "count(name) as open_document_count"],
+			fields=[
+				{"SUM": "outstanding_amount", "as": "current_balance"},
+				{"COUNT": "*", "as": "open_document_count"},
+			],
 			limit_page_length=1,
 		)
 		overdue_filters = {**open_filters, "due_date": ["<", nowdate()]}
 		overdue_rows = frappe.get_list(
 			doctype,
 			filters=overdue_filters,
-			fields=["sum(outstanding_amount) as overdue_balance"],
+			fields=[{"SUM": "outstanding_amount", "as": "overdue_balance"}],
 			limit_page_length=1,
 		)
 		row = rows[0] if rows else frappe._dict()
