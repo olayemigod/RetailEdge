@@ -7,7 +7,17 @@ from frappe import _
 from frappe.utils import cint, getdate, nowdate
 
 from retailedge.bank_account_policy import resolve_retailedge_bank_account, search_retailedge_bank_accounts
+from retailedge.bank_transaction_bridge import (
+	accept_possible_duplicate_statement_row as _accept_possible_duplicate_statement_row,
+	get_possible_duplicate_statement_rows as _get_possible_duplicate_statement_rows,
+	import_statement_rows_to_bank_transactions as _import_statement_rows_to_bank_transactions,
+	preview_bank_transaction_import as _preview_bank_transaction_import,
+)
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
+from retailedge.statement_import import (
+	import_payment_statement_rows as _import_payment_statement_rows,
+	preview_payment_statement_import_rows as _preview_payment_statement_import_rows,
+)
 
 DOCTYPE = "RetailEdge Payment Statement Import"
 ROW_DOCTYPE = "RetailEdge Statement Import Row"
@@ -259,6 +269,63 @@ def set_bank_statement_import_attachment(name: str, file_url: str) -> dict[str, 
 	return get_bank_statement_import_detail(doc.name)
 
 
+def _assert_statement_action(name: str, *, write: bool = False, bank_transaction_access: str = "") -> dict[str, Any]:
+	detail = get_bank_statement_import_detail(name)
+	if write and not detail.get("can_write"):
+		frappe.throw(_("You do not have permission to update this Bank Statement Import."), frappe.PermissionError)
+	if bank_transaction_access and not frappe.has_permission("Bank Transaction", bank_transaction_access):
+		frappe.throw(
+			_("You do not have permission to {0} Bank Transactions.").format(bank_transaction_access),
+			frappe.PermissionError,
+		)
+	return detail
+
+
+@frappe.whitelist()
+def preview_statement_rows(name: str) -> dict[str, Any]:
+	_assert_statement_action(name)
+	return _preview_payment_statement_import_rows(_clean(name))
+
+
+@frappe.whitelist(methods=["POST"])
+def import_statement_rows(name: str, replace_rows: int = 1) -> dict[str, Any]:
+	_assert_statement_action(name, write=True)
+	return _import_payment_statement_rows(_clean(name), replace_rows=bool(cint(replace_rows)))
+
+
+@frappe.whitelist()
+def preview_statement_bank_transactions(name: str) -> dict[str, Any]:
+	_assert_statement_action(name, bank_transaction_access="read")
+	return _preview_bank_transaction_import(_clean(name))
+
+
+@frappe.whitelist(methods=["POST"])
+def create_statement_bank_transactions(name: str) -> dict[str, Any]:
+	_assert_statement_action(name, write=True, bank_transaction_access="create")
+	return _import_statement_rows_to_bank_transactions(_clean(name), force=False)
+
+
+@frappe.whitelist()
+def get_statement_possible_duplicates(name: str) -> list[dict[str, Any]]:
+	_assert_statement_action(name)
+	return _get_possible_duplicate_statement_rows(_clean(name))
+
+
+@frappe.whitelist(methods=["POST"])
+def accept_statement_possible_duplicate(row_name: str, acceptance_note: str = "") -> dict[str, Any]:
+	row_name = _clean(row_name)
+	if not row_name:
+		frappe.throw(_("Statement Row is required."), frappe.ValidationError)
+	parent = _clean(frappe.db.get_value(ROW_DOCTYPE, row_name, "parent"))
+	if not parent:
+		frappe.throw(_("Statement Row {0} does not exist.").format(row_name), frappe.DoesNotExistError)
+	_assert_statement_action(parent, write=True, bank_transaction_access="create")
+	note = _clean(acceptance_note)
+	if not note:
+		frappe.throw(_("Acceptance Note is required for a possible duplicate."), frappe.ValidationError)
+	return _accept_possible_duplicate_statement_row(row_name, acceptance_note=note)
+
+
 @frappe.whitelist()
 def search_bank_statement_import_options(
 	fieldname: str,
@@ -322,5 +389,11 @@ __all__ = [
 	"get_bank_statement_import_detail",
 	"create_bank_statement_import",
 	"set_bank_statement_import_attachment",
+	"preview_statement_rows",
+	"import_statement_rows",
+	"preview_statement_bank_transactions",
+	"create_statement_bank_transactions",
+	"get_statement_possible_duplicates",
+	"accept_statement_possible_duplicate",
 	"search_bank_statement_import_options",
 ]
