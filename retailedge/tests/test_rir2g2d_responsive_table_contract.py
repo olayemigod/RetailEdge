@@ -14,6 +14,7 @@ LOCAL_OVERFLOW_WRAPPERS = {
 	"branch_assignments/BranchAssignments.vue": "assignment-table-wrap",
 	"branch_setup/BranchSetup.vue": "table-wrap",
 	"business_expenses/BusinessExpenses.vue": "table-wrap",
+	"bank_statement_imports/BankStatementImports.vue": "statement-table-wrap",
 	"customer_360/Customer360.vue": "customer-360-table-wrap",
 	"forecasting_planning/ForecastingPlanning.vue": "table-wrap",
 	"native_visual_workspaces/NativeERPNextWorkspace.vue": "native-control-table-wrap",
