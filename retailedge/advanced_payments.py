@@ -67,15 +67,14 @@ def _resolve_advance_scope(company: str | None, branch: str | None) -> tuple[str
 	resolved_branch = str(branch or "").strip()
 	if not resolved_branch and (not company or resolved_company == operating_company):
 		resolved_branch = operating_branch
-	if resolved_branch:
-		resolved_branch = str(
-			resolve_operational_branch(
-				resolved_company,
-				resolved_branch,
-				user=frappe.session.user,
-			).get("branch")
-			or ""
-		).strip()
+	resolved_branch = str(
+		resolve_operational_branch(
+			resolved_company,
+			resolved_branch,
+			user=frappe.session.user,
+		).get("branch")
+		or ""
+	).strip()
 	return resolved_company, resolved_branch
 
 
@@ -207,16 +206,14 @@ def create_customer_advance_draft(values: dict | str | None = None) -> dict[str,
 	if not company_currency:
 		frappe.throw(_("Company {0} has no default currency configured.").format(company))
 
-	branch = str(values.get("branch") or "").strip()
-	if branch:
-		branch = str(
-			resolve_operational_branch(
-				company,
-				branch,
-				user=frappe.session.user,
-			).get("branch")
-			or ""
-		).strip()
+	branch = str(
+		resolve_operational_branch(
+			company,
+			str(values.get("branch") or "").strip(),
+			user=frappe.session.user,
+		).get("branch")
+		or ""
+	).strip()
 	branch_field = _require_payment_branch_field(branch)
 
 	customer = str(values.get("customer") or values.get("party") or "").strip()
