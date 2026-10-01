@@ -343,9 +343,17 @@ def _update_stock_draft_items(doc, requested_items: Any, *, preview: dict[str, A
 			if row_name in requested_existing:
 				frappe.throw(_("Stock item row {0} is repeated.").format(index))
 			requested_existing.add(row_name)
-			if item_code and item_code != _clean(row.get("item_code")):
-				frappe.throw(_("Existing stock item identity cannot be replaced here. Remove the row and add the correct Item instead."))
-			item_code = _clean(row.get("item_code"))
+			stored_item_code = _clean(row.get("item_code"))
+			if kind == "transfer":
+				if item_code and item_code != stored_item_code:
+					frappe.throw(_("Existing transfer item identity cannot be replaced here. Remove the row and add the correct Item instead."))
+				item_code = stored_item_code
+			else:
+				item_code = item_code or stored_item_code
+				if item_code != stored_item_code:
+					row.item_code = item_code
+					if row.meta.has_field("item_name"):
+						row.item_name = ""
 		else:
 			if not item_code:
 				frappe.throw(_("Item is required on new stock row {0}.").format(index))
