@@ -125,6 +125,9 @@ def get_supplier_quotation_history(
 	branch: str | None = None,
 	supplier: str | None = None,
 	limit: int | str = 50,
+	start: int | str = 0,
+	page_length: int | str | None = None,
+	search: str | None = None,
 ) -> dict[str, Any]:
 	"""Return Supplier Quotations inside permission-safe Company/Branch sourcing scope."""
 	_assert_read(SUPPLIER_QUOTATION_DOCTYPE)
@@ -178,14 +181,27 @@ def get_supplier_quotation_history(
 	if branch_field:
 		fields.append(branch_field)
 
-	row_limit = max(1, min(cint(limit) or 50, MAX_SUPPLIER_QUOTATION_HISTORY))
+	page_start = max(0, cint(start))
+	requested_length = page_length if page_length not in (None, "") else limit
+	row_limit = max(1, min(cint(requested_length) or 50, MAX_SUPPLIER_QUOTATION_HISTORY))
+	search_text = str(search or "").strip()
+	or_filters = None
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters = [["name", "like", like], ["supplier", "like", like], ["supplier_name", "like", like]]
+		if meta.has_field("quotation_number"):
+			or_filters.append(["quotation_number", "like", like])
 	rows = frappe.get_list(
 		SUPPLIER_QUOTATION_DOCTYPE,
 		filters=filters,
+		or_filters=or_filters,
 		fields=fields,
 		order_by="modified desc, name desc",
-		limit_page_length=row_limit,
+		limit_start=page_start,
+		limit_page_length=row_limit + 1,
 	)
+	has_more = len(rows) > row_limit
+	rows = rows[:row_limit]
 	parent_names = [str(row.get("name") or "") for row in rows if row.get("name")]
 	rfqs_by_parent, branch_by_rfq, item_count_by_parent = _linked_rfq_context(parent_names)
 
@@ -222,7 +238,11 @@ def get_supplier_quotation_history(
 		"supplier": supplier,
 		"can_create_purchase_order": bool(frappe.has_permission("Purchase Order", "create")),
 		"rows": result_rows,
+		"search": search_text,
 		"limit": row_limit,
+		"start": page_start,
+		"has_more": has_more,
+		"next_start": page_start + len(result_rows),
 		"branch_source": branch_field or "Request for Quotation linkage",
 		"standalone_visibility": "company-wide only" if not branch_field and global_access and not resolved_branch else "excluded_without_attributable RFQ",
 		"source_of_truth": SUPPLIER_QUOTATION_DOCTYPE,
