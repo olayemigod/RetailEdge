@@ -31,6 +31,7 @@ from retailedge.bank_transaction_matching import (
 	_review_queue_status_mode,
 	_select_candidate_for_queue,
 	candidate_document_has_active_confirmed_bank_match,
+	find_journal_entry_candidates_for_bank_transaction,
 	find_payment_entry_candidates_for_bank_transaction,
 	find_sales_invoice_candidates_for_bank_transaction,
 	get_amount_scenario_label,
@@ -78,12 +79,15 @@ def _review_status_filters(filters):
 
 def _get_review_matches_by_candidate(document_type, document_names):
 	document_names = [cstr(name).strip() for name in (document_names or []) if cstr(name).strip()]
-	if not document_names or document_type not in {"Sales Invoice", "Payment Entry"} or not has_doctype("RetailEdge Bank Transaction Match"):
+	if not document_names or document_type not in {"Sales Invoice", "Payment Entry", "Journal Entry"} or not has_doctype("RetailEdge Bank Transaction Match"):
 		return {}
-	fieldname = "sales_invoice" if document_type == "Sales Invoice" else "payment_entry"
+	fieldname = "sales_invoice" if document_type == "Sales Invoice" else "payment_entry" if document_type == "Payment Entry" else "suggested_document"
+	filters = {fieldname: ["in", document_names]}
+	if document_type == "Journal Entry":
+		filters["suggested_document_type"] = "Journal Entry"
 	rows = frappe.get_all(
 		"RetailEdge Bank Transaction Match",
-		filters={fieldname: ["in", document_names]},
+		filters=filters,
 		fields=[
 			"name",
 			"bank_transaction",
@@ -114,7 +118,7 @@ def _get_bank_transaction_match_record(bank_transaction, document_type, document
 	bank_transaction = cstr(bank_transaction).strip()
 	document_type = cstr(document_type).strip()
 	document_name = cstr(document_name).strip()
-	if not bank_transaction or document_type not in {"Sales Invoice", "Payment Entry"} or not document_name:
+	if not bank_transaction or document_type not in {"Sales Invoice", "Payment Entry", "Journal Entry"} or not document_name:
 		return None
 	if not has_doctype("RetailEdge Bank Transaction Match"):
 		return None
@@ -136,6 +140,7 @@ def _candidate_count_for_bank_transaction(bank_transaction_name, filters):
 	candidates = []
 	candidates.extend(find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, filters=matching_filters, limit=50))
 	candidates.extend(find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, filters=matching_filters, limit=50))
+	candidates.extend(find_journal_entry_candidates_for_bank_transaction(bank_transaction_name, filters=matching_filters, limit=50))
 	return candidates
 
 
@@ -392,12 +397,39 @@ def _hydrate_match_candidate_context(row, details):
 			if has_field("Payment Entry", "retailedge_branch"):
 				fields.append("retailedge_branch")
 			payload = frappe.db.get_value("Payment Entry", entry_name, fields, as_dict=True) or {}
+			direction = cstr(row.get("bank_direction") or details.get("bank_direction") or details.get("direction")).strip()
 			context["candidate_category"] = context.get("candidate_category") or "payment_entry_match"
 			context["payment_event_source"] = context.get("payment_event_source") or "Payment Entry"
-			context["payment_account"] = context.get("payment_account") or cstr(payload.get("paid_to") or payload.get("paid_from")).strip()
-			context["payment_event_amount"] = flt(context.get("payment_event_amount") or payload.get("received_amount") or payload.get("paid_amount"))
+			context["payment_account"] = context.get("payment_account") or cstr(
+				payload.get("paid_to") if direction == "Inflow" else payload.get("paid_from") if direction == "Outflow" else payload.get("paid_to") or payload.get("paid_from")
+			).strip()
+			context["payment_event_amount"] = flt(
+				context.get("payment_event_amount")
+				or payload.get("received_amount") if direction == "Inflow"
+				else context.get("payment_event_amount") or payload.get("paid_amount") if direction == "Outflow"
+				else context.get("payment_event_amount") or payload.get("received_amount") or payload.get("paid_amount")
+			)
 			context["party"] = payload.get("party") or row.get("party") or row.get("customer")
 			context["branch"] = payload.get("retailedge_branch") or row.get("branch")
+			context["candidate_docstatus"] = payload.get("docstatus")
+		return context
+
+	if suggested_document_type == "Journal Entry":
+		entry_name = cstr(row.get("suggested_document")).strip()
+		if entry_name and has_doctype("Journal Entry"):
+			fields = ["posting_date", "docstatus"]
+			if has_field("Journal Entry", "retailedge_branch"):
+				fields.append("retailedge_branch")
+			elif has_field("Journal Entry", "branch"):
+				fields.append("branch")
+			payload = frappe.db.get_value("Journal Entry", entry_name, fields, as_dict=True) or {}
+			context["candidate_category"] = context.get("candidate_category") or "journal_entry_match"
+			context["payment_event_source"] = context.get("payment_event_source") or "Journal Entry"
+			context["payment_account"] = context.get("payment_account") or cstr(details.get("candidate_canonical_account")).strip()
+			context["payment_event_amount"] = flt(context.get("payment_event_amount") or row.get("candidate_amount"))
+			context["branch"] = payload.get("retailedge_branch") or payload.get("branch") or row.get("branch")
+			context["candidate_posting_date"] = payload.get("posting_date") or details.get("candidate_posting_date")
+			context["candidate_docstatus"] = payload.get("docstatus")
 		return context
 
 	if suggested_document_type == "Sales Invoice":
@@ -503,8 +535,11 @@ def _readiness_for_match_row(match_row):
 		return READINESS_NEEDS_REVIEW, "Decision is not confirmed yet."
 	if match_row.get("is_reconciled"):
 		return READINESS_ALREADY_RECONCILED, "Bank Transaction already appears reconciled/settled."
-	if cstr(match_row.get("candidate_category")).strip() not in {"payment_entry_match", "invoice_payment_row_match", "pos_payment_match"}:
+	if cstr(match_row.get("candidate_category")).strip() not in {"payment_entry_match", "journal_entry_match", "invoice_payment_row_match", "pos_payment_match"}:
 		return READINESS_NOT_READY, "No bank-matchable payment event found."
+	candidate_docstatus = match_row.get("candidate_docstatus")
+	if candidate_docstatus not in (None, "") and cint(candidate_docstatus) != 1:
+		return READINESS_NOT_READY, "The candidate accounting document is not submitted."
 	if abs(flt(match_row.get("amount_difference"))) > 0.01:
 		return READINESS_NOT_READY, "Amount variance requires review"
 	account_status = cstr(match_row.get("account_resolution_status")).strip()
@@ -537,6 +572,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 			"transaction_date",
 			"bank_amount",
 			"bank_account",
+			"bank_direction",
 			"suggested_document_type",
 			"suggested_document",
 			"sales_invoice",
@@ -576,6 +612,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 			"expected_bank_account": details.get("candidate_canonical_account"),
 			"branch": hydrated.get("branch") or row.get("branch"),
 		}
+		bank_direction = cstr(row.get("bank_direction") or details.get("bank_direction") or details.get("direction")).strip() or "Inflow"
 		bank_transaction = {
 			"bank_account": row.get("bank_account"),
 			"bank_transaction": row.get("bank_transaction"),
@@ -583,7 +620,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 			"amount": row.get("bank_amount"),
 			"branch": row.get("branch"),
 			"company": row.get("company"),
-			"direction": "Inflow",
+			"direction": bank_direction,
 			"is_reconciled": _report_boolean(details.get("is_reconciled"), 0),
 		}
 		account_payload = _resolve_account_match_payload(bank_transaction, candidate)
@@ -1533,6 +1570,11 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 		for row in (match_rows or [])
 		if cstr(row.get("suggested_document_type")).strip() == "Sales Invoice"
 	]
+	journal_entry_names = [
+		cstr(row.get("suggested_document")).strip()
+		for row in (match_rows or [])
+		if cstr(row.get("suggested_document_type")).strip() == "Journal Entry"
+	]
 	payment_entry_map = {}
 	if payment_entry_names and has_doctype("Payment Entry"):
 		fields = ["name", "posting_date", "paid_to", "paid_from", "received_amount", "paid_amount", "party", "party_type", "docstatus"]
@@ -1572,6 +1614,22 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 				limit_page_length=0,
 			)
 		}
+	journal_entry_map = {}
+	if journal_entry_names and has_doctype("Journal Entry"):
+		fields = ["name", "posting_date", "docstatus"]
+		if has_field("Journal Entry", "retailedge_branch"):
+			fields.append("retailedge_branch")
+		elif has_field("Journal Entry", "branch"):
+			fields.append("branch")
+		journal_entry_map = {
+			row.get("name"): row
+			for row in frappe.get_all(
+				"Journal Entry",
+				filters={"name": ["in", journal_entry_names]},
+				fields=fields,
+				limit_page_length=0,
+			)
+		}
 	payment_rows_by_invoice = _get_sales_invoice_payment_rows_by_parent(sales_invoice_names)
 	context_map = {}
 	for row in match_rows or []:
@@ -1581,14 +1639,44 @@ def _bulk_hydrate_match_candidate_contexts(match_rows):
 		if cstr(row.get("suggested_document_type")).strip() == "Payment Entry":
 			entry_name = cstr(row.get("payment_entry") or row.get("suggested_document")).strip()
 			payload = frappe._dict(payment_entry_map.get(entry_name) or {})
+			direction = cstr(row.get("bank_direction") or details.get("bank_direction") or details.get("direction")).strip()
+			payment_account = (
+				payload.get("paid_to")
+				if direction == "Inflow"
+				else payload.get("paid_from")
+				if direction == "Outflow"
+				else payload.get("paid_to") or payload.get("paid_from")
+			)
+			payment_amount = (
+				payload.get("received_amount")
+				if direction == "Inflow"
+				else payload.get("paid_amount")
+				if direction == "Outflow"
+				else payload.get("received_amount") or payload.get("paid_amount")
+			)
 			context_map[match_name] = {
 				"candidate_category": cstr(details.get("candidate_category")).strip() or "payment_entry_match",
 				"payment_event_source": cstr(details.get("payment_event_source")).strip() or "Payment Entry",
-				"payment_account": cstr(details.get("payment_account")).strip() or cstr(payload.get("paid_to") or payload.get("paid_from")).strip(),
-				"payment_event_amount": flt(details.get("payment_entry_paid_amount") or details.get("payment_row_amount") or row.get("candidate_amount") or payload.get("received_amount") or payload.get("paid_amount")),
+				"payment_account": cstr(details.get("payment_account")).strip() or cstr(payment_account).strip(),
+				"payment_event_amount": flt(details.get("payment_entry_paid_amount") or details.get("payment_row_amount") or row.get("candidate_amount") or payment_amount),
 				"branch": details.get("branch") or payload.get("retailedge_branch") or row.get("branch"),
 				"party": payload.get("party") or row.get("party") or row.get("customer"),
 				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date"),
+				"candidate_docstatus": payload.get("docstatus"),
+			}
+			continue
+		if cstr(row.get("suggested_document_type")).strip() == "Journal Entry":
+			entry_name = cstr(row.get("suggested_document")).strip()
+			payload = frappe._dict(journal_entry_map.get(entry_name) or {})
+			context_map[match_name] = {
+				"candidate_category": cstr(details.get("candidate_category")).strip() or "journal_entry_match",
+				"payment_event_source": cstr(details.get("payment_event_source")).strip() or "Journal Entry",
+				"payment_account": cstr(details.get("payment_account") or details.get("candidate_canonical_account")).strip(),
+				"payment_event_amount": flt(details.get("payment_row_amount") or row.get("candidate_amount")),
+				"branch": details.get("branch") or payload.get("retailedge_branch") or payload.get("branch") or row.get("branch"),
+				"party": row.get("party") or row.get("customer"),
+				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date"),
+				"candidate_docstatus": payload.get("docstatus"),
 			}
 			continue
 		invoice_name = cstr(row.get("sales_invoice") or row.get("suggested_document")).strip()
@@ -1652,6 +1740,7 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 			"transaction_date",
 			"bank_amount",
 			"bank_account",
+			"bank_direction",
 			"suggested_document_type",
 			"suggested_document",
 			"sales_invoice",
@@ -1712,6 +1801,8 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 		combined["branch_match"] = details.get("branch_match")
 		combined["branch_match_available"] = details.get("branch_match_available")
 		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date")
+		combined["candidate_docstatus"] = context.get("candidate_docstatus")
+		combined["bank_direction"] = bank_direction
 		readiness, reason = _readiness_for_match_row(combined)
 		if not _report_boolean(filters.get("include_rejected_cancelled"), 0) and cstr(row.get("decision_status")).strip() in {"Rejected", "Cancelled"}:
 			continue
