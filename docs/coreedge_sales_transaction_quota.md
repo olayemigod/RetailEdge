@@ -200,8 +200,12 @@ capacity.
 
 An operator may explicitly configure fail-open behavior.
 
-Fail-open is a deliberate commercial-risk setting: the sale proceeds without a reservation and may therefore
-be absent from central quota usage.
+Fail-open is a deliberate commercial-risk setting. The sale proceeds without a CoreEdge reservation, but
+RetailEdge now writes a durable local `Needs Review` quota operation with reason
+`FAIL_OPEN_UNRESERVED`.
+
+That record commits with the sale and gives operators a reconciliation queue instead of silently losing the
+commercial usage event.
 
 An explicit CoreEdge quota denial always blocks the sale, even when outage handling is configured fail-open.
 
@@ -287,6 +291,7 @@ Coverage includes:
 - explicit central denial;
 - fail-closed outage handling;
 - explicit fail-open outage handling;
+- durable fail-open `Needs Review` audit;
 - stable local operation identity;
 - direct operation creation blocking;
 - immutable reservation/source identity;
