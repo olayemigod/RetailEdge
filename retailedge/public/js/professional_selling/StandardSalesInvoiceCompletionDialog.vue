@@ -129,7 +129,7 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
-							v-if="preview?.can_edit && draftDirty"
+							v-if="preview?.can_submit"
 							type="button"
 							class="edge-button edge-button--primary"
 							:disabled="busy || draftDirty"
@@ -155,6 +155,8 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
@@ -557,7 +559,7 @@ export default {
 		requestClose() {
 			if (this.busy) return;
 			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
-				frappe.confirm(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
+				confirmAboveEdgeModal(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
 				return;
 			}
 			this.$emit("close");
