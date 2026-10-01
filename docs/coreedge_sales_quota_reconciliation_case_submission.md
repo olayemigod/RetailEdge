@@ -37,11 +37,11 @@ For a `Needs Review` operation with:
 
 - no Reservation Reference;
 - reason code `FAIL_OPEN_UNRESERVED`;
-- a submitted or subsequently cancelled source sales document;
+- a currently submitted source sales document;
 
 RetailEdge now:
 
-1. reads the authoritative source document;
+1. reads the authoritative source document and rejects a cancelled source;
 2. derives the original business occurrence timestamp;
 3. builds a stable Product Case Key from the existing quota-operation identity;
 4. submits immutable evidence to CoreEdge;
