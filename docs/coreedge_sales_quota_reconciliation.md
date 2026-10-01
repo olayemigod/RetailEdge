@@ -95,10 +95,16 @@ It compares that period with the original source sale date.
 If the source sale belongs to the current period:
 
 1. request a one-unit reservation using the original DocType/name as business reference;
-2. attach the recovered reservation through the governed reconciliation-only controller flag;
-3. move the local operation to Pending Finalize;
-4. finalize through the existing finalization path;
-5. let the existing retry scheduler recover a transient finalize failure.
+2. register a rollback release callback immediately;
+3. attach the recovered reservation through the governed reconciliation-only controller flag;
+4. move the local operation to Pending Finalize and save it in the local database transaction;
+5. write the append-only Review Event in the same transaction;
+6. queue finalization only from an after-commit callback;
+7. let the existing retry scheduler recover a queue outage or transient finalize failure.
+
+This commit-first order is intentional. CoreEdge quota must not be finalized before RetailEdge has durably stored
+the recovered reservation. If the local transaction rolls back, RetailEdge releases the central reservation
+instead.
 
 If the source sale belongs to an older/different period, automatic reconciliation is refused.
 
@@ -126,6 +132,19 @@ An unreserved recovery still respects the current CoreEdge policy:
 If CoreEdge returns `LIMIT_EXCEEDED`, the operation remains Needs Review.
 
 There is no local bypass.
+
+## Distributed transaction safety
+
+Recovered quota follows the same safe transaction boundary as normal sales submission:
+
+- remote reserve occurs before the local reconciliation state is committed;
+- local reservation state and review history commit together;
+- CoreEdge finalization is queued only after local commit;
+- local rollback triggers best-effort CoreEdge release;
+- queue failure after commit leaves a durable Pending Finalize row for the 10-minute retry worker.
+
+The API may therefore return `Pending Finalize` after a successful recovery reservation. That means the hold
+is safely durable locally and finalization is queued; it does not claim central usage is finalized yet.
 
 ## Lost-response recovery
 
@@ -266,7 +285,7 @@ Coverage includes:
 - manager-only mutations;
 - reservation-backed retry to Finalized;
 - older-period unreserved refusal;
-- current-period unreserved reserve/finalize recovery;
+- current-period unreserved reserve + commit-before-finalize recovery;
 - current Block limit denial;
 - report/form UI contract;
 - immutable reservation identity under normal writes;
