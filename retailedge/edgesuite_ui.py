@@ -19,8 +19,6 @@ CASH_FLOW_OUTLOOK_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
-	"RetailEdgeBranchManager",
 	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 	"Accounts Manager",
