@@ -210,19 +210,11 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		operation.source_name,
 		"docstatus",
 	)
-	if int(docstatus or 0) != 1:
+	if int(docstatus or 0) not in {1, 2}:
 		_mark_needs_review(
 			operation,
-			"Source document is not submitted; quota finalization was not attempted.",
-		)
-		return _serialize_operation(operation)
-
-	if operation.reservation_expires_on and get_datetime(
-		operation.reservation_expires_on
-	) <= get_datetime(now_datetime()):
-		_mark_needs_review(
-			operation,
-			"CoreEdge quota reservation expired before finalization was confirmed.",
+			"Source document has not reached a submitted transaction state; "
+			"quota finalization was not attempted.",
 		)
 		return _serialize_operation(operation)
 
