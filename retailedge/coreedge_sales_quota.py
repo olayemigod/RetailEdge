@@ -6,7 +6,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import now_datetime
 
 from retailedge.integrations.coreedge_remote_usage import (
 	CoreEdgeRemoteUsageError,
