@@ -76,3 +76,14 @@ def test_legacy_primary_text_state_blocks_are_removed():
 	assert 'v-else-if="loading" class="payment-state"' not in source
 	assert 'v-if="error" class="payment-error"' not in source
 	assert "this.error" not in source
+
+
+def test_customer_advance_bank_reference_is_validated_before_create_and_errors_are_friendly():
+	source = _source()
+	assert "syncAdvanceReferenceRequirement" in source
+	assert 'dialog.set_df_property("reference_no", "reqd", required ? 1 : 0)' in source
+	assert 'dialog.set_df_property("reference_date", "reqd", required ? 1 : 0)' in source
+	assert 'title: __("Reference No required")' in source
+	assert "Enter the bank transaction or transfer reference before creating this advance." in source
+	assert "window.retailedge?.userErrorMessage?.(error, fallback)" in source
+	assert "error?.exc || error?.exception" not in source
