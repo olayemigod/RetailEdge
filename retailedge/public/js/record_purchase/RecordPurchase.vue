@@ -535,7 +535,7 @@ export default {
 				frappe.set_route("supplier-payables");
 				return;
 			}
-			if (payload.action === "output") { window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" }; frappe.set_route("document-output-sharing"); }
+			if (payload.action === "output") { window.retailedge?.openDocumentOutputSharing?.("purchase-invoice", payload.name); }
 		},
 		closePayment() { this.paymentOpen = false; this.paymentInitialContext = {}; },
 		async handlePaymentSaved() {
