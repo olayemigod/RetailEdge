@@ -6,7 +6,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from retailedge.integrations.coreedge_remote_usage import (
 	CoreEdgeRemoteUsageError,
@@ -20,6 +20,11 @@ DEFAULT_ENTITLEMENT_KEY = "SALES_TRANSACTIONS"
 FINALIZE_JOB = "retailedge.coreedge_sales_quota.finalize_sales_quota_operation"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off", ""}
+_RECONCILABLE_REASONS = {
+	"FAIL_OPEN_UNRESERVED",
+	"RESERVATION_EXPIRED",
+	"RESERVATION_ALREADY_RELEASED",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +286,100 @@ def retry_sales_quota_finalize(operation_name: str) -> dict:
 	return finalize_sales_quota_operation(operation.name)
 
 
+@frappe.whitelist()
+def reconcile_sales_quota_operation(operation_name: str, reason: str) -> dict:
+	"""Reconcile one committed sale through the governed CoreEdge V2.6E contract."""
+	_require_post()
+	_assert_quota_review_operator()
+	reason = _required_reconciliation_reason(reason)
+
+	operation_name = str(operation_name or "").strip()
+	if not operation_name:
+		frappe.throw(_("Quota operation is required."), frappe.ValidationError)
+
+	_lock_operation(operation_name)
+	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
+	operation.check_permission("read")
+	if operation.status != "Needs Review":
+		frappe.throw(
+			_("Only Needs Review quota operations can be reconciled."),
+			frappe.ValidationError,
+		)
+	if str(operation.reason_code or "") not in _RECONCILABLE_REASONS:
+		frappe.throw(
+			_("This quota operation requires platform review and is not eligible for product-side reconciliation."),
+			frappe.ValidationError,
+		)
+
+	source = _get_reconciliation_source_document(operation)
+	occurred_on = _source_business_occurred_on(source)
+	units = int(operation.units or 0)
+	if units != 1:
+		frappe.throw(
+			_("RetailEdge Sales Transaction reconciliation requires exactly one quota unit."),
+			frappe.ValidationError,
+		)
+
+	operation.reconciliation_attempt_count = int(operation.reconciliation_attempt_count or 0) + 1
+	operation.last_reconciliation_attempt_on = now_datetime()
+	attempt_key = _idempotency_key(
+		operation.source_doctype,
+		operation.source_name,
+		"reconcile",
+		frappe.generate_hash(length=12),
+	)
+
+	try:
+		response = get_remote_usage_client().reconcile_usage(
+			operation.entitlement_key,
+			units,
+			occurred_on,
+			reason,
+			attempt_key,
+			operation.source_doctype,
+			operation.source_name,
+			source_reason_code=operation.reason_code,
+			request_id=attempt_key,
+			correlation_id=f"{operation.source_doctype}:{operation.source_name}",
+			source_path="RetailEdge Quota Review",
+		)
+	except CoreEdgeRemoteUsageError as exc:
+		operation.reconciliation_last_error = _safe_error(exc)
+		_save_operation(operation)
+		return _serialize_operation(operation)
+
+	data = response.get("data") or {}
+	result = data.get("reconciliation") or {}
+	if data.get("ok") and (
+		result.get("reconciled")
+		or result.get("already_counted")
+		or data.get("status") in {"Applied Current Period", "Recorded Historical", "Already Counted"}
+	):
+		operation.status = "Reconciled"
+		operation.reconciliation_reference = result.get("reconciliation_reference") or None
+		operation.reconciliation_status = data.get("status") or result.get("status") or "Reconciled"
+		operation.reconciliation_result_code = result.get("reason_code") or ""
+		operation.reconciliation_reason = reason
+		operation.reconciled_on = now_datetime()
+		operation.reconciled_by = frappe.session.user
+		operation.reconciliation_last_error = None
+		_save_operation(operation)
+		return _serialize_operation(operation)
+
+	operation.reconciliation_status = data.get("status") or result.get("status") or "Failed"
+	operation.reconciliation_result_code = (
+		data.get("reason_code") or result.get("reason_code") or ""
+	)
+	operation.reconciliation_last_error = (
+		data.get("message")
+		or result.get("message")
+		or operation.reconciliation_result_code
+		or _("CoreEdge reconciliation did not complete.")
+	)
+	_save_operation(operation)
+	return _serialize_operation(operation)
+
+
 def retry_pending_sales_quota_operations(limit: int = 50) -> int:
 	try:
 		resolved_limit = max(1, min(int(limit or 50), 200))
@@ -343,6 +442,56 @@ def _require_post() -> None:
 	request = getattr(frappe.local, "request", None)
 	if request is not None and str(getattr(request, "method", "")).upper() != "POST":
 		frappe.throw(_("This operation requires an HTTP POST request."), frappe.PermissionError)
+
+
+def _get_reconciliation_source_document(operation):
+	if operation.source_doctype not in {"Sales Invoice", "POS Invoice"}:
+		frappe.throw(_("Unsupported quota source document type."), frappe.ValidationError)
+	if not frappe.db.exists(operation.source_doctype, operation.source_name):
+		frappe.throw(_("The source sales document no longer exists."), frappe.DoesNotExistError)
+
+	source = frappe.get_doc(operation.source_doctype, operation.source_name)
+	source.check_permission("read")
+	if int(source.docstatus or 0) not in {1, 2}:
+		frappe.throw(
+			_("The source sales document has not reached a submitted transaction state."),
+			frappe.ValidationError,
+		)
+	eligible, _count_reason = is_counted_sales_transaction(source)
+	if not eligible:
+		frappe.throw(
+			_("The source document is not an eligible counted Sales Transaction."),
+			frappe.ValidationError,
+		)
+	return source
+
+
+def _source_business_occurred_on(source):
+	if not getattr(source, "posting_date", None):
+		frappe.throw(
+			_("The source sales document does not have a Posting Date."),
+			frappe.ValidationError,
+		)
+	posting_time = getattr(source, "posting_time", None) or "00:00:00"
+	try:
+		return get_datetime(f"{source.posting_date} {posting_time}")
+	except (TypeError, ValueError):
+		frappe.throw(
+			_("The source sales document Posting Date/Time is invalid."),
+			frappe.ValidationError,
+		)
+
+
+def _required_reconciliation_reason(value: str | None) -> str:
+	resolved = str(value or "").strip()
+	if len(resolved) < 5:
+		frappe.throw(
+			_("Provide a reconciliation reason of at least 5 characters."),
+			frappe.ValidationError,
+		)
+	if len(resolved) > 500:
+		frappe.throw(_("Reconciliation reason cannot exceed 500 characters."), frappe.ValidationError)
+	return resolved
 
 
 def _insert_quota_operation(
@@ -473,6 +622,16 @@ def _serialize_operation(operation) -> dict:
 		"attempt_count": int(operation.attempt_count or 0),
 		"last_error": operation.last_error or "",
 		"finalized_on": operation.finalized_on,
+		"reconciliation_reference": getattr(operation, "reconciliation_reference", None),
+		"reconciliation_status": getattr(operation, "reconciliation_status", None),
+		"reconciliation_result_code": getattr(operation, "reconciliation_result_code", None),
+		"reconciliation_attempt_count": int(
+			getattr(operation, "reconciliation_attempt_count", 0) or 0
+		),
+		"reconciliation_last_error": (
+			getattr(operation, "reconciliation_last_error", None) or ""
+		),
+		"reconciled_on": getattr(operation, "reconciled_on", None),
 	}
 
 
