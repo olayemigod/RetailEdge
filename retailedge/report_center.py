@@ -444,6 +444,14 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 				"tags": ("sales", "daily", "audit", "register"),
 				"native_desk": True,
 			},
+			{
+				"label": "CoreEdge Quota Review",
+				"description": "Review pending or exceptional CoreEdge sales-quota operations and retry only safe pending finalization.",
+				"target_type": "Report",
+				"target": "RetailEdge CoreEdge Quota Review",
+				"tags": ("coreedge", "quota", "subscription", "sales", "review", "control"),
+				"native_desk": True,
+			},
 		),
 	},
 	{
