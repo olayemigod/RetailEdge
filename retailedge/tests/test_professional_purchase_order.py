@@ -57,7 +57,7 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 			"validate_user_branch_access",
 			"Choose a permitted Branch before creating a Purchase Order.",
 			"clearing Branch on the client cannot weaken scope",
-			"get_first_existing_field(PURCHASE_ORDER_DOCTYPE, BRANCH_FIELD_CANDIDATES)",
+			'"retailedge_branch", *BRANCH_FIELD_CANDIDATES',
 			"Required By date cannot be before the Order Date.",
 			'"schedule_date": schedule_date',
 		):

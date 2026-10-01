@@ -122,6 +122,11 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 	can_write_expense = bool(
 		frappe.has_permission(EXPENSE_DOCTYPE, "write", doc=str(expense.get("name") or ""))
 	)
+	can_submit_for_review = bool(
+		docstatus == 0
+		and can_write_expense
+		and frappe.has_permission(EXPENSE_DOCTYPE, "submit", doc=str(expense.get("name") or ""))
+	)
 	can_review_submitted = reviewer and can_write_expense and docstatus == 1 and status == "Submitted"
 	can_reopen = reviewer and can_write_expense and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
 
@@ -158,7 +163,16 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 		and user_has_any_role(user=user, roles=POSTING_REFRESH_ROLES)
 	)
 
+	reasons: list[str] = []
+	if docstatus == 0 and not can_submit_for_review:
+		reasons.append(_("This draft requires submit permission before it can enter review."))
+	elif docstatus == 1 and status == "Submitted" and not reviewer:
+		reasons.append(_("This submitted expense requires a RetailEdge reviewer role before approval or rejection."))
+	elif docstatus == 1 and status == "Pending Ledger" and not can_post:
+		reasons.append(expense.get("posting_block_reason") or _("Posting requirements are not yet satisfied."))
+
 	return {
+		"can_submit_for_review": can_submit_for_review,
 		"can_approve": bool(can_review_submitted and (not self_cashier or is_system_manager)),
 		"can_reject": bool(can_review_submitted),
 		"can_reopen": bool(can_reopen),
@@ -167,4 +181,42 @@ def _workflow_actions(expense: dict[str, Any]) -> dict[str, Any]:
 		"posting_enabled": posting_enabled,
 		"posting_mode": posting.get("posting_mode") or "",
 		"posting_document_type": posting.get("posting_document_type") or "Journal Entry",
+		"reasons": reasons,
 	}
+
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_cashier_expense_for_review(
+	expense_name: str,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Submit one draft Cashier Expense through native Frappe document submission."""
+	expense_name = str(expense_name or "").strip()
+	if not expense_name:
+		frappe.throw(_("Cashier Expense is required."), frappe.ValidationError)
+
+	# Reuse the scoped detail read first so branch/read containment is identical
+	# to the EdgeSuite detail surface.
+	scoped = get_cashier_expense_detail(expense_name)
+	expense = scoped.get("expense") or {}
+	if int(expense.get("docstatus") or 0) != 0:
+		frappe.throw(_("Only a draft Cashier Expense can be submitted for review."), frappe.ValidationError)
+	if expected_modified and str(expense.get("modified") or "") != str(expected_modified):
+		frappe.throw(
+			_("This Cashier Expense changed after you opened it. Refresh before submitting."),
+			frappe.ValidationError,
+		)
+
+	doc = frappe.get_doc(EXPENSE_DOCTYPE, expense_name)
+	if not doc.has_permission("write"):
+		frappe.throw(_("You do not have permission to update this Cashier Expense."), frappe.PermissionError)
+	if not doc.has_permission("submit"):
+		frappe.throw(_("You do not have permission to submit this Cashier Expense."), frappe.PermissionError)
+
+	# Native submit owns validation and the Draft → Submitted/Pending Ledger state.
+	doc.submit()
+	doc.reload()
+	result = get_cashier_expense_detail(doc.name)
+	result["persistence"] = "native_submit"
+	return result

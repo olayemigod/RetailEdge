@@ -146,13 +146,17 @@
 const EdgeLinkField = window.EdgeSuiteUI?.components?.EdgeLinkField;
 const EdgeDropdown = window.EdgeSuiteUI?.components?.EdgeDropdown;
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => frappe.call({
-		method,
-		args,
-		callback: (response) => resolve(response.message || {}),
-		error: reject,
-	}));
+function callMethod(method, args = {}, type = null) {
+	return new Promise((resolve, reject) => {
+		const options = {
+			method,
+			args,
+			callback: (response) => resolve(response.message || {}),
+			error: reject,
+		};
+		if (type) options.type = type;
+		frappe.call(options);
+	});
 }
 
 function errorMessage(error, fallback) {
@@ -295,14 +299,15 @@ export default {
 			this.saving = true;
 			this.formError = "";
 			try {
+				const creating = !this.editingName;
 				const result = await callMethod("retailedge.expense_category_setup.save_expense_category", {
 					values: { ...this.form, is_active: this.form.is_active ? 1 : 0 },
 					name: this.editingName || "",
 					expected_modified: this.expectedModified || "",
-				});
+				}, "POST");
 				this.editingName = result.name || this.editingName;
 				this.expectedModified = result.modified || "";
-				frappe.show_alert?.({ message: this.editingName ? "Expense Category saved" : "Expense Category created", indicator: "green" });
+				frappe.show_alert?.({ message: creating ? "Expense Category created" : "Expense Category saved", indicator: "green" });
 				this.returnToList();
 			} catch (error) {
 				this.formError = errorMessage(error, "Unable to save Expense Category.");

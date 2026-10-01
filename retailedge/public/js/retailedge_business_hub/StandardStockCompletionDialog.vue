@@ -49,7 +49,16 @@
 					<div class="stock-edit-items">
 						<div class="stock-edit-item stock-edit-item--head"><span>Item</span><span>Qty</span><span></span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="stock-edit-item">
-							<span>{{ row.item_code || row.item_name || "Item" }}</span>
+							<EdgeLinkField
+								v-if="preview.kind === 'adjustment'"
+								:modelValue="row.item_code"
+								label="Item"
+								placeholder="Select counted Item"
+								:disabled="busy"
+								:searcher="(query) => searchLineLink({ fieldname: 'item_code' }, query)"
+								@update:modelValue="setDraftItemCode(index, $event)"
+							/>
+							<span v-else>{{ row.item_code || row.item_name || "Item" }}</span>
 							<EdgeInput v-model="row.qty" :id="`stock-item-qty-${index}`" label="Qty" type="number" :min="preview.kind === 'adjustment' ? 0 : 0.000001" step="any" :disabled="busy" />
 							<button type="button" class="edge-button edge-button--secondary" :disabled="busy || draftItems.length <= 1" @click="removeDraftItem(index)">Remove</button>
 						</div>
@@ -167,6 +176,7 @@ export default {
 		EdgeModal: runtimeComponents().EdgeModal,
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
 		EdgeInput: runtimeComponents().EdgeInput,
+		EdgeLinkField: runtimeComponents().EdgeLinkField,
 		EdgeChildTable: runtimeComponents().EdgeChildTable,
 	},
 	props: {
@@ -261,6 +271,10 @@ export default {
 			} finally {
 				this.loading = false;
 			}
+		},
+		setDraftItemCode(index, value) {
+			if (this.busy || !this.draftItems[index]) return;
+			this.draftItems[index].item_code = value || "";
 		},
 		removeDraftItem(index) {
 			if (this.busy || this.draftItems.length <= 1) return;
