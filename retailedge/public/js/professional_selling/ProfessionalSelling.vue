@@ -152,6 +152,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
 import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
 import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
@@ -529,7 +530,7 @@ export default {
 
 		openDocumentOutput(document, row) {
 			if (!document?.key || !row?.name) return;
-			window.retailedge?.openDocumentOutputSharing?.(document.key, row.name);
+			openDocumentOutputSharing(document.key, row.name);
 		},
 
 		openStandardCompletion(document) {
