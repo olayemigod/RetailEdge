@@ -19,6 +19,11 @@ _IMMUTABLE_FIELDS = {
 	"finalize_idempotency_key",
 	"release_idempotency_key",
 	"reserved_on",
+	"reconciliation_case_reference",
+	"reconciliation_case_status",
+	"reconciliation_case_evidence_hash",
+	"reconciliation_submitted_on",
+	"reconciliation_last_idempotency_key",
 }
 
 
@@ -58,13 +63,28 @@ class RetailEdgeCoreEdgeQuotaOperation(Document):
 				"release_idempotency_key",
 				"reserved_on",
 			}
+			allowed_case_submission_fields = {
+				"reconciliation_case_reference",
+				"reconciliation_case_status",
+				"reconciliation_case_evidence_hash",
+				"reconciliation_submitted_on",
+				"reconciliation_last_idempotency_key",
+			}
+			changed_fields = set(immutable_changes)
 			reconciliation_allowed = bool(
 				self.flags.get("allow_retailedge_quota_reconciliation")
-				and set(immutable_changes).issubset(allowed_reconciliation_fields)
+				and changed_fields.issubset(allowed_reconciliation_fields)
 			)
-			if not reconciliation_allowed:
+			case_submission_allowed = bool(
+				self.flags.get("allow_retailedge_quota_case_submission")
+				and changed_fields.issubset(allowed_case_submission_fields)
+			)
+			if not reconciliation_allowed and not case_submission_allowed:
 				frappe.throw(
-					_("CoreEdge quota operation identity and reservation fields are immutable."),
+					_(
+						"CoreEdge quota operation identity, reservation and reconciliation case fields "
+						"are immutable."
+					),
 					frappe.ValidationError,
 				)
 
