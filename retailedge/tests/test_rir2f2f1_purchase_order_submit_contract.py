@@ -137,19 +137,15 @@ def test_submit_overlay_requires_review_and_stays_inside_edgesuite():
 	assert 'window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"))' in overlay
 
 
-def test_bundle_adds_review_submit_only_to_draft_po_rows_and_capture_intercepts_it():
+def test_bundle_does_not_inject_a_duplicate_purchase_order_review_action():
 	bundle = _read(BUNDLE)
-	assert 'const PURCHASE_ORDER_SUBMIT_LABEL = "Review & Submit"' in bundle
 	assert 'const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit"' in bundle
-	assert 'target.querySelectorAll(".purchasing-table--orders tbody tr")' in bundle
-	assert 'const status = normaliseButtonLabel(row.querySelector(".status-pill"))' in bundle
-	assert 'if (status !== "Draft")' in bundle
-	assert 'existing?.remove()' in bundle
-	assert 'button.setAttribute("data-retailedge-po-submit", "true")' in bundle
-	assert "purchaseOrderFromRow(button)" in bundle
-	assert "event.preventDefault()" in bundle
-	assert "event.stopImmediatePropagation()" in bundle
-	assert "OPEN_PURCHASE_ORDER_SUBMIT_EVENT" in bundle
+	assert "ProfessionalPurchaseOrderSubmitOverlay" in bundle
+	assert "removeLegacyPurchaseOrderSubmitButtons" in bundle
+	assert 'target.querySelectorAll(\'[data-retailedge-po-submit="true"]\')' in bundle
+	assert 'const PURCHASE_ORDER_SUBMIT_LABEL = "Review & Submit"' not in bundle
+	assert 'button.setAttribute("data-retailedge-po-submit", "true")' not in bundle
+	assert "purchaseOrderFromRow(button)" not in bundle
 
 
 def test_bundle_mounts_and_cleans_up_po_submit_overlay():
