@@ -359,7 +359,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Operations Review",
-   "link_count": 4,
+   "link_count": 5,
    "link_type": "Page",
    "onboard": 0,
    "type": "Card Break"
@@ -370,6 +370,16 @@
    "label": "Daily Sales Audit",
    "link_count": 0,
    "link_to": "daily-sales-audit",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Quota Operations Review",
+   "link_count": 0,
+   "link_to": "quota-operations-review",
    "link_type": "Page",
    "onboard": 0,
    "type": "Link"
