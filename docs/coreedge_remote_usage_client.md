@@ -35,9 +35,13 @@ Supported keys:
 - `coreedge_site_identifier` — exact site identifier registered on the CoreEdge Service Client;
 - `coreedge_api_key` — dedicated Service Client integration-user API key;
 - `coreedge_api_secret` — dedicated Service Client integration-user API secret;
+- `coreedge_remote_usage_allow_insecure_http` — default 0; use only for controlled local QA;
 - `coreedge_timeout_seconds` — 1–120 seconds, default 8.
 
 The API secret is excluded from the configuration object's representation and never returned by readiness diagnostics.
+
+HTTPS is required by default. Plain HTTP is rejected unless
+`coreedge_remote_usage_allow_insecure_http = 1` is explicitly set for controlled local QA.
 
 Example configuration shape:
 
@@ -48,6 +52,7 @@ Example configuration shape:
   "coreedge_site_identifier": "retail.example.com",
   "coreedge_api_key": "<protected-api-key>",
   "coreedge_api_secret": "<protected-api-secret>",
+  "coreedge_remote_usage_allow_insecure_http": 0,
   "coreedge_timeout_seconds": 8
 }
 ```
@@ -140,7 +145,10 @@ Coverage includes:
 - authentication-error preservation;
 - network/unexpected error normalization;
 - invalid response rejection;
-- timeout bounds.
+- timeout bounds;
+- malformed URL rejection;
+- HTTPS required by default;
+- explicit insecure-HTTP local-QA override.
 
 ## Out of scope
 

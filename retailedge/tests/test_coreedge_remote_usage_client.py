@@ -179,6 +179,29 @@ class CoreEdgeRemoteUsageClientTests(unittest.TestCase):
 		with self.assertRaises(CoreEdgeRemoteUsageResponseInvalid):
 			client.get_usage_status("SALES_TRANSACTIONS")
 
+	def test_http_base_url_is_rejected_by_default(self):
+		config = self._config(coreedge_base_url="http://coreedge.local")
+		self.assertFalse(config.readiness()["ready"])
+		self.assertTrue(
+			any("HTTPS" in blocker for blocker in config.readiness()["blockers"])
+		)
+		with self.assertRaises(CoreEdgeRemoteUsageNotConfigured):
+			config.assert_ready()
+
+	def test_http_base_url_requires_explicit_local_qa_override(self):
+		config = self._config(
+			coreedge_base_url="http://coreedge.local",
+			coreedge_remote_usage_allow_insecure_http=1,
+		)
+		self.assertTrue(config.readiness()["ready"])
+		self.assertTrue(config.sanitized()["allow_insecure_http"])
+
+	def test_malformed_base_url_is_rejected(self):
+		config = self._config(coreedge_base_url="coreedge-without-scheme")
+		self.assertFalse(config.readiness()["ready"])
+		with self.assertRaises(CoreEdgeRemoteUsageNotConfigured):
+			config.assert_ready()
+
 	def test_timeout_is_bounded_to_safe_default(self):
 		self.assertEqual(
 			self._config(coreedge_timeout_seconds=0).timeout_seconds,
