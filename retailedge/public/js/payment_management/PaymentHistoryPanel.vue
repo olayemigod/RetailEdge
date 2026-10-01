@@ -150,7 +150,7 @@ const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.subm
 const SUPPLIER_SUBMIT_METHOD = "retailedge.standard_supplier_payment_submit.submit_standard_supplier_payment";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
@@ -178,19 +178,48 @@ export default {
 			return Number(this.paymentDetail.docstatus) === 0 && ["standard_customer", "standard_supplier"].includes(this.standardReview.kind) && Boolean(review.can_submit);
 		},
 	},
-	mounted() { this.loadMetadata(); },
+	created() {
+		this._onPaymentHistoryPageShow = () => this.loadMetadata();
+	},
+	mounted() {
+		window.addEventListener("retailedge-payment-history-page-show", this._onPaymentHistoryPageShow);
+		this.loadMetadata();
+	},
+	beforeUnmount() {
+		window.removeEventListener("retailedge-payment-history-page-show", this._onPaymentHistoryPageShow);
+	},
 	methods: {
 		async loadMetadata() {
 			this.error = "";
 			try {
+				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.("payment-history") || {};
+				const routeOptions = frappe.route_options || {};
+				const requestedCompany = String(handoff.company || routeOptions.company || "").trim();
+				const requestedBranch = String(handoff.branch || routeOptions.branch || "").trim();
+				const requestedPartyType = String(handoff.party_type || routeOptions.party_type || "").trim();
+				const requestedParty = String(handoff.party || routeOptions.party || "").trim();
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
 					callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"),
 				]);
-				this.filters.company = context.default_filters?.company || "";
-				this.filters.branch = context.default_filters?.branch || "";
+				this.filters.company = requestedCompany || context.default_filters?.company || "";
+				let validBranch = requestedBranch || context.default_filters?.branch || "";
+				if (validBranch && this.filters.company) {
+					try {
+						await callMethod("retailedge.operating_context.preview_operating_context", {
+							company: this.filters.company,
+							branch: validBranch,
+						});
+					} catch (_error) {
+						validBranch = context.default_filters?.branch || "";
+					}
+				}
+				this.filters.branch = validBranch;
+				this.filters.party_type = ["Customer", "Supplier"].includes(requestedPartyType) ? requestedPartyType : "";
+				this.filters.party = this.filters.party_type ? requestedParty : "";
 				this.companyLabel = this.filters.company;
 				this.branchLabel = this.filters.branch;
+				this.partyLabel = this.filters.party;
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (this.filters.company) await this.loadPaymentHistory(1);
 			} catch (error) { this.error = errorMessage(error, "Payment History controls failed to load."); }
