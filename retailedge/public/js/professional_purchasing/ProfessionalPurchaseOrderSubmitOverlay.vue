@@ -67,7 +67,7 @@
 				<div class="po-draft-editor__heading">
 					<div>
 						<strong>Edit draft before completion</strong>
-						<p>Company, Supplier, Branch, Buying Price List, Stock Location and item identity stay protected. ERPNext recalculates and validates the draft when you save.</p>
+						<p>Company, Supplier, Branch, Buying Price List, Stock Location and existing item identity stay protected. You may add new items; ERPNext recalculates and validates the draft when you save.</p>
 					</div>
 				</div>
 				<div class="po-draft-editor__grid">
