@@ -3,12 +3,10 @@ const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bund
 const PURCHASING_ASSET = "professional_purchasing.bundle.js";
 const PURCHASE_ORDER_ASSET = "professional_purchase_order.bundle.js";
 const PURCHASE_RECEIPT_PREVIEW_ASSET = "professional_purchase_receipt_preview.bundle.js";
-const PURCHASE_RECEIPT_HISTORY_ASSET = "professional_purchase_receipt_history.bundle.js";
 const PAGE_ROUTE = "professional-purchasing";
 const PAGE_TITLE = "Professional Purchasing";
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
-const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
 const ADVANCED_PREPARE_RECEIPT_EVENT = "retailedge-advanced-prepare-purchase-receipt";
 const PURCHASE_ORDER_TRIGGER_LABEL = "New Purchase Order";
 const PREPARE_RECEIPT_TRIGGER_LABEL = "Prepare Receipt";
@@ -199,7 +197,7 @@ function installPurchaseOrderOwnership(wrapper, root) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT));
+			frappe.set_route("purchase-receipt-history");
 			return;
 		}
 		if (!nativeDeskEnabled() && [ADVANCED_PURCHASE_ORDER_LABEL, ADVANCED_PURCHASE_RECEIPTS_LABEL].includes(label)) {
@@ -288,11 +286,10 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(RESTRICTED_GUARD_ASSET);
 		installRestrictedOperationalGuard();
-		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET), requireAsync(PURCHASE_RECEIPT_PREVIEW_ASSET), requireAsync(PURCHASE_RECEIPT_HISTORY_ASSET)]);
+		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET), requireAsync(PURCHASE_RECEIPT_PREVIEW_ASSET)]);
 		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing bundle is unavailable.");
 		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Professional Purchase Order bundle is unavailable.");
 		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptPreview !== "function") throw new Error("Professional Purchase Receipt preview bundle is unavailable.");
-		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptHistory !== "function") throw new Error("Professional Purchase Receipt history bundle is unavailable.");
 		bootLoading.remove();
 
 		const root = document.createElement("div");
@@ -313,10 +310,6 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		page.body.append(receiptPreviewRoot);
 		wrapper._retailedgeProfessionalPurchaseReceiptPreviewApp = await window.mountRetailEdgeProfessionalPurchaseReceiptPreview(receiptPreviewRoot);
 
-		const receiptHistoryRoot = document.createElement("div");
-		receiptHistoryRoot.className = "retailedge-professional-purchase-receipt-history-overlay-root";
-		page.body.append(receiptHistoryRoot);
-		wrapper._retailedgeProfessionalPurchaseReceiptHistoryApp = await window.mountRetailEdgeProfessionalPurchaseReceiptHistory(receiptHistoryRoot);
 	} catch (error) {
 		bootLoading.remove();
 		renderLoadError(wrapper, error);
