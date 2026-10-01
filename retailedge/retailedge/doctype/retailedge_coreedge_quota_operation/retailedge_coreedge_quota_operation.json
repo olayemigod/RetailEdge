@@ -29,7 +29,12 @@
   "finalized_on",
   "last_attempt_on",
   "attempt_count",
-  "last_error"
+  "last_error",
+  "review_section",
+  "review_action",
+  "review_reason",
+  "reviewed_by",
+  "reviewed_on"
  ],
  "fields": [
   {
@@ -210,6 +215,36 @@
    "fieldname": "last_error",
    "fieldtype": "Small Text",
    "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review Audit"
+  },
+  {
+   "fieldname": "review_action",
+   "fieldtype": "Data",
+   "label": "Review Action",
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_reason",
+   "fieldtype": "Small Text",
+   "label": "Review Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
    "read_only": 1
   }
  ],
