@@ -344,7 +344,7 @@ export default {
 			if (!actions.some((action) => action.value === "output")) {
 				actions.push({
 					value: "output",
-					label: "Print & Send",
+					label: "Print & Share",
 				});
 			}
 			if (this.canUseNativeDesk) {
