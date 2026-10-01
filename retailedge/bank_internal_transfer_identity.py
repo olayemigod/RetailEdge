@@ -268,7 +268,24 @@ def install_internal_transfer_bank_leg_identity():
 				)
 		return True
 
-	def payment_entry_has_active_confirmed_bank_match(payment_entry):
+	def payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction=None, exclude_match=None):
+		"""Keep the historical one-argument contract while accepting bank-leg context.
+
+		Callers that know the Bank Transaction may pass it so submitted Internal
+		Transfers are checked per bank ledger leg. Older integrations/tests that
+		call or replace this helper with the original one-argument shape continue
+		to work unchanged.
+		"""
+		bank_transaction = bank_transaction or _get_context_bank_transaction()
+		if bank_transaction and _is_submitted_internal_transfer(payment_entry):
+			return bool(
+				_same_leg_match_rows(
+					payment_entry,
+					bank_transaction,
+					confirmed_only=True,
+					exclude_match=exclude_match,
+				)
+			)
 		return candidate_document_has_active_confirmed_bank_match("Payment Entry", payment_entry)
 
 	def active_review_match_for_candidate(document_type, document_name):
