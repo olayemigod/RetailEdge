@@ -72,7 +72,7 @@ def before_submit_sales_transaction_quota(doc, method=None):
 	if not config.enabled:
 		return
 
-	eligible, _ = is_counted_sales_transaction(doc)
+	eligible, _count_reason = is_counted_sales_transaction(doc)
 	if not eligible:
 		return
 
@@ -137,7 +137,7 @@ def before_submit_sales_transaction_quota(doc, method=None):
 			title=_("Sales Transaction Limit"),
 		)
 
-	frappe.db.after_rollback.add(
+	_register_after_rollback(
 		lambda: _release_rolled_back_reservation(
 			reservation_reference=reservation_reference,
 			release_idempotency_key=release_key,
@@ -160,7 +160,7 @@ def before_submit_sales_transaction_quota(doc, method=None):
 		remote_message=quota.get("message"),
 	)
 
-	frappe.db.after_commit.add(
+	_register_after_commit(
 		lambda: _enqueue_finalize_operation(operation.name)
 	)
 
@@ -291,6 +291,14 @@ def _enqueue_finalize_operation(operation_name: str) -> bool:
 			message=frappe.get_traceback(),
 		)
 		return False
+
+
+def _register_after_commit(callback) -> None:
+	frappe.db.after_commit.add(callback)
+
+
+def _register_after_rollback(callback) -> None:
+	frappe.db.after_rollback.add(callback)
 
 
 def _insert_quota_operation(
