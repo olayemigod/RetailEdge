@@ -237,11 +237,7 @@ def reconcile_unreserved_quota_operation(
 			frappe.ValidationError,
 		)
 
-	docstatus = frappe.db.get_value(
-		operation.source_doctype,
-		operation.source_name,
-		"docstatus",
-	)
+	docstatus = _source_docstatus(operation)
 	if int(docstatus or 0) not in {1, 2}:
 		_record_review_failure(
 			operation,
@@ -470,6 +466,17 @@ def _lock_operation(name: str) -> None:
 	)
 	if not rows:
 		frappe.throw(_("Quota review item was not found."), frappe.DoesNotExistError)
+
+
+def _source_docstatus(operation) -> int:
+	return int(
+		frappe.db.get_value(
+			operation.source_doctype,
+			operation.source_name,
+			"docstatus",
+		)
+		or 0
+	)
 
 
 def _review_reserve_key(operation) -> str:
