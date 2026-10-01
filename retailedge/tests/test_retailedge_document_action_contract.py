@@ -67,10 +67,10 @@ def test_core_transaction_lists_keep_view_review_and_output_meanings_separate():
 	assert 'if (action === "output") { this.openDocumentOutput(document, row); return; }' in selling
 	assert "openDocumentOutputSharing" in selling
 	assert 'Number(row.docstatus || 0) === 0 ? "Review / Edit" : "View"' in purchasing
-	assert `openDocumentOutput('purchase-order', row.name)` in purchasing
+	assert "openDocumentOutput('purchase-order', row.name)" in purchasing
 	assert '"purchase-order", this.submitted.name' in purchase_order_review
 	assert "Print & Share" in purchase_order_review
-	assert `openDocumentOutput(row.name)` in purchase_receipt_history
+	assert "openDocumentOutput(row.name)" in purchase_receipt_history
 	assert '"purchase-receipt", name' in purchase_receipt_history
 	assert '"purchase-receipt", this.submitted.name' in purchase_receipt_review
 	assert "Print & Share" in purchase_receipt_review
