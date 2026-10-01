@@ -195,12 +195,18 @@ def make_sales_quota_operation_key(doctype: str, name: str) -> str:
 	return f"resq-{hashlib.sha256(value.encode('utf-8')).hexdigest()[:40]}"
 
 
-def finalize_sales_quota_operation(operation_name: str) -> dict:
+def finalize_sales_quota_operation(
+	operation_name: str,
+	*,
+	allow_review_retry: bool = False,
+) -> dict:
 	_lock_operation(operation_name)
 	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
 	if operation.status == "Finalized":
 		return _serialize_operation(operation)
-	if operation.status == "Needs Review":
+	if operation.status == "Needs Review" and not allow_review_retry:
+		return _serialize_operation(operation)
+	if operation.status == "Needs Review" and not operation.reservation_reference:
 		return _serialize_operation(operation)
 
 	operation.attempt_count = int(operation.attempt_count or 0) + 1
@@ -259,6 +265,154 @@ def finalize_sales_quota_operation(operation_name: str) -> dict:
 		operation.status = "Needs Review"
 	_save_operation(operation)
 	return _serialize_operation(operation)
+
+
+@frappe.whitelist()
+def get_sales_quota_review(filters=None, limit: int = 200) -> dict:
+	_assert_quota_review_reader()
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	filters = frappe._dict(filters)
+	try:
+		resolved_limit = max(1, min(int(limit or 200), 500))
+	except (TypeError, ValueError):
+		resolved_limit = 200
+
+	query_filters = {}
+	for key in ("status", "source_doctype", "company", "branch"):
+		value = str(filters.get(key) or "").strip()
+		if value:
+			query_filters[key] = value
+
+	fields = [
+		"name",
+		"operation_key",
+		"status",
+		"source_doctype",
+		"source_name",
+		"company",
+		"branch",
+		"entitlement_key",
+		"units",
+		"reservation_reference",
+		"reservation_expires_on",
+		"warning",
+		"reason_code",
+		"remote_message",
+		"reserved_on",
+		"finalized_on",
+		"last_attempt_on",
+		"attempt_count",
+		"last_error",
+		"creation",
+	]
+	rows = frappe.get_list(
+		OPERATION_DOCTYPE,
+		filters=query_filters,
+		fields=fields,
+		order_by="creation desc",
+		limit_page_length=resolved_limit + 1,
+	)
+	truncated = len(rows) > resolved_limit
+	rows = rows[:resolved_limit]
+
+	status_counts = {"Pending Finalize": 0, "Needs Review": 0, "Finalized": 0}
+	for row in rows:
+		status_counts[row.status] = status_counts.get(row.status, 0) + 1
+		row["can_retry"] = bool(
+			row.status in {"Pending Finalize", "Needs Review"}
+			and row.reservation_reference
+			and _can_manage_quota_review()
+		)
+		row["requires_manual_reconciliation"] = bool(
+			row.status == "Needs Review" and not row.reservation_reference
+		)
+		row["source_route"] = _source_route(row.source_doctype, row.source_name)
+
+	return {
+		"rows": rows,
+		"summary": {
+			"pending_finalize": status_counts.get("Pending Finalize", 0),
+			"needs_review": status_counts.get("Needs Review", 0),
+			"finalized": status_counts.get("Finalized", 0),
+			"total": len(rows),
+		},
+		"truncated": truncated,
+		"limit": resolved_limit,
+		"can_manage": _can_manage_quota_review(),
+	}
+
+
+@frappe.whitelist()
+def retry_sales_quota_review(operation_name: str) -> dict:
+	_assert_quota_review_manager()
+	operation_name = str(operation_name or "").strip()
+	if not operation_name:
+		frappe.throw(_("Quota Operation is required."), frappe.ValidationError)
+
+	operation = frappe.get_doc(OPERATION_DOCTYPE, operation_name)
+	operation.check_permission("read")
+	if operation.status == "Finalized":
+		return _serialize_operation(operation)
+	if not operation.reservation_reference:
+		frappe.throw(
+			_(
+				"This sale has no CoreEdge reservation to retry. "
+				"Manual commercial reconciliation is required."
+			),
+			frappe.ValidationError,
+		)
+
+	return finalize_sales_quota_operation(
+		operation.name,
+		allow_review_retry=True,
+	)
+
+
+def _assert_quota_review_reader() -> None:
+	if frappe.session.user == "Administrator":
+		return
+	roles = set(frappe.get_roles(frappe.session.user))
+	if not roles.intersection(
+		{
+			"System Manager",
+			"RetailEdge Manager",
+			"RetailEdgeManager",
+			"RetailEdge Auditor",
+			"RetailEdgeAuditor",
+		}
+	):
+		frappe.throw(
+			_("You are not allowed to review RetailEdge usage reconciliation."),
+			frappe.PermissionError,
+		)
+
+
+def _can_manage_quota_review() -> bool:
+	if frappe.session.user == "Administrator":
+		return True
+	roles = set(frappe.get_roles(frappe.session.user))
+	return bool(
+		roles.intersection(
+			{"System Manager", "RetailEdge Manager", "RetailEdgeManager"}
+		)
+	)
+
+
+def _assert_quota_review_manager() -> None:
+	_assert_quota_review_reader()
+	if not _can_manage_quota_review():
+		frappe.throw(
+			_("You are not allowed to retry RetailEdge usage reconciliation."),
+			frappe.PermissionError,
+		)
+
+
+def _source_route(doctype: str, name: str) -> str:
+	doctype = str(doctype or "").strip()
+	name = str(name or "").strip()
+	if not doctype or not name:
+		return ""
+	return f"/app/{frappe.scrub(doctype).replace('_', '-')}/{name}"
 
 
 def retry_pending_sales_quota_operations(limit: int = 50) -> int:
