@@ -487,6 +487,31 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.save(ignore_permissions=True)
 
+	def test_normal_engine_update_cannot_attach_reconciliation_case(self):
+		doc = self._operation("case-immutable")
+		doc.reconciliation_case_reference = "ceurc-forged"
+		doc.reconciliation_case_status = "Open"
+		doc.reconciliation_case_evidence_hash = "c" * 64
+		doc.reconciliation_submitted_on = now_datetime()
+		doc.reconciliation_last_idempotency_key = "case-submit-forged"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		with self.assertRaises(frappe.ValidationError):
+			doc.save(ignore_permissions=True)
+
+	def test_case_submission_flag_attaches_case_without_reopening_needs_review(self):
+		doc = self._operation("case-governed")
+		doc.reconciliation_case_reference = "ceurc-governed"
+		doc.reconciliation_case_status = "Open"
+		doc.reconciliation_case_evidence_hash = "d" * 64
+		doc.reconciliation_submitted_on = now_datetime()
+		doc.reconciliation_last_idempotency_key = "case-submit-governed"
+		doc.flags.allow_retailedge_quota_operation_update = True
+		doc.flags.allow_retailedge_quota_case_submission = True
+		doc.save(ignore_permissions=True)
+		self.assertEqual(doc.status, "Needs Review")
+		self.assertIsNone(doc.reservation_reference)
+		self.assertEqual(doc.reconciliation_case_reference, "ceurc-governed")
+
 	def test_reconciliation_flag_can_attach_reservation_and_reopen_needs_review(self):
 		doc = self._operation("governed")
 		doc.status = "Pending Finalize"
@@ -507,11 +532,12 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 			{
 				"doctype": REVIEW_EVENT_DOCTYPE,
 				"quota_operation": op.name,
-				"action": "Reconcile Unreserved",
-				"result": "Needs Review",
+				"action": "Submit CoreEdge Review",
+				"result": "Submitted",
 				"source_doctype": "User",
 				"source_name": "Administrator",
 				"entitlement_key": "SALES_TRANSACTIONS",
+				"reconciliation_case_reference": "ceurc-forged",
 				"reason": "Manual forged event should be blocked.",
 				"reviewed_on": now_datetime(),
 				"reviewed_by": "Administrator",
@@ -529,6 +555,7 @@ class SalesQuotaReconciliationPersistenceTests(FrappeTestCase):
 				"source_doctype": "User",
 				"source_name": "Administrator",
 				"entitlement_key": "SALES_TRANSACTIONS",
+				"reconciliation_case_reference": "ceurc-governed",
 				"reason": "Reviewed through governed reconciliation.",
 				"reviewed_on": now_datetime(),
 				"reviewed_by": "Administrator",
