@@ -1042,6 +1042,7 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 		]
 		for fieldname in (
 			"reference_no",
+			"clearance_date",
 			"remarks",
 			"custom_remarks",
 			"status",
@@ -1052,6 +1053,8 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 			if has_field("Payment Entry", fieldname) and fieldname not in fields:
 				fields.append(fieldname)
 		filters_payload = {"docstatus": 1}
+		if has_field("Payment Entry", "clearance_date"):
+			filters_payload["clearance_date"] = ["is", "not set"]
 		if filters.get("company") and has_field("Payment Entry", "company"):
 			filters_payload["company"] = filters.get("company")
 		elif has_field("Payment Entry", "company"):
@@ -1115,13 +1118,15 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 	start = _timing_bucket(debug_timings, "journal_entry_prefetch")
 	try:
 		fields = ["name", "posting_date", "company", "voucher_type"]
-		for fieldname in ("cheque_no", "cheque_date", "user_remark", "remark", "total_debit", "total_credit"):
+		for fieldname in ("cheque_no", "cheque_date", "clearance_date", "user_remark", "remark", "total_debit", "total_credit"):
 			if has_field("Journal Entry", fieldname) and fieldname not in fields:
 				fields.append(fieldname)
 		branch_field = _journal_entry_branch_field()
 		if branch_field:
 			fields.append(branch_field)
-		filters_payload = {"docstatus": 1}
+		filters_payload = {"docstatus": 1, "voucher_type": ["!=", "Opening Entry"]}
+		if has_field("Journal Entry", "clearance_date"):
+			filters_payload["clearance_date"] = ["is", "not set"]
 		if filters.get("company") and has_field("Journal Entry", "company"):
 			filters_payload["company"] = filters.get("company")
 		else:
@@ -2322,6 +2327,8 @@ def _get_payment_entry_rows(bank_transaction, filters, settings, limit=60):
 			fields.append(fieldname)
 
 	filters_payload = {"docstatus": 1}
+	if has_field("Payment Entry", "clearance_date"):
+		filters_payload["clearance_date"] = ["is", "not set"]
 	if bank_transaction.get("company") and has_field("Payment Entry", "company"):
 		filters_payload["company"] = bank_transaction.get("company")
 	if filters.get("company") and has_field("Payment Entry", "company"):
@@ -2570,7 +2577,7 @@ def _get_bank_transaction_rows(filters, limit, limit_start=0):
 		if fieldname and fieldname not in fields:
 			fields.append(fieldname)
 
-	filters_payload = {}
+	filters_payload = {"docstatus": 1}
 	date_field = field_map.get("transaction_date")
 	if filters.get("company") and field_map.get("company"):
 		filters_payload[field_map["company"]] = filters.get("company")
