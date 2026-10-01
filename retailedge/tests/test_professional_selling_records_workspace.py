@@ -120,8 +120,7 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 		"openRecordPreview(document, row)",
 		'if (action === "view") { this.openRecordPreview(document, row); return; }',
 		'if (action === "output") { this.openDocumentOutput(document, row); return; }',
-		'window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode: "share" };',
-		'frappe.set_route("document-output-sharing");',
+		'window.retailedge?.openDocumentOutputSharing?.(document.key, row.name);',
 	):
 		assert contract in workspace
 	assert 'this.openDocumentOutput(document, row, "view")' not in workspace
