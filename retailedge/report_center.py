@@ -444,6 +444,14 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 				"tags": ("sales", "daily", "audit", "register"),
 				"native_desk": True,
 			},
+			{
+				"label": "Sales Quota Reconciliation",
+				"description": "Review pending and exception sales-transaction quota operations without changing ERPNext accounting truth.",
+				"target_type": "Report",
+				"target": "RetailEdge Sales Quota Reconciliation",
+				"tags": ("sales", "quota", "coreedge", "reconciliation", "exception"),
+				"native_desk": True,
+			},
 		),
 	},
 	{
