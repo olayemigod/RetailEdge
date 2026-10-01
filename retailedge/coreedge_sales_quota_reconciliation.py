@@ -407,10 +407,15 @@ def _get_scoped_operation(operation_name: str):
 
 
 def _get_source_state(operation) -> dict:
+	meta = frappe.get_meta(operation.source_doctype)
+	fields = ["docstatus", "creation"]
+	for fieldname in ("posting_date", "transaction_date"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
 	row = frappe.db.get_value(
 		operation.source_doctype,
 		operation.source_name,
-		["docstatus", "posting_date", "transaction_date", "creation"],
+		fields,
 		as_dict=True,
 	)
 	if not row:
@@ -420,7 +425,7 @@ def _get_source_state(operation) -> dict:
 			_("Only submitted or subsequently cancelled sales can be reconciled."),
 			frappe.ValidationError,
 		)
-	candidate = row.posting_date or row.transaction_date or row.creation
+	candidate = row.get("posting_date") or row.get("transaction_date") or row.get("creation")
 	if not candidate:
 		frappe.throw(
 			_("The source sale has no reliable transaction date for quota reconciliation."),
