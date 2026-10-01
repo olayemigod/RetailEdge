@@ -336,6 +336,7 @@ export default {
 		moreActions(row) {
 			const actions = (Array.isArray(row?.actions) ? row.actions : [])
 				.map((action) => ({
+					...action,
 					value: action?.value,
 					label: action?.label,
 					disabled: Boolean(action?.disabled),
@@ -384,7 +385,7 @@ export default {
 		runMoreAction(row, option) {
 			const action = String(option?.value || "");
 			if (!action) return;
-			this.$emit("action", { action, document: this.activeDocument, row });
+			this.$emit("action", { action, actionDefinition: option, document: this.activeDocument, row });
 		},
 	},
 };
