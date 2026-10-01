@@ -383,6 +383,7 @@ export default {
 			if (action === "view") { this.openRecordPreview(document, row); return; }
 			if (action === "output") { this.openDocumentOutput(document, row); return; }
 			if (action === "advanced") { this.openAdvancedRecord(document, row.name); return; }
+			if (action === "open-existing-document") { this.openExistingLinkedDocument(payload?.actionDefinition, document); return; }
 			if (action === "make-payment") { this.openCustomerPayment(document, row); return; }
 			if (["create-sales-order", "create-delivery-note", "create-sales-invoice", "create-return-credit-note"].includes(action)) {
 				await this.runConversionAction(action, document, row);
@@ -406,6 +407,25 @@ export default {
 				);
 			}
 		},
+		openExistingLinkedDocument(actionDefinition, fallbackDocument) {
+			const doctype = String(actionDefinition?.target_doctype || "").trim();
+			const name = String(actionDefinition?.target_name || "").trim();
+			if (!doctype || !name) return;
+			const docstatus = Number(actionDefinition?.target_docstatus || 0);
+			const isReturn = Boolean(actionDefinition?.target_is_return);
+			const document = this.documents.find((item) => item.doctype === doctype)
+				|| fallbackDocument
+				|| { key: doctypeSlug(doctype), doctype };
+			const row = { name, docstatus, is_return: isReturn };
+
+			if (docstatus === 0) {
+				if (doctype === "Quotation" || doctype === "Sales Order") { this.openStandardCompletion({ doctype, name }); return; }
+				if (doctype === "Delivery Note") { this.openDeliveryCompletion({ doctype, name }); return; }
+				if (doctype === "Sales Invoice") { this.openSalesInvoiceCompletion({ doctype, name }, isReturn ? "sales_return" : "standard"); return; }
+			}
+			this.openRecordPreview(document, row);
+		},
+
 		async runConversionAction(action, document, row) {
 			const route = {
 				"create-sales-order": { method: "retailedge.professional_sales_order.create_sales_order_from_quotation", args: { quotation: row.name } },
@@ -427,12 +447,16 @@ export default {
 				if (result.existing) {
 					const label = (result.doctype || "Document") + " " + (result.name || "");
 					if (result.requires_amend || Number(result.docstatus || 0) === 2) {
-						frappe.msgprint({
-							title: __("Existing cancelled invoice"),
-							message: __(label + " already came from this Quotation. Open it and use Amend instead of creating another invoice."),
+						frappe.show_alert({
+							message: __(label + " already came from this transaction and is cancelled. Opening the existing document; use Advanced ERPNext Amend when a replacement is required."),
 							indicator: "orange",
 						});
-						if (this.canUseNativeDesk) frappe.set_route("Form", "Sales Invoice", result.name);
+						this.openExistingLinkedDocument({
+							target_doctype: result.doctype || "Sales Invoice",
+							target_name: result.name,
+							target_docstatus: Number(result.docstatus || 2),
+							target_is_return: Boolean(result.is_return),
+						}, document);
 						return;
 					}
 					frappe.show_alert({ message: __(label + " already exists. Opening it instead."), indicator: "blue" });
