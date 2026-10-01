@@ -3,11 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import frappe
-from frappe.utils import flt, now_datetime
+from frappe.utils import cint, flt, now_datetime
 
 from retailedge.cashier_expense import append_cashier_expense_action_log, user_has_any_role
 from retailedge.utils.settings import get_retailedge_settings
+from retailedge.workflow_readiness import _get_active_workflow
 
+
+CASHIER_EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 
 POSTING_REFRESH_ROLES = {
 	"System Manager",
@@ -30,16 +33,100 @@ def get_cashier_expense_posting_settings():
 	if posting_mode not in {"Controlled Posting", "Direct Posting"}:
 		posting_mode = "Controlled Posting" if legacy_require_approval else "Direct Posting"
 
+	configured_roles = {
+		str(getattr(row, "role", None) or "").strip()
+		for row in list(getattr(settings, "cashier_expense_posting_roles", None) or [])
+		if str(getattr(row, "role", None) or "").strip()
+	}
 	return {
 		"enabled": bool(getattr(settings, "enable_cashier_expense_accounting_posting", 0)),
 		"posting_mode": posting_mode,
+		# Journal Entry is intentionally authoritative. Historical sites may still
+		# contain the removed Payment Entry option until the settings patch runs.
 		"posting_document_type": getattr(settings, "cashier_expense_posting_document_type", None) or "Journal Entry",
 		"require_approval_before_posting": posting_mode == "Controlled Posting",
 		"allow_rejected_posting": bool(getattr(settings, "allow_rejected_cashier_expense_posting", 0)),
 		"remark_template": getattr(settings, "cashier_expense_posting_remark_template", None)
 		or "RetailEdge Cashier Expense {expense_name} - {expense_category}",
 		"default_payable_account": getattr(settings, "default_cashier_expense_payable_account", None) or None,
+		"posting_workflow_state": str(getattr(settings, "cashier_expense_posting_workflow_state", None) or "").strip(),
+		"posting_roles": configured_roles,
+		"posting_roles_configured": bool(configured_roles),
 	}
+
+
+@frappe.whitelist()
+def search_cashier_expense_posting_workflow_states(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int,
+	page_len: int,
+	filters: dict | None = None,
+):
+	"""Return submitted states from the one active Cashier Expense Workflow."""
+	workflow = _get_active_workflow(CASHIER_EXPENSE_DOCTYPE)
+	if not workflow:
+		return []
+	rows = frappe.get_all(
+		"Workflow Document State",
+		filters={
+			"parent": workflow["name"],
+			"parenttype": "Workflow",
+			"doc_status": "1",
+		},
+		fields=["state"],
+		order_by="idx asc",
+		limit_page_length=0,
+	)
+	needle = str(txt or "").strip().lower()
+	states = [
+		str(row.state or "").strip()
+		for row in rows
+		if str(row.state or "").strip()
+		and (not needle or needle in str(row.state).lower())
+	]
+	start = max(0, cint(start))
+	page_len = max(1, min(cint(page_len) or 20, 100))
+	return [[state] for state in states[start : start + page_len]]
+
+
+def cashier_expense_workflow_posting_reasons(doc, settings=None) -> list[str]:
+	settings = settings or get_cashier_expense_posting_settings()
+	workflow = _get_active_workflow(CASHIER_EXPENSE_DOCTYPE)
+	if not workflow:
+		if settings["require_approval_before_posting"] and str(getattr(doc, "expense_status", None) or "") != "Pending Ledger":
+			return ["Controlled Posting requires approval and Pending Ledger status before posting."]
+		if not settings["require_approval_before_posting"] and str(getattr(doc, "expense_status", None) or "") not in {"Submitted", "Pending Ledger"}:
+			return ["Direct Posting requires a submitted cashier expense before accounting posting."]
+		return []
+
+	state_field = str(workflow.get("workflow_state_field") or "workflow_state").strip()
+	current_state = str(
+		getattr(doc, state_field, None)
+		or getattr(doc, "workflow_state", None)
+		or ""
+	).strip()
+	allowed_state = str(settings.get("posting_workflow_state") or "").strip()
+	if not allowed_state:
+		return [
+			"Configure Workflow State Allowed for Accounting Posting in RetailEdge Settings before posting a workflow-controlled Cashier Expense."
+		]
+	if not frappe.db.exists(
+		"Workflow Document State",
+		{
+			"parent": workflow["name"],
+			"parenttype": "Workflow",
+			"state": allowed_state,
+			"doc_status": "1",
+		},
+	):
+		return [f"Configured posting Workflow State {allowed_state} is not a submitted state in the active Cashier Expense Workflow."]
+	if cint(getattr(doc, "docstatus", 0)) != 1:
+		return ["Cashier Expense must be submitted before accounting posting."]
+	if current_state != allowed_state:
+		return [f"Cashier Expense must be in Workflow State {allowed_state} before accounting posting."]
+	return []
 
 
 def build_cashier_expense_posting_preview(expense_doc_or_name):
@@ -78,10 +165,7 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 	if credit_account:
 		reasons.extend(_validate_credit_account(credit_account, company))
 
-	if settings["require_approval_before_posting"] and expense_status != "Pending Ledger":
-		reasons.append("Controlled Posting requires approval and Pending Ledger status before posting.")
-	if not settings["require_approval_before_posting"] and expense_status not in {"Submitted", "Pending Ledger"}:
-		reasons.append("Direct Posting requires a submitted cashier expense before accounting posting.")
+	reasons.extend(cashier_expense_workflow_posting_reasons(doc, settings=settings))
 	if expense_status == "Rejected" and not settings["allow_rejected_posting"]:
 		reasons.append("Rejected cashier expenses are blocked from posting by RetailEdge Settings.")
 	if posting_reference:
@@ -122,6 +206,8 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 		"accounting_posting_enabled": settings["enabled"],
 		"posting_mode": settings["posting_mode"],
 		"posting_document_type": settings["posting_document_type"],
+		"posting_workflow_state": settings.get("posting_workflow_state") or "",
+		"posting_roles_configured": bool(settings.get("posting_roles_configured")),
 		"company": company,
 		"posting_date": posting_date,
 		"amount": amount,
