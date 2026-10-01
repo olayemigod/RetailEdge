@@ -78,7 +78,10 @@ def _set_branch(doc, branch: str) -> str:
 	branch = str(branch or "").strip()
 	if not branch:
 		return ""
-	fieldname = get_first_existing_field(PURCHASE_ORDER_DOCTYPE, BRANCH_FIELD_CANDIDATES)
+	fieldname = get_first_existing_field(
+		PURCHASE_ORDER_DOCTYPE,
+		["retailedge_branch", *BRANCH_FIELD_CANDIDATES],
+	)
 	if not fieldname:
 		frappe.throw(
 			_("Purchase Order branch attribution is unavailable. Run site migration before using Branch-scoped guided purchasing.")
@@ -233,7 +236,10 @@ def search_professional_purchase_order_options(
 	if fieldname == "branch":
 		if not has_doctype("Branch"):
 			return []
-		branch_field = get_first_existing_field(PURCHASE_ORDER_DOCTYPE, BRANCH_FIELD_CANDIDATES) or "retailedge_branch"
+		branch_field = get_first_existing_field(
+			PURCHASE_ORDER_DOCTYPE,
+			["retailedge_branch", *BRANCH_FIELD_CANDIDATES],
+		) or "retailedge_branch"
 		return list(
 			search_link(
 				"Branch",
