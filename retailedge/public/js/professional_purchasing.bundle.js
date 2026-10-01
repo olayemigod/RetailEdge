@@ -17,7 +17,6 @@ const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
 const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
-const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit";
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
