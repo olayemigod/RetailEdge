@@ -282,17 +282,22 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 		expected_groups = [
 			"Home",
-			"Sell",
-			"Buy",
+			"Point of Sale",
+			"Sales",
+			"Purchases",
 			"Stock",
-			"Money",
+			"Money & Banking",
 			"Expenses",
 			"Customers",
 			"Suppliers & Payables",
+			"Operations Review",
+			"Banking & Reconciliation",
+			"Insights & Dashboards",
 			"Reports",
-			"Insights",
-			"Review & Approvals",
-			"Setup",
+			"Selling Setup",
+			"Stock Setup",
+			"Finance Setup",
+			"Business Setup",
 		]
 		for rows, break_type in (
 			(workspace["links"], "Card Break"),

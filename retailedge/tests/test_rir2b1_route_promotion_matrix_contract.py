@@ -37,7 +37,7 @@ def _page_definition(directory_name: str, filename: str) -> dict:
 class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 	def test_bank_matching_b1_decision_has_advanced_to_confirmed_page_route(self):
 		base = _base_item("review-approvals", "Bank Match Reviews")
-		fallback = _fallback_item("Bank Matching")
+		fallback = _fallback_item("Bank Matching & Reconciliation")
 
 		self.assertEqual((base["target_type"], base["target"]), ("Page", "bank-matching-reconciliation"))
 		self.assertEqual((fallback.link_type, fallback.link_to), ("Page", "bank-matching-reconciliation"))
@@ -49,12 +49,13 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 		self.assertEqual(page["name"], "bank-matching-reconciliation")
 		self.assertEqual(page["standard"], "Yes")
 
-	def test_stock_movement_history_remains_query_report_until_parity_gate(self):
+	def test_stock_movement_history_remains_report_authority_but_leaves_compact_daily_navigation(self):
 		base = _base_item("stock", "Stock Movement History")
-		fallback = _fallback_item("Stock Movement History")
+		fallback_targets = {(item.link_type, item.link_to) for item in HOME_WORKSPACE_ITEMS}
 
 		self.assertEqual((base["target_type"], base["target"]), ("Report", "RetailEdge Stock Movement History"))
-		self.assertEqual((fallback.link_type, fallback.link_to), ("Report", "RetailEdge Stock Movement History"))
+		self.assertNotIn(("Report", "RetailEdge Stock Movement History"), fallback_targets)
+		self.assertIn(("Page", "reports-centre"), fallback_targets)
 
 	def test_existing_page_first_operational_routes_remain_frozen(self):
 		expected = {
@@ -92,7 +93,7 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 			},
 		)
 
-	def test_later_review_promotions_do_not_rewrite_the_frozen_b1_matrix(self):
+	def test_later_review_promotions_are_explicit_in_compact_navigation(self):
 		base_targets = {
 			(item["target_type"], item["target"])
 			for group in NAVIGATION_GROUPS
@@ -105,7 +106,7 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 		self.assertEqual(banking_readiness["name"], "banking-readiness")
 		self.assertEqual(branch_assignments["name"], "branch-assignments")
 		self.assertIn(("Page", "banking-readiness"), base_targets)
-		self.assertNotIn(("Page", "banking-readiness"), fallback_targets)
+		self.assertIn(("Page", "banking-readiness"), fallback_targets)
 		self.assertNotIn(("Page", "branch-assignments"), base_targets)
 		self.assertNotIn(("Page", "branch-assignments"), fallback_targets)
 

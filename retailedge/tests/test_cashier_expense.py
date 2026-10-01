@@ -27,17 +27,22 @@ _legacy.CashierExpenseServiceTests.setUp = _set_up_cashier_expense_service_read_
 
 R2_NATIVE_SECTIONS = [
 	"Home",
-	"Sell",
-	"Buy",
+	"Point of Sale",
+	"Sales",
+	"Purchases",
 	"Stock",
-	"Money",
+	"Money & Banking",
 	"Expenses",
 	"Customers",
 	"Suppliers & Payables",
+	"Operations Review",
+	"Banking & Reconciliation",
+	"Insights & Dashboards",
 	"Reports",
-	"Insights",
-	"Review & Approvals",
-	"Setup",
+	"Selling Setup",
+	"Stock Setup",
+	"Finance Setup",
+	"Business Setup",
 ]
 
 R2_FORBIDDEN_NATIVE_TARGETS = {
@@ -47,13 +52,12 @@ R2_FORBIDDEN_NATIVE_TARGETS = {
 	"RetailEdge Branch Profile User",
 	"Item Group",
 	"UOM",
-	"Batch",
-	"Serial No",
 }
 
 R2_REQUIRED_LINKS = {
 	"Business Hub": ("Page", "retailedge-business-hub"),
 	"Sales Invoices": ("DocType", "Sales Invoice"),
+	"Purchase Operations": ("Page", "professional-purchasing"),
 	"Payments": ("DocType", "Payment Entry"),
 	"Cashier Expenses": ("Page", "cashier-expenses"),
 	"Customers": ("DocType", "Customer"),
@@ -61,9 +65,10 @@ R2_REQUIRED_LINKS = {
 	"Reports Centre": ("Page", "reports-centre"),
 	"Branch Performance": ("Page", "branch-performance-dashboard"),
 	"Salesperson Performance": ("Page", "salesperson-performance-dashboard"),
-	"Daily Sales Audit": ("DocType", "RetailEdge Daily Sales Audit"),
-	"Bank Matching": ("Report", "RetailEdge Bank Transaction Matching"),
-	"Stock Movement History": ("Report", "RetailEdge Stock Movement History"),
+	"Daily Sales Audit": ("Page", "daily-sales-audit"),
+	"Bank Matching & Reconciliation": ("Page", "bank-matching-reconciliation"),
+	"Banking Readiness": ("Page", "banking-readiness"),
+	"Stock Position": ("Page", "stock-position"),
 	"Stock Locations": ("DocType", "Warehouse"),
 	"Settings": ("DocType", "RetailEdge Settings"),
 	"Branch Setup": ("DocType", "RetailEdge Branch Profile"),
@@ -73,11 +78,11 @@ R2_SHORTCUTS = [
 	"Business Hub",
 	"Start POS",
 	"Sales Invoices",
+	"Purchase Operations",
 	"Payments",
 	"Cashier Expenses",
-	"Stock Movement History",
+	"Reports Centre",
 	"Branch Performance",
-	"Daily Sales Audit",
 ]
 
 
