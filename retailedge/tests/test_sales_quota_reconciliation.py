@@ -275,6 +275,8 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		client.reserve_usage.assert_not_called()
 		self.assertEqual(mock_event.call_args.kwargs["result"], "Blocked")
 
+	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_rollback")
+	@patch("retailedge.coreedge_sales_quota_reconciliation._register_after_commit")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
 	@patch("retailedge.coreedge_sales_quota_reconciliation.finalize_sales_quota_operation")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._next_review_attempt", return_value=1)
@@ -295,6 +297,8 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		_mock_attempt,
 		mock_finalize,
 		mock_event,
+		mock_after_commit,
+		mock_after_rollback,
 	):
 		op = self._operation()
 		mock_get_operation.return_value = op
@@ -326,25 +330,21 @@ class SalesQuotaReconciliationContractTests(unittest.TestCase):
 		}
 		mock_client_factory.return_value = client
 
-		def finalize(_name):
-			op.status = "Finalized"
-			op.reason_code = "RESERVATION_FINALIZED"
-			return {"status": "Finalized"}
-
-		mock_finalize.side_effect = finalize
 		result = reconcile_unreserved_quota_operation(
 			op.name,
 			"Recover this audited fail-open sale in the current quota period.",
 		)
 		self.assertTrue(result["ok"])
 		self.assertEqual(op.reservation_reference, "CEUR-RECOVERED")
-		self.assertEqual(op.status, "Finalized")
+		self.assertEqual(op.status, "Pending Finalize")
 		self.assertTrue(
 			op.flags.allow_retailedge_quota_reconciliation
 		)
 		op.save.assert_called_once()
-		mock_finalize.assert_called_once_with(op.name)
-		self.assertEqual(mock_event.call_args.kwargs["result"], "Finalized")
+		mock_finalize.assert_not_called()
+		mock_after_commit.assert_called_once()
+		mock_after_rollback.assert_called_once()
+		self.assertEqual(mock_event.call_args.kwargs["result"], "Pending Finalize")
 
 	@patch("retailedge.coreedge_sales_quota_reconciliation._write_review_event")
 	@patch("retailedge.coreedge_sales_quota_reconciliation._update_review_failure")
