@@ -140,6 +140,20 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		)
 		self.assertEqual(status, "Suggested")
 
+	def test_internal_transfer_shims_preserve_bank_context_signatures(self):
+		source = (APP_ROOT / "bank_internal_transfer_identity.py").read_text(encoding="utf-8")
+		self.assertIn(
+			"def payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction=None, exclude_match=None):",
+			source,
+		)
+		self.assertIn(
+			"def active_review_match_for_candidate(document_type, document_name, bank_transaction_name=None):",
+			source,
+		)
+		self.assertIn("def find_active_candidate_review_match(", source)
+		self.assertIn("bank_transaction=None,", source)
+		self.assertIn("bank_transaction=bank_transaction", source)
+
 	def test_internal_transfer_bank_matching_is_leg_aware_and_manual_review_first(self):
 		matching = (APP_ROOT / "bank_transaction_matching.py").read_text(encoding="utf-8")
 		workflow = (APP_ROOT / "bank_transaction_match_workflow.py").read_text(encoding="utf-8")
