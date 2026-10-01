@@ -77,18 +77,34 @@
 				</div>
 				<div class="table-responsive">
 					<table class="table po-submit-review__table po-draft-editor__table">
-						<thead><tr><th>Item</th><th class="text-right">Qty</th><th>UOM</th><th class="text-right">Rate</th><th>Required</th><th>Stock Location</th></tr></thead>
+						<thead><tr><th>Item</th><th class="text-right">Qty</th><th>UOM</th><th class="text-right">Rate</th><th>Required</th><th>Stock Location</th><th>Action</th></tr></thead>
 						<tbody>
-							<tr v-for="(row, index) in draftItems" :key="row.name || index">
-								<td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td>
-								<td><input v-model.number="row.qty" class="form-control text-right" type="number" min="0.000001" step="any" :disabled="saving || submitting" /></td>
+							<tr v-for="(row, index) in draftItems" :key="row.name || `new-${index}`">
+								<td>
+									<template v-if="row.name">
+										<strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small>
+									</template>
+									<EdgeLinkField
+										v-else
+										:modelValue="row.item_code"
+										placeholder="Search item"
+										:searcher="searchDraftItem"
+										@update:modelValue="setDraftItemCode(index, $event)"
+									/>
+								</td>
+								<td><input :value="row.qty" class="form-control text-right" type="number" min="0.000001" step="any" :disabled="saving || submitting" @input="setDraftItemQty(index, $event.target.value)" /></td>
 								<td>{{ row.uom || '—' }}</td>
-								<td><input v-model.number="row.rate" class="form-control text-right" type="number" min="0" step="any" :disabled="saving || submitting" /></td>
+								<td><input :value="row.rate" class="form-control text-right" type="number" min="0" step="any" :disabled="saving || submitting" @input="setDraftItemRate(index, $event.target.value)" /></td>
 								<td><input v-model="row.schedule_date" class="form-control" type="date" :min="draftTransactionDate || undefined" :disabled="saving || submitting" /></td>
-								<td>{{ row.warehouse || '—' }}</td>
+								<td>{{ row.warehouse || preview.default_warehouse || '—' }}</td>
+								<td><button v-if="!row.name" type="button" class="edge-button" :disabled="saving || submitting" @click="removeNewDraftItem(index)">Remove</button></td>
 							</tr>
 						</tbody>
 					</table>
+				</div>
+				<div class="po-draft-editor__item-actions">
+					<button type="button" class="edge-button" :disabled="saving || submitting" @click="addDraftItem">Add Item</button>
+					<span>New rows inherit the Purchase Order's governed Supplier, Branch, Buying Price List and receiving Stock Location.</span>
 				</div>
 			</section>
 			<div v-else class="table-responsive">
@@ -153,6 +169,8 @@ import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUti
 const PREVIEW_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_submit_preview";
 const SUBMIT_METHOD = "retailedge.professional_purchase_order_submit.submit_standard_purchase_order";
 const UPDATE_METHOD = "retailedge.professional_purchase_order_submit.update_standard_purchase_order_draft";
+const ITEM_SEARCH_METHOD = "retailedge.professional_purchase_order_submit.search_purchase_order_draft_items";
+const ITEM_PRICING_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_draft_item_pricing";
 const WORKFLOW_METHOD = "retailedge.professional_purchase_order_submit.apply_standard_purchase_order_workflow_action";
 const OPEN_EVENT = "retailedge-open-purchase-order-submit";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
@@ -185,6 +203,7 @@ export default {
 		EdgeModal: runtime.EdgeModal,
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
+		EdgeLinkField: runtime.EdgeLinkField,
 	},
 	data() {
 		return {
@@ -201,6 +220,7 @@ export default {
 			draftTerms: "",
 			draftItems: [],
 			draftBaseline: "",
+			pricingTokens: {},
 		};
 	},
 	computed: {
@@ -215,9 +235,10 @@ export default {
 		draftValid() {
 			if (!this.draftTransactionDate || !this.draftScheduleDate || this.draftScheduleDate < this.draftTransactionDate) return false;
 			return this.draftItems.length > 0 && this.draftItems.every((row) =>
-				Boolean(row.name) &&
+				Boolean(row.name || row.item_code) &&
 				Number(row.qty || 0) > 0 &&
-				Number(row.rate || 0) >= 0 &&
+				row.rate !== "" && row.rate !== null && row.rate !== undefined &&
+				Number(row.rate) >= 0 &&
 				Boolean(row.schedule_date) &&
 				row.schedule_date >= this.draftTransactionDate
 			);
@@ -250,7 +271,77 @@ export default {
 			this.draftScheduleDate = preview?.schedule_date || preview?.transaction_date || "";
 			this.draftTerms = preview?.terms || "";
 			this.draftItems = (preview?.items || []).map((row) => ({ ...row }));
+			this.pricingTokens = {};
 			this.draftBaseline = draftSnapshot(this.draftTransactionDate, this.draftScheduleDate, this.draftTerms, this.draftItems);
+		},
+		addDraftItem() {
+			this.draftItems = [...this.draftItems, {
+				name: "",
+				item_code: "",
+				item_name: "",
+				qty: 1,
+				uom: "",
+				rate: "",
+				schedule_date: this.draftScheduleDate || this.draftTransactionDate || "",
+				warehouse: this.preview?.default_warehouse || "",
+			}];
+		},
+		removeNewDraftItem(index) {
+			const row = this.draftItems[index];
+			if (!row || row.name || this.saving || this.submitting) return;
+			this.draftItems = this.draftItems.filter((_item, rowIndex) => rowIndex !== index);
+			this.pricingTokens = {};
+		},
+		searchDraftItem(query) {
+			if (!this.preview?.purchase_order) return Promise.resolve([]);
+			return callMethod(ITEM_SEARCH_METHOD, {
+				purchase_order: this.preview.purchase_order,
+				txt: query || "",
+			}).then((rows) => Array.isArray(rows) ? rows : []);
+		},
+		setDraftItemCode(index, value) {
+			const row = this.draftItems[index];
+			if (!row || row.name) return;
+			row.item_code = value || "";
+			row.rate = "";
+			row.warehouse = row.warehouse || this.preview?.default_warehouse || "";
+			this.draftItems = [...this.draftItems];
+			if (row.item_code) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemQty(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.qty = value;
+			this.draftItems = [...this.draftItems];
+			if (!row.name && row.item_code && Number(value || 0) > 0) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemRate(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.rate = value;
+			this.draftItems = [...this.draftItems];
+		},
+		async refreshDraftItemPricing(index) {
+			const row = this.draftItems[index];
+			if (!row?.item_code || row.name || !this.preview?.purchase_order) return;
+			const token = (this.pricingTokens[index] || 0) + 1;
+			this.pricingTokens[index] = token;
+			try {
+				const result = await callMethod(ITEM_PRICING_METHOD, {
+					purchase_order: this.preview.purchase_order,
+					item_code: row.item_code,
+					qty: Number(row.qty || 1),
+				});
+				if (this.pricingTokens[index] !== token || this.draftItems[index]?.item_code !== row.item_code) return;
+				this.draftItems[index] = {
+					...this.draftItems[index],
+					rate: result?.rate ?? "",
+					warehouse: this.draftItems[index]?.warehouse || this.preview?.default_warehouse || "",
+				};
+				this.draftItems = [...this.draftItems];
+			} catch (error) {
+				if (this.pricingTokens[index] === token) this.error = errorMessage(error, `Unable to price ${row.item_code}.`);
+			}
 		},
 		async saveDraft() {
 			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.saving || this.submitting) return;
@@ -265,10 +356,12 @@ export default {
 						schedule_date: this.draftScheduleDate,
 						terms: this.draftTerms,
 						items: this.draftItems.map((row) => ({
-							name: row.name,
+							name: row.name || "",
+							item_code: row.item_code || "",
 							qty: Number(row.qty || 0),
-							rate: Number(row.rate || 0),
+							rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
 							schedule_date: row.schedule_date,
+							warehouse: row.warehouse || "",
 						})),
 					},
 				}, "POST");
@@ -390,6 +483,8 @@ export default {
 .po-draft-editor__grid label { display:grid; gap:.3rem; font-size:.82rem; font-weight:600; }
 .po-draft-editor__terms { grid-column:1 / -1; }
 .po-draft-editor__table input { min-width:7rem; }
+.po-draft-editor__item-actions { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.po-draft-editor__item-actions span { opacity:.72; font-size:.78rem; }
 .po-submit-review__note { margin:0; font-size:.82rem; opacity:.72; }
 .po-submit-review__footer { width:100%; display:flex; justify-content:space-between; gap:.75rem; }
 .po-submit-review__footer-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
