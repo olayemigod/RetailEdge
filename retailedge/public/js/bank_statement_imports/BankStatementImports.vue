@@ -196,7 +196,6 @@
 import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
 
 const WORKSPACE = "retailedge.payment_statement_import_workspace";
-const API = "retailedge.api";
 const runtime = typeof window !== "undefined" ? (window.EdgeSuiteUI?.components || {}) : {};
 
 function callMethod(method, args = {}, type = "GET") {
@@ -415,10 +414,10 @@ export default {
 			try {
 				let result;
 				const name = this.detail.document.name;
-				if (action === "preview-rows") result = await callMethod(`${API}.preview_payment_statement_import_rows`, { import_name: name });
-				else if (action === "import-rows") result = await callMethod(`${API}.import_payment_statement_rows`, { import_name: name, replace_rows: 1 }, "POST");
-				else if (action === "preview-bank") result = await callMethod(`${API}.preview_bank_transaction_import`, { statement_import_name: name });
-				else if (action === "create-bank") result = await callMethod(`${API}.import_statement_rows_to_bank_transactions`, { statement_import_name: name, force: 0 }, "POST");
+				if (action === "preview-rows") result = await callMethod(`${WORKSPACE}.preview_statement_rows`, { name });
+				else if (action === "import-rows") result = await callMethod(`${WORKSPACE}.import_statement_rows`, { name, replace_rows: 1 }, "POST");
+				else if (action === "preview-bank") result = await callMethod(`${WORKSPACE}.preview_statement_bank_transactions`, { name });
+				else if (action === "create-bank") result = await callMethod(`${WORKSPACE}.create_statement_bank_transactions`, { name }, "POST");
 				else return;
 				this.actionResult = result || {}; this.resultTitle = ({
 					"preview-rows": "Statement Row Preview", "import-rows": "Statement Rows Imported",
@@ -437,7 +436,7 @@ export default {
 			const name = this.detail?.document?.name; if (!name) return;
 			this.duplicatesOpen = true; this.duplicatesLoading = true; this.duplicatesError = "";
 			try {
-				const result = await callMethod(`${API}.get_possible_duplicate_statement_rows`, { statement_import_name: name });
+				const result = await callMethod(`${WORKSPACE}.get_statement_possible_duplicates`, { name });
 				this.duplicates = Array.isArray(result) ? result : (result?.rows || []);
 				this.duplicateNotes = Object.fromEntries(this.duplicates.map((row) => [row.name, ""]));
 			} catch (error) { this.duplicatesError = errorMessage(error, "Unable to load possible duplicates."); }
@@ -449,7 +448,7 @@ export default {
 			if (!row?.name || !note || this.actionBusy) return;
 			this.actionBusy = true; this.duplicatesError = "";
 			try {
-				const result = await callMethod(`${API}.accept_possible_duplicate_statement_row`, { row_name: row.name, acceptance_note: note }, "POST");
+				const result = await callMethod(`${WORKSPACE}.accept_statement_possible_duplicate`, { row_name: row.name, acceptance_note: note }, "POST");
 				this.actionResult = result || {}; this.resultTitle = "Possible Duplicate Accepted"; this.resultOpen = true;
 				await this.loadDuplicates();
 				this.detail = await callMethod(`${WORKSPACE}.get_bank_statement_import_detail`, { name: this.detail.document.name });
