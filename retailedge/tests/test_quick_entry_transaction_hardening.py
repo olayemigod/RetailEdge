@@ -622,3 +622,16 @@ def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 			"GL Entry",
 		):
 			assert forbidden not in source
+
+
+def test_cached_persistent_transaction_pages_reload_when_a_new_quick_handoff_exists():
+	make_sale = MAKE_SALE.read_text(encoding="utf-8")
+	purchase = RECORD_PURCHASE.read_text(encoding="utf-8")
+
+	assert "hasPendingHandoff()" in make_sale
+	assert "if (!this.loaded || this.hasPendingHandoff()) this.loadPage();" in make_sale
+	assert "cleanStoredPayload(raw, HANDOFF_MAX_AGE_MS)" in make_sale
+
+	assert "hasPendingHandoff()" in purchase
+	assert "(!this.loaded || this.hasPendingHandoff())" in purchase
+	assert "stored(raw, 10 * 60 * 1000)" in purchase
