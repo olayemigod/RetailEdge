@@ -139,6 +139,9 @@
 				The effective Selling Price List follows Price List Governance. When switching is allowed, Branch-assigned alternatives can be chosen.
 				Changing the Price List automatically re-prices entered items, and the server validates pricing again when the draft is saved.
 			</p>
+			<p v-if="formContext.pricing?.allow_rate_change === false" class="guided-invoice-warning" role="status">
+				Selling rate is read-only. {{ formContext.pricing?.rate_change_lock_reason || "Rate editing is disabled by the current pricing policy." }}
+			</p>
 
 			<label class="guided-field guided-field--wide">
 				<span>Remarks</span>

@@ -69,6 +69,15 @@ def test_category_name_is_stable_in_edgesuite_edit_flow():
 	assert "rename" not in inspect.getsource(expense_category_setup.save_expense_category).lower()
 
 
+def test_new_category_generates_nonblank_unique_code_and_posts_explicitly():
+	source = inspect.getsource(expense_category_setup.save_expense_category)
+	assert "_default_category_code" in source
+	assert "doc.category_code = _default_category_code" in source
+	manager = MANAGER_UI.read_text(encoding="utf-8")
+	assert '}, "POST")' in manager
+	assert "const creating = !this.editingName" in manager
+
+
 def test_new_edgesuite_category_requires_explicit_company():
 	source = inspect.getsource(expense_category_setup.save_expense_category)
 	assert "Company is required when creating an Expense Category in RetailEdge Setup." in source

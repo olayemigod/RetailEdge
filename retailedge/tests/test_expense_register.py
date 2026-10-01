@@ -180,6 +180,7 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertIn("Expense Category", component)
 		self.assertIn("Cashier view is limited to your own expenses", component)
 		self.assertIn('this.filters.expense_category = ""', component)
+		self.assertIn('class="edge-smart-date--align-end"', component)
 		self.assertIn("SimpleCashierExpenseDialog", component)
 		self.assertIn(':nativeFallbackEnabled="false"', component)
 		self.assertIn('frappe.set_route("business-expenses")', component)

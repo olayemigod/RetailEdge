@@ -32,12 +32,16 @@ def test_party_context_uses_submitted_invoice_truth_and_bounded_multicurrency_op
     assert '"docstatus": 1' in source
     assert '"Sales Invoice"' in source
     assert '"Purchase Invoice"' in source
-    assert "sum(base_net_total) as total_value" in source
-    assert "sum(outstanding_amount) as current_balance" in source
+    assert '{"SUM": "base_net_total", "as": "total_value"}' in source
+    assert '{"SUM": "outstanding_amount", "as": "current_balance"}' in source
     assert "MAX_OPEN_DOCUMENT_ROWS = 2000" in source
     assert "limit_page_length=MAX_OPEN_DOCUMENT_ROWS + 1" in source
     assert '"conversion_rate"' in source
     assert '"source_of_truth": config["source"]' in source
+    assert '{"COUNT": "*", "as": "document_count"}' in source
+    assert '{"MAX": "posting_date", "as": "last_transaction_date"}' in source
+    assert "count(name) as document_count" not in source
+    assert "sum(base_net_total) as total_value" not in source
 
 
 def test_context_card_refreshes_on_party_company_and_branch_changes():

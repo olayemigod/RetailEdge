@@ -6,7 +6,8 @@ import frappe
 from frappe import _
 
 
-USER_DEFAULT_KEY = "RetailEdge Transaction Entry Style"
+USER_DEFAULT_KEY = "retailedge_transaction_entry_style"
+LEGACY_USER_DEFAULT_KEY = "RetailEdge Transaction Entry Style"
 DEFAULT_PREFERENCE = "smart"
 PREFERENCE_OPTIONS: tuple[dict[str, str], ...] = (
 	{
@@ -40,7 +41,10 @@ def get_transaction_entry_style(*, user: str | None = None) -> str:
 	if not user or user == "Guest":
 		return DEFAULT_PREFERENCE
 	value = str(frappe.defaults.get_user_default(USER_DEFAULT_KEY, user=user) or "").strip().lower()
-	return value if value in _ALLOWED else DEFAULT_PREFERENCE
+	if value in _ALLOWED:
+		return value
+	legacy = str(frappe.defaults.get_user_default(LEGACY_USER_DEFAULT_KEY, user=user) or "").strip().lower()
+	return legacy if legacy in _ALLOWED else DEFAULT_PREFERENCE
 
 
 def _payload(value: str) -> dict[str, Any]:
