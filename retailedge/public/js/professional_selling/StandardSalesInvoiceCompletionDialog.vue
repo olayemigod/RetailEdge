@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		title="Complete Sales Invoice"
-		subtitle="Review the saved ERPNext Sales Invoice and complete it through native submission or the active Frappe Workflow."
+		:title="dialogTitle"
+		:subtitle="dialogSubtitle"
 		size="lg"
 		@close="requestClose"
 	>
@@ -74,7 +74,7 @@
 					</p>
 				</div>
 
-				<div v-if="preview.blockers?.length" class="invoice-completion-blockers">
+				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="invoice-completion-blockers">
 					<strong>Standard Sales Invoice completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
@@ -108,7 +108,7 @@
 						>
 							{{ action.label }}
 						</button>
-						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Send</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Share</button>
 					</div>
 				</div>
 
@@ -223,6 +223,14 @@ export default {
 		};
 	},
 	computed: {
+		dialogTitle() {
+			return Number(this.preview?.docstatus || 0) === 0 ? "Complete Sales Invoice" : "View Sales Invoice";
+		},
+		dialogSubtitle() {
+			return Number(this.preview?.docstatus || 0) === 0
+				? "Review the saved ERPNext Sales Invoice and complete it through native submission or the active Frappe Workflow."
+				: "Review the submitted ERPNext Sales Invoice and continue with any permitted next workflow.";
+		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
 		},
@@ -302,7 +310,13 @@ export default {
 			this.actionError = "";
 			try {
 				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name, source_mode: this.sourceMode || "standard" }));
-				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
+				if (Number(this.preview?.docstatus || 0) === 0) {
+					this.completedResult = null;
+				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.completedResult = await this.decorateCompletedResult(this.preview);
+				} else {
+					this.completedResult = null;
+				}
 			} catch (error) {
 				this.applyPreview(null);
 				this.error = errorMessage(error, "Unable to review this Sales Invoice.");
