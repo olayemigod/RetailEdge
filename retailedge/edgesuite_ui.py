@@ -34,6 +34,14 @@ SUPPLIER_DOCUMENT_REVIEW_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 }
+QUOTA_OPERATIONS_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+}
+
 ACTION_CENTER_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -230,6 +238,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
 			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
+			{"label": "Quota Operations", "target_type": "Page", "target": "quota-operations", "icon": "shield", "required_roles": tuple(sorted(QUOTA_OPERATIONS_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},
