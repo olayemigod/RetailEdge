@@ -20,6 +20,7 @@ from retailedge.integrations.coreedge_remote_usage import (
 from retailedge.operating_context import get_allowed_operating_branches
 
 
+_REVIEW_EVENT_DOCTYPE = "RetailEdge CoreEdge Quota Review Event"
 _MUTATION_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -177,6 +178,12 @@ def retry_quota_operation(operation_name: str, reason: str | None = None) -> dic
 		return {"ok": True, "status": "Finalized", "operation": _operation_result(operation)}
 	if operation.status == "Pending Finalize":
 		result = finalize_sales_quota_operation(operation.name)
+		_write_review_event(
+			operation=frappe.get_doc(OPERATION_DOCTYPE, operation.name),
+			action="Retry Finalization",
+			result_status=result.get("status") or "Pending Finalize",
+			reason="",
+		)
 		return {
 			"ok": result.get("status") == "Finalized",
 			"status": result.get("status"),
@@ -201,6 +208,12 @@ def retry_quota_operation(operation_name: str, reason: str | None = None) -> dic
 		allow_needs_review=True,
 		review_action="Retry CoreEdge Finalization",
 		review_reason=resolved_reason,
+	)
+	_write_review_event(
+		operation=frappe.get_doc(OPERATION_DOCTYPE, operation.name),
+		action="Retry CoreEdge Finalization",
+		result_status=result.get("status") or "Needs Review",
+		reason=resolved_reason,
 	)
 	return {
 		"ok": result.get("status") == "Finalized",
@@ -341,6 +354,12 @@ def reconcile_unreserved_quota_operation(
 		review_action="Attempt Reconciliation",
 		review_reason=resolved_reason,
 	)
+	_write_review_event(
+		operation=frappe.get_doc(OPERATION_DOCTYPE, operation.name),
+		action="Attempt Reconciliation",
+		result_status=result.get("status") or "Needs Review",
+		reason=resolved_reason,
+	)
 	return {
 		"ok": result.get("status") == "Finalized",
 		"status": result.get("status"),
@@ -440,6 +459,48 @@ def _record_review_failure(
 	operation.last_error = str(message or reason_code or "")[:1000]
 	_apply_review_metadata(operation, action, reason)
 	_save_review_operation(operation)
+	_write_review_event(
+		operation=operation,
+		action=action,
+		result_status=operation.status or "Needs Review",
+		reason=reason,
+		reason_code=reason_code,
+		message=message,
+	)
+
+
+def _write_review_event(
+	*,
+	operation,
+	action: str,
+	result_status: str,
+	reason: str,
+	reason_code: str | None = None,
+	message: str | None = None,
+) -> None:
+	event = frappe.get_doc(
+		{
+			"doctype": _REVIEW_EVENT_DOCTYPE,
+			"event_key": "reqr-" + frappe.generate_hash(length=32),
+			"quota_operation": operation.name,
+			"action": str(action or "")[:140],
+			"result_status": str(result_status or "")[:140],
+			"source_doctype": operation.source_doctype,
+			"source_name": operation.source_name,
+			"reservation_reference": operation.reservation_reference,
+			"reason": str(reason or "")[:1000] or None,
+			"reason_code": str(
+				reason_code or operation.reason_code or ""
+			)[:140] or None,
+			"message": str(
+				message or operation.last_error or operation.remote_message or ""
+			)[:1000] or None,
+			"actor": getattr(frappe.session, "user", None) or "Administrator",
+			"occurred_on": now_datetime(),
+		}
+	)
+	event.flags.allow_retailedge_quota_review_event_create = True
+	event.insert(ignore_permissions=True)
 
 
 def _apply_review_metadata(operation, action: str, reason: str) -> None:
