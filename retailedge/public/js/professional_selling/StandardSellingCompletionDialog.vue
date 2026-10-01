@@ -25,9 +25,6 @@
 							<strong>Edit draft before completion</strong>
 							<p>Update draft dates, notes and quantities, or add new items. Existing source-linked item identity remains protected.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
-							{{ busy ? "Saving..." : "Save Draft Changes" }}
-						</button>
 					</div>
 					<div class="selling-editor-grid">
 						<EdgeInput v-model="draftTransactionDate" id="selling-draft-date" :label="preview.doctype === 'Quotation' ? 'Quotation Date' : 'Order Date'" type="date" :disabled="busy" required />
@@ -143,7 +140,7 @@
 							:disabled="busy || !draftValid"
 							@click="saveDraftChanges"
 						>
-							{{ busy ? "Saving..." : "Save Changes" }}
+							{{ busy ? "Saving..." : "Save Draft Changes" }}
 						</button>
 						<button
 							v-if="preview?.can_submit && !draftDirty"
