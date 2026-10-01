@@ -1,3 +1,12 @@
+function canRetryCoreEdgeQuota() {
+	return (
+		frappe.session.user === "Administrator" ||
+		["System Manager", "RetailEdge Manager", "RetailEdgeManager"].some((role) =>
+			(frappe.user_roles || []).includes(role)
+		)
+	);
+}
+
 frappe.query_reports["RetailEdge CoreEdge Quota Review"] = {
 	onload(report) {
 		if (report?.page?.wrapper) {
@@ -28,7 +37,11 @@ frappe.query_reports["RetailEdge CoreEdge Quota Review"] = {
 	},
 
 	formatter(value, row, column, data, default_formatter) {
-		if (column.fieldname === "next_action" && data?.status === "Pending Finalize") {
+		if (
+			column.fieldname === "next_action" &&
+			data?.status === "Pending Finalize" &&
+			canRetryCoreEdgeQuota()
+		) {
 			const operation = encodeURIComponent(data.name || "");
 			return [
 				'<button class="btn btn-xs btn-default retailedge-quota-retry"',
@@ -60,7 +73,6 @@ frappe.query_reports["RetailEdge CoreEdge Quota Review"] = {
 			options: "Company",
 			on_change(queryReport) {
 				queryReport.set_filter_value("branch", "");
-				queryReport.refresh();
 			},
 		},
 		{
