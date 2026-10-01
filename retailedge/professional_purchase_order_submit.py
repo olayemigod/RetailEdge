@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
 
+from retailedge.guided_pricing import resolve_purchase_item_pricing
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.professional_purchasing import (
 	PURCHASE_ORDER_DOCTYPE,
@@ -152,6 +153,8 @@ def _build_preview(doc: Any) -> dict[str, Any]:
 		"supplier": str(getattr(doc, "supplier", "") or ""),
 		"supplier_name": str(getattr(doc, "supplier_name", "") or getattr(doc, "supplier", "") or ""),
 		"currency": str(getattr(doc, "currency", "") or ""),
+		"buying_price_list": str(getattr(doc, "buying_price_list", "") or ""),
+		"default_warehouse": str(getattr(doc, "set_warehouse", "") or ""),
 		"transaction_date": str(getattr(doc, "transaction_date", "") or ""),
 		"schedule_date": str(getattr(doc, "schedule_date", "") or ""),
 		"terms": str(getattr(doc, "terms", "") or ""),
@@ -249,21 +252,61 @@ def update_standard_purchase_order_draft(
 		if not isinstance(requested, dict):
 			frappe.throw(_("Purchase Order item row {0} is invalid.").format(index))
 		row_name = str(requested.get("name") or "").strip()
-		row = current_rows.get(row_name)
-		if not row:
+		row = current_rows.get(row_name) if row_name else None
+		if row_name and not row:
 			frappe.throw(_("Purchase Order item row {0} is no longer part of this draft. Refresh and try again.").format(index))
+
+		item_code = str(requested.get("item_code") or "").strip()
+		if row:
+			if item_code and item_code != str(getattr(row, "item_code", "") or "").strip():
+				frappe.throw(_("Existing Purchase Order item identity cannot be replaced here. Add a new item row instead."))
+		else:
+			if not item_code:
+				frappe.throw(_("Item is required on new Purchase Order row {0}.").format(index))
+			_assert_read("Item", item_code)
+			row = doc.append("items", {"item_code": item_code})
+			default_warehouse = str(getattr(doc, "set_warehouse", "") or "").strip()
+			if default_warehouse and row.meta.has_field("warehouse"):
+				row.warehouse = default_warehouse
+
 		qty = flt(requested.get("qty"))
-		rate = flt(requested.get("rate"))
 		row_schedule = getdate(requested.get("schedule_date") or parent_schedule)
 		if qty <= 0:
 			frappe.throw(_("Quantity on row {0} must be greater than zero.").format(index))
-		if rate < 0:
-			frappe.throw(_("Buying Rate on row {0} cannot be negative.").format(index))
 		if row_schedule < transaction_date:
 			frappe.throw(_("Required By date on row {0} cannot be before the Order Date.").format(index))
+
+		rate_value = requested.get("rate")
+		if not row_name and rate_value in (None, ""):
+			pricing = resolve_purchase_item_pricing(
+				item_code=item_code,
+				company=str(getattr(doc, "company", "") or ""),
+				supplier=str(getattr(doc, "supplier", "") or ""),
+				branch=_document_branch(doc),
+				warehouse=str(getattr(row, "warehouse", "") or getattr(doc, "set_warehouse", "") or ""),
+				posting_date=str(transaction_date),
+				qty=qty,
+				selected_price_list=str(getattr(doc, "buying_price_list", "") or ""),
+				user=frappe.session.user,
+				requested_price_list=str(getattr(doc, "buying_price_list", "") or ""),
+			)
+			rate_value = pricing.get("rate")
+			if rate_value is None:
+				frappe.throw(
+					_("No buying price could be resolved for Item {0}. Enter the agreed buying rate before saving.").format(
+						item_code
+					)
+				)
+		rate = flt(rate_value)
+		if rate < 0:
+			frappe.throw(_("Buying Rate on row {0} cannot be negative.").format(index))
+
 		row.qty = qty
 		row.rate = rate
 		row.schedule_date = row_schedule
+
+	if hasattr(doc, "set_missing_values"):
+		doc.set_missing_values()
 
 	doc.save()
 	doc.reload()
