@@ -26,8 +26,6 @@ READ_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
-	"RetailEdgeBranchManager",
 	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
@@ -35,8 +33,6 @@ RETRY_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
-	"RetailEdgeBranchManager",
 }
 STATUS_OPTIONS = {
 	"Open": ["Pending Finalize", "Needs Review"],
