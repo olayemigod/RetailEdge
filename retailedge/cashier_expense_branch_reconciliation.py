@@ -64,8 +64,8 @@ def _run_cashier_expense_pos_profile_branch_history(
 		filters={
 			"docstatus": ["!=", 2],
 			"expense_status": ["!=", "Cancelled"],
-			"pos_profile": ["not in", ["", None]],
-			"branch": ["not in", ["", None]],
+			"pos_profile": ["!=", ""],
+			"branch": ["!=", ""],
 		},
 		fields=[
 			"name",
