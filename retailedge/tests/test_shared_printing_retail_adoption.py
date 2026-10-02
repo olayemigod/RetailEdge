@@ -143,6 +143,20 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_devices_and_printing_navigation_carries_operating_context(self):
+		source = self.read_app("master_experience.py")
+		for contract in (
+			'params = {',
+			'"purpose": "Receipt"',
+			'"product_key": "retailedge"',
+			'company = str(operating.get("company") or "").strip()',
+			'branch = str(operating.get("branch") or "").strip()',
+			'item["target_type"] = "URL"',
+			'item["target"] = f"/app/edge-printing?{urlencode(params)}"',
+			'target.startswith("/app/edge-printing?")',
+		):
+			self.assertIn(contract, source)
+
 	def test_retailedge_ci_uses_the_printing_capable_edgesuite_foundation(self):
 		workflow = self.read_repo(".github/workflows/ci.yml")
 		self.assertIn("800cf1fd4aad82038f74411872e534400ad1ead0", workflow)
