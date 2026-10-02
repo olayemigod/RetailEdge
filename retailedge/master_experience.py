@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+from urllib.parse import urlencode
 
 import frappe
 
@@ -566,16 +567,36 @@ def _add_devices_printing_navigation(navigation_groups: list[dict[str, Any]]) ->
 		navigation_groups.append(setup_group)
 
 	items = list(setup_group.get("items") or [])
-	if any(item.get("target") == DEVICES_PRINTING_ITEM["target"] for item in items):
+	if any(
+		str(item.get("target") or "").startswith("/app/edge-printing?")
+		or item.get("target") == DEVICES_PRINTING_ITEM["target"]
+		for item in items
+	):
 		return
 
+	operating = get_operating_context() or {}
+	params = {
+		"purpose": "Receipt",
+		"product_key": "retailedge",
+	}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if company:
+		params["company"] = company
+	if branch:
+		params["branch"] = branch
+
+	item = deepcopy(DEVICES_PRINTING_ITEM)
+	item["target_type"] = "URL"
+	item["target"] = f"/app/edge-printing?{urlencode(params)}"
+
 	branch_assignment_index = next(
-		(index for index, item in enumerate(items) if item.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"]),
+		(index for index, row in enumerate(items) if row.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"]),
 		-1,
 	)
 	items.insert(
 		branch_assignment_index + 1 if branch_assignment_index >= 0 else len(items),
-		deepcopy(DEVICES_PRINTING_ITEM),
+		item,
 	)
 	setup_group["items"] = items
 
@@ -1110,7 +1131,7 @@ def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | N
 		return "stock-setup"
 	if target in FINANCE_SETUP_TARGETS:
 		return "finance-setup"
-	if target in BUSINESS_SETUP_TARGETS:
+	if target in BUSINESS_SETUP_TARGETS or target.startswith("/app/edge-printing?"):
 		return "business-setup"
 
 	# Keep future items available under their originating business family until
