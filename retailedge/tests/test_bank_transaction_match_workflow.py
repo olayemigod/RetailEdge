@@ -689,10 +689,6 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		mock_journal_candidates.assert_not_called()
 
 	@patch(
-		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction",
-		return_value=[],
-	)
-	@patch(
 		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[],
 	)
@@ -1299,6 +1295,10 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_journal_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[
