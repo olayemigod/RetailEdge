@@ -106,7 +106,7 @@ def get_branch_profile(
 		profile = _get_profile_by_filters(filters, active_only=active_only)
 		if not profile:
 			continue
-		if pos_profile and getattr(profile, "default_pos_profile", None) not in (None, "", pos_profile):
+		if not _profile_matches_pos_profile(profile, pos_profile):
 			continue
 		if warehouse and not _profile_matches_warehouse(profile, warehouse):
 			continue
@@ -126,7 +126,7 @@ def get_branch_profile(
 			profile = frappe.get_doc("RetailEdge Branch Profile", row.get("name"))
 			if user and not _profile_has_user(profile, user):
 				continue
-			if pos_profile and getattr(profile, "default_pos_profile", None) not in (None, "", pos_profile):
+			if not _profile_matches_pos_profile(profile, pos_profile):
 				continue
 			if warehouse and not _profile_matches_warehouse(profile, warehouse):
 				continue
@@ -495,6 +495,18 @@ def _get_profile_by_filters(filters, active_only=True):
 	except Exception:
 		return None
 
+
+def _profile_matches_pos_profile(profile, pos_profile):
+	"""An explicit POS Profile must resolve to an explicitly mapped Branch Profile.
+
+	A blank default_pos_profile is not a wildcard. Company/default Branch Profiles
+	may still be used when no POS Profile context was supplied.
+	"""
+	requested = str(pos_profile or "").strip()
+	if not requested:
+		return True
+	configured = str(getattr(profile, "default_pos_profile", None) or "").strip()
+	return configured == requested
 
 def _profile_has_user(profile, user):
 	for table_field in ("default_cashiers", "default_managers", "default_auditors"):
