@@ -30,9 +30,29 @@ class TestCashMovement(unittest.TestCase):
 		self.assertIn("`tabPOS Invoice` posi", context["joins"])
 		self.assertIn("`tabPurchase Invoice` pi", context["joins"])
 		self.assertIn("retailedge_branch", context["branch_expression"])
+		self.assertIn("ce.branch", context["branch_expression"])
+		self.assertIn("be.branch", context["branch_expression"])
 		self.assertIn("Internal Transfer", context["movement_expression"])
 		self.assertIn("Journal Entry", context["movement_expression"])
 		self.assertNotIn("tab'Payment Entry'", context["joins"])
+
+	@patch("retailedge.cash_movement._doctype_has_field")
+	def test_expense_source_branch_fallback_works_without_journal_entry_branch_field(self, mock_has_field):
+		def has_field(doctype, fieldname):
+			if doctype == "Journal Entry" and fieldname == "retailedge_branch":
+				return False
+			if doctype in {"RetailEdge Cashier Expense", "RetailEdge Business Expense"}:
+				return fieldname in {"posting_reference", "posting_reference_type", "branch"}
+			return False
+
+		mock_has_field.side_effect = has_field
+		context = _build_sql_context()
+
+		self.assertIn("tabRetailEdge Cashier Expense", context["joins"])
+		self.assertIn("tabRetailEdge Business Expense", context["joins"])
+		self.assertIn("NULLIF(ce.branch, \'\')", context["branch_expression"])
+		self.assertIn("NULLIF(be.branch, \'\')", context["branch_expression"])
+		self.assertNotIn("je.retailedge_branch", context["branch_expression"])
 
 	def test_non_global_user_without_permitted_branches_gets_empty_sql_scope(self):
 		where_sql, values = _build_where_sql(
