@@ -15,6 +15,21 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def read_repo(self, relative: str) -> str:
 		return (REPO_ROOT / relative).read_text(encoding="utf-8")
 
+	def test_retailedge_publishes_permission_aware_edgesuite_product_availability(self):
+		provider = self.read_app("product_context.py")
+		hooks = self.read_app("hooks.py")
+		for contract in (
+			'"key": "retailedge"',
+			'"product_key": "retailedge"',
+			'"home_route": "/app/retailedge-business-hub"',
+			'frappe.get_doc("Page", "retailedge-business-hub").is_permitted()',
+		):
+			self.assertIn(contract, provider)
+		self.assertIn(
+			'"retailedge.product_context.get_product_availability"',
+			hooks,
+		)
+
 	def test_thermal_receipt_payload_is_product_owned_and_permission_guarded(self):
 		source = self.read_app("thermal_receipt.py")
 		for contract in (
