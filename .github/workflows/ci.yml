@@ -159,6 +159,7 @@ jobs:
         working-directory: frappe-bench
         run: |
           grep -Eq 'edgeui\.bundle' sites/assets/assets.json
+          grep -Eq 'edgeui_print\\.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_business_hub\.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_product_menu\.bundle' sites/assets/assets.json
           grep -Eq 'salesperson_performance\.bundle' sites/assets/assets.json
