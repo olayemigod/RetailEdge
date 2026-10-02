@@ -79,7 +79,7 @@ DEVICES_PRINTING_ITEM: dict[str, Any] = {
 	"description": "Connect this browser to the shared receipt printer and run a test print.",
 	"target_type": "Page",
 	"target": "edge-printing",
-	"icon": "printer",
+	"icon": "settings",
 }
 
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
