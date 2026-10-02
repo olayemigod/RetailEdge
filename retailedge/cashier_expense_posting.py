@@ -55,6 +55,23 @@ def get_cashier_expense_posting_settings():
 	}
 
 
+def get_effective_cashier_expense_posting_settings(doc=None, settings=None):
+	"""Resolve posting policy for a document without rewriting its captured mode.
+
+	Submitted Cashier Expenses keep the posting mode captured in
+	posting_mode_applied. This prevents a later merchant settings change from
+	retroactively adding or removing an approval requirement. Historical records
+	without a captured mode retain the current settings behaviour for backward
+	compatibility.
+	"""
+	settings = dict(settings or get_cashier_expense_posting_settings())
+	applied_mode = str(getattr(doc, "posting_mode_applied", None) or "").strip()
+	if applied_mode in {"Controlled Posting", "Direct Posting"}:
+		settings["posting_mode"] = applied_mode
+		settings["require_approval_before_posting"] = applied_mode == "Controlled Posting"
+	return settings
+
+
 @frappe.whitelist()
 def search_cashier_expense_posting_workflow_states(
 	doctype: str,
@@ -92,7 +109,7 @@ def search_cashier_expense_posting_workflow_states(
 
 
 def cashier_expense_workflow_posting_reasons(doc, settings=None) -> list[str]:
-	settings = settings or get_cashier_expense_posting_settings()
+	settings = settings or get_effective_cashier_expense_posting_settings(doc)
 	workflow = _get_active_workflow(CASHIER_EXPENSE_DOCTYPE)
 	if not workflow:
 		if settings["require_approval_before_posting"] and str(getattr(doc, "expense_status", None) or "") != "Pending Ledger":
@@ -131,7 +148,7 @@ def cashier_expense_workflow_posting_reasons(doc, settings=None) -> list[str]:
 
 def build_cashier_expense_posting_preview(expense_doc_or_name):
 	doc = _coerce_expense_doc(expense_doc_or_name)
-	settings = get_cashier_expense_posting_settings()
+	settings = get_effective_cashier_expense_posting_settings(doc)
 	reasons = []
 	posting_reference = getattr(doc, "posting_reference", None)
 	expense_status = getattr(doc, "expense_status", None)
