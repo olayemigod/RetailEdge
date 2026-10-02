@@ -13,6 +13,7 @@ from retailedge.expense_register import (
 	MAX_PAGE_SIZE,
 	_build_query_filters,
 	_can_view_other_cashiers,
+	_get_summary,
 	get_expense_register,
 )
 
@@ -120,6 +121,24 @@ class TestExpenseRegister(unittest.TestCase):
 			"linked_pos_closing_shift",
 		):
 			self.assertNotIn(sensitive, result["rows"][0])
+
+	@patch("retailedge.expense_register.frappe.get_list")
+	def test_posting_blocked_summary_excludes_already_posted_expenses(self, mock_get_list):
+		mock_get_list.side_effect = [
+			[frappe._dict(count=3, total_amount=27000)],
+			[
+				frappe._dict(expense_status="Posted", count=1, amount=10000),
+				frappe._dict(expense_status="Pending Ledger", count=2, amount=17000),
+			],
+			[
+				frappe._dict(posting_ready=0, ledger_status="Posted", count=1),
+				frappe._dict(posting_ready=0, ledger_status="Pending Ledger", count=1),
+				frappe._dict(posting_ready=1, ledger_status="Pending Ledger", count=1),
+			],
+		]
+		summary = _get_summary({"company": "Demo Company"})
+		self.assertEqual(summary["posting_ready_count"], 1)
+		self.assertEqual(summary["posting_blocked_count"], 1)
 
 	@patch("retailedge.expense_register.frappe.get_roles")
 	def test_cashier_only_role_does_not_receive_other_cashier_visibility(self, mock_roles):
