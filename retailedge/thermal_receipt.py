@@ -138,7 +138,8 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 	if payment_blocks:
 		blocks.append({"type": "text", "text": _("Payment"), "bold": True})
 		blocks.extend(payment_blocks)
-	elif doc.meta.has_field("outstanding_amount"):
+
+	if doc.meta.has_field("outstanding_amount") and flt(doc.get("outstanding_amount")) > 0:
 		blocks.append(
 			{
 				"type": "text",
