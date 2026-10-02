@@ -58,8 +58,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'"type": "row"',
 			'"type": "rule"',
 			'"type": "qr"',
-			'"TOTAL"',
-			'"Outstanding"',
+			'"TOTAL: {0}"',
+			'"Outstanding: {0}"',
 		):
 			self.assertIn(contract, source)
 		for forbidden in (
@@ -69,6 +69,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			"0x1d",
 			"ESC @",
 		):
+
 			self.assertNotIn(forbidden, source)
 
 	def test_browser_adapter_uses_edgesuite_profiles_binding_and_print_runtime(self):
