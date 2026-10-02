@@ -290,11 +290,12 @@ NAVIGATION_PRESENTATION_GROUPS: tuple[tuple[str, str, str], ...] = (
 	("business-setup", "Business Setup", "settings"),
 )
 
+# Expense Register is deliberately dual-entry: it is an operational expense ledger
+# under Expenses and also remains discoverable in Reports Centre.
 REPORT_CENTRE_ONLY_PAGE_TARGETS = {
 	"sales-invoice-register",
 	"sales-by-item",
 	"purchase-register",
-	"expense-register",
 	"stock-movement-history",
 	"daily-sales-audit-register",
 }
@@ -1044,7 +1045,7 @@ def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | N
 		return "stock"
 	if target in MONEY_OPERATION_TARGETS:
 		return "money-banking"
-	if target in {"business-expenses", "cashier-expenses"}:
+	if target in {"business-expenses", "cashier-expenses", "expense-register"}:
 		return "expenses"
 	if target in CUSTOMER_OPERATION_TARGETS:
 		return "customers"
