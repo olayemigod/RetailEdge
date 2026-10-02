@@ -107,6 +107,18 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			self.assertIn(contract, component)
 		self.assertNotIn("navigator.serial", component)
 
+	def test_devices_and_printing_is_discoverable_in_business_setup(self):
+		source = self.read_app("master_experience.py")
+		for contract in (
+			"DEVICES_PRINTING_ITEM",
+			'"label": "Devices & Printing"',
+			'"target": "edge-printing"',
+			"_add_devices_printing_navigation(navigation_groups)",
+			'"edge-printing",',
+			'"shared_receipt_printing"] = "edgesuite_serial_receipt_v1"',
+		):
+			self.assertIn(contract, source)
+
 	def test_retailedge_ci_uses_the_printing_capable_edgesuite_foundation(self):
 		workflow = self.read_repo(".github/workflows/ci.yml")
 		self.assertIn("800cf1fd4aad82038f74411872e534400ad1ead0", workflow)
