@@ -258,14 +258,36 @@ def _journal_entry_reconciliation_context(match_doc):
 	name = cstr(match_doc.get("suggested_document")).strip()
 	if not name or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
 		return {}
+	entry_fields = ["name", "posting_date", "company", "docstatus", "voucher_type", "cheque_no", "user_remark"]
+	if has_field("Journal Entry", "clearance_date"):
+		entry_fields.append("clearance_date")
 	entry = frappe.db.get_value(
 		"Journal Entry",
 		name,
-		["name", "posting_date", "company", "docstatus", "cheque_no", "user_remark"],
+		entry_fields,
 		as_dict=True,
 	) or {}
 	if not entry:
 		return {"candidate_missing": True}
+	if cstr(entry.get("voucher_type")).strip() == "Opening Entry":
+		return {
+			"candidate_doctype": "Journal Entry",
+			"candidate_name": name,
+			"candidate_docstatus": entry.get("docstatus"),
+			"candidate_clearance_date": entry.get("clearance_date"),
+			"candidate_exists": True,
+			"journal_entry_validation_error": "Opening Journal Entries are not bank reconciliation candidates.",
+			"payment_event_source": "Journal Entry",
+		}
+	if entry.get("clearance_date"):
+		return {
+			"candidate_doctype": "Journal Entry",
+			"candidate_name": name,
+			"candidate_docstatus": entry.get("docstatus"),
+			"candidate_clearance_date": entry.get("clearance_date"),
+			"candidate_exists": True,
+			"payment_event_source": "Journal Entry",
+		}
 
 	bank_account = cstr(match_doc.get("resolved_bank_account") or match_doc.get("payment_account")).strip()
 	direction = cstr(match_doc.get("direction") or match_doc.get("bank_direction")).strip()
@@ -308,6 +330,7 @@ def _journal_entry_reconciliation_context(match_doc):
 		"candidate_doctype": "Journal Entry",
 		"candidate_name": name,
 		"candidate_docstatus": entry.get("docstatus"),
+		"candidate_clearance_date": entry.get("clearance_date"),
 		"candidate_account": bank_account,
 		"payment_account": bank_account,
 		"candidate_amount": amount,
@@ -330,6 +353,8 @@ def _journal_entry_readiness(match_doc):
 		return READINESS_NEEDS_REVIEW, "Decision is not confirmed yet."
 	if match_doc.get("is_reconciled"):
 		return READINESS_ALREADY_RECONCILED, "Bank Transaction already appears reconciled/settled."
+	if match_doc.get("candidate_clearance_date"):
+		return READINESS_ALREADY_RECONCILED, "Journal Entry already has a clearance date."
 	if match_doc.get("candidate_missing") or match_doc.get("candidate_exists") is False:
 		return READINESS_NOT_READY, "Journal Entry candidate is missing."
 	if cint_or_zero(match_doc.get("candidate_docstatus")) != 1:
@@ -552,6 +577,15 @@ def resolve_reconciliation_target(match_doc):
 				"blocking_reason": "Payment Entry is not submitted.",
 				"notes": "ERPNext native reconciliation expects a submitted Payment Entry voucher.",
 			}
+		if match_doc.get("candidate_clearance_date"):
+			return {
+				"target_status": TARGET_MANUAL_REVIEW,
+				"erpnext_target_doctype": "Payment Entry",
+				"erpnext_target_name": candidate_name,
+				"recommended_action": "No reconciliation action is needed for this Payment Entry.",
+				"blocking_reason": "Payment Entry already has a clearance date.",
+				"notes": "ERPNext has already cleared this accounting voucher.",
+			}
 		return {
 			"target_status": TARGET_AVAILABLE,
 			"erpnext_target_doctype": "Payment Entry",
@@ -574,6 +608,15 @@ def resolve_reconciliation_target(match_doc):
 				"recommended_action": "Review or submit the Journal Entry before reconciliation.",
 				"blocking_reason": "Journal Entry is not submitted.",
 				"notes": "ERPNext native bank reconciliation requires the accounting voucher to be submitted.",
+			}
+		if match_doc.get("candidate_clearance_date"):
+			return {
+				"target_status": TARGET_MANUAL_REVIEW,
+				"erpnext_target_doctype": "Journal Entry",
+				"erpnext_target_name": candidate_name,
+				"recommended_action": "No reconciliation action is needed for this Journal Entry.",
+				"blocking_reason": "Journal Entry already has a clearance date.",
+				"notes": "ERPNext has already cleared this accounting voucher.",
 			}
 		if payment_event_source != "Journal Entry":
 			return {

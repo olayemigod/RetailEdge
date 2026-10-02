@@ -11,8 +11,10 @@ This phase deliberately does **not** adopt POSNext's native expense accounting w
 RetailEdge Settings > Cashier Expenses now exposes:
 
 - **Cashier Expense Posting Mode**
-  - **Controlled Posting** — default and backward-compatible. Cashier submission records the till movement; a reviewer approves it into Pending Ledger; an authorised accounting/management user posts the Journal Entry.
-  - **Direct Posting** — after submission RetailEdge attempts the same Journal Entry posting service immediately.
+  - **Controlled Posting** — default and backward-compatible. Cashier submission records the till movement. When no Frappe Workflow is active, the simple reviewer flow moves an approved expense to Pending Ledger. When a merchant Workflow is active, any number of approval stages may precede the configured accounting-posting state. An authorised poster then runs **Post to Accounts**.
+  - **Direct Posting** — RetailEdge auto-attempts the same Journal Entry posting service as soon as the expense reaches its permitted accounting-posting stage. Without a Frappe Workflow this is normally submission; with a Workflow it is the configured submitted Workflow State.
+- **Roles Allowed to Post Cashier Expenses** — merchant-configurable roles allowed to perform accounting posting. Leaving the table empty preserves the legacy RetailEdge role policy. A role still needs normal Journal Entry and source-document permissions.
+- **Workflow State Allowed for Accounting Posting** — when one active Frappe Workflow controls Cashier Expense, this submitted state is the accounting gate in both posting modes. The Workflow may contain any number of earlier approval stages.
 - **Enable Cashier Expense in POS** — enables the supported POS bridge.
 - **Show Cashier Expense Action in POS** — advertises the action to a supported POS frontend integration.
 - **Include Cashier Expenses in POS Closing** — adjusts expected POS cash for submitted/disbursed RetailEdge till expenses.
@@ -42,7 +44,9 @@ Accounting posting creates one submitted ERPNext Journal Entry:
 
 The service is idempotent through the Cashier Expense posting reference and locks the source row before posting.
 
-Direct Posting does not bypass ERPNext permissions. The user must still have the required Journal Entry permissions. If direct posting cannot complete, the Cashier Expense remains submitted/disbursed and is marked `ledger_status = Failed` with a user-safe posting message. This prevents an accounting permission problem from erasing a real till movement.
+Direct Posting does not bypass ERPNext permissions. The acting user must be in a configured posting role and must still have the required source write, Branch access, and Journal Entry read/create/submit permissions.
+
+If Direct Posting is not yet eligible because the configured Workflow State has not been reached, or the acting user lacks posting authority, the Cashier Expense remains submitted/disbursed with `ledger_status = Pending Ledger`. A real accounting attempt that raises an error is marked `Failed`. This distinction prevents a policy or permission deferral from being reported as an accounting-system failure while preserving the physical till movement.
 
 Posted Cashier Expenses cannot be cancelled while their accounting reference is active.
 
@@ -102,11 +106,14 @@ POS Closing Shift custom fields are added idempotently after migrate.
 5. Create a POS Closing Shift and verify Cashier Expenses reduce only the cash expected amount.
 6. Save the closing draft repeatedly and verify the expense is not deducted twice.
 7. Record a second expense before closing submission and verify the expected amount refreshes by only the incremental amount.
-8. Controlled mode: approve the expense, then Post to Accounts; verify one submitted Journal Entry and a Posted ledger state.
-9. Direct mode with accounting-capable user: submit and verify immediate Journal Entry posting.
-10. Direct mode without Journal Entry permission: verify the till expense remains recorded, closing still includes it, and ledger status becomes Failed with a clear message.
-11. Retry a POS create call using the same client request ID and verify the original Cashier Expense is returned.
-12. Verify a user cannot spoof Company, Branch, POS Profile or opening shift through the POS API.
-13. Verify rejected-but-disbursed expenses remain in closing cash.
-14. Verify Returned/Reversed cash no longer reduces shift cash.
-15. Verify a Posted Cashier Expense cannot be cancelled while its Journal Entry is active.
+8. Controlled mode without Frappe Workflow: approve the expense, then Post to Accounts; verify one submitted Journal Entry and a Posted ledger state.
+9. Controlled mode with a multi-stage Frappe Workflow: configure the final submitted posting state, move through every merchant approval stage, and confirm Post to Accounts is unavailable until that state is reached.
+10. Direct mode without Frappe Workflow: configure a posting role with normal Journal Entry permissions, submit, and verify immediate Journal Entry posting.
+11. Direct mode with Frappe Workflow: configure the manager-approved submitted state as the posting gate and configure the Manager as a posting role; verify the Manager approval action auto-posts exactly once.
+12. Direct mode where the approving user lacks Journal Entry permission: verify the till expense remains recorded, closing still includes it, and ledger status remains Pending Ledger for an authorised poster rather than Failed.
+13. Force a genuine Journal Entry posting validation error and verify ledger status becomes Failed with a clear posting message while the till movement remains intact.
+14. Retry a POS create call using the same client request ID and verify the original Cashier Expense is returned.
+15. Verify a user cannot spoof Company, Branch, POS Profile or opening shift through the POS API.
+16. Verify rejected-but-disbursed expenses remain in closing cash.
+17. Verify Returned/Reversed cash no longer reduces shift cash.
+18. Verify a Posted Cashier Expense cannot be cancelled while its Journal Entry is active.

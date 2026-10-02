@@ -764,8 +764,8 @@ export default {
 			dialog.set_df_property("reference_no", "reqd", required ? 1 : 0);
 			dialog.set_df_property("reference_date", "reqd", required ? 1 : 0);
 			if (required && !dialog.get_value("reference_date")) dialog.set_value("reference_date", dialog.get_value("posting_date") || frappe.datetime.get_today());
-			dialog.refresh_field("reference_no");
-			dialog.refresh_field("reference_date");
+			dialog.get_field?.("reference_no")?.refresh?.();
+			dialog.get_field?.("reference_date")?.refresh?.();
 			return required;
 		},
 		async openAdvanceDialog() {

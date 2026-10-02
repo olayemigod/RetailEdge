@@ -102,6 +102,8 @@ def get_payment_event_reconciliation_context(candidate_doctype, candidate_name, 
 			"docstatus",
 			"reference_no",
 		]
+		if has_field("Payment Entry", "clearance_date"):
+			fields.append("clearance_date")
 		if has_field("Payment Entry", "company"):
 			fields.append("company")
 		if has_field("Payment Entry", "retailedge_branch"):
@@ -135,6 +137,7 @@ def get_payment_event_reconciliation_context(candidate_doctype, candidate_name, 
 			"candidate_party": row.get("party"),
 			"candidate_branch": row.get("retailedge_branch"),
 			"candidate_docstatus": row.get("docstatus"),
+			"candidate_clearance_date": row.get("clearance_date"),
 			"payment_event_source": "Payment Entry",
 		}
 	if doctype == "Sales Invoice" and has_doctype("Sales Invoice"):

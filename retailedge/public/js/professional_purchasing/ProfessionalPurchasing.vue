@@ -322,6 +322,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
 import { getTransactionEntryPreference } from "../retailedge_business_hub/guidedEntryUtils";
@@ -333,10 +334,7 @@ const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_pu
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
 const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
-const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
-const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
-const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
 const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
 const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
 const PREPARE_PO_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_order";
@@ -553,7 +551,7 @@ export default {
 		},
 		openDocumentOutput(document, name) {
 			if (!document || !name) return;
-			window.retailedge?.openDocumentOutputSharing?.(document, name);
+			openDocumentOutputSharing(document, name);
 		},
 		closeSupplierPayment() {
 			this.supplierPaymentOpen = false;
@@ -703,8 +701,8 @@ export default {
 		newPurchaseOrder() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_EVENT); },
 		openMaterialRequest(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Material Request", name); },
 		openMaterialRequests() { if (this.canUseNativeDesk) frappe.set_route("List", "Material Request"); },
-		openRequestsForQuotation() { dispatchEdgeSuiteEvent(OPEN_RFQ_HISTORY_EVENT); },
-		openSupplierQuotations() { dispatchEdgeSuiteEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT); },
+		openRequestsForQuotation() { frappe.set_route("rfq-history"); },
+		openSupplierQuotations() { frappe.set_route("supplier-quotation-history"); },
 		openSupplierQuotationComparison() { if (!this.canUseNativeDesk) return; frappe.set_route("query-report", "Supplier Quotation Comparison"); },
 		openPurchaseOrderAnalysis() { if (!this.canUseNativeDesk) return; frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
 		openProcurementTracker() { if (!this.canUseNativeDesk || !this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
@@ -716,7 +714,7 @@ export default {
 			if (!this.canUseNativeDesk || !name) return;
 			frappe.set_route("Form", "Purchase Order", name);
 		},
-		openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); },
+		openPurchaseReceipts() { frappe.set_route("purchase-receipt-history"); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortMaterialBy(key) { if (this.materialSort.key === key) this.materialSort.direction = this.materialSort.direction === "asc" ? "desc" : "asc"; else this.materialSort = { key, direction: "asc" }; }, materialSortMark(key) { return this.materialSort.key === key ? (this.materialSort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortDraftInvoicesBy(key) {

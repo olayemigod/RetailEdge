@@ -113,6 +113,85 @@ def search_simple_cash_transfer_options(
 	return []
 
 
+def _existing_internal_transfer_draft(
+	*,
+	company: str,
+	branch: str,
+	posting_date,
+	from_account: str,
+	to_account: str,
+	amount: float,
+	reference_no: str,
+	reference_date,
+):
+	"""Reuse only an unambiguous bank-referenced Internal Transfer draft."""
+	if not reference_no:
+		return None
+	filters = {
+		"docstatus": 0,
+		"payment_type": "Internal Transfer",
+		"company": company,
+		"posting_date": posting_date,
+		"paid_from": from_account,
+		"paid_to": to_account,
+		"reference_no": reference_no,
+	}
+	branch_field = (
+		"retailedge_branch"
+		if has_field(PAYMENT_ENTRY_DOCTYPE, "retailedge_branch")
+		else "branch"
+		if has_field(PAYMENT_ENTRY_DOCTYPE, "branch")
+		else None
+	)
+	if branch and branch_field:
+		filters[branch_field] = branch
+	rows = frappe.get_list(
+		PAYMENT_ENTRY_DOCTYPE,
+		filters=filters,
+		fields=["name"],
+		order_by="modified desc",
+		limit_page_length=3,
+	)
+	matches = []
+	for row in rows:
+		doc = frappe.get_doc(PAYMENT_ENTRY_DOCTYPE, row.name)
+		if not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "read", doc=doc):
+			continue
+		if abs(flt(getattr(doc, "paid_amount", 0)) - amount) > 0.005:
+			continue
+		if abs(flt(getattr(doc, "received_amount", 0)) - amount) > 0.005:
+			continue
+		if reference_date and getdate(getattr(doc, "reference_date", None) or posting_date) != getdate(reference_date):
+			continue
+		matches.append(doc)
+	if len(matches) > 1:
+		frappe.throw(
+			_(
+				"Multiple matching draft Internal Transfer Payment Entries already exist: {0}. "
+				"Review them before creating another transfer."
+			).format(", ".join(doc.name for doc in matches))
+		)
+	return matches[0] if matches else None
+
+
+def _cash_transfer_result(doc, *, branch: str, reused: bool) -> dict[str, Any]:
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"docstatus": doc.docstatus,
+		"payment_type": doc.payment_type,
+		"company": doc.company,
+		"branch": branch,
+		"from_account": doc.paid_from,
+		"to_account": doc.paid_to,
+		"amount": doc.paid_amount,
+		"route": f"/app/payment-entry/{doc.name}",
+		"existing": bool(reused),
+		"reused": bool(reused),
+	}
+
+
+
 @frappe.whitelist(methods=["POST"])
 def create_simple_cash_transfer_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_payment_entry()
@@ -153,6 +232,24 @@ def create_simple_cash_transfer_draft(values: dict | str | None = None) -> dict[
 	if amount <= 0:
 		frappe.throw(_("Amount must be greater than zero."))
 	posting_date = getdate(values.get("posting_date") or nowdate())
+	bank_involved = from_details["account_type"] == "Bank" or to_details["account_type"] == "Bank"
+	reference_no = str(values.get("reference_no") or "").strip() if bank_involved else ""
+	reference_date = getdate(values.get("reference_date") or posting_date) if bank_involved else None
+	if bank_involved and not reference_no:
+		frappe.throw(_("Reference No is required when a Bank account is involved."))
+
+	existing = _existing_internal_transfer_draft(
+		company=company,
+		branch=branch,
+		posting_date=posting_date,
+		from_account=from_account,
+		to_account=to_account,
+		amount=amount,
+		reference_no=reference_no,
+		reference_date=reference_date,
+	)
+	if existing:
+		return _cash_transfer_result(existing, branch=branch, reused=True)
 
 	doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)
 	doc.payment_type = "Internal Transfer"
@@ -169,12 +266,9 @@ def create_simple_cash_transfer_draft(values: dict | str | None = None) -> dict[
 		elif has_field(PAYMENT_ENTRY_DOCTYPE, "branch"):
 			doc.branch = branch
 
-	if from_details["account_type"] == "Bank" or to_details["account_type"] == "Bank":
-		reference_no = str(values.get("reference_no") or "").strip()
-		if not reference_no:
-			frappe.throw(_("Reference No is required when a Bank account is involved."))
+	if bank_involved:
 		doc.reference_no = reference_no
-		doc.reference_date = getdate(values.get("reference_date") or posting_date)
+		doc.reference_date = reference_date
 
 	remarks = str(values.get("remarks") or "").strip()
 	if remarks:
@@ -184,18 +278,7 @@ def create_simple_cash_transfer_draft(values: dict | str | None = None) -> dict[
 	# Insert as the current user and keep the transaction in Draft. ERPNext Payment Entry
 	# validation remains authoritative for account, currency, exchange-rate and ledger safety.
 	doc.insert()
-	return {
-		"doctype": doc.doctype,
-		"name": doc.name,
-		"docstatus": doc.docstatus,
-		"payment_type": doc.payment_type,
-		"company": doc.company,
-		"branch": branch,
-		"from_account": doc.paid_from,
-		"to_account": doc.paid_to,
-		"amount": doc.paid_amount,
-		"route": f"/app/payment-entry/{doc.name}",
-	}
+	return _cash_transfer_result(doc, branch=branch, reused=False)
 
 
 def _search_bank_cash_accounts(*, company: str, txt: str, limit: int) -> list[dict[str, Any]]:

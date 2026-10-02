@@ -12,6 +12,7 @@ from retailedge.bank_transaction_matching import (
 	_select_candidate_for_queue,
 	amount_scenario_requires_manual_review,
 	assert_can_access_bank_transaction_matching,
+	find_journal_entry_candidates_for_bank_transaction,
 	find_payment_entry_candidates_for_bank_transaction,
 	find_sales_invoice_candidates_for_bank_transaction,
 	get_amount_scenario_label,
@@ -22,6 +23,7 @@ from retailedge.bank_transaction_matching import (
 	get_review_creation_block_reason,
 	is_payment_basis_review_candidate,
 	normalize_bank_transaction,
+	payment_entry_active_match_conflict,
 	payment_entry_has_active_confirmed_bank_match,
 	sales_invoice_has_active_confirmed_bank_match,
 	split_duplicate_candidate_suggestions,
@@ -1015,7 +1017,7 @@ def _validate_locked_candidate_from_selected_row(row):
 			"do_not_substitute": True,
 		}
 
-	if candidate_doctype not in {"Sales Invoice", "Payment Entry"}:
+	if candidate_doctype not in {"Sales Invoice", "Payment Entry", "Journal Entry"}:
 		return {
 			"valid": False,
 			"reason": f"Invalid candidate doctype: {candidate_doctype}",
@@ -1059,9 +1061,11 @@ def _validate_locked_candidate_from_selected_row(row):
 				"party",
 				"party_type",
 				"mode_of_payment",
+				"payment_type",
 				"paid_to",
 				"paid_from",
 				"reference_no",
+				"clearance_date",
 				"retailedge_branch",
 			],
 			as_dict=True,
@@ -1078,13 +1082,25 @@ def _validate_locked_candidate_from_selected_row(row):
 				"reason": f"Payment Entry {candidate_name} is not submitted (docstatus={pe.docstatus})",
 				"do_not_substitute": True,
 			}
-
-		# Check conflict
-		conflict = frappe.db.get_value("RetailEdge Bank Transaction Match", conflict_filter, "name")
-		if conflict:
+		if pe.clearance_date:
 			return {
 				"valid": False,
-				"reason": f"Payment Entry is already confirmed in match review {conflict}",
+				"reason": f"Payment Entry {candidate_name} already has clearance date {pe.clearance_date}",
+				"do_not_substitute": True,
+			}
+
+		# Receive/Pay entries are single-leg candidates. Internal Transfer conflicts
+		# are scoped to the current Bank Transaction ledger leg.
+		conflict_row = payment_entry_active_match_conflict(
+			candidate_name,
+			bank_transaction_name,
+			exclude_match=match_record,
+			confirmed_only=True,
+		)
+		if conflict_row:
+			return {
+				"valid": False,
+				"reason": f"Payment Entry bank leg is already confirmed in match review {conflict_row.get('name')}",
 				"do_not_substitute": True,
 			}
 
@@ -1140,6 +1156,7 @@ def _validate_locked_candidate_from_selected_row(row):
 		candidate["party_type"] = pe.party_type or "Customer"
 		candidate["customer"] = pe.party if pe.party_type == "Customer" else None
 		candidate["payment_mode"] = pe.mode_of_payment
+		candidate["payment_entry_payment_type"] = pe.payment_type
 		candidate["payment_account"] = pe_account
 		candidate["branch"] = pe.retailedge_branch
 		candidate["candidate_amount"] = pe_amount
@@ -1163,6 +1180,101 @@ def _validate_locked_candidate_from_selected_row(row):
 		candidate["candidate_category_label"] = get_candidate_category_label("payment_entry_match")
 		candidate["payment_event_found"] = 1
 		candidate["payment_event_source"] = "Payment Entry"
+
+	elif candidate_doctype == "Journal Entry":
+		entry_fields = ["name", "docstatus", "posting_date", "voucher_type", "cheque_no", "user_remark"]
+		if frappe.get_meta("Journal Entry").has_field("clearance_date"):
+			entry_fields.append("clearance_date")
+		if frappe.get_meta("Journal Entry").has_field("retailedge_branch"):
+			entry_fields.append("retailedge_branch")
+		elif frappe.get_meta("Journal Entry").has_field("branch"):
+			entry_fields.append("branch")
+		entry = frappe.db.get_value("Journal Entry", candidate_name, entry_fields, as_dict=True)
+		if not entry:
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} not found",
+				"do_not_substitute": True,
+			}
+		if cint(entry.get("docstatus")) != 1:
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} is not submitted (docstatus={entry.get('docstatus')})",
+				"do_not_substitute": True,
+			}
+		if cstr(entry.get("voucher_type")).strip() == "Opening Entry":
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} is an Opening Entry",
+				"do_not_substitute": True,
+			}
+		if entry.get("clearance_date"):
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} already has clearance date {entry.get('clearance_date')}",
+				"do_not_substitute": True,
+			}
+		bank_ledger = cstr(frappe.db.get_value("Bank Account", bt.bank_account, "account")).strip()
+		if not bank_ledger:
+			return {
+				"valid": False,
+				"reason": f"Bank Account {bt.bank_account} has no linked ledger Account",
+				"do_not_substitute": True,
+			}
+		lines = frappe.get_all(
+			"Journal Entry Account",
+			filters={"parent": candidate_name, "account": bank_ledger},
+			fields=[
+				"debit_in_account_currency",
+				"credit_in_account_currency",
+				"party_type",
+				"party",
+			],
+			limit_page_length=0,
+		)
+		if not lines:
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} does not touch statement bank ledger {bank_ledger}",
+				"do_not_substitute": True,
+			}
+		entry_amount = sum(
+			flt(line.get("debit_in_account_currency"))
+			if flt(bt.deposit) > 0
+			else flt(line.get("credit_in_account_currency"))
+			for line in lines
+		)
+		if entry_amount <= 0:
+			return {
+				"valid": False,
+				"reason": f"Journal Entry {candidate_name} has no matching bank-ledger amount for this statement direction",
+				"do_not_substitute": True,
+			}
+		amount_diff = abs(bt_amount - entry_amount)
+		party_lines = [line for line in lines if cstr(line.get("party")).strip()]
+		candidate["posting_date"] = entry.get("posting_date")
+		candidate["candidate_amount"] = entry_amount
+		candidate["amount_difference"] = amount_diff
+		candidate["amount_scenario"] = (
+			"Submitted Journal Entry Amount" if amount_diff <= amount_tolerance else "Journal Entry Amount Variance"
+		)
+		candidate["amount_scenario_label"] = get_amount_scenario_label(candidate["amount_scenario"])
+		candidate["candidate_category"] = "journal_entry_match"
+		candidate["candidate_category_label"] = get_candidate_category_label("journal_entry_match")
+		candidate["payment_event_found"] = 1
+		candidate["payment_event_source"] = "Journal Entry"
+		candidate["payment_account"] = bank_ledger
+		candidate["account"] = bank_ledger
+		candidate["reference"] = entry.get("cheque_no") or candidate_name
+		candidate["branch"] = entry.get("retailedge_branch") or entry.get("branch")
+		if len(party_lines) == 1:
+			candidate["party_type"] = party_lines[0].get("party_type")
+			candidate["party"] = party_lines[0].get("party")
+		candidate["reason"] = "Submitted Journal Entry candidate touching the statement bank ledger."
+		candidate["confidence"] = candidate.get("confidence") or (
+			"Strong Match" if amount_diff <= amount_tolerance else "Possible Match"
+		)
+		candidate["score"] = cint(candidate.get("score") or (85 if amount_diff <= amount_tolerance else 55))
 
 	elif candidate_doctype == "Sales Invoice":
 		si = frappe.db.get_value(
@@ -1332,6 +1444,10 @@ def _revalidate_suggestion_row(row, filters=None, is_selected=False):
 		bank_transaction_name,
 		filters=candidate_filters,
 		limit=20,
+	) + find_journal_entry_candidates_for_bank_transaction(
+		bank_transaction_name,
+		filters=candidate_filters,
+		limit=20,
 	)
 	explicit_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
 	explicit_name = cstr(row.get("candidate_name") or row.get("suggested_document")).strip()
@@ -1485,10 +1601,13 @@ def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False
 			"status": "already_matched",
 			"row": _preparation_summary_row(row, reason="Sales Invoice already has a confirmed bank match."),
 		}
-	if payment_entry and payment_entry_has_active_confirmed_bank_match(payment_entry):
+	if payment_entry and payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction):
 		return {
 			"status": "already_matched",
-			"row": _preparation_summary_row(row, reason="Payment Entry already has a confirmed bank match."),
+			"row": _preparation_summary_row(
+				row,
+				reason="This Payment Entry bank ledger leg already has a confirmed bank match.",
+			),
 		}
 	active_bank_transaction_match = _find_active_bank_transaction_review_match(bank_transaction)
 	if active_bank_transaction_match:
@@ -1523,6 +1642,7 @@ def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False
 	active_candidate_match = _find_active_candidate_review_match(
 		suggested_document_type=suggested_document_type,
 		suggested_document=suggested_document,
+		bank_transaction=bank_transaction,
 	)
 	if active_candidate_match:
 		return {
@@ -1550,9 +1670,16 @@ def _find_active_bank_transaction_review_match(bank_transaction):
 	)
 
 
-def _find_active_candidate_review_match(suggested_document_type, suggested_document):
+def _find_active_candidate_review_match(suggested_document_type, suggested_document, bank_transaction=None):
 	if not suggested_document_type or not suggested_document:
 		return None
+	if suggested_document_type == "Payment Entry" and bank_transaction:
+		conflict = payment_entry_active_match_conflict(
+			suggested_document,
+			bank_transaction,
+			confirmed_only=False,
+		)
+		return conflict.get("name") if conflict else None
 	status_filter = ["not in", ["Rejected", "Cancelled", "Reopened"]]
 	name = frappe.db.get_value(
 		"RetailEdge Bank Transaction Match",
@@ -1927,17 +2054,14 @@ def _get_first_active_confirmed_conflict(doc):
 		if other_invoice_match:
 			return f"Sales Invoice already has confirmed match {other_invoice_match}."
 	if getattr(doc, "payment_entry", None):
-		other_payment_match = frappe.db.get_value(
-			"RetailEdge Bank Transaction Match",
-			{
-				"payment_entry": doc.payment_entry,
-				"decision_status": "Confirmed",
-				"name": ["!=", doc.name],
-			},
-			"name",
+		other_payment_match = payment_entry_active_match_conflict(
+			doc.payment_entry,
+			doc.bank_transaction,
+			exclude_match=doc.name,
+			confirmed_only=True,
 		)
 		if other_payment_match:
-			return f"Payment Entry already has confirmed match {other_payment_match}."
+			return f"Payment Entry bank leg already has confirmed match {other_payment_match.get('name')}."
 	return None
 
 
@@ -2036,18 +2160,16 @@ def _validate_no_other_active_confirmed_match(doc):
 			)
 
 	if getattr(doc, "payment_entry", None):
-		other_payment_entry_match = frappe.db.get_value(
-			"RetailEdge Bank Transaction Match",
-			{
-				"payment_entry": doc.payment_entry,
-				"decision_status": "Confirmed",
-				"name": ["!=", doc.name],
-			},
-			"name",
+		other_payment_entry_match = payment_entry_active_match_conflict(
+			doc.payment_entry,
+			doc.bank_transaction,
+			exclude_match=doc.name,
+			confirmed_only=True,
 		)
-		if other_payment_entry_match or payment_entry_has_active_confirmed_bank_match(doc.payment_entry):
+		if other_payment_entry_match:
 			frappe.throw(
-				"Payment Entry already has a confirmed bank match. Reopen, reject, or cancel the existing match before confirming another."
+				"Payment Entry bank leg already has a confirmed bank match. "
+				"Reopen, reject, or cancel the existing match before confirming another for this bank ledger."
 			)
 
 
@@ -2064,7 +2186,11 @@ def _resolve_matching_candidate(
 		"Sales Invoice" if sales_invoice else "Payment Entry" if payment_entry else None
 	)
 
-	if (getattr(frappe.flags, "retailedge_fast_validation", False) or not allow_fallback) and explicit_target:
+	# An explicit selected document is a locked candidate, never an invitation to
+	# run broad discovery and silently substitute another document. Validate the
+	# selected candidate directly in every mode. Broad discovery is only for
+	# calls that did not supply a candidate.
+	if explicit_target:
 		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
 		if doc:
 			payment_row_index = getattr(doc, "payment_row_index", None)
@@ -2140,12 +2266,16 @@ def _resolve_matching_candidate(
 			return res.get("candidate")
 		return None
 
-	search_filters = {"include_exception_candidates": 1} if explicit_target else None
+	search_filters = None
 	candidates = find_sales_invoice_candidates_for_bank_transaction(
 		bank_transaction_name,
 		filters=search_filters,
 		limit=20,
 	) + find_payment_entry_candidates_for_bank_transaction(
+		bank_transaction_name,
+		filters=search_filters,
+		limit=20,
+	) + find_journal_entry_candidates_for_bank_transaction(
 		bank_transaction_name,
 		filters=search_filters,
 		limit=20,
@@ -2167,13 +2297,6 @@ def _resolve_matching_candidate(
 		)
 	)
 
-	if explicit_target:
-		for candidate in candidates:
-			if cstr(candidate.get("document_name")) == cstr(explicit_target) and (
-				not explicit_type or cstr(candidate.get("document_type")) == cstr(explicit_type)
-			):
-				return candidate
-		return None
 
 	return candidates[0] if candidates else None
 
@@ -2181,11 +2304,11 @@ def _resolve_matching_candidate(
 def _ensure_valid_candidate(candidate):
 	candidate = frappe._dict(candidate or {})
 	if (
-		cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry"}
+		cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry", "Journal Entry"}
 		or not cstr(candidate.get("document_name")).strip()
 	):
 		frappe.throw(
-			"Cannot create review record because no Sales Invoice, Payment Entry, or payment event candidate was found."
+			"Cannot create review record because no Sales Invoice, Payment Entry, Journal Entry, or payment event candidate was found."
 		)
 	block_reason = get_review_creation_block_reason(candidate)
 	if block_reason and not is_payment_basis_review_candidate(candidate):
@@ -2222,6 +2345,7 @@ def _populate_match_document(
 	doc.company = bank_transaction.get("company")
 	doc.branch = bank_transaction.get("branch") or candidate.get("branch")
 	doc.bank_account = bank_transaction.get("bank_account")
+	doc.bank_direction = bank_transaction.get("direction")
 	doc.transaction_date = bank_transaction.get("transaction_date")
 	doc.bank_amount = flt(bank_transaction.get("amount"))
 	doc.bank_reference = bank_transaction.get("reference")
@@ -2232,6 +2356,8 @@ def _populate_match_document(
 	doc.payment_entry = (
 		candidate.get("document_name") if candidate.get("document_type") == "Payment Entry" else None
 	)
+	doc.payment_event_source = candidate.get("payment_event_source")
+	doc.payment_account = candidate.get("payment_account") or candidate.get("account")
 	party_resolution = resolve_bank_match_party_link(
 		party_type=candidate.get("party_type"),
 		party=candidate.get("party"),
@@ -2278,6 +2404,7 @@ def _populate_match_document(
 		"payment_row_index",
 		"payment_mode",
 		"payment_account",
+		"payment_entry_payment_type",
 	):
 		if candidate.get(fieldname):
 			context_reasons.append(f"{fieldname.replace('_', ' ').title()}: {candidate.get(fieldname)}")

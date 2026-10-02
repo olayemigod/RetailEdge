@@ -144,6 +144,16 @@
 					</div>
 
 					<div v-else class="workflow-buttons">
+						<button
+							v-for="workflowAction in actions.workflow_actions || []"
+							:key="workflowAction.action"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="actionBusy"
+							@click="applyWorkflowAction(workflowAction.action)"
+						>
+							{{ workflowAction.action }}
+						</button>
 						<button v-if="actions.can_submit_for_review" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="submitForReview">
 							{{ actionBusy ? "Working..." : "Submit for Review" }}
 						</button>
@@ -180,6 +190,7 @@ import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUti
 
 const DETAIL_METHOD = "retailedge.cashier_expense_detail.get_cashier_expense_detail";
 const SUBMIT_FOR_REVIEW_METHOD = "retailedge.cashier_expense_detail.submit_cashier_expense_for_review";
+const WORKFLOW_ACTION_METHOD = "retailedge.cashier_expense_detail.apply_cashier_expense_workflow_action";
 const REVIEW_METHODS = Object.freeze({
 	approve: "retailedge.api.approve_cashier_expense",
 	reject: "retailedge.api.reject_cashier_expense",
@@ -231,6 +242,7 @@ export default {
 			error: "",
 			detail: null,
 			actions: {},
+			workflow: {},
 			loadToken: 0,
 			actionBusy: false,
 			actionError: "",
@@ -264,12 +276,17 @@ export default {
 				|| this.actions.can_reopen
 				|| this.actions.can_refresh_posting
 				|| this.actions.can_post_to_accounts
+				|| (this.actions.workflow_actions || []).length
 			);
+		},
+		workflowReadiness() {
+			return this.workflow || {};
 		},
 		workflowVisible() {
 			return Boolean(this.detail && (this.hasWorkflowActions || this.actions.reasons?.length || this.actionError));
 		},
 		workflowHelper() {
+			if (this.actions.workflow_controlled) return this.workflowReadiness?.message || "Use the merchant-configured Frappe Workflow actions below.";
 			if (this.actions.can_submit_for_review) return "Submit this draft into the governed Cashier Expense review workflow.";
 			if (this.actions.can_post_to_accounts) return "This expense is ready for ERPNext Journal Entry posting.";
 			if (this.actions.posting_enabled && this.detail?.posting_block_reason) return this.detail.posting_block_reason;
@@ -310,6 +327,7 @@ export default {
 			this.error = "";
 			this.detail = null;
 			this.actions = {};
+			this.workflow = {};
 			this.actionBusy = false;
 			this.actionError = "";
 			this.reviewAction = "";
@@ -330,6 +348,7 @@ export default {
 				if (token !== this.loadToken) return;
 				this.detail = result.expense || null;
 				this.actions = result.actions || {};
+				this.workflow = result.workflow_readiness || {};
 				if (!this.detail) this.error = "Cashier Expense details were not returned.";
 			} catch (error) {
 				if (token !== this.loadToken) return;
@@ -361,6 +380,15 @@ export default {
 			if (!value) return "—";
 			try { return frappe.datetime.str_to_user(value); }
 			catch (_error) { return String(value); }
+		},
+		async applyWorkflowAction(action) {
+			if (!action || !this.detail?.name || this.actionBusy) return;
+			await this.runWorkflowAction("workflow", WORKFLOW_ACTION_METHOD, {
+				expense_name: this.detail.name,
+				action,
+				expected_modified: this.detail.modified || null,
+				expected_workflow_state: this.workflow?.current_state || "",
+			});
 		},
 		async submitForReview() {
 			if (!this.actions.can_submit_for_review || !this.detail?.name || this.actionBusy) return;

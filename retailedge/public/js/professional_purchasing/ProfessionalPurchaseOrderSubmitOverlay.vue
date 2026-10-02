@@ -165,6 +165,7 @@
 </template>
 
 <script>
+import { openDocumentOutputSharing } from "../documentOutputNavigation";
 import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
 
 const PREVIEW_METHOD = "retailedge.professional_purchase_order_submit.get_purchase_order_submit_preview";
@@ -416,7 +417,7 @@ export default {
 		},
 		openDocumentOutput() {
 			if (!this.submitted?.name) return;
-			window.retailedge?.openDocumentOutputSharing?.("purchase-order", this.submitted.name);
+			openDocumentOutputSharing("purchase-order", this.submitted.name);
 		},
 		async runNextAction(action) {
 			if (!this.submitted?.name || !action || this.submitting) return;

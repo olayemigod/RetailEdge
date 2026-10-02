@@ -228,6 +228,9 @@
 			<div v-if="saveError" class="guided-payment-error" role="alert">
 				{{ saveError }}
 			</div>
+			<div v-if="reuseNotice" class="guided-payment-notice" role="status">
+				{{ reuseNotice }}
+			</div>
 
 			<div class="guided-payment-grid">
 				<EdgeLinkField
@@ -530,6 +533,7 @@ export default {
 			submitting: false,
 			loadError: "",
 			saveError: "",
+			reuseNotice: "",
 			submitError: "",
 			customerReview: null,
 			supplierReview: null,
@@ -626,6 +630,7 @@ export default {
 			this.loading = true;
 			this.loadError = "";
 			this.saveError = "";
+			this.reuseNotice = "";
 			this.submitError = "";
 			this.customerReview = null;
 			this.supplierReview = null;
@@ -768,6 +773,7 @@ export default {
 		},
 		setParty(next) {
 			if (this.values.party !== (next || "")) {
+				this.reuseNotice = "";
 				this.values.party = next || "";
 				this.values.references = [emptyReference()];
 				this.customerReview = null;
@@ -776,6 +782,7 @@ export default {
 		},
 		setBranch(next) {
 			if (this.values.branch !== (next || "")) {
+				this.reuseNotice = "";
 				this.values.branch = next || "";
 				this.values.references = [emptyReference()];
 				this.customerReview = null;
@@ -1019,6 +1026,7 @@ export default {
 		async saveDraft() {
 			if (this.saving || this.loading || this.referenceLoading) return;
 			this.saveError = "";
+			this.reuseNotice = "";
 			this.saving = true;
 			try {
 				if (this.isCustomerPayment) this.validateStandardCustomerDraft();
@@ -1028,6 +1036,9 @@ export default {
 					values: this.values,
 					managed: this.allowMultiReferenceSupplierPayment ? 1 : 0,
 				});
+				if (result?.reused) {
+					this.reuseNotice = __(`Existing draft Payment Entry ${result.name} matches this transaction. It has been reopened instead of creating another draft.`);
+				}
 				this.$emit("draft-created", result);
 				if (this.isCustomerPayment) {
 					await this.loadCustomerReview(result.name);
@@ -1140,6 +1151,7 @@ export default {
 	margin: -8px 0 0;
 	font-size: 0.8rem;
 }
+.guided-payment-notice { padding:10px 12px; border:1px solid var(--blue-300,#93c5fd); border-radius:8px; background:var(--blue-50,#eff6ff); color:var(--blue-800,#1e40af); }
 .guided-payment-error,
 .supplier-review-blockers {
 	padding: 10px 12px;

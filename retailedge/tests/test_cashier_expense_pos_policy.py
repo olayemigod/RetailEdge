@@ -80,7 +80,10 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		source = self.read("cashier_expense_accounting.py")
 		for contract in (
 			'POSTING_DOCUMENT_TYPE = "Journal Entry"',
-			"frappe.has_permission(POSTING_DOCUMENT_TYPE, ptype)",
+			'frappe.has_permission(POSTING_DOCUMENT_TYPE, "read")',
+			'frappe.has_permission(POSTING_DOCUMENT_TYPE, "create")',
+			'frappe.has_permission(POSTING_DOCUMENT_TYPE, "submit")',
+			"get_effective_cashier_expense_posting_roles",
 			"journal.insert()",
 			'journal.has_permission("submit")',
 			"journal.submit()",

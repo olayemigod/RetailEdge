@@ -1,5 +1,7 @@
 # RetailEdge Cashier Expense Structure Reset
 
+> Historical foundation note. The items described below were the scope of the structural reset phase. Cashier autofill, POS shift linkage, merchant-governed approval, Journal Entry posting, POS closing integration and accounting-readiness behavior are now implemented. See `cashier_expense_pos_policy.md` for the current executable policy.
+
 RetailEdge Cashier Expense was recreated as a clean structural foundation after the earlier implementation became difficult to save, list, and maintain safely.
 
 ## What This Phase Includes
@@ -10,22 +12,12 @@ RetailEdge Cashier Expense was recreated as a clean structural foundation after 
 - Workspace links for both DocTypes
 - Basic structure tests for create/save/list behavior
 
-## What This Phase Does Not Include
+## Historical Phase Boundary
 
-- autofill logic
-- approval workflow
-- posting logic
-- Journal Entry creation
-- Payment Entry creation
-- role-specific workflow rules
+The structural reset itself did not include autofill, approval, posting, or role-specific workflow rules. Those capabilities were added in later phases.
+
+Current accounting policy is intentionally **Journal Entry only** for Cashier Expense. Payment Entry is not an alternative expense-posting voucher.
 
 ## Product Direction
 
-Expense Category exists so cashiers can choose a friendly category instead of selecting an accounting expense account directly.
-
-Later phases will add:
-
-- cashier autofill behavior
-- POS shift linking logic
-- approval and review flow
-- optional accounting posting
+Expense Category exists so cashiers can choose a friendly category instead of selecting an accounting expense account directly. Current workflow, posting, POS and merchant-governance behavior is maintained in the dedicated Cashier Expense policy documentation.

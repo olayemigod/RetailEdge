@@ -14,6 +14,8 @@ MODULE = "retailedge.retailedge.doctype.retailedge_bank_transaction_match.retail
 
 class PaymentEntrySourceCandidateDirectionTests(IntegrationTestCase):
     def _build_candidate(self, payload, bank_context=None):
+        payload = dict(payload)
+        payload.setdefault("docstatus", 1)
         with (
             patch(f"{MODULE}.frappe.get_meta") as get_meta,
             patch(f"{MODULE}.frappe.db.get_value") as get_value,

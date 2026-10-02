@@ -298,6 +298,9 @@ def get_request_for_quotation_history(
 	branch: str | None = None,
 	supplier: str | None = None,
 	limit: int | str = 50,
+	start: int | str = 0,
+	page_length: int | str | None = None,
+	search: str | None = None,
 ) -> dict[str, Any]:
 	"""Return permission-aware RFQ history for the active Company/Branch scope."""
 	_assert_read(REQUEST_FOR_QUOTATION_DOCTYPE)
@@ -332,14 +335,27 @@ def get_request_for_quotation_history(
 	if branch_field:
 		fields.append(branch_field)
 
-	row_limit = max(1, min(cint(limit) or 50, MAX_RFQ_HISTORY))
+	page_start = max(0, cint(start))
+	requested_length = page_length if page_length not in (None, "") else limit
+	row_limit = max(1, min(cint(requested_length) or 50, MAX_RFQ_HISTORY))
+	search_text = str(search or "").strip()
+	or_filters = None
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters = [["name", "like", like]]
+		if meta.has_field("status"):
+			or_filters.append(["status", "like", like])
 	rows = frappe.get_list(
 		REQUEST_FOR_QUOTATION_DOCTYPE,
 		filters=filters,
+		or_filters=or_filters,
 		fields=fields,
 		order_by="modified desc, name desc",
-		limit_page_length=row_limit,
+		limit_start=page_start,
+		limit_page_length=row_limit + 1,
 	)
+	has_more = len(rows) > row_limit
+	rows = rows[:row_limit]
 	parent_names = [str(row.get("name") or "") for row in rows if row.get("name")]
 	suppliers_by_parent: dict[str, list[str]] = {name: [] for name in parent_names}
 	items_by_parent: dict[str, int] = {name: 0 for name in parent_names}
@@ -388,6 +404,10 @@ def get_request_for_quotation_history(
 		"branch": resolved_branch,
 		"supplier": supplier,
 		"rows": result_rows,
+		"search": search_text,
 		"limit": row_limit,
+		"start": page_start,
+		"has_more": has_more,
+		"next_start": page_start + len(result_rows),
 		"source_of_truth": REQUEST_FOR_QUOTATION_DOCTYPE,
 	}

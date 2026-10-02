@@ -249,6 +249,7 @@ def install_internal_transfer_bank_leg_identity():
 
 	original_find_payment_entries = matching.find_payment_entry_candidates_for_bank_transaction
 	original_candidate_confirmed = matching.candidate_document_has_active_confirmed_bank_match
+	original_payment_confirmed = matching.payment_entry_has_active_confirmed_bank_match
 	original_active_review = matching._active_review_match_for_candidate
 	original_candidate_key = matching.get_candidate_document_key
 
@@ -268,15 +269,41 @@ def install_internal_transfer_bank_leg_identity():
 				)
 		return True
 
-	def payment_entry_has_active_confirmed_bank_match(payment_entry):
-		return candidate_document_has_active_confirmed_bank_match("Payment Entry", payment_entry)
+	def payment_entry_has_active_confirmed_bank_match(payment_entry, bank_transaction=None, exclude_match=None):
+		"""Keep the historical one-argument contract while accepting bank-leg context.
 
-	def active_review_match_for_candidate(document_type, document_name):
-		legacy_match = original_active_review(document_type, document_name)
+		Callers that know the Bank Transaction may pass it so submitted Internal
+		Transfers are checked per bank ledger leg. Older integrations/tests that
+		call or replace this helper with the original one-argument shape continue
+		to work unchanged.
+		"""
+		bank_transaction = bank_transaction or _get_context_bank_transaction()
+		if bank_transaction and _is_submitted_internal_transfer(payment_entry):
+			return bool(
+				_same_leg_match_rows(
+					payment_entry,
+					bank_transaction,
+					confirmed_only=True,
+					exclude_match=exclude_match,
+				)
+			)
+		return original_payment_confirmed(
+			payment_entry,
+			bank_transaction=bank_transaction,
+			exclude_match=exclude_match,
+		)
+
+	def active_review_match_for_candidate(document_type, document_name, bank_transaction_name=None):
+		"""Preserve the matching helper contract and add leg-aware transfer scoping."""
+		bank_transaction = bank_transaction_name or _get_context_bank_transaction()
+		legacy_match = original_active_review(
+			document_type,
+			document_name,
+			bank_transaction_name=bank_transaction,
+		)
 		if not legacy_match:
 			return None
 		if cstr(document_type).strip() == "Payment Entry":
-			bank_transaction = _get_context_bank_transaction()
 			if bank_transaction and _is_submitted_internal_transfer(document_name):
 				rows = _same_leg_match_rows(document_name, bank_transaction, confirmed_only=False)
 				return rows[0] if rows else None
@@ -316,12 +343,21 @@ def install_internal_transfer_bank_leg_identity():
 	original_first_confirmed_conflict = workflow._get_first_active_confirmed_conflict
 	original_validate_no_confirmed = workflow._validate_no_other_active_confirmed_match
 
-	def find_active_candidate_review_match(suggested_document_type, suggested_document):
-		legacy_match = original_find_active_candidate_review(suggested_document_type, suggested_document)
+	def find_active_candidate_review_match(
+		suggested_document_type,
+		suggested_document,
+		bank_transaction=None,
+	):
+		"""Preserve workflow helper signature while scoping Internal Transfers by bank leg."""
+		bank_transaction = bank_transaction or _get_context_bank_transaction()
+		legacy_match = original_find_active_candidate_review(
+			suggested_document_type,
+			suggested_document,
+			bank_transaction=bank_transaction,
+		)
 		if not legacy_match:
 			return None
 		if cstr(suggested_document_type).strip() == "Payment Entry":
-			bank_transaction = _get_context_bank_transaction()
 			if bank_transaction and _is_submitted_internal_transfer(suggested_document):
 				rows = _same_leg_match_rows(suggested_document, bank_transaction, confirmed_only=False)
 				return cstr(rows[0].get("name")).strip() if rows else None

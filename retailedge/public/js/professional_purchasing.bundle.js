@@ -1,7 +1,5 @@
 import ProfessionalPurchasing from "./professional_purchasing/ProfessionalPurchasing.vue";
 import ProfessionalRfqPreviewOverlay from "./professional_purchasing/ProfessionalRfqPreviewOverlay.vue";
-import ProfessionalRfqHistoryOverlay from "./professional_purchasing/ProfessionalRfqHistoryOverlay.vue";
-import ProfessionalSupplierQuotationHistoryOverlay from "./professional_purchasing/ProfessionalSupplierQuotationHistoryOverlay.vue";
 import ProfessionalSupplierQuotationPurchaseOrderOverlay from "./professional_purchasing/ProfessionalSupplierQuotationPurchaseOrderOverlay.vue";
 import ProfessionalPurchaseOrderSubmitOverlay from "./professional_purchasing/ProfessionalPurchaseOrderSubmitOverlay.vue";
 import { installProfessionalPurchaseReturnOwnership } from "./professional_purchasing/professionalPurchaseReturnOwnership";
@@ -15,12 +13,12 @@ const COMPARE_QUOTATIONS_LABEL = "Compare Quotations";
 const ADVANCED_COMPARE_QUOTATIONS_LABEL = "Advanced: Compare Quotations in ERPNext";
 const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
-const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
-const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
 const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
+const SUPPLIER_QUOTATION_PURCHASE_ORDER_EVENT = "retailedge-open-supplier-quotation-purchase-order";
 
 function normaliseButtonLabel(button) {
 	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
@@ -140,14 +138,14 @@ function installSourcingOwnership(target) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_RFQ_HISTORY_EVENT));
+			frappe.set_route("rfq-history");
 			return;
 		}
 		if ([SUPPLIER_QUOTATIONS_LABEL, SUPPLIER_QUOTATION_HISTORY_LABEL].includes(label) || button.getAttribute("data-retailedge-supplier-quotation-history") === "true") {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
-			window.dispatchEvent(new CustomEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT));
+			frappe.set_route("supplier-quotation-history");
 			return;
 		}
 		if (!nativeDeskEnabled() && [ADVANCED_MATERIAL_REQUEST_LABEL, COMPARE_QUOTATIONS_LABEL, ADVANCED_COMPARE_QUOTATIONS_LABEL].includes(label)) {
@@ -193,10 +191,23 @@ function consumeProfessionalPurchasingTarget() {
 	if (!target || typeof target !== "object") return;
 	delete window.retailedgeProfessionalPurchasingTarget;
 	if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
-	if (target.action !== "supplier-debit-note" || !target.source_name) return;
-	window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
-		detail: { source_type: "purchase_invoice", source_name: String(target.source_name) },
-	}));
+	if (target.action === "supplier-debit-note" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+			detail: { source_type: "purchase_invoice", source_name: String(target.source_name) },
+		}));
+		return;
+	}
+	if (target.action === "purchase-invoice-ready" && target.result?.name) {
+		window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: target.result }));
+		return;
+	}
+	if (target.action === "rfq-capture" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(OPEN_RFQ_HISTORY_EVENT, { detail: { request_for_quotation: String(target.source_name), capture: true } }));
+		return;
+	}
+	if (target.action === "supplier-quotation-purchase-order" && target.source_name) {
+		window.dispatchEvent(new CustomEvent(SUPPLIER_QUOTATION_PURCHASE_ORDER_EVENT, { detail: { supplier_quotation: String(target.source_name) } }));
+	}
 }
 
 
@@ -214,17 +225,6 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const overlayApp = edgeUI.createEdgeApp(ProfessionalRfqPreviewOverlay);
 	overlayApp.mount(overlayRoot);
 
-	const historyRoot = document.createElement("div");
-	historyRoot.className = "retailedge-professional-rfq-history-overlay-root";
-	(target.parentNode || target).appendChild(historyRoot);
-	const historyApp = edgeUI.createEdgeApp(ProfessionalRfqHistoryOverlay);
-	historyApp.mount(historyRoot);
-
-	const supplierQuotationHistoryRoot = document.createElement("div");
-	supplierQuotationHistoryRoot.className = "retailedge-professional-supplier-quotation-history-overlay-root";
-	(target.parentNode || target).appendChild(supplierQuotationHistoryRoot);
-	const supplierQuotationHistoryApp = edgeUI.createEdgeApp(ProfessionalSupplierQuotationHistoryOverlay);
-	supplierQuotationHistoryApp.mount(supplierQuotationHistoryRoot);
 
 	const supplierQuotationPurchaseOrderRoot = document.createElement("div");
 	supplierQuotationPurchaseOrderRoot.className = "retailedge-supplier-quotation-purchase-order-overlay-root";

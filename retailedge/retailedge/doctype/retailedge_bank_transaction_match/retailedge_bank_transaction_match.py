@@ -261,6 +261,9 @@ class RetailEdgeBankTransactionMatch(Document):
 
 def _build_bank_transaction_context(bank_transaction_name):
 	bank_transaction = normalize_bank_transaction(bank_transaction_name)
+	bank_docstatus = frappe.db.get_value("Bank Transaction", bank_transaction_name, "docstatus")
+	if cint(bank_docstatus) != 1:
+		frappe.throw(_("Submit Bank Transaction {0} before creating a reconciliation review.").format(bank_transaction_name))
 	account_payload = _resolve_bank_transaction_canonical_account(bank_transaction)
 	return {
 		"bank_transaction": bank_transaction.get("bank_transaction"),
@@ -433,13 +436,18 @@ def _build_payment_entry_source_candidate(payment_entry_name, bank_context=None)
 		"received_amount",
 		"reference_no",
 		"remarks",
+		"docstatus",
 	]
 	if frappe.get_meta("Payment Entry").has_field("mode_of_payment"):
 		fields.append("mode_of_payment")
 	if frappe.get_meta("Payment Entry").has_field("retailedge_branch"):
 		fields.append("retailedge_branch")
+	if frappe.get_meta("Payment Entry").has_field("clearance_date"):
+		fields.append("clearance_date")
 	payload = frappe.db.get_value("Payment Entry", payment_entry_name, fields, as_dict=True)
-	if not payload:
+	if not payload or cint(payload.get("docstatus")) != 1:
+		return None
+	if payload.get("clearance_date"):
 		return None
 	if cstr(payload.get("mode_of_payment")).strip().lower() == "cash":
 		return None
@@ -543,10 +551,23 @@ def _build_journal_entry_source_candidate(journal_entry_name, bank_context=None)
 	payload = frappe.db.get_value(
 		"Journal Entry",
 		journal_entry_name,
-		["name", "posting_date", "company", "voucher_type", "cheque_no", "user_remark", "docstatus"],
+		[
+			"name",
+			"posting_date",
+			"company",
+			"voucher_type",
+			"cheque_no",
+			"user_remark",
+			"docstatus",
+			*(["clearance_date"] if frappe.get_meta("Journal Entry").has_field("clearance_date") else []),
+		],
 		as_dict=True,
 	)
 	if not payload or cint(payload.get("docstatus")) != 1:
+		return None
+	if cstr(payload.get("voucher_type")).strip() == "Opening Entry":
+		return None
+	if payload.get("clearance_date"):
 		return None
 
 	bank_ledger = cstr(bank_context.get("resolved_bank_account")).strip()

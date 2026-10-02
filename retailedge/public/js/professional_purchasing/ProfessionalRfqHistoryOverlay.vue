@@ -179,7 +179,20 @@ export default {
 			});
 		},
 	},
-	created() { this._open = () => { this.capture = emptyCapture(); this.open = true; this.loadHistory(); }; },
+	created() {
+		this._open = async (event) => {
+			const requestForQuotation = String(event?.detail?.request_for_quotation || "").trim();
+			if (event?.detail?.capture && requestForQuotation) {
+				this.open = true;
+				this.capture = { ...emptyCapture(), active: true, rfq: requestForQuotation, transaction_date: frappe.datetime.get_today() };
+				await this.loadCapturePreview();
+				return;
+			}
+			// Legacy event compatibility: history itself now lives on the persistent page.
+			this.open = false;
+			frappe.set_route("rfq-history");
+		};
+	},
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
@@ -253,7 +266,7 @@ export default {
 			} catch (error) { this.capture.error = errorMessage(error, "ERPNext could not record and submit the Supplier Quotation."); }
 			finally { this.capture.saving = false; }
 		},
-		leaveCapture() { if (this.capture.saving) return; this.capture = emptyCapture(); this.loadHistory(); },
+		leaveCapture() { if (this.capture.saving) return; this.capture = emptyCapture(); this.open = false; frappe.set_route("rfq-history"); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; },
 		sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		statusLabel(docstatus) { return Number(docstatus) === 1 ? "Submitted" : Number(docstatus) === 2 ? "Cancelled" : "Draft"; },

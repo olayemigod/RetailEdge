@@ -33,6 +33,7 @@ _BRANCH_VOUCHER_SPECS = (
 	("Sales Invoice", "si"),
 	("POS Invoice", "posi"),
 	("Purchase Invoice", "pi"),
+	("Journal Entry", "je"),
 )
 
 
@@ -404,6 +405,36 @@ def _build_sql_context() -> dict[str, str]:
 		joined_aliases.add(alias)
 		branch_parts.append(f"NULLIF({alias}.retailedge_branch, '')")
 
+	expense_source_expression = "0"
+	if (
+		_doctype_has_field("RetailEdge Cashier Expense", "posting_reference")
+		and _doctype_has_field("RetailEdge Cashier Expense", "posting_reference_type")
+	):
+		joins.append(
+			"LEFT JOIN `tabRetailEdge Cashier Expense` ce "
+			"ON gle.voucher_type = 'Journal Entry' "
+			"AND ce.posting_reference_type = 'Journal Entry' "
+			"AND ce.posting_reference = gle.voucher_no "
+			"AND ce.docstatus = 1"
+		)
+		expense_source_expression = "(ce.name IS NOT NULL)"
+	if (
+		_doctype_has_field("RetailEdge Business Expense", "posting_reference")
+		and _doctype_has_field("RetailEdge Business Expense", "posting_reference_type")
+	):
+		joins.append(
+			"LEFT JOIN `tabRetailEdge Business Expense` be "
+			"ON gle.voucher_type = 'Journal Entry' "
+			"AND be.posting_reference_type = 'Journal Entry' "
+			"AND be.posting_reference = gle.voucher_no "
+			"AND be.docstatus = 1"
+		)
+		expense_source_expression = (
+			f"({expense_source_expression} OR be.name IS NOT NULL)"
+			if expense_source_expression != "0"
+			else "(be.name IS NOT NULL)"
+		)
+
 	payment_type_expression = "''"
 	payment_method_expression = "''"
 	if _doctype_has_field("Payment Entry", "payment_type"):
@@ -421,6 +452,9 @@ def _build_sql_context() -> dict[str, str]:
 		CASE
 			WHEN gle.voucher_type = 'Payment Entry'
 				AND {payment_type_expression} = 'Internal Transfer' THEN 'Transfer'
+			WHEN gle.voucher_type = 'Journal Entry'
+				AND {expense_source_expression}
+				AND gle.credit > 0 THEN 'Money Out'
 			WHEN gle.voucher_type = 'Journal Entry' THEN 'Adjustment'
 			WHEN (gle.debit - gle.credit) > 0 THEN 'Money In'
 			WHEN (gle.debit - gle.credit) < 0 THEN 'Money Out'

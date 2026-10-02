@@ -61,6 +61,17 @@
 					<strong>{{ preview.source_type }} {{ preview.source_name }}</strong>
 				</div>
 
+				<div v-if="preview.is_return && preview.return_outstanding_policy?.message" class="invoice-return-policy">
+					<strong>Credit Note outstanding treatment</strong>
+					<p>{{ preview.return_outstanding_policy.message }}</p>
+					<p v-if="preview.return_outstanding_policy.mode === 'reduce_source_outstanding'">
+						ERPNext will submit this return with Update Outstanding for Self turned off so the credit reduces the source invoice outstanding.
+					</p>
+					<p v-else>
+						ERPNext will keep the credit on this Credit Note for later reconciliation or refund; the source invoice is not mutated by RetailEdge.
+					</p>
+				</div>
+
 				<div v-if="preview.items?.length" class="invoice-completion-items">
 					<h4>Invoice items</h4>
 					<div v-for="(row, index) in preview.items" :key="`${row.item_code}-${index}`" class="invoice-completion-item">
@@ -616,6 +627,8 @@ export default {
 .invoice-completion-workflow { background: var(--blue-50,#eff6ff); border: 1px solid var(--blue-200,#bfdbfe); }
 .invoice-completion-workflow p { margin: .35rem 0 0; }
 .invoice-completion-error { background: var(--red-50,#fef2f2); border: 1px solid var(--red-200,#fecaca); color: var(--red-700,#b91c1c); }
+.invoice-return-policy { display:grid; gap:.35rem; padding:.8rem; border:1px solid var(--blue-200,#bfdbfe); border-radius:.6rem; background:var(--blue-50,#eff6ff); }
+.invoice-return-policy p { margin:0; }
 .invoice-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
 .invoice-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .invoice-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
