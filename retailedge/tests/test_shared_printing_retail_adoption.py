@@ -59,7 +59,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_browser_adapter_uses_edgesuite_profiles_binding_and_print_runtime(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
-			'RETAIL_EDGE_PRODUCT_KEY',
+			'RETAILEDGE_PRODUCT_KEY',
 			'adapter.profiles?.resolve',
 			'adapter.devices?.connectBoundSerial',
 			'adapter.profiles.connectionOptions(profile)',
