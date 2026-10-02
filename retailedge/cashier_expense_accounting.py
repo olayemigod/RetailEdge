@@ -10,6 +10,7 @@ from retailedge.cashier_expense import append_cashier_expense_action_log, user_h
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
 	get_cashier_expense_posting_settings,
+	get_effective_cashier_expense_posting_settings,
 )
 from retailedge.operating_context import get_operational_branch_scope
 from retailedge.workflow_readiness import _get_active_workflow
@@ -50,7 +51,7 @@ def get_cashier_expense_posting_permissions(
 	settings: dict[str, Any] | None = None,
 	automatic: bool = False,
 ) -> dict[str, bool]:
-	settings = settings or get_cashier_expense_posting_settings()
+	settings = settings or get_effective_cashier_expense_posting_settings(doc)
 	roles = get_effective_cashier_expense_posting_roles(settings, automatic=automatic)
 	role_allowed = user_has_any_role(roles=roles)
 	try:
@@ -157,11 +158,10 @@ def attempt_direct_cashier_expense_posting(expense_doc_or_name) -> dict[str, Any
 	physical Cashier Expense submitted with Pending Ledger status. Only a real
 	posting attempt that raises an accounting error is marked Failed.
 	"""
-	settings = get_cashier_expense_posting_settings()
+	doc = _coerce_expense_doc(expense_doc_or_name)
+	settings = get_effective_cashier_expense_posting_settings(doc)
 	if not settings["enabled"] or settings["posting_mode"] != "Direct Posting":
 		return {"attempted": False, "posted": False}
-
-	doc = _coerce_expense_doc(expense_doc_or_name)
 	if cint(getattr(doc, "docstatus", 0)) != 1:
 		return {"attempted": False, "posted": False}
 
@@ -231,7 +231,7 @@ def _post_cashier_expense_to_accounts(
 	if expected_modified and str(getattr(doc, "modified", "") or "") != str(expected_modified):
 		frappe.throw(_("This Cashier Expense changed after you opened it. Refresh before posting."))
 
-	settings = get_cashier_expense_posting_settings()
+	settings = get_effective_cashier_expense_posting_settings(doc)
 	if not settings["enabled"]:
 		frappe.throw(_("Cashier Expense accounting posting is disabled in RetailEdge Settings."))
 	if settings["posting_document_type"] != POSTING_DOCUMENT_TYPE:
