@@ -139,10 +139,13 @@ export async function printRetailReceipt({
 		);
 	}
 
-	const context = { company, branch };
+	const payload = await callReceiptPayload(documentKey, documentName);
+	const context = {
+		company: String(payload?.company || company || "").trim(),
+		branch: String(payload?.branch || branch || "").trim(),
+	};
 	const profile = await resolveSerialProfile(adapter, context);
 	await ensureConnected(adapter, profile);
-	const payload = await callReceiptPayload(documentKey, documentName);
 	const options = adapter.profiles.receiptOptions(profile);
 	const documentPayload = {
 		paper: options.paper,
