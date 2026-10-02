@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+from urllib.parse import urlencode
 
 import frappe
 
@@ -72,6 +73,14 @@ BRANCH_ASSIGNMENTS_ITEM: dict[str, Any] = {
 	"target_type": "Page",
 	"target": "branch-assignments",
 	"icon": "users",
+}
+
+DEVICES_PRINTING_ITEM: dict[str, Any] = {
+	"label": "Devices & Printing",
+	"description": "Connect this browser to the shared receipt printer and run a test print.",
+	"target_type": "Page",
+	"target": "edge-printing",
+	"icon": "settings",
 }
 
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
@@ -418,6 +427,7 @@ BUSINESS_SETUP_TARGETS = {
 	"branch-assignments",
 	"company-profile",
 	"operating-context",
+	"edge-printing",
 }
 SERVICE_WARRANTY_TARGETS = {
 	"service-warranty-control",
@@ -539,6 +549,55 @@ def _add_branch_assignment_navigation(navigation_groups: list[dict[str, Any]]) -
 		-1,
 	)
 	items.insert(branch_setup_index + 1 if branch_setup_index >= 0 else 0, deepcopy(BRANCH_ASSIGNMENTS_ITEM))
+	setup_group["items"] = items
+
+
+def _add_devices_printing_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(DEVICES_PRINTING_ITEM["target"]):
+		return
+
+	setup_group = next((group for group in navigation_groups if group.get("key") == "setup"), None)
+	if setup_group is None:
+		setup_group = {
+			"key": "setup",
+			"label": "Setup",
+			"icon": "settings",
+			"items": [],
+		}
+		navigation_groups.append(setup_group)
+
+	items = list(setup_group.get("items") or [])
+	if any(
+		str(item.get("target") or "").startswith("/app/edge-printing?")
+		or item.get("target") == DEVICES_PRINTING_ITEM["target"]
+		for item in items
+	):
+		return
+
+	operating = get_operating_context() or {}
+	params = {
+		"purpose": "Receipt",
+		"product_key": "retailedge",
+	}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if company:
+		params["company"] = company
+	if branch:
+		params["branch"] = branch
+
+	item = deepcopy(DEVICES_PRINTING_ITEM)
+	item["target_type"] = "URL"
+	item["target"] = f"/app/edge-printing?{urlencode(params)}"
+
+	branch_assignment_index = next(
+		(index for index, row in enumerate(items) if row.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"]),
+		-1,
+	)
+	items.insert(
+		branch_assignment_index + 1 if branch_assignment_index >= 0 else len(items),
+		item,
+	)
 	setup_group["items"] = items
 
 
@@ -1072,7 +1131,7 @@ def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | N
 		return "stock-setup"
 	if target in FINANCE_SETUP_TARGETS:
 		return "finance-setup"
-	if target in BUSINESS_SETUP_TARGETS:
+	if target in BUSINESS_SETUP_TARGETS or target.startswith("/app/edge-printing?"):
 		return "business-setup"
 
 	# Keep future items available under their originating business family until
@@ -1154,6 +1213,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_operating_context_navigation(navigation_groups)
 	_add_company_profile_navigation(navigation_groups)
 	_add_branch_assignment_navigation(navigation_groups)
+	_add_devices_printing_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_make_sale(navigation_groups)
 	_promote_long_transaction_pages(navigation_groups)
@@ -1235,7 +1295,8 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["stock_movement_history_ownership"] = "edgesuite_page"
 	feature_flags["cashier_expense_ownership"] = "edgesuite_expense_register"
 	feature_flags["business_expense_ownership"] = "edgesuite_business_expenses"
-	feature_flags["document_output_sharing"] = "erpnext_native_output"
+	feature_flags["document_output_sharing"] = "erpnext_native_output_plus_edgesuite_receipt"
+	feature_flags["shared_receipt_printing"] = "edgesuite_serial_receipt_v1"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
 	feature_flags["banking_readiness"] = "permission_scoped_inventory"
