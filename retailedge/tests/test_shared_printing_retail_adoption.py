@@ -92,6 +92,15 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_printer_profile_uses_authoritative_receipt_company_and_branch(self):
+		source = self.read_app("public/js/thermalReceiptPrinting.js")
+		payload_index = source.index("const payload = await callReceiptPayload")
+		context_index = source.index("company: String(payload?.company || company ||")
+		profile_index = source.index("const profile = await resolveSerialProfile")
+		self.assertLess(payload_index, context_index)
+		self.assertLess(context_index, profile_index)
+		self.assertIn("branch: String(payload?.branch || branch ||", source)
+
 	def test_generic_reprint_never_opens_cash_drawer_by_default(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		self.assertIn("openDrawer = false", source)
