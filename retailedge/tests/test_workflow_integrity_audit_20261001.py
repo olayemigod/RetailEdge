@@ -66,6 +66,23 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertIn("get_effective_cashier_expense_posting_roles", posting_source)
 		self.assertNotIn("and posting_role", (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8"))
 
+	def test_historical_cashier_expense_readiness_is_backfilled_without_posting(self):
+		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
+		self.assertIn(
+			"retailedge.patches.backfill_cashier_expense_posting_readiness",
+			patches,
+		)
+		patch_source = (
+			APP_ROOT
+			/ "patches"
+			/ "backfill_cashier_expense_posting_readiness.py"
+		).read_text(encoding="utf-8")
+		self.assertIn("build_cashier_expense_posting_preview", patch_source)
+		self.assertIn('"ledger_status": ["!=", "Posted"]', patch_source)
+		self.assertIn('"posting_ready": 1 if preview.get("posting_ready") else 0', patch_source)
+		self.assertNotIn("post_cashier_expense_to_accounts", patch_source)
+		self.assertNotIn(".submit()", patch_source)
+
 	def test_cashier_workflow_and_ledger_statuses_remain_distinct(self):
 		accounting = (APP_ROOT / "cashier_expense_accounting.py").read_text(encoding="utf-8")
 		detail = (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8")
