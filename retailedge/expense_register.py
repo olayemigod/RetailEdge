@@ -317,9 +317,9 @@ def _get_summary(query_filters: dict[str, Any]) -> dict[str, Any]:
 	posting_rows = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
-		fields=["posting_ready", {"COUNT": "*", "as": "count"}],
-		group_by="posting_ready",
-		limit_page_length=3,
+		fields=["posting_ready", "ledger_status", {"COUNT": "*", "as": "count"}],
+		group_by="posting_ready, ledger_status",
+		limit_page_length=12,
 	)
 	base = overall[0] if overall else frappe._dict(count=0, total_amount=0)
 	by_status = {
@@ -329,15 +329,25 @@ def _get_summary(query_filters: dict[str, Any]) -> dict[str, Any]:
 		}
 		for row in status_rows
 	}
-	by_posting = {cint(row.posting_ready): cint(row.count) for row in posting_rows}
+	posting_ready_count = sum(
+		cint(row.count)
+		for row in posting_rows
+		if cint(row.posting_ready)
+	)
+	posting_blocked_count = sum(
+		cint(row.count)
+		for row in posting_rows
+		if not cint(row.posting_ready)
+		and str(row.ledger_status or "").strip() in {"Pending Ledger", "Failed"}
+	)
 	return {
 		"count": cint(base.count),
 		"total_amount": flt(base.total_amount),
 		"submitted_count": cint((by_status.get("Submitted") or {}).get("count")),
 		"pending_ledger_count": cint((by_status.get("Pending Ledger") or {}).get("count")),
 		"rejected_count": cint((by_status.get("Rejected") or {}).get("count")),
-		"posting_ready_count": cint(by_posting.get(1)),
-		"posting_blocked_count": cint(by_posting.get(0)),
+		"posting_ready_count": posting_ready_count,
+		"posting_blocked_count": posting_blocked_count,
 		"by_status": by_status,
 	}
 
