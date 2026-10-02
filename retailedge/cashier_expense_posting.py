@@ -43,7 +43,7 @@ def get_cashier_expense_posting_settings():
 		"posting_mode": posting_mode,
 		# Journal Entry is intentionally authoritative. Historical sites may still
 		# contain the removed Payment Entry option until the settings patch runs.
-		"posting_document_type": getattr(settings, "cashier_expense_posting_document_type", None) or "Journal Entry",
+		"posting_document_type": "Journal Entry",
 		"require_approval_before_posting": posting_mode == "Controlled Posting",
 		"allow_rejected_posting": bool(getattr(settings, "allow_rejected_cashier_expense_posting", 0)),
 		"remark_template": getattr(settings, "cashier_expense_posting_remark_template", None)
