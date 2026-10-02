@@ -101,6 +101,16 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		self.assertLess(context_index, profile_index)
 		self.assertIn("branch: String(payload?.branch || branch ||", source)
 
+	def test_partial_payment_receipt_keeps_payment_rows_and_outstanding_balance(self):
+		source = self.read_app("thermal_receipt.py")
+		payment_index = source.index('if payment_blocks:')
+		outstanding_index = source.index(
+			'if doc.meta.has_field("outstanding_amount") and flt(doc.get("outstanding_amount")) > 0:'
+		)
+		self.assertLess(payment_index, outstanding_index)
+		self.assertNotIn('elif doc.meta.has_field("outstanding_amount")', source)
+		self.assertIn('"Outstanding: {0}"', source)
+
 	def test_generic_reprint_never_opens_cash_drawer_by_default(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		self.assertIn("openDrawer = false", source)
