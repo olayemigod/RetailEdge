@@ -32,6 +32,18 @@ function hideNativePageSidebar(wrapper) {
 	}
 }
 
+async function addExpenseRegisterButton(page) {
+	try {
+		const response = await frappe.call({
+			method: "retailedge.retailedge.page.cashier_expenses.cashier_expenses.can_open_expense_register",
+		});
+		if (!response?.message?.can_open || !page?.add_inner_button) return;
+		page.add_inner_button(__("Expense Register"), () => frappe.set_route("expense-register"));
+	} catch (error) {
+		console.warn("RetailEdge: unable to resolve Expense Register access", error);
+	}
+}
+
 function renderLoadError(wrapper, error) {
 	const errorDiv = document.createElement("div");
 	errorDiv.className = "retailedge-cashier-expenses-load-error alert alert-danger p-6 text-center";
@@ -54,6 +66,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true });
 		wrapper.page = page;
 		hideNativePageSidebar(wrapper);
+		await addExpenseRegisterButton(page);
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(EXPENSE_REGISTER_ASSET);
