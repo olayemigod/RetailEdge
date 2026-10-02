@@ -44,20 +44,20 @@ def _item_blocks(doc, currency: str) -> list[dict[str, Any]]:
 		blocks.append({"type": "text", "text": _item_label(row), "bold": True})
 		blocks.append(
 			{
-				"type": "row",
-				"gap": 1,
-				"columns": [
-					{
-						"text": _("{0} x {1}").format(
-							_quantity(row.get("qty")),
-							_money(row.get("rate"), currency),
-						),
-					},
-					{
-						"text": _money(row.get("amount"), currency),
-						"align": "right",
-					},
-				],
+				"type": "text",
+				"text": _("{0} x {1}").format(
+					_quantity(row.get("qty")),
+					_money(row.get("rate"), currency),
+				),
+			}
+		)
+		# Preserve the complete monetary amount on narrow 58 mm paper. EdgeSuite
+		# may wrap text blocks, while row cells are intentionally width-bounded.
+		blocks.append(
+			{
+				"type": "text",
+				"text": _money(row.get("amount"), currency),
+				"align": "right",
 			}
 		)
 	return blocks
@@ -70,14 +70,11 @@ def _payment_blocks(doc, currency: str) -> list[dict[str, Any]]:
 		amount = flt(payment.get("amount"))
 		if not amount:
 			continue
+		label = _text(payment.get("mode_of_payment")) or _("Payment")
 		blocks.append(
 			{
-				"type": "row",
-				"gap": 1,
-				"columns": [
-					{"text": _text(payment.get("mode_of_payment")) or _("Payment")},
-					{"text": _money(amount, currency), "align": "right"},
-				],
+				"type": "text",
+				"text": _("{0}: {1}").format(label, _money(amount, currency)),
 			}
 		)
 	return blocks
@@ -113,32 +110,25 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 	if doc.meta.has_field("net_total"):
 		blocks.append(
 			{
-				"type": "row",
-				"columns": [
-					{"text": _("Subtotal")},
-					{"text": _money(doc.get("net_total"), currency), "align": "right"},
-				],
+				"type": "text",
+				"text": _("Subtotal: {0}").format(_money(doc.get("net_total"), currency)),
 			}
 		)
 	if doc.meta.has_field("total_taxes_and_charges") and flt(doc.get("total_taxes_and_charges")):
 		blocks.append(
 			{
-				"type": "row",
-				"columns": [
-					{"text": _("Tax / Charges")},
-					{"text": _money(doc.get("total_taxes_and_charges"), currency), "align": "right"},
-				],
+				"type": "text",
+				"text": _("Tax / Charges: {0}").format(
+					_money(doc.get("total_taxes_and_charges"), currency)
+				),
 			}
 		)
 	blocks.extend(
 		[
 			{
-				"type": "row",
+				"type": "text",
+				"text": _("TOTAL: {0}").format(_money(doc.get("grand_total"), currency)),
 				"bold": True,
-				"columns": [
-					{"text": _("TOTAL")},
-					{"text": _money(doc.get("grand_total"), currency), "align": "right"},
-				],
 			},
 			{"type": "rule"},
 		]
@@ -151,11 +141,10 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 	elif doc.meta.has_field("outstanding_amount"):
 		blocks.append(
 			{
-				"type": "row",
-				"columns": [
-					{"text": _("Outstanding")},
-					{"text": _money(doc.get("outstanding_amount"), currency), "align": "right"},
-				],
+				"type": "text",
+				"text": _("Outstanding: {0}").format(
+					_money(doc.get("outstanding_amount"), currency)
+				),
 			}
 		)
 
