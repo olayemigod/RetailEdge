@@ -69,7 +69,6 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			"0x1d",
 			"ESC @",
 		):
-
 			self.assertNotIn(forbidden, source)
 
 	def test_browser_adapter_uses_edgesuite_profiles_binding_and_print_runtime(self):
