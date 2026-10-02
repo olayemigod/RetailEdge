@@ -418,6 +418,8 @@ def _build_sql_context() -> dict[str, str]:
 			"AND ce.docstatus = 1"
 		)
 		expense_source_expression = "(ce.name IS NOT NULL)"
+		if _doctype_has_field("RetailEdge Cashier Expense", "branch"):
+			branch_parts.append("NULLIF(ce.branch, '')")
 	if (
 		_doctype_has_field("RetailEdge Business Expense", "posting_reference")
 		and _doctype_has_field("RetailEdge Business Expense", "posting_reference_type")
@@ -434,6 +436,8 @@ def _build_sql_context() -> dict[str, str]:
 			if expense_source_expression != "0"
 			else "(be.name IS NOT NULL)"
 		)
+		if _doctype_has_field("RetailEdge Business Expense", "branch"):
+			branch_parts.append("NULLIF(be.branch, '')")
 
 	payment_type_expression = "''"
 	payment_method_expression = "''"
