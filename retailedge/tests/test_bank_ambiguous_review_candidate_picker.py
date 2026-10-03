@@ -102,6 +102,91 @@ def test_review_candidates_return_both_competing_payment_entries_without_mutatio
 	assert rows[0]["review_candidate_key"] == "Payment Entry|ACC-PAY-2026-00016"
 
 
+@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+@patch(
+	"retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings",
+	return_value={},
+)
+@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+def test_confirmed_candidate_for_same_bank_transaction_remains_selectable(
+	normalize_bank_transaction,
+	find_candidates,
+	_settings,
+	_access,
+	_manage,
+	get_value,
+):
+	normalize_bank_transaction.return_value = frappe._dict(
+		bank_transaction="ACC-BTN-2026-00020",
+		transaction_date="2026-10-01",
+		bank_account="Access Bank Ketu - Access Bank",
+		amount=200000,
+		direction="Inflow",
+	)
+	confirmed = _candidate("ACC-PAY-2026-00016", "Internal Transfer")
+	confirmed["decision_status"] = "Confirmed"
+	confirmed["match_record"] = "RE-BTM-0001"
+	find_candidates.return_value = [
+		confirmed,
+		_candidate("ACC-PAY-2026-00018", "Receive", party="Mathew Alao"),
+	]
+	get_value.return_value = "ACC-BTN-2026-00020"
+
+	rows = get_ambiguous_payment_entry_review_candidates("ACC-BTN-2026-00020")
+
+	assert [row["suggested_document"] for row in rows] == [
+		"ACC-PAY-2026-00016",
+		"ACC-PAY-2026-00018",
+	]
+
+
+@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+@patch(
+	"retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings",
+	return_value={},
+)
+@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+def test_picker_expands_to_full_reported_competing_set(
+	normalize_bank_transaction,
+	find_candidates,
+	_settings,
+	_access,
+	_manage,
+):
+	normalize_bank_transaction.return_value = frappe._dict(
+		bank_transaction="ACC-BTN-MANY",
+		transaction_date="2026-10-01",
+		bank_account="Access Bank Ketu - Access Bank",
+		amount=200000,
+		direction="Inflow",
+	)
+	first_page = []
+	for index in range(20):
+		candidate = _candidate(f"ACC-PAY-{index:03d}", "Receive", party=f"Customer {index}")
+		candidate["identity_competing_candidates"] = 21
+		first_page.append(candidate)
+	full_set = list(first_page)
+	extra = _candidate("ACC-PAY-020", "Receive", party="Customer 20")
+	extra["identity_competing_candidates"] = 21
+	full_set.append(extra)
+	find_candidates.side_effect = [first_page, full_set]
+
+	rows = get_ambiguous_payment_entry_review_candidates(
+		"ACC-BTN-MANY",
+		limit=20,
+	)
+
+	assert len(rows) == 21
+	assert find_candidates.call_count == 2
+	assert find_candidates.call_args_list[0].kwargs["limit"] == 20
+	assert find_candidates.call_args_list[1].kwargs["limit"] == 21
+
+
 def test_review_dialog_requires_explicit_choice_for_ambiguous_candidates():
 	source = REPORT_JS.read_text(encoding="utf-8")
 	assert 'fieldname: "candidate_choices"' in source
