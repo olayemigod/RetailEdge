@@ -457,6 +457,44 @@ def _validate_prefetched_candidate_identity(bank_transaction, candidate, all_can
 	return True
 
 
+def _ambiguous_payment_entry_review_candidates(bank_transaction, candidates, settings):
+	"""Surface equally plausible weak-identity Payment Entries for human review only."""
+	candidates = list(candidates or [])
+	ambiguous = []
+	for candidate in candidates:
+		if not candidate or candidate.get("exception_only"):
+			continue
+		strength = cstr(candidate.get("reference_match_strength") or "none").strip().lower()
+		if strength in {"exact", "strong", "contains", "narration_contains_reference"}:
+			continue
+		if _is_weak_ref_match_similar(candidate, bank_transaction, settings, candidates):
+			ambiguous.append(candidate)
+
+	if len(ambiguous) <= 1:
+		return []
+
+	competing_count = len(ambiguous)
+	result = []
+	for candidate in ambiguous:
+		candidate = dict(candidate)
+		reason = (
+			f"{competing_count} submitted Payment Entries fit the same weak statement identity "
+			"(amount/account/date) and the Bank Transaction has no unique reference evidence. "
+			"Choose the correct accounting event manually."
+		)
+		candidate["identity_ambiguous"] = 1
+		candidate["identity_competing_candidates"] = competing_count
+		candidate["identity_review_reason"] = reason
+		candidate["reason"] = (
+			f"{candidate.get('reason')} {reason}".strip()
+			if candidate.get("reason")
+			else reason
+		)
+		candidate["confidence"] = "Possible Match"
+		result.append(candidate)
+	return result
+
+
 def _build_scored_sales_invoices(bank_transaction, invoices, filters, settings, context):
 	results = []
 	for invoice in invoices:
