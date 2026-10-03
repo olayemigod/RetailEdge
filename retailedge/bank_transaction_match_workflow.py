@@ -870,6 +870,66 @@ def _suggestion_row_key(row):
 	)
 
 
+def get_ambiguous_payment_entry_review_candidates(bank_transaction_name, filters=None, limit=20):
+	"""Return Payment Entry alternatives for one Bank Transaction without changing any records."""
+	assert_can_manage_bank_transaction_match()
+	assert_can_access_bank_transaction_matching()
+
+	filters = _coerce_json_payload(filters)
+	filters["include_exception_candidates"] = 1
+	filters["include_confirmed_matches"] = 0
+	limit = max(min(cint(limit or 20), 50), 1)
+
+	bank_transaction = normalize_bank_transaction(bank_transaction_name)
+	candidates = find_payment_entry_candidates_for_bank_transaction(
+		bank_transaction_name=bank_transaction_name,
+		filters=filters,
+		limit=limit,
+	)
+	settings = get_bank_transaction_matching_settings()
+	rows = []
+	seen = set()
+	for candidate in candidates or []:
+		candidate = frappe._dict(candidate or {})
+		document_name = cstr(candidate.get("document_name") or candidate.get("suggested_document")).strip()
+		if not document_name:
+			continue
+		identity = (
+			"Payment Entry",
+			document_name,
+			cstr(candidate.get("payment_account") or candidate.get("account")).strip(),
+		)
+		if identity in seen:
+			continue
+		seen.add(identity)
+		action_status = _derive_action_status(bank_transaction, candidate)
+		row = frappe._dict(
+			_build_matching_row(
+				bank_transaction,
+				candidate,
+				action_status=action_status,
+				match_reason=candidate.get("reason"),
+			)
+		)
+		auto_status = get_auto_match_status_for_row(row, settings=settings)
+		row.auto_match_status = auto_status.get("status")
+		row.auto_match_reason = auto_status.get("reason")
+		row.auto_match_category = auto_status.get("category")
+		row.eligible_for_auto_prepare = cint(auto_status.get("eligible_prepare"))
+		row.eligible_for_auto_confirm = cint(auto_status.get("eligible_confirm"))
+		row.review_candidate_key = f"Payment Entry|{document_name}"
+		rows.append(row)
+
+	rows.sort(
+		key=lambda row: (
+			-cint(row.get("match_score") or 0),
+			abs(flt(row.get("amount_difference"))),
+			cstr(row.get("suggested_document")).strip(),
+		)
+	)
+	return rows[:limit]
+
+
 def _candidate_from_revalidated_row(row):
 	row = frappe._dict(row or {})
 	if cstr(row.get("candidate_changed_reason")).strip():
