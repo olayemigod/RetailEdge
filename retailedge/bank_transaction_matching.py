@@ -1988,15 +1988,9 @@ def _matching_row_passes_optional_filters(row, filters):
 		"auto_match_status": row.get("auto_match_status"),
 	}
 	for fieldname, value in checks.items():
-		requested = cstr(filters.get(fieldname)).strip()
-		if not requested:
-			continue
-		if fieldname == "review_queue_status" and requested == "All":
-			continue
-		if requested != cstr(value).strip():
+		if filters.get(fieldname) and cstr(filters.get(fieldname)).strip() != cstr(value).strip():
 			return False
 	return True
-
 
 def _matching_row_passes_post_suppression_filters(row, filters):
 	checks = {
@@ -2017,10 +2011,14 @@ def _matching_row_passes_post_suppression_filters(row, filters):
 		),
 	}
 	for fieldname, value in checks.items():
-		if filters.get(fieldname) and cstr(filters.get(fieldname)).strip() != cstr(value).strip():
+		requested = cstr(filters.get(fieldname)).strip()
+		if not requested:
+			continue
+		if fieldname == "review_queue_status" and requested == "All":
+			continue
+		if requested != cstr(value).strip():
 			return False
 	return True
-
 
 def suppress_duplicate_candidate_suggestions(rows, mark_duplicates=False):
 	"""Keep one normal suggestion per Sales Invoice/Payment Entry in the current result set."""
