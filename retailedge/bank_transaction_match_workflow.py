@@ -51,12 +51,13 @@ def resolve_bank_match_party_link(party_type=None, party=None, customer=None):
 	party = cstr(party or customer).strip()
 	customer = cstr(customer or (party if party_type == "Customer" else "")).strip()
 	allowed_party_types = {"Customer", "Supplier"}
+	resolved_party_type = party_type if party_type in allowed_party_types else None
 	result = frappe._dict(
 		{
-			"party_type": party_type if party_type in allowed_party_types else "Customer",
+			"party_type": resolved_party_type,
 			"party": None,
 			"customer": None,
-			"display_party_type": party_type,
+			"display_party_type": party_type or None,
 			"display_party": party or customer,
 			"missing_party_link": 0,
 			"diagnostic_message": None,
@@ -888,7 +889,8 @@ def _candidate_from_revalidated_row(row):
 			"customer": row.get("customer"),
 			"customer_display": row.get("customer"),
 			"party": row.get("party") or row.get("customer"),
-			"party_type": row.get("party_type") or "Customer",
+			"party_type": row.get("party_type")
+			or ("Customer" if document_type == "Sales Invoice" else None),
 			"candidate_amount": flt(row.get("candidate_amount")),
 			"amount_difference": flt(row.get("amount_difference")),
 			"amount_scenario": row.get("amount_scenario"),
@@ -905,6 +907,7 @@ def _candidate_from_revalidated_row(row):
 			"payment_category": row.get("payment_category"),
 			"payment_entry_paid_amount": flt(row.get("payment_entry_paid_amount")),
 			"payment_entry_allocated_amount": flt(row.get("payment_entry_allocated_amount")),
+			"payment_entry_payment_type": row.get("payment_entry_payment_type"),
 			"payment_entry_invoice_context": row.get("payment_entry_invoice_context"),
 			"sales_invoice_outstanding_amount": flt(row.get("sales_invoice_outstanding_amount")),
 			"sales_invoice_grand_total": flt(row.get("sales_invoice_grand_total")),
