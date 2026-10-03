@@ -525,7 +525,21 @@
 							warnings.push(state.review.approval.reason);
 						}
 
-						if (evidenceResult.status === "fulfilled") {
+						const approvalIsReadOnly = Boolean(
+							state.review.approval.read_only ||
+							state.review.approval.read_only_history ||
+							state.review.approval.live_validation_ok === false
+						);
+						if (approvalIsReadOnly) {
+							state.review.evidence = historicalEvidenceFallback(doc, candidateSnapshot);
+							if (evidenceResult.status === "rejected") {
+								warnings.push(
+									t(
+										"Live accounting evidence is unavailable. Showing the stored review snapshot instead."
+									)
+								);
+							}
+						} else if (evidenceResult.status === "fulfilled") {
 							state.review.evidence =
 								evidenceResult.value || historicalEvidenceFallback(doc, candidateSnapshot);
 						} else {
