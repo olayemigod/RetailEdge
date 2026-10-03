@@ -138,6 +138,8 @@ def test_edgesuite_review_hydration_is_partial_failure_tolerant():
 	assert "Promise.allSettled([" in source
 	assert "historicalEvidenceFallback(doc, candidateSnapshot)" in source
 	assert "historicalApprovalFallback(" in source
+	assert "const approvalIsReadOnly = Boolean(" in source
+	assert "if (approvalIsReadOnly)" in source
 	assert "approval.live_validation_ok === false" in source
 	assert "const reviewReadOnly = Boolean(" in source
 	assert "Historical review snapshot — displayed read-only." in source
@@ -151,3 +153,19 @@ def test_historical_review_actions_are_hidden_when_read_only():
 	assert "!reviewReadOnly &&" in source
 	assert "const canApprove = !reviewReadOnly && Boolean(approval.can_approve);" in source
 	assert "const canRequestApproval =" in source
+
+
+def test_historical_read_only_review_prefers_stored_snapshot_over_live_evidence():
+	source = WORKSPACE_JS.read_text(encoding="utf-8")
+	read_only_index = source.index("const approvalIsReadOnly = Boolean(")
+	historical_index = source.index(
+		"state.review.evidence = historicalEvidenceFallback(doc, candidateSnapshot);",
+		read_only_index,
+	)
+	live_index = source.index(
+		"evidenceResult.value || historicalEvidenceFallback(doc, candidateSnapshot)",
+		read_only_index,
+	)
+
+	assert historical_index > read_only_index
+	assert live_index > historical_index
