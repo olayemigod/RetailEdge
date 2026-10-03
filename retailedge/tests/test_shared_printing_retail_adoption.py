@@ -202,7 +202,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 
 	def test_retailedge_ci_uses_the_transport_hardened_edgesuite_candidate(self):
 		workflow = self.read_repo(".github/workflows/ci.yml")
-		self.assertIn("b4fe90a6378637e1a35c3b89d994b58af74af927", workflow)
+		self.assertIn("5dddaeb2af125461b113d07f66ce446c01c831af", workflow)
 		self.assertIn("edgeui_print.bundle", workflow)
 
 
