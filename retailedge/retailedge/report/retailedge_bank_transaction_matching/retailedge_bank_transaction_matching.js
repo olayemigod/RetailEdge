@@ -312,6 +312,12 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				match_score: $btn.data("matchScore"),
 				match_reason: $btn.data("matchReason"),
 				customer: $btn.data("customer"),
+				party: $btn.data("party"),
+				party_type: $btn.data("partyType"),
+				payment_entry_payment_type: $btn.data("paymentEntryPaymentType"),
+				identity_ambiguous: Number($btn.data("identityAmbiguous") || 0),
+				identity_competing_candidates: Number($btn.data("identityCompetingCandidates") || 0),
+				identity_review_reason: $btn.data("identityReviewReason"),
 				match_record: $btn.data("matchRecord"),
 				match_decision: $btn.data("matchDecision"),
 			});
@@ -332,11 +338,20 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 	},
 
 	open_match_review_dialog(args) {
+		if (args.match_record) {
+			args._match_record_candidate_document = args.suggested_document;
+			args._match_record_candidate_type = args.suggested_document_type;
+			args._match_record_decision = args.match_decision;
+		}
 		const dialog = new frappe.ui.Dialog({
 			title: __("Bank Match Review"),
 			fields: [
 				{
 					fieldname: "review_summary",
+					fieldtype: "HTML",
+				},
+				{
+					fieldname: "candidate_choices",
 					fieldtype: "HTML",
 				},
 				{
@@ -369,6 +384,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 
 		dialog.show();
 		render_bank_match_review_summary(dialog, args);
+		load_ambiguous_review_candidates(dialog, args);
 
 		dialog.get_field("confirm_candidate").$input.on("click", function () {
 			run_bank_match_review_action(dialog, args, {
@@ -404,6 +420,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 		});
 
 		dialog.get_field("open_match_review").$input.on("click", function () {
+			if (!ensure_explicit_ambiguous_candidate_selection(args)) return;
 			ensure_bank_match_record(args, function (matchRecord) {
 				dialog.hide();
 				frappe.set_route("Form", "RetailEdge Bank Transaction Match", matchRecord);
@@ -485,6 +502,12 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				data-match-score="${frappe.utils.escape_html(String(data.match_score || ""))}"
 				data-match-reason="${frappe.utils.escape_html(String(data.match_reason || ""))}"
 				data-customer="${frappe.utils.escape_html(String(data.customer || ""))}"
+				data-party="${frappe.utils.escape_html(String(data.party || ""))}"
+				data-party-type="${frappe.utils.escape_html(String(data.party_type || ""))}"
+				data-payment-entry-payment-type="${frappe.utils.escape_html(String(data.payment_entry_payment_type || ""))}"
+				data-identity-ambiguous="${frappe.utils.escape_html(String(data.identity_ambiguous || ""))}"
+				data-identity-competing-candidates="${frappe.utils.escape_html(String(data.identity_competing_candidates || ""))}"
+				data-identity-review-reason="${frappe.utils.escape_html(String(data.identity_review_reason || ""))}"
 				data-match-record="${frappe.utils.escape_html(String(data.match_record || ""))}"
 				data-match-decision="${frappe.utils.escape_html(String(data.decision_status || ""))}">
 				${frappe.utils.escape_html(__("Review"))}
@@ -808,6 +831,138 @@ function render_bank_match_review_summary(dialog, args) {
 	);
 }
 
+function ensure_explicit_ambiguous_candidate_selection(args) {
+	if (!Number(args.identity_ambiguous || 0)) return true;
+	if (args._explicit_candidate_selected) return true;
+	frappe.msgprint(
+		__(
+			"Multiple accounting candidates fit this Bank Transaction. Select the correct candidate before taking a review action."
+		)
+	);
+	return false;
+}
+
+function apply_review_candidate(args, candidate) {
+	const keys = [
+		"candidate_doctype", "candidate_name", "suggested_document_type", "suggested_document",
+		"suggested_sales_invoice", "candidate_posting_date", "candidate_date",
+		"payment_entry_posting_date", "sales_invoice_posting_date", "customer", "party",
+		"party_type", "candidate_amount", "amount_difference", "match_confidence", "match_score",
+		"match_reason", "candidate_category", "candidate_category_label", "payment_event_found",
+		"payment_event_source", "payment_reference", "payment_row_index", "payment_row_amount",
+		"mode_of_payment", "payment_mode", "payment_account", "payment_category",
+		"amount_scenario", "amount_scenario_label", "sales_invoice_outstanding_amount",
+		"sales_invoice_grand_total", "payment_entry_paid_amount", "payment_entry_allocated_amount",
+		"payment_entry_payment_type", "payment_entry_invoice_context", "multi_invoice_references",
+		"exception_only", "exception_type", "branch", "action_status", "reference_match_exact",
+		"account_match", "branch_match", "auto_match_status", "auto_match_reason",
+		"auto_match_category", "eligible_for_auto_prepare", "eligible_for_auto_confirm",
+	];
+	keys.forEach((key) => {
+		if (Object.prototype.hasOwnProperty.call(candidate, key)) args[key] = candidate[key];
+	});
+	args._explicit_candidate_selected = true;
+	args._candidate_switch_required = Boolean(
+		args.match_record &&
+		args._match_record_candidate_document &&
+		args._match_record_candidate_document !== args.suggested_document
+	);
+	if (args.match_record) {
+		args.match_decision = args._candidate_switch_required
+			? "Needs Review"
+			: args._match_record_decision;
+	}
+}
+
+function review_candidate_label(candidate) {
+	const type = candidate.payment_entry_payment_type || candidate.suggested_document_type || __("Payment Entry");
+	const party = candidate.customer || candidate.party || "";
+	const amount = format_currency_value(candidate.candidate_amount);
+	return [candidate.suggested_document, type, party, amount].filter(Boolean).join(" · ");
+}
+
+function render_ambiguous_candidate_choices(dialog, args, candidates) {
+	const wrapper = dialog.get_field("candidate_choices").$wrapper;
+	if (!wrapper || !wrapper.length) return;
+	if (!Array.isArray(candidates) || candidates.length <= 1) {
+		args._explicit_candidate_selected = false;
+		wrapper.html(
+			`<div class="alert alert-warning">${frappe.utils.escape_html(
+				__(
+					"The competing candidate set changed while this review was open. Refresh Bank Matching before taking action."
+				)
+			)}</div>`
+		);
+		return;
+	}
+	args.identity_ambiguous = 1;
+	args.identity_competing_candidates = candidates.length;
+	args._explicit_candidate_selected = false;
+
+	const reason = args.identity_review_reason || __(
+		"Multiple accounting candidates fit the same amount, bank account, and date. Select the correct accounting event."
+	);
+	const items = candidates.map((candidate, index) => {
+		const selected = candidate.suggested_document === args.suggested_document;
+		const key = frappe.utils.escape_html(String(candidate.review_candidate_key || index));
+		return `
+			<button type="button"
+				class="btn btn-block text-left mb-2 ${selected ? "btn-outline-primary" : "btn-default"} retailedge-bank-review-candidate${selected ? " is-current" : ""}"
+				data-review-candidate-key="${key}">
+				<strong>${frappe.utils.escape_html(review_candidate_label(candidate))}</strong>
+				<span class="text-muted d-block small">${frappe.utils.escape_html(String(candidate.match_reason || ""))}</span>
+			</button>`;
+	}).join("");
+
+	wrapper.html(`
+		<div class="retailedge-bank-review-candidates">
+			<div class="alert alert-warning">
+				<strong>${frappe.utils.escape_html(__("Choose the accounting event"))}</strong>
+				<div>${frappe.utils.escape_html(String(reason))}</div>
+			</div>
+			<div class="retailedge-bank-review-candidate-list">${items}</div>
+		</div>
+	`);
+
+	wrapper.off("click", ".retailedge-bank-review-candidate");
+	wrapper.on("click", ".retailedge-bank-review-candidate", function () {
+		const key = String($(this).data("reviewCandidateKey") || "");
+		const candidate = candidates.find(
+			(row, index) => String(row.review_candidate_key || index) === key
+		);
+		if (!candidate) return;
+		apply_review_candidate(args, candidate);
+		wrapper
+			.find(".retailedge-bank-review-candidate")
+			.removeClass("is-selected btn-primary btn-outline-primary")
+			.addClass("btn-default");
+		$(this).removeClass("btn-default").addClass("is-selected btn-primary");
+		render_bank_match_review_summary(dialog, args);
+	});
+}
+
+function load_ambiguous_review_candidates(dialog, args) {
+	const wrapper = dialog.get_field("candidate_choices").$wrapper;
+	if (!Number(args.identity_ambiguous || 0) && Number(args.identity_competing_candidates || 0) <= 1) {
+		wrapper.empty();
+		return;
+	}
+	wrapper.html(`<p class="text-muted">${frappe.utils.escape_html(__("Loading competing candidates..."))}</p>`);
+	const activeReport = get_active_bank_match_report();
+	frappe.call({
+		method: "retailedge.api.get_ambiguous_payment_entry_review_candidates",
+		args: {
+			bank_transaction_name: args.bank_transaction,
+			filters: JSON.stringify(activeReport ? activeReport.get_filter_values() : {}),
+			limit: 20,
+		},
+		callback: function (r) {
+			const candidates = (r && r.message) || [];
+			render_ambiguous_candidate_choices(dialog, args, candidates);
+		},
+	});
+}
+
 function build_readable_suggested_document_label(args) {
 	if (args.suggested_document_type === "Sales Invoice") {
 		const amounts = [];
@@ -858,6 +1013,7 @@ function build_match_context_summary(args) {
 }
 
 function run_bank_match_review_action(dialog, args, options) {
+	if (!ensure_explicit_ambiguous_candidate_selection(args)) return;
 	const remarks = dialog.get_value("remarks") || "";
 	if (options.require_remarks && !String(remarks).trim()) {
 		frappe.msgprint(__("Remarks are required for Reject Candidate."));
@@ -885,8 +1041,49 @@ function run_bank_match_review_action(dialog, args, options) {
 	});
 }
 
+function switch_bank_match_record_candidate(args, matchRecord, callback) {
+	const activeReport = get_active_bank_match_report();
+	frappe.call({
+		method: "retailedge.api.switch_bank_transaction_match_candidate",
+		args: {
+			match_name: matchRecord,
+			selected_row: JSON.stringify(clean_report_suggestion_row(args)),
+			filters: JSON.stringify(activeReport ? activeReport.get_filter_values() : {}),
+		},
+		freeze: true,
+		freeze_message: __("Updating selected bank match candidate..."),
+		callback: function (r) {
+			const result = (r && r.message) || {};
+			if (
+				!result.name ||
+				String(result.suggested_document || "") !== String(args.suggested_document || "") ||
+				String(result.suggested_document_type || "") !==
+					String(args.suggested_document_type || "")
+			) {
+				frappe.msgprint(
+					__(
+						"RetailEdge could not bind the review record to the candidate you selected. Refresh Bank Matching and try again."
+					)
+				);
+				return;
+			}
+			args.match_record = result.name;
+			args.match_decision = result.decision_status;
+			args._match_record_candidate_document = result.suggested_document;
+			args._match_record_candidate_type = result.suggested_document_type;
+			args._match_record_decision = result.decision_status;
+			args._candidate_switch_required = false;
+			callback(result.name);
+		},
+	});
+}
+
 function ensure_bank_match_record(args, callback) {
 	if (args.match_record) {
+		if (args._candidate_switch_required) {
+			switch_bank_match_record_candidate(args, args.match_record, callback);
+			return;
+		}
 		callback(args.match_record);
 		return;
 	}
@@ -912,8 +1109,18 @@ function ensure_bank_match_record(args, callback) {
 				show_create_review_records_summary(result);
 				return;
 			}
-			args.match_record = matchRecord;
-			callback(matchRecord);
+			if (created) {
+				args.match_record = matchRecord;
+				args._match_record_candidate_document = args.suggested_document;
+				args._match_record_candidate_type = args.suggested_document_type;
+				args._match_record_decision = args.match_decision;
+				args._candidate_switch_required = false;
+				callback(matchRecord);
+				return;
+			}
+			// A duplicate may be an existing review for another candidate on this
+			// Bank Transaction. Revalidate/rebind it explicitly before acting.
+			switch_bank_match_record_candidate(args, matchRecord, callback);
 		},
 	});
 }
@@ -1201,8 +1408,8 @@ function clean_report_suggestion_row(row) {
 		narration: row.narration,
 		branch: row.branch,
 		direction: row.direction,
-		amount: row.amount,
-		bank_amount: row.amount,
+		amount: row.amount ?? row.bank_amount,
+		bank_amount: row.bank_amount ?? row.amount,
 		candidate_doctype: row.candidate_doctype || row.suggested_document_type,
 		candidate_name: row.candidate_name || row.suggested_document,
 		suggested_document_type: row.suggested_document_type,
@@ -1213,6 +1420,12 @@ function clean_report_suggestion_row(row) {
 		payment_entry_posting_date: row.payment_entry_posting_date,
 		sales_invoice_posting_date: row.sales_invoice_posting_date,
 		customer: row.customer,
+		party: row.party,
+		party_type: row.party_type,
+		payment_entry_payment_type: row.payment_entry_payment_type,
+		identity_ambiguous: row.identity_ambiguous,
+		identity_competing_candidates: row.identity_competing_candidates,
+		identity_review_reason: row.identity_review_reason,
 		candidate_amount: row.candidate_amount,
 		amount_difference: row.amount_difference,
 		amount_scenario: row.amount_scenario,

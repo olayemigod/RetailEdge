@@ -67,6 +67,9 @@ from retailedge.bank_transaction_match_workflow import (
 	get_bank_match_review_queue_summary as _get_bank_match_review_queue_summary,
 )
 from retailedge.bank_transaction_match_workflow import (
+	get_ambiguous_payment_entry_review_candidates as _get_ambiguous_payment_entry_review_candidates,
+)
+from retailedge.bank_transaction_match_workflow import (
 	mark_bank_transaction_match_needs_review as _mark_bank_transaction_match_needs_review,
 )
 from retailedge.bank_transaction_match_workflow import (
@@ -77,6 +80,9 @@ from retailedge.bank_transaction_match_workflow import (
 )
 from retailedge.bank_transaction_match_workflow import (
 	reopen_bank_transaction_match as _reopen_bank_transaction_match,
+)
+from retailedge.bank_transaction_match_workflow import (
+	switch_bank_transaction_match_candidate as _switch_bank_transaction_match_candidate,
 )
 from retailedge.bank_transaction_match_workflow import (
 	run_bank_transaction_auto_match as _run_bank_transaction_auto_match,
@@ -781,6 +787,26 @@ def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, fi
 def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20):
 	_assert_can_access_bank_transaction_matching()
 	return _find_payment_entry_candidates_for_bank_transaction(
+		bank_transaction_name=bank_transaction_name,
+		filters=filters,
+		limit=int(limit or 20),
+	)
+
+
+@frappe.whitelist()
+def switch_bank_transaction_match_candidate(match_name, selected_row, filters=None):
+	_assert_can_manage_bank_transaction_match()
+	return _switch_bank_transaction_match_candidate(
+		match_name=match_name,
+		selected_row=selected_row,
+		filters=filters,
+	)
+
+
+@frappe.whitelist()
+def get_ambiguous_payment_entry_review_candidates(bank_transaction_name, filters=None, limit=20):
+	_assert_can_manage_bank_transaction_match()
+	return _get_ambiguous_payment_entry_review_candidates(
 		bank_transaction_name=bank_transaction_name,
 		filters=filters,
 		limit=int(limit or 20),
