@@ -25,8 +25,11 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 			"reference_number": {},
 		},
 	)
+	@patch("retailedge.bank_transaction_bridge.frappe.has_permission", return_value=True)
 	@patch("retailedge.bank_transaction_bridge.frappe.new_doc")
-	def test_create_bank_transaction_inserts_and_submits(self, mock_new_doc, _mock_meta):
+	def test_create_bank_transaction_inserts_and_submits(
+		self, mock_new_doc, _has_permission, _mock_meta
+	):
 		doc = MagicMock()
 		doc.name = "ACC-BTN-NEW"
 		doc.docstatus = 0
@@ -48,7 +51,35 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 		self.assertEqual(name, "ACC-BTN-NEW")
 		doc.insert.assert_called_once_with(ignore_permissions=True)
 		doc.submit.assert_called_once_with()
-		self.assertTrue(doc.flags.ignore_permissions)
+		self.assertFalse(doc.flags.ignore_permissions)
+		_has_permission.assert_called_once_with("Bank Transaction", ptype="submit")
+
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "withdrawal": {}},
+	)
+	@patch("retailedge.bank_transaction_bridge.frappe.has_permission", return_value=False)
+	@patch("retailedge.bank_transaction_bridge.frappe.new_doc")
+	def test_create_bank_transaction_requires_submit_permission(
+		self, mock_new_doc, _has_permission, _mock_meta
+	):
+		doc = MagicMock()
+		doc.name = "ACC-BTN-DENIED"
+		doc.docstatus = 0
+		doc.flags = SimpleNamespace(ignore_permissions=False)
+		mock_new_doc.return_value = doc
+
+		with self.assertRaises(frappe.PermissionError):
+			_create_bank_transaction(
+				{
+					"bank_account": "Access Bank Ketu - Access Bank",
+					"transaction_date": "2026-10-01",
+					"deposit": 200000,
+					"withdrawal": 0,
+				}
+			)
+
+		doc.submit.assert_not_called()
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
@@ -84,6 +115,7 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 		self.assertEqual(result["repairable"], 1)
 		self.assertEqual(result["repaired"], 1)
 		doc.submit.assert_called_once_with()
+		self.assertTrue(doc.flags.ignore_permissions)
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
@@ -120,6 +152,44 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	@patch("retailedge.bank_transaction_bridge.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
+	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
+	@patch("retailedge.bank_transaction_bridge.frappe.db.exists", return_value=True)
+	def test_repair_pages_through_all_qualifying_rows(
+		self, _exists, get_all, get_value, get_doc
+	):
+		get_all.side_effect = [
+			[frappe._dict(name="ROW-1", bank_transaction="ACC-BTN-1", parent="RE-PSI-1")],
+			[frappe._dict(name="ROW-2", bank_transaction="ACC-BTN-2", parent="RE-PSI-1")],
+			[],
+		]
+		get_value.side_effect = [
+			frappe._dict(
+				name="ACC-BTN-1",
+				docstatus=1,
+				status="Unreconciled",
+				bank_account="Access Bank Ketu - Access Bank",
+				deposit=100,
+				withdrawal=0,
+			),
+			frappe._dict(
+				name="ACC-BTN-2",
+				docstatus=1,
+				status="Unreconciled",
+				bank_account="Access Bank Ketu - Access Bank",
+				deposit=200,
+				withdrawal=0,
+			),
+		]
+
+		result = repair_imported_pending_bank_transactions(dry_run=True, limit=1)
+
+		self.assertEqual(result["checked"], 2)
+		self.assertEqual(result["already_submitted"], 2)
+		self.assertEqual(get_all.call_count, 3)
+		get_doc.assert_not_called()
+
 	def test_repair_is_idempotent_for_already_submitted_transaction(
 		self, _exists, get_all, get_value, get_doc
 	):
