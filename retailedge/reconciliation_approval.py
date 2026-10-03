@@ -272,11 +272,71 @@ def _refresh_match_candidate_context(doc):
 	return doc
 
 
+def _historical_review_state(doc):
+	"""Return whether this review is already historical/handled and must not be revalidated for display."""
+	execution_status = cstr(getattr(doc, "execution_status", None)).strip()
+	if execution_status in {"Executed", "Already Handled"}:
+		return True
+	bank_transaction = cstr(getattr(doc, "bank_transaction", None)).strip()
+	if not bank_transaction or not frappe.db.exists("Bank Transaction", bank_transaction):
+		return False
+	status = cstr(frappe.db.get_value("Bank Transaction", bank_transaction, "status")).strip().lower()
+	return status == "reconciled"
+
+
 def build_live_reconciliation_approval_state(match_name, user=None, settings=None):
-	"""Build approval state from the same live DocType context used at approval time."""
+	"""Build approval state for UI display without making historical reviews unreadable.
+
+	Actual request/approve/decline/reconciliation actions keep their existing fresh
+	candidate validation. This read path may fall back to the stored review snapshot
+	so previously reviewed or reconciled records remain inspectable.
+	"""
 	doc = frappe.get_doc("RetailEdge Bank Transaction Match", match_name)
-	_refresh_match_candidate_context(doc)
-	return build_reconciliation_approval_state(doc, user=user, settings=settings)
+	if _historical_review_state(doc):
+		state = build_reconciliation_approval_state(doc, user=user, settings=settings)
+		state.update(
+			{
+				"read_only": True,
+				"read_only_history": True,
+				"live_validation_ok": None,
+				"live_validation_error": None,
+			}
+		)
+		return state
+
+	try:
+		_refresh_match_candidate_context(doc)
+	except Exception as exc:
+		state = build_reconciliation_approval_state(doc, user=user, settings=settings)
+		state["can_approve"] = False
+		state["is_satisfied"] = False
+		if cstr(getattr(doc, "decision_status", None)).strip() == "Confirmed":
+			state["status"] = APPROVAL_INVALIDATED
+		state.update(
+			{
+				"read_only": True,
+				"read_only_history": False,
+				"live_validation_ok": False,
+				"live_validation_error": cstr(exc),
+				"reason": (
+					"Current accounting data no longer validates this stored review candidate. "
+					"The historical review remains available read-only; refresh or create a new valid "
+					"review before taking another accounting action."
+				),
+			}
+		)
+		return state
+
+	state = build_reconciliation_approval_state(doc, user=user, settings=settings)
+	state.update(
+		{
+			"read_only": False,
+			"read_only_history": False,
+			"live_validation_ok": True,
+			"live_validation_error": None,
+		}
+	)
+	return state
 
 
 @frappe.whitelist()

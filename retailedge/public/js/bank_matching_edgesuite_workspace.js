@@ -89,6 +89,80 @@
 		return "";
 	}
 
+	function parseReviewDetails(doc) {
+		try {
+			return JSON.parse(doc?.details_json || "{}") || {};
+		} catch (_error) {
+			return {};
+		}
+	}
+
+	function historicalEvidenceFallback(doc, candidateSnapshot = null) {
+		const details = parseReviewDetails(doc);
+		const bank = details.bank_context || details.bank_transaction || {};
+		const candidate =
+			details.candidate_context || details.candidate || candidateSnapshot || {};
+		const direction =
+			doc.bank_direction || bank.bank_direction || bank.direction || "";
+		return {
+			match_name: doc.name,
+			direction,
+			candidate_category: candidate.candidate_category,
+			transaction_category:
+				candidate.transaction_category || candidate.candidate_category || "",
+			historical_snapshot: true,
+			statement: {
+				bank_transaction: doc.bank_transaction,
+				bank_account: doc.bank_account || bank.bank_account,
+				bank: bank.bank,
+				gl_account: doc.resolved_bank_account || bank.resolved_bank_account,
+				company: doc.company || bank.company,
+				branch: doc.branch || bank.branch,
+				amount: doc.bank_amount || bank.bank_amount || bank.amount,
+				date: doc.transaction_date || bank.transaction_date,
+				reference: doc.bank_reference || bank.bank_reference || bank.reference,
+			},
+			accounting: {
+				doctype: doc.suggested_document_type,
+				name: doc.suggested_document,
+				bank_account: candidate.bank_account,
+				bank: candidate.bank,
+				gl_account:
+					doc.resolved_payment_account ||
+					doc.payment_account ||
+					candidate.resolved_payment_account ||
+					candidate.payment_account,
+				company: candidate.company || doc.company,
+				branch: candidate.branch || doc.branch,
+				mode_of_payment: doc.payment_mode || candidate.payment_mode,
+				amount: doc.candidate_amount || candidate.candidate_amount,
+				date: doc.candidate_posting_date || candidate.posting_date,
+				reference: candidate.reference,
+			},
+			evidence: [],
+		};
+	}
+
+	function historicalApprovalFallback(doc, error) {
+		return {
+			required: false,
+			status: doc.approval_status || "Unavailable",
+			stored_status: doc.approval_status || "",
+			is_satisfied: false,
+			can_approve: false,
+			read_only: true,
+			read_only_history: true,
+			live_validation_ok: false,
+			live_validation_error: clean(error?.message || error || ""),
+			reason: t(
+				"Historical review is available from its stored audit snapshot. Live approval validation is unavailable for this record."
+			),
+			approved_by: doc.approved_by,
+			approved_on: doc.approved_on,
+			approval_note: doc.approval_note,
+		};
+	}
+
 	function rowCategory(row) {
 		const category = businessCategory(row?.transaction_category);
 		if (category) return category;
@@ -174,6 +248,7 @@
 						loading: false,
 						busy: false,
 						error: "",
+						warning: "",
 						matchName: "",
 						doc: {},
 						approval: {},
@@ -409,6 +484,7 @@
 						loading: true,
 						busy: false,
 						error: "",
+						warning: "",
 						matchName,
 						doc: {},
 						approval: {},
@@ -418,16 +494,71 @@
 						approvalNote: "",
 					});
 					try {
-						const [doc, approval, evidence] = await Promise.all([
-							getMatchDocument(matchName),
+						const doc = await getMatchDocument(matchName);
+						if (!doc?.name) {
+							throw new Error(t("Bank Match Review {0} could not be found.", [matchName]));
+						}
+						state.review.doc = doc;
+						state.review.decisionNote = doc.decision_note || "";
+
+						const [approvalResult, evidenceResult] = await Promise.allSettled([
 							getApprovalState(matchName),
 							getMatchEvidence(matchName),
 						]);
-						state.review.doc = doc;
-						state.review.approval = approval;
-						state.review.evidence = evidence;
-						state.review.decisionNote = doc.decision_note || "";
-						state.review.approvalNote = approval.approval_note || "";
+						const warnings = [];
+
+						if (approvalResult.status === "fulfilled") {
+							state.review.approval = approvalResult.value || {};
+							state.review.approvalNote = state.review.approval.approval_note || "";
+							if (state.review.approval.live_validation_ok === false) {
+								warnings.push(
+									state.review.approval.reason ||
+										t("Current accounting data no longer validates this stored review.")
+								);
+							}
+						} else {
+							state.review.approval = historicalApprovalFallback(
+								doc,
+								approvalResult.reason
+							);
+							state.review.approvalNote = doc.approval_note || "";
+							warnings.push(state.review.approval.reason);
+						}
+
+						const approvalIsReadOnly = Boolean(
+							state.review.approval.read_only ||
+							state.review.approval.read_only_history ||
+							state.review.approval.live_validation_ok === false
+						);
+						if (approvalIsReadOnly) {
+							state.review.evidence = historicalEvidenceFallback(doc, candidateSnapshot);
+							if (evidenceResult.status === "rejected") {
+								warnings.push(
+									t(
+										"Live accounting evidence is unavailable. Showing the stored review snapshot instead."
+									)
+								);
+							}
+						} else if (evidenceResult.status === "fulfilled") {
+							state.review.evidence =
+								evidenceResult.value || historicalEvidenceFallback(doc, candidateSnapshot);
+						} else {
+							state.review.evidence = historicalEvidenceFallback(doc, candidateSnapshot);
+							warnings.push(
+								t(
+									"Live accounting evidence is unavailable. Showing the stored review snapshot instead."
+								)
+							);
+						}
+
+						if (state.review.approval.read_only_history) {
+							warnings.push(
+								t(
+									"This is a historical or already reconciled review. It is displayed read-only."
+								)
+							);
+						}
+						state.review.warning = [...new Set(warnings.filter(Boolean))].join(" ");
 					} catch (error) {
 						state.review.error = error?.message || t("Unable to load this bank match review.");
 					} finally {
@@ -762,12 +893,27 @@
 					const evidence = state.review.evidence || {};
 					const statement = evidence.statement || {};
 					const accounting = evidence.accounting || {};
-					const canDecide = ["Suggested", "Reopened", "Needs Review"].includes(doc.decision_status || "Suggested");
+					const reviewReadOnly = Boolean(
+						approval.read_only ||
+						approval.read_only_history ||
+						approval.live_validation_ok === false ||
+						["Executed", "Already Handled"].includes(doc.execution_status || "")
+					);
+					const canDecide =
+						!reviewReadOnly &&
+						["Suggested", "Reopened", "Needs Review"].includes(
+							doc.decision_status || "Suggested"
+						);
 					const confirmed = doc.decision_status === "Confirmed";
 					const approvalRequired = Boolean(approval.required);
 					const approvalSatisfied = Boolean(approval.is_satisfied);
-					const canApprove = Boolean(approval.can_approve);
-					const canRequestApproval = confirmed && approvalRequired && !approvalSatisfied && !canApprove;
+					const canApprove = !reviewReadOnly && Boolean(approval.can_approve);
+					const canRequestApproval =
+						!reviewReadOnly &&
+						confirmed &&
+						approvalRequired &&
+						!approvalSatisfied &&
+						!canApprove;
 					const category = businessCategory(evidence.transaction_category, evidence.candidate_category, state.review.candidateSnapshot?.transaction_category, state.review.candidateSnapshot?.candidate_category);
 					const recordBadge = confirmed ? (doc.execution_status === "Executed" || doc.execution_status === "Already Handled" ? t("Reconciled Record") : t("Confirmed Candidate")) : t("Suggested Candidate");
 					const recordLinks = [];
@@ -784,7 +930,11 @@
 					return h(EdgeModal, {
 						open: state.review.open,
 						title: t("Review Match: {0}", [doc.bank_transaction || state.review.matchName]),
-						subtitle: confirmed ? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.") : t("Review accounting identity before confirming this match."),
+						subtitle: reviewReadOnly
+							? t("Historical review snapshot — displayed read-only.")
+							: confirmed
+								? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
+								: t("Review accounting identity before confirming this match."),
 						size: "xl",
 						busy: state.review.busy,
 						closeOnBackdrop: false,
@@ -794,6 +944,7 @@
 							? [h(EdgeLoadingState, { message: t("Loading match review...") })]
 							: [
 								state.review.error ? h("div", { class: "retailedge-bank-inline-error", role: "alert" }, state.review.error) : null,
+								state.review.warning ? h("div", { class: "retailedge-bank-fuzzy-note", role: "status" }, state.review.warning) : null,
 								h("div", { class: "retailedge-bank-compare-grid" }, [
 									h("section", { class: "retailedge-bank-compare-card" }, [
 										h("header", [h("h3", t("Bank Statement")), h(EdgeStatusBadge, { status: evidence.direction || doc.bank_direction || "" })]),
