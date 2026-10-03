@@ -940,11 +940,18 @@
 					const evidence = state.review.evidence || {};
 					const statement = evidence.statement || {};
 					const accounting = evidence.accounting || {};
-					const reviewReadOnly = Boolean(
-						approval.read_only ||
+					const historicalReadOnly = Boolean(
 						approval.read_only_history ||
-						approval.live_validation_ok === false ||
 						["Executed", "Already Handled"].includes(doc.execution_status || "")
+					);
+					const staleActiveReview = Boolean(
+						!historicalReadOnly &&
+						approval.live_validation_ok === false
+					);
+					const reviewReadOnly = Boolean(
+						historicalReadOnly ||
+						staleActiveReview ||
+						approval.read_only
 					);
 					const canDecide =
 						!reviewReadOnly &&
@@ -962,7 +969,13 @@
 						!approvalSatisfied &&
 						!canApprove;
 					const category = businessCategory(evidence.transaction_category, evidence.candidate_category, state.review.candidateSnapshot?.transaction_category, state.review.candidateSnapshot?.candidate_category);
-					const recordBadge = confirmed ? (doc.execution_status === "Executed" || doc.execution_status === "Already Handled" ? t("Reconciled Record") : t("Confirmed Candidate")) : t("Suggested Candidate");
+					const recordBadge = historicalReadOnly && confirmed
+						? t("Reconciled Record")
+						: staleActiveReview
+							? t("Candidate Needs Replacement")
+							: confirmed
+								? t("Confirmed Candidate")
+								: t("Suggested Candidate");
 					const recordLinks = [];
 					if (state.canUseNativeDesk && state.review.matchName) {
 						recordLinks.push(actionButton(t("Open Audit Record"), "secondary", () => routeToNativeDocument("RetailEdge Bank Transaction Match", state.review.matchName)));
@@ -977,11 +990,13 @@
 					return h(EdgeModal, {
 						open: state.review.open,
 						title: t("Review Match: {0}", [doc.bank_transaction || state.review.matchName]),
-						subtitle: reviewReadOnly
+						subtitle: historicalReadOnly
 							? t("Historical review snapshot — displayed read-only.")
-							: confirmed
-								? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
-								: t("Review accounting identity before confirming this match."),
+							: staleActiveReview
+								? t("Stored suggestion needs replacement — displayed read-only until a valid candidate is selected.")
+								: confirmed
+									? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
+									: t("Review accounting identity before confirming this match."),
 						size: "xl",
 						busy: state.review.busy,
 						closeOnBackdrop: false,
@@ -1055,7 +1070,16 @@
 							],
 						footer: () => {
 							const buttons = [actionButton(t("Close"), "secondary", closeReview, { disabled: state.review.busy })];
-							if (canDecide) {
+							if (staleActiveReview) {
+								buttons.push(
+									actionButton(
+										t("Find Replacement"),
+										"primary",
+										findReplacementForReview,
+										{ disabled: state.review.busy }
+									)
+								);
+							} else if (canDecide) {
 								buttons.push(actionButton(t("Keep for Review"), "secondary", () => applyReviewDecision("retailedge.api.mark_bank_transaction_match_needs_review", t("Match kept for review.")), { disabled: state.review.busy }));
 								buttons.push(actionButton(t("Reject Match"), "danger", () => applyReviewDecision("retailedge.api.reject_bank_transaction_match", t("Match rejected.")), { disabled: state.review.busy }));
 								buttons.push(actionButton(t("Confirm Match"), "primary", () => applyReviewDecision("retailedge.api.confirm_bank_transaction_match", t("Match confirmed. Reconciliation is still required.")), { disabled: state.review.busy }));
