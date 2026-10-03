@@ -82,6 +82,9 @@ from retailedge.bank_transaction_match_workflow import (
 	reopen_bank_transaction_match as _reopen_bank_transaction_match,
 )
 from retailedge.bank_transaction_match_workflow import (
+	switch_bank_transaction_match_candidate as _switch_bank_transaction_match_candidate,
+)
+from retailedge.bank_transaction_match_workflow import (
 	run_bank_transaction_auto_match as _run_bank_transaction_auto_match,
 )
 from retailedge.bank_transaction_matching import (
@@ -787,6 +790,16 @@ def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, fi
 		bank_transaction_name=bank_transaction_name,
 		filters=filters,
 		limit=int(limit or 20),
+	)
+
+
+@frappe.whitelist()
+def switch_bank_transaction_match_candidate(match_name, selected_row, filters=None):
+	_assert_can_manage_bank_transaction_match()
+	return _switch_bank_transaction_match_candidate(
+		match_name=match_name,
+		selected_row=selected_row,
+		filters=filters,
 	)
 
 
