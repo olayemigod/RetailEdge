@@ -79,7 +79,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'adapter.devices?.connectBoundSerial',
 			'adapter.profiles.connectionOptions(profile)',
 			'adapter.profiles.receiptOptions(profile)',
-			'adapter.printReceipt(documentPayload)',
+			'adapter.profiles.textEncoder(profile)',
+			'adapter.printReceipt(documentPayload, { encodeText })',
 			'RETAIL_PRINTER_SETUP_REQUIRED',
 			'/app/edge-printing?',
 		):
@@ -100,6 +101,19 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		self.assertLess(payload_index, context_index)
 		self.assertLess(context_index, profile_index)
 		self.assertIn("branch: String(payload?.branch || branch ||", source)
+
+	def test_receipt_uses_erpnext_net_values_discounts_tender_and_change(self):
+		source = self.read_app("thermal_receipt.py")
+		for contract in (
+			'row.get("net_rate") if row.get("net_rate") is not None else row.get("rate")',
+			'row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")',
+			'"Item Discount: {0}%"',
+			'"Additional Discount: {0}"',
+			'"Tendered: {0}"',
+			'"Change: {0}"',
+			'receipt_label = _("Return Receipt") if cint(doc.get("is_return"))',
+		):
+			self.assertIn(contract, source)
 
 	def test_partial_payment_receipt_keeps_payment_rows_and_outstanding_balance(self):
 		source = self.read_app("thermal_receipt.py")
@@ -166,6 +180,25 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'target.startswith("/app/edge-printing?")',
 		):
 			self.assertIn(contract, source)
+
+	def test_retailedge_validates_scoped_print_profile_context(self):
+		provider = self.read_app("product_context.py")
+		hooks = self.read_app("hooks.py")
+		for contract in (
+			"def validate_print_context",
+			'key != "retailedge"',
+			'frappe.db.exists("Company", company)',
+			'company_doc.has_permission("read", user=user)',
+			'frappe.db.exists("Branch", branch)',
+			"validate_user_branch_access",
+			'"handled": True',
+			'"allowed": True',
+		):
+			self.assertIn(contract, provider)
+		self.assertIn(
+			'"retailedge.product_context.validate_print_context"',
+			hooks,
+		)
 
 	def test_retailedge_ci_uses_the_transport_hardened_edgesuite_candidate(self):
 		workflow = self.read_repo(".github/workflows/ci.yml")
