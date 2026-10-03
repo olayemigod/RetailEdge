@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: b4fe90a6378637e1a35c3b89d994b58af74af927
+          ref: 5dddaeb2af125461b113d07f66ce446c01c831af
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "b4fe90a6378637e1a35c3b89d994b58af74af927"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "5dddaeb2af125461b113d07f66ce446c01c831af"
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
           # never a CoreEdge-local compatibility bridge. This keeps RetailEdge standalone
@@ -156,6 +156,9 @@ jobs:
           grep -Fq 'writeChunkSize = 256' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
           grep -Fq 'writer.ready' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
           grep -Fq 'state: "unsupported"' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_components.js
+          grep -Fq 'writeQueues' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_runtime.js
+          grep -Fq 'text_encoding' apps/edgesuite_ui/edgesuite_ui/doctype/edge_print_profile/edge_print_profile.json
+          grep -Fq 'PRINT_CONTEXT_VALIDATOR_HOOK' apps/edgesuite_ui/edgesuite_ui/api/printing.py
 
           # Reproduce the shared-bench condition that exposed the stale alias: a CoreEdge
           # bridge may exist elsewhere in apps/, but RetailEdge must ignore it completely.
