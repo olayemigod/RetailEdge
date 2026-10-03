@@ -914,6 +914,12 @@ def get_auto_match_status_for_row(row, settings=None):
 		return blocked("Missing Bank Transaction.", category="unsafe")
 	if not suggested_document_type or not row.get("suggested_document"):
 		return blocked("No match candidate found.", category="unsafe")
+	if cint(row.get("identity_ambiguous")):
+		return manual(
+			cstr(row.get("identity_review_reason")).strip()
+			or "Multiple accounting candidates fit the same weak statement identity; choose the correct event manually.",
+			category="ambiguous_identity",
+		)
 	if action_status == "Duplicate Candidate" or cint(row.get("duplicate_candidate_skipped")):
 		return manual(
 			"Duplicate candidate in current view requires manual review.", category="duplicate_candidate"
@@ -2689,6 +2695,9 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		else candidate.get("multi_invoice_references"),
 		"exception_only": cint(candidate.get("exception_only")),
 		"exception_type": candidate.get("exception_type"),
+		"identity_ambiguous": cint(candidate.get("identity_ambiguous")),
+		"identity_competing_candidates": cint(candidate.get("identity_competing_candidates")),
+		"identity_review_reason": candidate.get("identity_review_reason"),
 		"branch": bank_transaction.get("branch") or candidate.get("branch"),
 		"action_status": action_status,
 		"action": "Review" if bank_transaction.get("bank_transaction") else "",
@@ -2718,6 +2727,8 @@ def _derive_action_status(bank_transaction, candidate):
 		return "Already Reconciled"
 	if not candidate:
 		return "No Match"
+	if cint(candidate.get("identity_ambiguous")):
+		return "Needs Review"
 	if candidate.get("exception_only"):
 		return "Exception Only"
 	category_key = normalize_candidate_category_key(candidate.get("candidate_category"))
