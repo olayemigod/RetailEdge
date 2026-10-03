@@ -645,7 +645,25 @@ def _create_bank_transaction(normalized):
 		_set_if_available(doc, meta_fields, "party_type", normalized.get("party_type"))
 		_set_if_available(doc, meta_fields, "party", normalized.get("party"))
 	doc.insert(ignore_permissions=True)
+	_submit_imported_bank_transaction(doc)
 	return doc.name
+
+
+def _submit_imported_bank_transaction(doc):
+	"""Complete the ERPNext Bank Transaction lifecycle for an imported statement row.
+
+	A Bank Transaction left in draft remains Pending and is intentionally invisible
+	to RetailEdge reconciliation. Submitting a fresh statement transaction does not
+	post GL; ERPNext promotes it to Unreconciled/Reconciled and makes it eligible
+	for native bank reconciliation.
+	"""
+	if cint(getattr(doc, "docstatus", 0)) == 1:
+		return doc
+	if cint(getattr(doc, "docstatus", 0)) == 2:
+		frappe.throw("Cancelled Bank Transactions cannot be submitted for reconciliation.")
+	doc.flags.ignore_permissions = True
+	doc.submit()
+	return doc
 
 
 def _refresh_statement_import_bridge_summary(import_doc):
