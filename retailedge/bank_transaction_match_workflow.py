@@ -1156,7 +1156,7 @@ def _validate_locked_candidate_from_selected_row(row):
 
 		candidate["posting_date"] = pe.posting_date
 		candidate["party"] = pe.party
-		candidate["party_type"] = pe.party_type or "Customer"
+		candidate["party_type"] = pe.party_type
 		candidate["customer"] = pe.party if pe.party_type == "Customer" else None
 		candidate["payment_mode"] = pe.mode_of_payment
 		candidate["payment_entry_payment_type"] = pe.payment_type
