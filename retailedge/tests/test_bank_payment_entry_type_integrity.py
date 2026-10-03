@@ -6,6 +6,7 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.bank_transaction_matching import (
+	_build_matching_row,
 	_build_payment_entry_candidate,
 	_get_payment_entry_rows,
 	get_auto_match_status_for_row,
@@ -41,6 +42,32 @@ class BankPaymentEntryTypeIntegrityTests(unittest.TestCase):
 		self.assertIsNone(candidate["party"])
 		self.assertIsNone(candidate["customer"])
 		self.assertEqual(candidate["payment_account"], "Bank - RC")
+
+	def test_matching_row_does_not_invent_customer_for_partyless_payment_entry(self):
+		row = _build_matching_row(
+			frappe._dict(
+				bank_transaction="ACC-BTN-1",
+				transaction_date="2026-10-01",
+				bank_account="Access Bank Ketu - Access Bank",
+				amount=200000,
+				direction="Inflow",
+			),
+			{
+				"document_type": "Payment Entry",
+				"document_name": "ACC-PAY-2026-00016",
+				"payment_entry_payment_type": "Internal Transfer",
+				"party": None,
+				"party_type": None,
+				"customer": None,
+				"customer_display": None,
+			},
+			action_status="Needs Review",
+		)
+
+		self.assertIsNone(row["party_type"])
+		self.assertIsNone(row["party"])
+		self.assertIsNone(row["customer"])
+		self.assertEqual(row["payment_entry_payment_type"], "Internal Transfer")
 
 	def test_internal_transfer_candidate_is_manual_review_only_even_when_other_signals_are_strong(self):
 		row = {
