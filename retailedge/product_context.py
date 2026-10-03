@@ -88,6 +88,27 @@ def validate_print_context(
 				"allowed": False,
 				"reason": f"Branch {branch} does not exist.",
 			}
+
+		if company:
+			from retailedge.branch_profile import (
+				get_exact_branch_profile,
+				has_enabled_branch_profiles,
+			)
+
+			if has_enabled_branch_profiles(company=company) and not get_exact_branch_profile(
+				company=company,
+				branch=branch,
+				active_only=True,
+			):
+				return {
+					"handled": True,
+					"allowed": False,
+					"reason": (
+						f"Branch {branch} is not configured as an enabled RetailEdge Branch "
+						f"for Company {company}."
+					),
+				}
+
 		from retailedge.branch_context import validate_user_branch_access
 
 		access = validate_user_branch_access(
