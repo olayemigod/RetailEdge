@@ -11,6 +11,10 @@ from retailedge.bank_transaction_matching import (
 	_get_payment_entry_rows,
 	get_auto_match_status_for_row,
 )
+from retailedge.bank_transaction_match_workflow import (
+	_candidate_from_revalidated_row,
+	resolve_bank_match_party_link,
+)
 
 
 class BankPaymentEntryTypeIntegrityTests(unittest.TestCase):
@@ -68,6 +72,57 @@ class BankPaymentEntryTypeIntegrityTests(unittest.TestCase):
 		self.assertIsNone(row["party"])
 		self.assertIsNone(row["customer"])
 		self.assertEqual(row["payment_entry_payment_type"], "Internal Transfer")
+
+	def test_revalidated_internal_transfer_keeps_null_party_type(self):
+		candidate = _candidate_from_revalidated_row(
+			{
+				"bank_transaction": "ACC-BTN-1",
+				"candidate_doctype": "Payment Entry",
+				"candidate_name": "ACC-PAY-2026-00016",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-2026-00016",
+				"candidate_posting_date": "2026-10-01",
+				"candidate_amount": 200000,
+				"amount_difference": 0,
+				"party": None,
+				"party_type": None,
+				"customer": None,
+				"payment_entry_payment_type": "Internal Transfer",
+			}
+		)
+
+		self.assertEqual(candidate["document_type"], "Payment Entry")
+		self.assertIsNone(candidate["party_type"])
+		self.assertIsNone(candidate["party"])
+		self.assertIsNone(candidate["customer"])
+		self.assertEqual(candidate["payment_entry_payment_type"], "Internal Transfer")
+
+	def test_review_party_resolver_keeps_partyless_transfer_partyless(self):
+		resolution = resolve_bank_match_party_link(
+			party_type=None,
+			party=None,
+			customer=None,
+		)
+
+		self.assertIsNone(resolution.party_type)
+		self.assertIsNone(resolution.party)
+		self.assertIsNone(resolution.customer)
+		self.assertEqual(resolution.missing_party_link, 0)
+
+	def test_sales_invoice_revalidation_still_infers_customer(self):
+		candidate = _candidate_from_revalidated_row(
+			{
+				"candidate_doctype": "Sales Invoice",
+				"candidate_name": "ACC-SINV-1",
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": "ACC-SINV-1",
+				"customer": "Customer A",
+				"party": "Customer A",
+				"party_type": None,
+				"candidate_amount": 1000,
+			}
+		)
+		self.assertEqual(candidate["party_type"], "Customer")
 
 	def test_internal_transfer_candidate_is_manual_review_only_even_when_other_signals_are_strong(self):
 		row = {
