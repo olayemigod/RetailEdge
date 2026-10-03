@@ -99,9 +99,11 @@
 
 	function historicalEvidenceFallback(doc, candidateSnapshot = null) {
 		const details = parseReviewDetails(doc);
-		const bank = details.bank_context || {};
-		const candidate = details.candidate_context || candidateSnapshot || {};
-		const direction = doc.bank_direction || bank.bank_direction || "";
+		const bank = details.bank_context || details.bank_transaction || {};
+		const candidate =
+			details.candidate_context || details.candidate || candidateSnapshot || {};
+		const direction =
+			doc.bank_direction || bank.bank_direction || bank.direction || "";
 		return {
 			match_name: doc.name,
 			direction,
@@ -116,9 +118,9 @@
 				gl_account: doc.resolved_bank_account || bank.resolved_bank_account,
 				company: doc.company || bank.company,
 				branch: doc.branch || bank.branch,
-				amount: doc.bank_amount || bank.bank_amount,
+				amount: doc.bank_amount || bank.bank_amount || bank.amount,
 				date: doc.transaction_date || bank.transaction_date,
-				reference: doc.bank_reference || bank.bank_reference,
+				reference: doc.bank_reference || bank.bank_reference || bank.reference,
 			},
 			accounting: {
 				doctype: doc.suggested_document_type,
