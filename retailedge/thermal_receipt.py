@@ -147,11 +147,32 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 				),
 			}
 		)
+	grand_total = flt(doc.get("grand_total"))
+	rounded_total = (
+		flt(doc.get("rounded_total"))
+		if doc.meta.has_field("rounded_total") and doc.get("rounded_total") is not None
+		else 0
+	)
+	payable_total = rounded_total or grand_total
+	if rounded_total and abs(rounded_total - grand_total) > 0.0001:
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Grand Total: {0}").format(_money(grand_total, currency)),
+			}
+		)
+		rounding_adjustment = rounded_total - grand_total
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Rounding: {0}").format(_money(rounding_adjustment, currency)),
+			}
+		)
 	blocks.extend(
 		[
 			{
 				"type": "text",
-				"text": _("TOTAL: {0}").format(_money(doc.get("grand_total"), currency)),
+				"text": _("TOTAL: {0}").format(_money(payable_total, currency)),
 				"bold": True,
 			},
 			{"type": "rule"},
@@ -178,12 +199,30 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 			}
 		)
 
-	if doc.meta.has_field("outstanding_amount") and flt(doc.get("outstanding_amount")) > 0:
+	if doc.meta.has_field("write_off_amount") and flt(doc.get("write_off_amount")):
 		blocks.append(
 			{
 				"type": "text",
-				"text": _("Outstanding: {0}").format(
-					_money(doc.get("outstanding_amount"), currency)
+				"text": _("Write Off: {0}").format(_money(doc.get("write_off_amount"), currency)),
+			}
+		)
+
+	outstanding = (
+		flt(doc.get("outstanding_amount")) if doc.meta.has_field("outstanding_amount") else 0
+	)
+	if outstanding > 0:
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Outstanding: {0}").format(_money(outstanding, currency)),
+			}
+		)
+	elif outstanding < 0:
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Credit / Refund Due: {0}").format(
+					_money(abs(outstanding), currency)
 				),
 			}
 		)
