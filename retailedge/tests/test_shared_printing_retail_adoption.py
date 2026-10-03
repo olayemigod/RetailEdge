@@ -108,7 +108,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'row.get("net_rate") if row.get("net_rate") is not None else row.get("rate")',
 			'row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")',
 			'"Item Discount: {0}%"',
-			'"Additional Discount: {0}"',
+			'"Additional Discount (included): {0}"',
 			'"Tendered: {0}"',
 			'"Change: {0}"',
 			'"Grand Total: {0}"',
