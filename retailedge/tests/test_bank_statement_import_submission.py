@@ -28,7 +28,7 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_bridge.frappe.has_permission", return_value=True)
 	@patch("retailedge.bank_transaction_bridge.frappe.new_doc")
 	def test_create_bank_transaction_inserts_and_submits(
-		self, mock_new_doc, _has_permission, _mock_meta
+		self, mock_new_doc, mock_has_permission, _mock_meta
 	):
 		doc = MagicMock()
 		doc.name = "ACC-BTN-NEW"
@@ -52,7 +52,7 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 		doc.insert.assert_called_once_with(ignore_permissions=True)
 		doc.submit.assert_called_once_with()
 		self.assertFalse(doc.flags.ignore_permissions)
-		_has_permission.assert_called_once_with("Bank Transaction", ptype="submit")
+		mock_has_permission.assert_called_once_with("Bank Transaction", ptype="submit")
 
 	@patch(
 		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
@@ -61,7 +61,7 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_bridge.frappe.has_permission", return_value=False)
 	@patch("retailedge.bank_transaction_bridge.frappe.new_doc")
 	def test_create_bank_transaction_requires_submit_permission(
-		self, mock_new_doc, _has_permission, _mock_meta
+		self, mock_new_doc, _mock_has_permission, _mock_meta
 	):
 		doc = MagicMock()
 		doc.name = "ACC-BTN-DENIED"
@@ -152,10 +152,6 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	@patch("retailedge.bank_transaction_bridge.frappe.db.exists", return_value=True)
-	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
-	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
-	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	@patch("retailedge.bank_transaction_bridge.frappe.db.exists", return_value=True)
 	def test_repair_pages_through_all_qualifying_rows(
 		self, _exists, get_all, get_value, get_doc
 	):
@@ -190,6 +186,10 @@ class ImportedBankTransactionSubmissionTests(unittest.TestCase):
 		self.assertEqual(get_all.call_count, 3)
 		get_doc.assert_not_called()
 
+	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
+	@patch("retailedge.bank_transaction_bridge.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
+	@patch("retailedge.bank_transaction_bridge.frappe.db.exists", return_value=True)
 	def test_repair_is_idempotent_for_already_submitted_transaction(
 		self, _exists, get_all, get_value, get_doc
 	):
