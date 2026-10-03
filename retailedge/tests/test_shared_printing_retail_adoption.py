@@ -207,7 +207,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		)
 
 	def test_all_release_gates_pin_the_same_audited_edgesuite_runtime(self):
-		expected_sha = "6f9a0fed504c3747339ca8bef81c612615bdf48b"
+		expected_sha = "0321e8755b53e46a7a9251f5ef4a61852f959a81"
 		for workflow_path in (
 			".github/workflows/ci.yml",
 			".github/workflows/edgesuite-ui-candidate-compat.yml",
@@ -220,7 +220,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 
 	def test_retailedge_ci_uses_the_transport_hardened_edgesuite_candidate(self):
 		workflow = self.read_repo(".github/workflows/ci.yml")
-		self.assertIn("6f9a0fed504c3747339ca8bef81c612615bdf48b", workflow)
+		self.assertIn("0321e8755b53e46a7a9251f5ef4a61852f959a81", workflow)
 		self.assertIn("edgeui_print.bundle", workflow)
 
 
