@@ -457,6 +457,45 @@ def _validate_prefetched_candidate_identity(bank_transaction, candidate, all_can
 	return True
 
 
+def _ambiguous_payment_entry_review_candidates(bank_transaction, candidates, settings):
+	"""Surface equally plausible weak-identity Payment Entries for human review only."""
+	candidates = list(candidates or [])
+	ambiguous = []
+	for candidate in candidates:
+		if not candidate or candidate.get("exception_only"):
+			continue
+		strength = cstr(candidate.get("reference_match_strength") or "none").strip().lower()
+		if strength in {"exact", "strong", "contains", "narration_contains_reference"}:
+			continue
+		if _is_weak_ref_match_similar(candidate, bank_transaction, settings, candidates):
+			ambiguous.append(candidate)
+
+	if len(ambiguous) <= 1:
+		return []
+
+	competing_count = len(ambiguous)
+	result = []
+	for candidate in ambiguous:
+		candidate = dict(candidate)
+		reason = (
+			f"{competing_count} submitted Payment Entries fit the same weak statement identity "
+			"(amount/account/date) and the Bank Transaction has no unique reference evidence. "
+			"Choose the correct accounting event manually."
+		)
+		candidate["identity_ambiguous"] = 1
+		candidate["identity_competing_candidates"] = competing_count
+		candidate["identity_review_reason"] = reason
+		candidate["reason"] = (
+			f"{candidate.get('reason')} {reason}".strip()
+			if candidate.get("reason")
+			else reason
+		)
+		candidate["reasons"] = [*(candidate.get("reasons") or []), reason]
+		candidate["confidence"] = "Possible Match"
+		result.append(candidate)
+	return result
+
+
 def _build_scored_sales_invoices(bank_transaction, invoices, filters, settings, context):
 	results = []
 	for invoice in invoices:
@@ -629,6 +668,11 @@ def find_payment_entry_candidates_for_bank_transaction(
 		]
 		if safe_results:
 			return safe_results[: int(limit or 20)]
+		ambiguous_results = _ambiguous_payment_entry_review_candidates(
+			bank_transaction, results, settings
+		)
+		if ambiguous_results:
+			return ambiguous_results[: int(limit or 20)]
 
 	# Fallback to direct resolver
 	direct_entries = _get_payment_entry_rows(
@@ -638,7 +682,11 @@ def find_payment_entry_candidates_for_bank_transaction(
 	safe_results = [
 		c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)
 	]
-	return safe_results[: int(limit or 20)]
+	if safe_results:
+		return safe_results[: int(limit or 20)]
+	return _ambiguous_payment_entry_review_candidates(
+		bank_transaction, results, settings
+	)[: int(limit or 20)]
 
 
 def _payment_entry_match_rows(payment_entry, *, confirmed_only=False):
@@ -867,6 +915,12 @@ def get_auto_match_status_for_row(row, settings=None):
 		return blocked("Missing Bank Transaction.", category="unsafe")
 	if not suggested_document_type or not row.get("suggested_document"):
 		return blocked("No match candidate found.", category="unsafe")
+	if cint(row.get("identity_ambiguous")):
+		return manual(
+			cstr(row.get("identity_review_reason")).strip()
+			or "Multiple accounting candidates fit the same weak statement identity; choose the correct event manually.",
+			category="ambiguous_identity",
+		)
 	if action_status == "Duplicate Candidate" or cint(row.get("duplicate_candidate_skipped")):
 		return manual(
 			"Duplicate candidate in current view requires manual review.", category="duplicate_candidate"
@@ -1938,7 +1992,6 @@ def _matching_row_passes_optional_filters(row, filters):
 			return False
 	return True
 
-
 def _matching_row_passes_post_suppression_filters(row, filters):
 	checks = {
 		"action_status": row.get("action_status"),
@@ -1958,10 +2011,14 @@ def _matching_row_passes_post_suppression_filters(row, filters):
 		),
 	}
 	for fieldname, value in checks.items():
-		if filters.get(fieldname) and cstr(filters.get(fieldname)).strip() != cstr(value).strip():
+		requested = cstr(filters.get(fieldname)).strip()
+		if not requested:
+			continue
+		if fieldname == "review_queue_status" and requested == "All":
+			continue
+		if requested != cstr(value).strip():
 			return False
 	return True
-
 
 def suppress_duplicate_candidate_suggestions(rows, mark_duplicates=False):
 	"""Keep one normal suggestion per Sales Invoice/Payment Entry in the current result set."""
@@ -2642,6 +2699,9 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		else candidate.get("multi_invoice_references"),
 		"exception_only": cint(candidate.get("exception_only")),
 		"exception_type": candidate.get("exception_type"),
+		"identity_ambiguous": cint(candidate.get("identity_ambiguous")),
+		"identity_competing_candidates": cint(candidate.get("identity_competing_candidates")),
+		"identity_review_reason": candidate.get("identity_review_reason"),
 		"branch": bank_transaction.get("branch") or candidate.get("branch"),
 		"action_status": action_status,
 		"action": "Review" if bank_transaction.get("bank_transaction") else "",
@@ -2671,6 +2731,8 @@ def _derive_action_status(bank_transaction, candidate):
 		return "Already Reconciled"
 	if not candidate:
 		return "No Match"
+	if cint(candidate.get("identity_ambiguous")):
+		return "Needs Review"
 	if candidate.get("exception_only"):
 		return "Exception Only"
 	category_key = normalize_candidate_category_key(candidate.get("candidate_category"))
