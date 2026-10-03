@@ -8,6 +8,7 @@ import frappe
 from retailedge.bank_transaction_matching import (
 	_ambiguous_payment_entry_review_candidates,
 	_derive_action_status,
+	_matching_row_passes_post_suppression_filters,
 	find_payment_entry_candidates_for_bank_transaction,
 	get_auto_match_status_for_row,
 )
@@ -70,6 +71,30 @@ class AmbiguousPaymentEntryVisibilityTests(unittest.TestCase):
 			self.assertEqual(row["identity_competing_candidates"], 2)
 			self.assertEqual(row["confidence"], "Possible Match")
 			self.assertIn("Choose the correct accounting event manually", row["identity_review_reason"])
+
+	def test_review_queue_all_does_not_filter_open_suggestion(self):
+		row = {"decision_status": "", "match_record": None}
+		self.assertTrue(
+			_matching_row_passes_post_suppression_filters(
+				row,
+				{"review_queue_status": "All"},
+			)
+		)
+
+	def test_specific_review_queue_status_still_filters_normally(self):
+		row = {"decision_status": "", "match_record": None}
+		self.assertTrue(
+			_matching_row_passes_post_suppression_filters(
+				row,
+				{"review_queue_status": "Open Suggestions Only"},
+			)
+		)
+		self.assertFalse(
+			_matching_row_passes_post_suppression_filters(
+				row,
+				{"review_queue_status": "Confirmed"},
+			)
+		)
 
 	def test_single_weak_identity_candidate_is_not_labelled_ambiguous(self):
 		rows = _ambiguous_payment_entry_review_candidates(
