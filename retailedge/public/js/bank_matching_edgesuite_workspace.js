@@ -410,9 +410,21 @@
 							args: { bank_transaction_name: bankTransaction, limit: 20 },
 						});
 						const payload = response?.message || {};
-						const candidates = (payload.candidates || []).map((row, index) => ({ ...row, __key: candidateKey(row, index) }));
+						const rawCandidates = payload.candidates || [];
+						const eligibleCandidates = existingMatchName
+							? rawCandidates.filter((row) => row.document_type === "Payment Entry")
+							: rawCandidates;
+						const candidates = eligibleCandidates.map((row, index) => ({
+							...row,
+							__key: candidateKey(row, index),
+						}));
 						if (!candidates.length) {
-							setNotice(t("No safe accounting candidate was found for this bank transaction."), "warning");
+							setNotice(
+								existingMatchName
+									? t("No safe replacement Payment Entry candidate was found for this stored review.")
+									: t("No safe accounting candidate was found for this bank transaction."),
+								"warning"
+							);
 							return;
 						}
 						Object.assign(state.candidate, {
