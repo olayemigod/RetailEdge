@@ -2511,6 +2511,7 @@ def _get_payment_entry_rows(bank_transaction, filters, settings, limit=60):
 		"paid_to",
 		"paid_amount",
 		"received_amount",
+		"payment_type",
 	]
 	for fieldname in (
 		"reference_no",
