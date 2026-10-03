@@ -490,6 +490,7 @@ def _ambiguous_payment_entry_review_candidates(bank_transaction, candidates, set
 			if candidate.get("reason")
 			else reason
 		)
+		candidate["reasons"] = [*(candidate.get("reasons") or []), reason]
 		candidate["confidence"] = "Possible Match"
 		result.append(candidate)
 	return result
