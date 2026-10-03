@@ -102,11 +102,13 @@ def validate_print_context(
 				branch=branch,
 				active_only=True,
 			)
-			if (
-				configured_companies
-				and company not in configured_companies
-				or has_enabled_branch_profiles(company=company) and not exact_profile
-			):
+			branch_bound_elsewhere = bool(
+				configured_companies and company not in configured_companies
+			)
+			company_requires_exact = bool(
+				has_enabled_branch_profiles(company=company) and not exact_profile
+			)
+			if branch_bound_elsewhere or company_requires_exact:
 				return {
 					"handled": True,
 					"allowed": False,
