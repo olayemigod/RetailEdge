@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import frappe
 
 from retailedge.bank_transaction_match_workflow import (
@@ -292,7 +290,7 @@ def test_confirmed_review_cannot_switch_candidate_directly(
 		suggested_document="ACC-PAY-2026-00016",
 	)
 
-	with pytest.raises(Exception, match="Confirmed Bank Match Reviews cannot switch candidates directly"):
+	try:
 		switch_bank_transaction_match_candidate(
 			"RE-BTM-0001",
 			{
@@ -301,6 +299,10 @@ def test_confirmed_review_cannot_switch_candidate_directly(
 				"suggested_document": "ACC-PAY-2026-00018",
 			},
 		)
+	except Exception as exc:
+		assert "Confirmed Bank Match Reviews cannot switch candidates directly" in str(exc)
+	else:
+		raise AssertionError("Confirmed Bank Match Review candidate switch should be blocked.")
 
 
 def test_review_dialog_requires_explicit_choice_for_ambiguous_candidates():
