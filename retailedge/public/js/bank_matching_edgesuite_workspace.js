@@ -239,6 +239,7 @@
 						open: false,
 						busy: false,
 						bankTransaction: "",
+						existingMatchName: "",
 						candidates: [],
 						selected: "",
 						error: "",
@@ -266,6 +267,7 @@
 					},
 				});
 				let searchTimer = null;
+				let refreshRequestId = 0;
 
 				const sortedRows = computed(() => {
 					const rows = [...state.rows];
@@ -316,25 +318,29 @@
 				}
 
 				async function refresh() {
+					const requestId = ++refreshRequestId;
+					const requestArgs = {
+						direction: state.direction,
+						queue: state.queue,
+						limit: 100,
+						...state.filters,
+					};
 					state.loading = true;
 					state.error = "";
 					try {
 						const response = await global.frappe.call({
 							method: "retailedge.banking_workspace.get_banking_workspace_rows",
-							args: {
-								direction: state.direction,
-								queue: state.queue,
-								limit: 100,
-								...state.filters,
-							},
+							args: requestArgs,
 						});
+						if (requestId !== refreshRequestId) return;
 						const payload = response?.message || {};
 						state.rows = payload.rows || [];
 						state.skippedCount = Number(payload.skipped_count || 0);
 					} catch (error) {
+						if (requestId !== refreshRequestId) return;
 						state.error = error?.message || t("Unable to load the banking queue.");
 					} finally {
-						state.loading = false;
+						if (requestId === refreshRequestId) state.loading = false;
 					}
 				}
 
@@ -396,7 +402,7 @@
 					return state.candidate.candidates.find((item) => item.__key === state.candidate.selected) || null;
 				}
 
-				async function findCandidates(bankTransaction) {
+				async function findCandidates(bankTransaction, existingMatchName = "") {
 					state.candidate.error = "";
 					try {
 						const response = await global.frappe.call({
@@ -404,15 +410,28 @@
 							args: { bank_transaction_name: bankTransaction, limit: 20 },
 						});
 						const payload = response?.message || {};
-						const candidates = (payload.candidates || []).map((row, index) => ({ ...row, __key: candidateKey(row, index) }));
+						const rawCandidates = payload.candidates || [];
+						const eligibleCandidates = existingMatchName
+							? rawCandidates.filter((row) => row.document_type === "Payment Entry")
+							: rawCandidates;
+						const candidates = eligibleCandidates.map((row, index) => ({
+							...row,
+							__key: candidateKey(row, index),
+						}));
 						if (!candidates.length) {
-							setNotice(t("No safe accounting candidate was found for this bank transaction."), "warning");
+							setNotice(
+								existingMatchName
+									? t("No safe replacement Payment Entry candidate was found for this stored review.")
+									: t("No safe accounting candidate was found for this bank transaction."),
+								"warning"
+							);
 							return;
 						}
 						Object.assign(state.candidate, {
 							open: true,
 							busy: false,
 							bankTransaction,
+							existingMatchName,
 							candidates,
 							selected: candidates[0].__key,
 							error: "",
@@ -432,21 +451,46 @@
 					state.candidate.busy = true;
 					state.candidate.error = "";
 					try {
-						const response = await global.frappe.call({
-							method: "retailedge.bank_candidate_engine.prepare_direction_aware_bank_candidate",
-							args: {
-								bank_transaction_name: state.candidate.bankTransaction,
-								document_type: row.document_type,
-								document_name: row.document_name,
-							},
-						});
-						const result = response?.message || {};
+						let result = {};
+						if (state.candidate.existingMatchName) {
+							const response = await global.frappe.call({
+								method: "retailedge.api.switch_bank_transaction_match_candidate",
+								args: {
+									match_name: state.candidate.existingMatchName,
+									selected_row: JSON.stringify({
+										bank_transaction: state.candidate.bankTransaction,
+										candidate_doctype: row.document_type,
+										candidate_name: row.document_name,
+										suggested_document_type: row.document_type,
+										suggested_document: row.document_name,
+									}),
+								},
+							});
+							const switched = response?.message || {};
+							result = {
+								match_name: switched.name,
+								message: switched.switched
+									? t("Candidate replaced and kept for review.")
+									: t("Selected candidate is already attached to this review."),
+							};
+						} else {
+							const response = await global.frappe.call({
+								method: "retailedge.bank_candidate_engine.prepare_direction_aware_bank_candidate",
+								args: {
+									bank_transaction_name: state.candidate.bankTransaction,
+									document_type: row.document_type,
+									document_name: row.document_name,
+								},
+							});
+							result = response?.message || {};
+						}
 						if (!result.match_name) {
 							state.candidate.error = result.message || t("This candidate cannot enter review yet.");
 							return;
 						}
 						state.candidate.open = false;
 						await showReviewMatchDialog(result.match_name, row);
+						await refresh();
 					} catch (error) {
 						state.candidate.error = error?.message || t("Unable to prepare this candidate for review.");
 					} finally {
@@ -568,6 +612,14 @@
 
 				function closeReview() {
 					if (!state.review.busy) state.review.open = false;
+				}
+
+				async function findReplacementForReview() {
+					const bankTransaction = state.review.doc?.bank_transaction;
+					const matchName = state.review.matchName;
+					if (!bankTransaction || !matchName || state.review.busy) return;
+					state.review.open = false;
+					await findCandidates(bankTransaction, matchName);
 				}
 
 				async function applyReviewDecision(method, successMessage) {
@@ -836,7 +888,9 @@
 					}));
 					return h(EdgeModal, {
 						open: state.candidate.open,
-						title: t("Matching Candidates"),
+						title: state.candidate.existingMatchName
+							? t("Choose Replacement Candidate")
+							: t("Matching Candidates"),
 						subtitle: state.candidate.bankTransaction,
 						size: "lg",
 						busy: state.candidate.busy,
@@ -867,7 +921,12 @@
 						],
 						footer: () => [
 							actionButton(t("Cancel"), "secondary", () => { state.candidate.open = false; }, { disabled: state.candidate.busy }),
-							actionButton(t("Review Match"), "primary", prepareSelectedCandidate, { disabled: state.candidate.busy || !row }),
+							actionButton(
+								state.candidate.existingMatchName ? t("Use Selected Candidate") : t("Review Match"),
+								"primary",
+								prepareSelectedCandidate,
+								{ disabled: state.candidate.busy || !row }
+							),
 						],
 					});
 				}
@@ -893,11 +952,18 @@
 					const evidence = state.review.evidence || {};
 					const statement = evidence.statement || {};
 					const accounting = evidence.accounting || {};
-					const reviewReadOnly = Boolean(
-						approval.read_only ||
+					const historicalReadOnly = Boolean(
 						approval.read_only_history ||
-						approval.live_validation_ok === false ||
 						["Executed", "Already Handled"].includes(doc.execution_status || "")
+					);
+					const staleActiveReview = Boolean(
+						!historicalReadOnly &&
+						approval.live_validation_ok === false
+					);
+					const reviewReadOnly = Boolean(
+						historicalReadOnly ||
+						staleActiveReview ||
+						approval.read_only
 					);
 					const canDecide =
 						!reviewReadOnly &&
@@ -915,7 +981,13 @@
 						!approvalSatisfied &&
 						!canApprove;
 					const category = businessCategory(evidence.transaction_category, evidence.candidate_category, state.review.candidateSnapshot?.transaction_category, state.review.candidateSnapshot?.candidate_category);
-					const recordBadge = confirmed ? (doc.execution_status === "Executed" || doc.execution_status === "Already Handled" ? t("Reconciled Record") : t("Confirmed Candidate")) : t("Suggested Candidate");
+					const recordBadge = historicalReadOnly && confirmed
+						? t("Reconciled Record")
+						: staleActiveReview
+							? t("Candidate Needs Replacement")
+							: confirmed
+								? t("Confirmed Candidate")
+								: t("Suggested Candidate");
 					const recordLinks = [];
 					if (state.canUseNativeDesk && state.review.matchName) {
 						recordLinks.push(actionButton(t("Open Audit Record"), "secondary", () => routeToNativeDocument("RetailEdge Bank Transaction Match", state.review.matchName)));
@@ -930,11 +1002,13 @@
 					return h(EdgeModal, {
 						open: state.review.open,
 						title: t("Review Match: {0}", [doc.bank_transaction || state.review.matchName]),
-						subtitle: reviewReadOnly
+						subtitle: historicalReadOnly
 							? t("Historical review snapshot — displayed read-only.")
-							: confirmed
-								? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
-								: t("Review accounting identity before confirming this match."),
+							: staleActiveReview
+								? t("Stored suggestion needs replacement — displayed read-only until a valid candidate is selected.")
+								: confirmed
+									? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
+									: t("Review accounting identity before confirming this match."),
 						size: "xl",
 						busy: state.review.busy,
 						closeOnBackdrop: false,
@@ -1008,7 +1082,16 @@
 							],
 						footer: () => {
 							const buttons = [actionButton(t("Close"), "secondary", closeReview, { disabled: state.review.busy })];
-							if (canDecide) {
+							if (staleActiveReview) {
+								buttons.push(
+									actionButton(
+										t("Find Replacement"),
+										"primary",
+										findReplacementForReview,
+										{ disabled: state.review.busy }
+									)
+								);
+							} else if (canDecide) {
 								buttons.push(actionButton(t("Keep for Review"), "secondary", () => applyReviewDecision("retailedge.api.mark_bank_transaction_match_needs_review", t("Match kept for review.")), { disabled: state.review.busy }));
 								buttons.push(actionButton(t("Reject Match"), "danger", () => applyReviewDecision("retailedge.api.reject_bank_transaction_match", t("Match rejected.")), { disabled: state.review.busy }));
 								buttons.push(actionButton(t("Confirm Match"), "primary", () => applyReviewDecision("retailedge.api.confirm_bank_transaction_match", t("Match confirmed. Reconciliation is still required.")), { disabled: state.review.busy }));
@@ -1095,13 +1178,17 @@
 									state.filters.exception_summary_only = 0;
 									refresh();
 								}),
-							state.loading ? h(EdgeLoadingState, { message: t("Loading banking queue...") }) : null,
-							state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
+							state.loading && !state.rows.length
+								? h(EdgeLoadingState, { message: t("Loading banking queue...") })
+								: null,
+							state.error && !state.rows.length
+								? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh })
+								: null,
 							!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
 								title: t("No transactions in this queue"),
 								description: t("Adjust the direction or filters, or refresh after new bank transactions are imported."),
 							}) : null,
-							!state.loading && !state.error && state.rows.length ? renderTable() : null,
+							state.rows.length ? renderTable() : null,
 							state.skippedCount ? h("p", { class: "retailedge-bank-skipped-note" }, t("{0} row(s) were skipped because their banking context could not be resolved safely.", [state.skippedCount])) : null,
 							renderCandidateModal(),
 							renderReviewModal(),

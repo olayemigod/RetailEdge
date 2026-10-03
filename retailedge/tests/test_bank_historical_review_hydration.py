@@ -97,7 +97,47 @@ def test_stale_active_review_returns_read_only_state_instead_of_throwing(
 	assert state["can_approve"] is False
 	assert state["is_satisfied"] is False
 	assert state["status"] == "Invalidated"
-	assert "historical review remains available read-only" in state["reason"].lower()
+	assert "stored review remains available read-only" in state["reason"].lower()
+	assert "replacement candidate" in state["reason"].lower()
+
+
+def test_stale_display_validation_restores_frappe_message_log():
+	doc = _review_doc()
+	local = SimpleNamespace(message_log=[{"message": "keep me"}])
+
+	def stale_validator(_doc):
+		local.message_log.append(
+			{
+				"message": (
+					"Locked candidate no longer validates against current accounting data; "
+					"no alternate candidate was selected."
+				)
+			}
+		)
+		raise frappe.ValidationError("stale candidate")
+
+	with (
+		patch("retailedge.reconciliation_approval.frappe.local", local),
+		patch("retailedge.reconciliation_approval.frappe.get_doc", return_value=doc),
+		patch("retailedge.reconciliation_approval.frappe.db.exists", return_value=True),
+		patch("retailedge.reconciliation_approval.frappe.db.get_value", return_value="Unreconciled"),
+		patch(
+			"retailedge.reconciliation_approval._refresh_match_candidate_context",
+			side_effect=stale_validator,
+		),
+		patch(
+			"retailedge.reconciliation_approval.build_reconciliation_approval_state",
+			return_value={
+				"status": "Pending",
+				"is_satisfied": False,
+				"can_approve": True,
+			},
+		),
+	):
+		state = build_live_reconciliation_approval_state(doc.name)
+
+	assert state["live_validation_ok"] is False
+	assert local.message_log == [{"message": "keep me"}]
 
 
 @patch("retailedge.reconciliation_approval.build_reconciliation_approval_state")
