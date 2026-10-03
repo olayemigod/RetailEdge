@@ -870,6 +870,97 @@ def _suggestion_row_key(row):
 	)
 
 
+def get_ambiguous_payment_entry_review_candidates(bank_transaction_name, filters=None, limit=60):
+	"""Return the complete selectable Payment Entry set for one ambiguous Bank Transaction."""
+	assert_can_manage_bank_transaction_match()
+	assert_can_access_bank_transaction_matching()
+
+	filters = _coerce_json_payload(filters)
+	filters["include_exception_candidates"] = 1
+	# Preserve a candidate already confirmed for this same Bank Transaction so a
+	# reviewer can reopen/review it. Conflicting confirmed matches are filtered below.
+	filters["include_confirmed_matches"] = 1
+
+	requested_limit = max(min(cint(limit or 60), 200), 20)
+	bank_transaction = normalize_bank_transaction(bank_transaction_name)
+	settings = get_bank_transaction_matching_settings()
+
+	def load_candidates(candidate_limit):
+		return find_payment_entry_candidates_for_bank_transaction(
+			bank_transaction_name=bank_transaction_name,
+			filters=filters,
+			limit=candidate_limit,
+		)
+
+	candidates = load_candidates(requested_limit)
+	reported_competing = max(
+		[cint((candidate or {}).get("identity_competing_candidates")) for candidate in candidates or []]
+		or [0]
+	)
+	if reported_competing > len(candidates):
+		if reported_competing > 200:
+			frappe.throw(
+				"Too many competing Payment Entries to review safely in one dialog. "
+				"Narrow the Bank Matching filters before reviewing this transaction."
+			)
+		candidates = load_candidates(reported_competing)
+
+	rows = []
+	seen = set()
+	for candidate in candidates or []:
+		candidate = frappe._dict(candidate or {})
+		document_name = cstr(candidate.get("document_name") or candidate.get("suggested_document")).strip()
+		if not document_name:
+			continue
+
+		# If the candidate carries an active confirmed review, only keep it when
+		# that review belongs to this Bank Transaction. A confirmed match against
+		# another transaction remains a conflict and must never become selectable.
+		match_record = cstr(candidate.get("match_record")).strip()
+		if cstr(candidate.get("decision_status")).strip() == "Confirmed" and match_record:
+			confirmed_bank_transaction = cstr(
+				frappe.db.get_value(
+					"RetailEdge Bank Transaction Match", match_record, "bank_transaction"
+				)
+			).strip()
+			if confirmed_bank_transaction and confirmed_bank_transaction != cstr(bank_transaction_name).strip():
+				continue
+
+		identity = (
+			"Payment Entry",
+			document_name,
+			cstr(candidate.get("payment_account") or candidate.get("account")).strip(),
+		)
+		if identity in seen:
+			continue
+		seen.add(identity)
+		action_status = _derive_action_status(bank_transaction, candidate)
+		row = frappe._dict(
+			_build_matching_row(
+				bank_transaction,
+				candidate,
+				action_status=action_status,
+				match_reason=candidate.get("reason"),
+			)
+		)
+		auto_status = get_auto_match_status_for_row(row, settings=settings)
+		row.auto_match_status = auto_status.get("status")
+		row.auto_match_reason = auto_status.get("reason")
+		row.auto_match_category = auto_status.get("category")
+		row.eligible_for_auto_prepare = cint(auto_status.get("eligible_prepare"))
+		row.eligible_for_auto_confirm = cint(auto_status.get("eligible_confirm"))
+		row.review_candidate_key = f"Payment Entry|{document_name}"
+		rows.append(row)
+
+	rows.sort(
+		key=lambda row: (
+			-cint(row.get("match_score") or 0),
+			abs(flt(row.get("amount_difference"))),
+			cstr(row.get("suggested_document")).strip(),
+		)
+	)
+	return rows
+
 def _candidate_from_revalidated_row(row):
 	row = frappe._dict(row or {})
 	if cstr(row.get("candidate_changed_reason")).strip():
