@@ -61,7 +61,10 @@ class AmbiguousPaymentEntryVisibilityTests(unittest.TestCase):
 		)
 
 		self.assertEqual(len(rows), 2)
-		self.assertEqual(\n\t\t\t{row["document_name"] for row in rows},\n\t\t\t{"ACC-PAY-CASH-DEPOSIT", "ACC-PAY-CUSTOMER"},\n\t\t)
+		self.assertEqual(
+			{row["document_name"] for row in rows},
+			{"ACC-PAY-CASH-DEPOSIT", "ACC-PAY-CUSTOMER"},
+		)
 		for row in rows:
 			self.assertEqual(row["identity_ambiguous"], 1)
 			self.assertEqual(row["identity_competing_candidates"], 2)
@@ -115,7 +118,10 @@ class AmbiguousPaymentEntryVisibilityTests(unittest.TestCase):
 		self.assertFalse(status["eligible_confirm"])
 
 	@patch("retailedge.bank_transaction_matching._build_scored_payment_entries")
-	@patch(\n\t"retailedge.bank_transaction_matching._get_payment_entry_rows",\n\treturn_value=[{"name": "placeholder"}],\n)
+	@patch(
+	"retailedge.bank_transaction_matching._get_payment_entry_rows",
+	return_value=[{"name": "placeholder"}],
+)
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	@patch("retailedge.bank_transaction_matching.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings")
