@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 import frappe
 
 from retailedge.bank_transaction_match_workflow import (
 	get_ambiguous_payment_entry_review_candidates,
+	switch_bank_transaction_match_candidate,
 )
 
 
@@ -151,7 +154,7 @@ def test_confirmed_candidate_for_same_bank_transaction_remains_selectable(
 )
 @patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
 @patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
-def test_picker_expands_to_full_reported_competing_set(
+def test_picker_repeats_expansion_until_full_reported_competing_set_is_loaded(
 	normalize_bank_transaction,
 	find_candidates,
 	_settings,
@@ -165,26 +168,139 @@ def test_picker_expands_to_full_reported_competing_set(
 		amount=200000,
 		direction="Inflow",
 	)
-	first_page = []
-	for index in range(20):
-		candidate = _candidate(f"ACC-PAY-{index:03d}", "Receive", party=f"Customer {index}")
-		candidate["identity_competing_candidates"] = 21
-		first_page.append(candidate)
-	full_set = list(first_page)
-	extra = _candidate("ACC-PAY-020", "Receive", party="Customer 20")
-	extra["identity_competing_candidates"] = 21
-	full_set.append(extra)
-	find_candidates.side_effect = [first_page, full_set]
+
+	def make_candidates(count, reported):
+		rows = []
+		for index in range(count):
+			candidate = _candidate(
+				f"ACC-PAY-{index:03d}",
+				"Receive",
+				party=f"Customer {index}",
+			)
+			candidate["identity_competing_candidates"] = reported
+			rows.append(candidate)
+		return rows
+
+	find_candidates.side_effect = [
+		make_candidates(20, 60),
+		make_candidates(60, 180),
+		make_candidates(180, 180),
+	]
 
 	rows = get_ambiguous_payment_entry_review_candidates(
 		"ACC-BTN-MANY",
 		limit=20,
 	)
 
-	assert len(rows) == 21
-	assert find_candidates.call_count == 2
-	assert find_candidates.call_args_list[0].kwargs["limit"] == 20
-	assert find_candidates.call_args_list[1].kwargs["limit"] == 21
+	assert len(rows) == 180
+	assert find_candidates.call_count == 3
+	assert [call.kwargs["limit"] for call in find_candidates.call_args_list] == [20, 60, 180]
+
+
+@patch("retailedge.bank_transaction_match_workflow.append_bank_transaction_match_action_log")
+@patch("retailedge.bank_transaction_match_workflow._populate_match_document")
+@patch("retailedge.bank_transaction_match_workflow.payment_entry_active_match_conflict")
+@patch("retailedge.bank_transaction_match_workflow._ensure_valid_candidate")
+@patch("retailedge.bank_transaction_match_workflow._candidate_from_revalidated_row")
+@patch("retailedge.bank_transaction_match_workflow._revalidate_suggestion_row")
+@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+def test_nonconfirmed_review_switches_to_explicit_candidate_on_same_review_record(
+	_access,
+	_manage,
+	_exists,
+	get_doc,
+	normalize_bank_transaction,
+	revalidate,
+	candidate_from_row,
+	_ensure_valid,
+	active_conflict,
+	populate,
+	append_log,
+):
+	doc = frappe._dict(
+		name="RE-BTM-0001",
+		bank_transaction="ACC-BTN-2026-00020",
+		decision_status="Needs Review",
+		suggested_document_type="Payment Entry",
+		suggested_document="ACC-PAY-2026-00016",
+		source_report="Bank Transaction Matching",
+	)
+	doc.save = MagicMock()
+	get_doc.return_value = doc
+	normalize_bank_transaction.return_value = frappe._dict(
+		bank_transaction="ACC-BTN-2026-00020",
+		amount=200000,
+		direction="Inflow",
+	)
+	revalidated = frappe._dict(
+		bank_transaction="ACC-BTN-2026-00020",
+		suggested_document_type="Payment Entry",
+		suggested_document="ACC-PAY-2026-00018",
+	)
+	revalidate.return_value = revalidated
+	candidate = frappe._dict(
+		document_type="Payment Entry",
+		document_name="ACC-PAY-2026-00018",
+	)
+	candidate_from_row.return_value = candidate
+	active_conflict.return_value = None
+
+	def populate_side_effect(doc, bank_transaction, candidate, source_report):
+		doc.suggested_document_type = candidate.document_type
+		doc.suggested_document = candidate.document_name
+
+	populate.side_effect = populate_side_effect
+
+	result = switch_bank_transaction_match_candidate(
+		"RE-BTM-0001",
+		{
+			"bank_transaction": "ACC-BTN-2026-00020",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-2026-00018",
+		},
+	)
+
+	assert result["name"] == "RE-BTM-0001"
+	assert result["switched"] is True
+	assert result["suggested_document"] == "ACC-PAY-2026-00018"
+	assert doc.decision_status == "Needs Review"
+	append_log.assert_called_once()
+	assert append_log.call_args.kwargs["action"] == "Candidate Switched"
+	doc.save.assert_called_once_with(ignore_permissions=True)
+
+
+
+@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+def test_confirmed_review_cannot_switch_candidate_directly(
+	_access,
+	_manage,
+	_exists,
+	get_doc,
+):
+	get_doc.return_value = frappe._dict(
+		name="RE-BTM-0001",
+		bank_transaction="ACC-BTN-2026-00020",
+		decision_status="Confirmed",
+		suggested_document_type="Payment Entry",
+		suggested_document="ACC-PAY-2026-00016",
+	)
+
+	with pytest.raises(Exception, match="Confirmed Bank Match Reviews cannot switch candidates directly"):
+		switch_bank_transaction_match_candidate(
+			"RE-BTM-0001",
+			{
+				"bank_transaction": "ACC-BTN-2026-00020",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-2026-00018",
+			},
+		)
 
 
 def test_review_dialog_requires_explicit_choice_for_ambiguous_candidates():
@@ -199,8 +315,13 @@ def test_review_dialog_requires_explicit_choice_for_ambiguous_candidates():
 	assert "if (!ensure_explicit_ambiguous_candidate_selection(args)) return;" in source
 
 
-def test_review_candidate_switch_clears_old_review_record_identity():
+def test_review_candidate_switch_is_server_bound_before_actions():
 	source = REPORT_JS.read_text(encoding="utf-8")
-	assert "if (previousDocument && previousDocument !== args.suggested_document)" in source
-	assert "args.match_record = null;" in source
-	assert "args.match_decision = null;" in source
+	assert "args._candidate_switch_required = Boolean(" in source
+	assert 'method: "retailedge.api.switch_bank_transaction_match_candidate"' in source
+	assert "switch_bank_match_record_candidate(args, args.match_record, callback);" in source
+	assert (
+		'String(result.suggested_document || "") !== String(args.suggested_document || "")'
+		in source
+	)
+	assert "args._candidate_switch_required = false;" in source
