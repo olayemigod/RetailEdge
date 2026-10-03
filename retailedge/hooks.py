@@ -11,6 +11,15 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# EdgeSuite product availability is product-owned. RetailEdge explicitly
+# publishes its descriptor rather than relying on installation alone.
+edgesuite_product_availability_providers = [
+	"retailedge.product_context.get_product_availability",
+]
+edgesuite_print_context_validators = [
+	"retailedge.product_context.validate_print_context",
+]
+
 # Apps
 # ------------------
 

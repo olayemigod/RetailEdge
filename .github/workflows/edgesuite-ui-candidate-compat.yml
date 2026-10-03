@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   compatibility:
-    name: RetailEdge + reconciled EdgeSuite UI
+    name: RetailEdge + EdgeSuite printing candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 75
 
@@ -79,11 +79,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out governed EdgeSuite UI 1.1.0 runtime
+      - name: Check out EdgeSuite printing candidate
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 6f90676dbbf492d9f65923282d2e4dc53ef58d7b
+          ref: 0321e8755b53e46a7a9251f5ef4a61852f959a81
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,8 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "6f90676dbbf492d9f65923282d2e4dc53ef58d7b"
-          grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "0321e8755b53e46a7a9251f5ef4a61852f959a81"
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
           # never a CoreEdge-local compatibility bridge. This keeps RetailEdge standalone
@@ -151,6 +150,15 @@ jobs:
             apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/interaction_runtime.js
 
           bench build --app edgesuite_ui
+          grep -Eq 'edgeui_print\.bundle' sites/assets/assets.json
+          test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_print.bundle.js
+          grep -Fq 'EdgeSuitePrint' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_print.bundle.js
+          grep -Fq 'writeChunkSize = 256' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
+          grep -Fq 'writer.ready' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
+          grep -Fq 'state: "unsupported"' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_components.js
+          grep -Fq 'writeQueues' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_runtime.js
+          grep -Fq 'text_encoding' apps/edgesuite_ui/edgesuite_ui/edgesuite_ui/doctype/edge_print_profile/edge_print_profile.json
+          grep -Fq 'PRINT_CONTEXT_VALIDATOR_HOOK' apps/edgesuite_ui/edgesuite_ui/api/printing.py
 
           # Reproduce the shared-bench condition that exposed the stale alias: a CoreEdge
           # bridge may exist elsewhere in apps/, but RetailEdge must ignore it completely.
