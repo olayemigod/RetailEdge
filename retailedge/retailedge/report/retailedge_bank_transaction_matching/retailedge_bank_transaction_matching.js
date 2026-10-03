@@ -873,8 +873,16 @@ function review_candidate_label(candidate) {
 
 function render_ambiguous_candidate_choices(dialog, args, candidates) {
 	const wrapper = dialog.get_field("candidate_choices").$wrapper;
-	if (!wrapper || !wrapper.length || !Array.isArray(candidates) || candidates.length <= 1) {
-		wrapper && wrapper.empty();
+	if (!wrapper || !wrapper.length) return;
+	if (!Array.isArray(candidates) || candidates.length <= 1) {
+		args._explicit_candidate_selected = false;
+		wrapper.html(
+			`<div class="alert alert-warning">${frappe.utils.escape_html(
+				__(
+					"The competing candidate set changed while this review was open. Refresh Bank Matching before taking action."
+				)
+			)}</div>`
+		);
 		return;
 	}
 	args.identity_ambiguous = 1;
@@ -889,7 +897,7 @@ function render_ambiguous_candidate_choices(dialog, args, candidates) {
 		const key = frappe.utils.escape_html(String(candidate.review_candidate_key || index));
 		return `
 			<button type="button"
-				class="btn btn-default retailedge-bank-review-candidate${selected ? " is-current" : ""}"
+				class="btn ${selected ? "btn-outline-primary" : "btn-default"} retailedge-bank-review-candidate${selected ? " is-current" : ""}"
 				data-review-candidate-key="${key}">
 				<strong>${frappe.utils.escape_html(review_candidate_label(candidate))}</strong>
 				<span class="text-muted">${frappe.utils.escape_html(String(candidate.match_reason || ""))}</span>
@@ -914,8 +922,11 @@ function render_ambiguous_candidate_choices(dialog, args, candidates) {
 		);
 		if (!candidate) return;
 		apply_review_candidate(args, candidate);
-		wrapper.find(".retailedge-bank-review-candidate").removeClass("is-selected");
-		$(this).addClass("is-selected");
+		wrapper
+			.find(".retailedge-bank-review-candidate")
+			.removeClass("is-selected btn-primary btn-outline-primary")
+			.addClass("btn-default");
+		$(this).removeClass("btn-default").addClass("is-selected btn-primary");
 		render_bank_match_review_summary(dialog, args);
 	});
 }
