@@ -16,6 +16,9 @@ required_apps = ["edgesuite_ui"]
 edgesuite_product_availability_providers = [
 	"retailedge.product_context.get_product_availability",
 ]
+edgesuite_print_context_validators = [
+	"retailedge.product_context.validate_print_context",
+]
 
 # Apps
 # ------------------
