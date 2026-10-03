@@ -239,6 +239,7 @@
 						open: false,
 						busy: false,
 						bankTransaction: "",
+						existingMatchName: "",
 						candidates: [],
 						selected: "",
 						error: "",
@@ -266,6 +267,7 @@
 					},
 				});
 				let searchTimer = null;
+				let refreshRequestId = 0;
 
 				const sortedRows = computed(() => {
 					const rows = [...state.rows];
@@ -316,25 +318,29 @@
 				}
 
 				async function refresh() {
+					const requestId = ++refreshRequestId;
+					const requestArgs = {
+						direction: state.direction,
+						queue: state.queue,
+						limit: 100,
+						...state.filters,
+					};
 					state.loading = true;
 					state.error = "";
 					try {
 						const response = await global.frappe.call({
 							method: "retailedge.banking_workspace.get_banking_workspace_rows",
-							args: {
-								direction: state.direction,
-								queue: state.queue,
-								limit: 100,
-								...state.filters,
-							},
+							args: requestArgs,
 						});
+						if (requestId !== refreshRequestId) return;
 						const payload = response?.message || {};
 						state.rows = payload.rows || [];
 						state.skippedCount = Number(payload.skipped_count || 0);
 					} catch (error) {
+						if (requestId !== refreshRequestId) return;
 						state.error = error?.message || t("Unable to load the banking queue.");
 					} finally {
-						state.loading = false;
+						if (requestId === refreshRequestId) state.loading = false;
 					}
 				}
 
@@ -396,7 +402,7 @@
 					return state.candidate.candidates.find((item) => item.__key === state.candidate.selected) || null;
 				}
 
-				async function findCandidates(bankTransaction) {
+				async function findCandidates(bankTransaction, existingMatchName = "") {
 					state.candidate.error = "";
 					try {
 						const response = await global.frappe.call({
@@ -413,6 +419,7 @@
 							open: true,
 							busy: false,
 							bankTransaction,
+							existingMatchName,
 							candidates,
 							selected: candidates[0].__key,
 							error: "",
@@ -432,21 +439,46 @@
 					state.candidate.busy = true;
 					state.candidate.error = "";
 					try {
-						const response = await global.frappe.call({
-							method: "retailedge.bank_candidate_engine.prepare_direction_aware_bank_candidate",
-							args: {
-								bank_transaction_name: state.candidate.bankTransaction,
-								document_type: row.document_type,
-								document_name: row.document_name,
-							},
-						});
-						const result = response?.message || {};
+						let result = {};
+						if (state.candidate.existingMatchName) {
+							const response = await global.frappe.call({
+								method: "retailedge.api.switch_bank_transaction_match_candidate",
+								args: {
+									match_name: state.candidate.existingMatchName,
+									selected_row: JSON.stringify({
+										bank_transaction: state.candidate.bankTransaction,
+										candidate_doctype: row.document_type,
+										candidate_name: row.document_name,
+										suggested_document_type: row.document_type,
+										suggested_document: row.document_name,
+									}),
+								},
+							});
+							const switched = response?.message || {};
+							result = {
+								match_name: switched.name,
+								message: switched.switched
+									? t("Candidate replaced and kept for review.")
+									: t("Selected candidate is already attached to this review."),
+							};
+						} else {
+							const response = await global.frappe.call({
+								method: "retailedge.bank_candidate_engine.prepare_direction_aware_bank_candidate",
+								args: {
+									bank_transaction_name: state.candidate.bankTransaction,
+									document_type: row.document_type,
+									document_name: row.document_name,
+								},
+							});
+							result = response?.message || {};
+						}
 						if (!result.match_name) {
 							state.candidate.error = result.message || t("This candidate cannot enter review yet.");
 							return;
 						}
 						state.candidate.open = false;
 						await showReviewMatchDialog(result.match_name, row);
+						await refresh();
 					} catch (error) {
 						state.candidate.error = error?.message || t("Unable to prepare this candidate for review.");
 					} finally {
@@ -568,6 +600,14 @@
 
 				function closeReview() {
 					if (!state.review.busy) state.review.open = false;
+				}
+
+				async function findReplacementForReview() {
+					const bankTransaction = state.review.doc?.bank_transaction;
+					const matchName = state.review.matchName;
+					if (!bankTransaction || !matchName || state.review.busy) return;
+					state.review.open = false;
+					await findCandidates(bankTransaction, matchName);
 				}
 
 				async function applyReviewDecision(method, successMessage) {
@@ -836,7 +876,9 @@
 					}));
 					return h(EdgeModal, {
 						open: state.candidate.open,
-						title: t("Matching Candidates"),
+						title: state.candidate.existingMatchName
+							? t("Choose Replacement Candidate")
+							: t("Matching Candidates"),
 						subtitle: state.candidate.bankTransaction,
 						size: "lg",
 						busy: state.candidate.busy,
@@ -867,7 +909,12 @@
 						],
 						footer: () => [
 							actionButton(t("Cancel"), "secondary", () => { state.candidate.open = false; }, { disabled: state.candidate.busy }),
-							actionButton(t("Review Match"), "primary", prepareSelectedCandidate, { disabled: state.candidate.busy || !row }),
+							actionButton(
+								state.candidate.existingMatchName ? t("Use Selected Candidate") : t("Review Match"),
+								"primary",
+								prepareSelectedCandidate,
+								{ disabled: state.candidate.busy || !row }
+							),
 						],
 					});
 				}
