@@ -91,14 +91,21 @@ def validate_print_context(
 
 		if company:
 			from retailedge.branch_profile import (
+				get_enabled_branch_profile_companies,
 				get_exact_branch_profile,
 				has_enabled_branch_profiles,
 			)
 
-			if has_enabled_branch_profiles(company=company) and not get_exact_branch_profile(
+			configured_companies = get_enabled_branch_profile_companies(branch=branch)
+			exact_profile = get_exact_branch_profile(
 				company=company,
 				branch=branch,
 				active_only=True,
+			)
+			if (
+				configured_companies
+				and company not in configured_companies
+				or has_enabled_branch_profiles(company=company) and not exact_profile
 			):
 				return {
 					"handled": True,
