@@ -38,3 +38,74 @@ def get_product_availability() -> dict | None:
 	except Exception:
 		return None
 	return dict(PRODUCT_DESCRIPTOR)
+
+
+
+def validate_print_context(
+	product_key=None,
+	company=None,
+	branch=None,
+	purpose="Receipt",
+	user=None,
+) -> dict:
+	"""Validate RetailEdge Company/Branch context before EdgeSuite resolves a scoped profile."""
+
+	key = str(product_key or "").strip().lower()
+	if key != "retailedge":
+		return {"handled": False}
+
+	user = user or frappe.session.user
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+
+	if purpose != "Receipt":
+		return {
+			"handled": True,
+			"allowed": False,
+			"reason": "RetailEdge shared printing currently supports Receipt profiles only.",
+		}
+
+	if company:
+		if not frappe.db.exists("Company", company):
+			return {
+				"handled": True,
+				"allowed": False,
+				"reason": f"Company {company} does not exist.",
+			}
+		if user != "Administrator":
+			company_doc = frappe.get_doc("Company", company)
+			if not company_doc.has_permission("read", user=user):
+				return {
+					"handled": True,
+					"allowed": False,
+					"reason": f"You do not have access to Company {company}.",
+				}
+
+	if branch:
+		if frappe.db.exists("DocType", "Branch") and not frappe.db.exists("Branch", branch):
+			return {
+				"handled": True,
+				"allowed": False,
+				"reason": f"Branch {branch} does not exist.",
+			}
+		from retailedge.branch_context import validate_user_branch_access
+
+		access = validate_user_branch_access(
+			branch,
+			user=user,
+			company=company or None,
+			throw=False,
+		)
+		if not access.get("allowed"):
+			return {
+				"handled": True,
+				"allowed": False,
+				"reason": f"You do not have access to Branch {branch}.",
+			}
+
+	return {
+		"handled": True,
+		"allowed": True,
+		"company": company,
+		"branch": branch,
+	}
