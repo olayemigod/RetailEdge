@@ -1178,13 +1178,17 @@
 									state.filters.exception_summary_only = 0;
 									refresh();
 								}),
-							state.loading ? h(EdgeLoadingState, { message: t("Loading banking queue...") }) : null,
-							state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
+							state.loading && !state.rows.length
+								? h(EdgeLoadingState, { message: t("Loading banking queue...") })
+								: null,
+							state.error && !state.rows.length
+								? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh })
+								: null,
 							!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
 								title: t("No transactions in this queue"),
 								description: t("Adjust the direction or filters, or refresh after new bank transactions are imported."),
 							}) : null,
-							!state.loading && !state.error && state.rows.length ? renderTable() : null,
+							state.rows.length ? renderTable() : null,
 							state.skippedCount ? h("p", { class: "retailedge-bank-skipped-note" }, t("{0} row(s) were skipped because their banking context could not be resolved safely.", [state.skippedCount])) : null,
 							renderCandidateModal(),
 							renderReviewModal(),
