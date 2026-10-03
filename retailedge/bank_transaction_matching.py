@@ -1225,6 +1225,7 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 			"paid_to",
 			"paid_amount",
 			"received_amount",
+			"payment_type",
 		]
 		for fieldname in (
 			"reference_no",
@@ -2518,6 +2519,7 @@ def _get_payment_entry_rows(bank_transaction, filters, settings, limit=60):
 		"status",
 		"retailedge_branch",
 		"bank_account",
+		"mode_of_payment",
 	):
 		if has_field("Payment Entry", fieldname):
 			fields.append(fieldname)
@@ -2599,7 +2601,7 @@ def _build_payment_entry_candidate(bank_transaction, payment_entry, references):
 		"customer": payment_entry.get("party") if payment_entry.get("party_type") == "Customer" else None,
 		"customer_display": payment_entry.get("party"),
 		"party": payment_entry.get("party"),
-		"party_type": payment_entry.get("party_type") or "Customer",
+		"party_type": payment_entry.get("party_type"),
 		"candidate_amount": candidate_amount,
 		"amount_difference": amount_difference,
 		"amount_scenario": amount_scenario,
