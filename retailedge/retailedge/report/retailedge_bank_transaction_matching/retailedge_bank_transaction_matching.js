@@ -897,10 +897,10 @@ function render_ambiguous_candidate_choices(dialog, args, candidates) {
 		const key = frappe.utils.escape_html(String(candidate.review_candidate_key || index));
 		return `
 			<button type="button"
-				class="btn ${selected ? "btn-outline-primary" : "btn-default"} retailedge-bank-review-candidate${selected ? " is-current" : ""}"
+				class="btn btn-block text-left mb-2 ${selected ? "btn-outline-primary" : "btn-default"} retailedge-bank-review-candidate${selected ? " is-current" : ""}"
 				data-review-candidate-key="${key}">
 				<strong>${frappe.utils.escape_html(review_candidate_label(candidate))}</strong>
-				<span class="text-muted">${frappe.utils.escape_html(String(candidate.match_reason || ""))}</span>
+				<span class="text-muted d-block small">${frappe.utils.escape_html(String(candidate.match_reason || ""))}</span>
 			</button>`;
 	}).join("");
 
