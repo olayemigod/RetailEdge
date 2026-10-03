@@ -304,9 +304,16 @@ def build_live_reconciliation_approval_state(match_name, user=None, settings=Non
 		)
 		return state
 
+	message_log_snapshot = list(getattr(frappe.local, "message_log", None) or [])
 	try:
 		_refresh_match_candidate_context(doc)
 	except Exception as exc:
+		# frappe.throw() records a browser message before raising. This read/display
+		# path intentionally catches stale-candidate validation, so restore the
+		# prior message log as well or the caught error still appears as a red popup.
+		message_log = getattr(frappe.local, "message_log", None)
+		if isinstance(message_log, list):
+			message_log[:] = message_log_snapshot
 		state = build_reconciliation_approval_state(doc, user=user, settings=settings)
 		state["can_approve"] = False
 		state["is_satisfied"] = False
@@ -320,8 +327,8 @@ def build_live_reconciliation_approval_state(match_name, user=None, settings=Non
 				"live_validation_error": cstr(exc),
 				"reason": (
 					"Current accounting data no longer validates this stored review candidate. "
-					"The historical review remains available read-only; refresh or create a new valid "
-					"review before taking another accounting action."
+					"The stored review remains available read-only. Choose a replacement candidate "
+					"before taking another accounting action."
 				),
 			}
 		)
