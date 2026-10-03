@@ -338,6 +338,11 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 	},
 
 	open_match_review_dialog(args) {
+		if (args.match_record) {
+			args._match_record_candidate_document = args.suggested_document;
+			args._match_record_candidate_type = args.suggested_document_type;
+			args._match_record_decision = args.match_decision;
+		}
 		const dialog = new frappe.ui.Dialog({
 			title: __("Bank Match Review"),
 			fields: [
@@ -838,7 +843,6 @@ function ensure_explicit_ambiguous_candidate_selection(args) {
 }
 
 function apply_review_candidate(args, candidate) {
-	const previousDocument = args.suggested_document;
 	const keys = [
 		"candidate_doctype", "candidate_name", "suggested_document_type", "suggested_document",
 		"suggested_sales_invoice", "candidate_posting_date", "candidate_date",
@@ -858,9 +862,15 @@ function apply_review_candidate(args, candidate) {
 		if (Object.prototype.hasOwnProperty.call(candidate, key)) args[key] = candidate[key];
 	});
 	args._explicit_candidate_selected = true;
-	if (previousDocument && previousDocument !== args.suggested_document) {
-		args.match_record = null;
-		args.match_decision = null;
+	args._candidate_switch_required = Boolean(
+		args.match_record &&
+		args._match_record_candidate_document &&
+		args._match_record_candidate_document !== args.suggested_document
+	);
+	if (args.match_record) {
+		args.match_decision = args._candidate_switch_required
+			? "Needs Review"
+			: args._match_record_decision;
 	}
 }
 
@@ -1031,8 +1041,49 @@ function run_bank_match_review_action(dialog, args, options) {
 	});
 }
 
+function switch_bank_match_record_candidate(args, matchRecord, callback) {
+	const activeReport = get_active_bank_match_report();
+	frappe.call({
+		method: "retailedge.api.switch_bank_transaction_match_candidate",
+		args: {
+			match_name: matchRecord,
+			selected_row: JSON.stringify(clean_report_suggestion_row(args)),
+			filters: JSON.stringify(activeReport ? activeReport.get_filter_values() : {}),
+		},
+		freeze: true,
+		freeze_message: __("Updating selected bank match candidate..."),
+		callback: function (r) {
+			const result = (r && r.message) || {};
+			if (
+				!result.name ||
+				String(result.suggested_document || "") !== String(args.suggested_document || "") ||
+				String(result.suggested_document_type || "") !==
+					String(args.suggested_document_type || "")
+			) {
+				frappe.msgprint(
+					__(
+						"RetailEdge could not bind the review record to the candidate you selected. Refresh Bank Matching and try again."
+					)
+				);
+				return;
+			}
+			args.match_record = result.name;
+			args.match_decision = result.decision_status;
+			args._match_record_candidate_document = result.suggested_document;
+			args._match_record_candidate_type = result.suggested_document_type;
+			args._match_record_decision = result.decision_status;
+			args._candidate_switch_required = false;
+			callback(result.name);
+		},
+	});
+}
+
 function ensure_bank_match_record(args, callback) {
 	if (args.match_record) {
+		if (args._candidate_switch_required) {
+			switch_bank_match_record_candidate(args, args.match_record, callback);
+			return;
+		}
 		callback(args.match_record);
 		return;
 	}
@@ -1058,8 +1109,18 @@ function ensure_bank_match_record(args, callback) {
 				show_create_review_records_summary(result);
 				return;
 			}
-			args.match_record = matchRecord;
-			callback(matchRecord);
+			if (created) {
+				args.match_record = matchRecord;
+				args._match_record_candidate_document = args.suggested_document;
+				args._match_record_candidate_type = args.suggested_document_type;
+				args._match_record_decision = args.match_decision;
+				args._candidate_switch_required = false;
+				callback(matchRecord);
+				return;
+			}
+			// A duplicate may be an existing review for another candidate on this
+			// Bank Transaction. Revalidate/rebind it explicitly before acting.
+			switch_bank_match_record_candidate(args, matchRecord, callback);
 		},
 	});
 }
