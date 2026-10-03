@@ -629,11 +629,6 @@ def find_sales_invoice_candidates_for_bank_transaction(
 		]
 		if safe_results:
 			return safe_results[: int(limit or 20)]
-		ambiguous_results = _ambiguous_payment_entry_review_candidates(
-			bank_transaction, results, settings
-		)
-		if ambiguous_results:
-			return ambiguous_results[: int(limit or 20)]
 
 	# Fallback to direct resolver
 	direct_invoices = _get_sales_invoice_rows(
@@ -643,11 +638,7 @@ def find_sales_invoice_candidates_for_bank_transaction(
 	safe_results = [
 		c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)
 	]
-	if safe_results:
-		return safe_results[: int(limit or 20)]
-	return _ambiguous_payment_entry_review_candidates(
-		bank_transaction, results, settings
-	)[: int(limit or 20)]
+	return safe_results[: int(limit or 20)]
 
 
 def find_payment_entry_candidates_for_bank_transaction(
@@ -677,6 +668,11 @@ def find_payment_entry_candidates_for_bank_transaction(
 		]
 		if safe_results:
 			return safe_results[: int(limit or 20)]
+		ambiguous_results = _ambiguous_payment_entry_review_candidates(
+			bank_transaction, results, settings
+		)
+		if ambiguous_results:
+			return ambiguous_results[: int(limit or 20)]
 
 	# Fallback to direct resolver
 	direct_entries = _get_payment_entry_rows(
@@ -686,7 +682,11 @@ def find_payment_entry_candidates_for_bank_transaction(
 	safe_results = [
 		c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)
 	]
-	return safe_results[: int(limit or 20)]
+	if safe_results:
+		return safe_results[: int(limit or 20)]
+	return _ambiguous_payment_entry_review_candidates(
+		bank_transaction, results, settings
+	)[: int(limit or 20)]
 
 
 def _payment_entry_match_rows(payment_entry, *, confirmed_only=False):
