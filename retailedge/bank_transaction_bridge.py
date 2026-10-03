@@ -666,6 +666,128 @@ def _submit_imported_bank_transaction(doc):
 	return doc
 
 
+def repair_imported_pending_bank_transactions(dry_run=True, limit=5000):
+	"""Submit historical RetailEdge-imported Bank Transactions left as Pending drafts.
+
+	Only rows already recorded as Imported/Manually Accepted are considered. Drafts
+	with payment allocations are skipped so the repair cannot perform reconciliation
+	as a side effect.
+	"""
+	result = {
+		"dry_run": bool(dry_run),
+		"checked": 0,
+		"repairable": 0,
+		"repaired": 0,
+		"already_submitted": 0,
+		"skipped": 0,
+		"items": [],
+	}
+	if not frappe.db.exists("DocType", "RetailEdge Statement Import Row"):
+		return result
+	if not frappe.db.exists("DocType", "Bank Transaction"):
+		return result
+
+	rows = frappe.get_all(
+		"RetailEdge Statement Import Row",
+		filters={
+			"import_status": ["in", ["Imported", "Manually Accepted"]],
+			"bank_transaction": ["!=", ""],
+		},
+		fields=["name", "bank_transaction", "parent"],
+		limit_page_length=min(max(cint(limit) or 5000, 1), 5000),
+		order_by="creation asc, name asc",
+	)
+
+	seen = set()
+	for row in rows:
+		bank_transaction = cstr(row.get("bank_transaction")).strip()
+		if not bank_transaction or bank_transaction in seen:
+			continue
+		seen.add(bank_transaction)
+		result["checked"] += 1
+
+		state = frappe.db.get_value(
+			"Bank Transaction",
+			bank_transaction,
+			["name", "docstatus", "status", "bank_account", "deposit", "withdrawal"],
+			as_dict=True,
+		)
+		if not state:
+			result["skipped"] += 1
+			result["items"].append({
+				"bank_transaction": bank_transaction,
+				"statement_row": row.get("name"),
+				"status": "missing",
+				"reason": "Linked Bank Transaction no longer exists.",
+			})
+			continue
+
+		if cint(state.get("docstatus")) == 1:
+			result["already_submitted"] += 1
+			continue
+		if cint(state.get("docstatus")) == 2:
+			result["skipped"] += 1
+			result["items"].append({
+				"bank_transaction": bank_transaction,
+				"statement_row": row.get("name"),
+				"status": "skipped",
+				"reason": "Bank Transaction is cancelled.",
+			})
+			continue
+
+		status = cstr(state.get("status")).strip()
+		if status not in {"", "Pending"}:
+			result["skipped"] += 1
+			result["items"].append({
+				"bank_transaction": bank_transaction,
+				"statement_row": row.get("name"),
+				"status": "skipped",
+				"reason": f"Draft Bank Transaction has unexpected status {status}.",
+			})
+			continue
+
+		doc = frappe.get_doc("Bank Transaction", bank_transaction)
+		if getattr(doc, "payment_entries", None):
+			result["skipped"] += 1
+			result["items"].append({
+				"bank_transaction": bank_transaction,
+				"statement_row": row.get("name"),
+				"status": "skipped",
+				"reason": "Draft already contains payment allocations; manual review required.",
+			})
+			continue
+
+		amount = abs(flt(state.get("deposit")) - flt(state.get("withdrawal")))
+		if amount <= 0 or not cstr(state.get("bank_account")).strip():
+			result["skipped"] += 1
+			result["items"].append({
+				"bank_transaction": bank_transaction,
+				"statement_row": row.get("name"),
+				"status": "skipped",
+				"reason": "Bank Account or positive transaction amount is missing.",
+			})
+			continue
+
+		result["repairable"] += 1
+		item = {
+			"bank_transaction": bank_transaction,
+			"statement_row": row.get("name"),
+			"status": "repairable" if dry_run else "repaired",
+			"old_status": status or "Pending",
+			"amount": amount,
+			"bank_account": state.get("bank_account"),
+		}
+		if not dry_run:
+			_submit_imported_bank_transaction(doc)
+			result["repaired"] += 1
+			item["new_status"] = cstr(getattr(doc, "status", None)).strip() or frappe.db.get_value(
+				"Bank Transaction", bank_transaction, "status"
+			)
+		result["items"].append(item)
+
+	return result
+
+
 def _refresh_statement_import_bridge_summary(import_doc):
 	rows = frappe.get_all(
 		"RetailEdge Statement Import Row",
