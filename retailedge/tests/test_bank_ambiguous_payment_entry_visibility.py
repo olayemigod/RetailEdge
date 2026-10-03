@@ -119,9 +119,9 @@ class AmbiguousPaymentEntryVisibilityTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_matching._build_scored_payment_entries")
 	@patch(
-	"retailedge.bank_transaction_matching._get_payment_entry_rows",
-	return_value=[{"name": "placeholder"}],
-)
+		"retailedge.bank_transaction_matching._get_payment_entry_rows",
+		return_value=[{"name": "placeholder"}],
+	)
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	@patch("retailedge.bank_transaction_matching.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings")
@@ -146,7 +146,10 @@ class AmbiguousPaymentEntryVisibilityTests(unittest.TestCase):
 		self.assertTrue(all(row.get("identity_ambiguous") for row in rows))
 
 	@patch("retailedge.bank_transaction_matching._build_scored_payment_entries")
-	@patch("retailedge.bank_transaction_matching._get_payment_entry_rows", return_value=[{"name": "placeholder"}])
+	@patch(
+		"retailedge.bank_transaction_matching._get_payment_entry_rows",
+		return_value=[{"name": "placeholder"}],
+	)
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	@patch("retailedge.bank_transaction_matching.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings")
