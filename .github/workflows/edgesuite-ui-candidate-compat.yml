@@ -157,7 +157,7 @@ jobs:
           grep -Fq 'writer.ready' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
           grep -Fq 'state: "unsupported"' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_components.js
           grep -Fq 'writeQueues' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_runtime.js
-          grep -Fq 'text_encoding' apps/edgesuite_ui/edgesuite_ui/doctype/edge_print_profile/edge_print_profile.json
+          grep -Fq 'text_encoding' apps/edgesuite_ui/edgesuite_ui/edgesuite_ui/doctype/edge_print_profile/edge_print_profile.json
           grep -Fq 'PRINT_CONTEXT_VALIDATOR_HOOK' apps/edgesuite_ui/edgesuite_ui/api/printing.py
 
           # Reproduce the shared-bench condition that exposed the stale alias: a CoreEdge
