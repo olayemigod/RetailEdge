@@ -41,22 +41,36 @@ def _item_label(row) -> str:
 def _item_blocks(doc, currency: str) -> list[dict[str, Any]]:
 	blocks: list[dict[str, Any]] = []
 	for row in doc.get("items") or []:
+		qty = flt(row.get("qty"))
+		rate = flt(row.get("net_rate") if row.get("net_rate") is not None else row.get("rate"))
+		amount = flt(
+			row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")
+		)
 		blocks.append({"type": "text", "text": _item_label(row), "bold": True})
 		blocks.append(
 			{
 				"type": "text",
 				"text": _("{0} x {1}").format(
-					_quantity(row.get("qty")),
-					_money(row.get("rate"), currency),
+					_quantity(qty),
+					_money(rate, currency),
 				),
 			}
 		)
-		# Preserve the complete monetary amount on narrow 58 mm paper. EdgeSuite
-		# may wrap text blocks, while row cells are intentionally width-bounded.
+		discount_percentage = flt(row.get("discount_percentage"))
+		if discount_percentage:
+			blocks.append(
+				{
+					"type": "text",
+					"text": _("Item Discount: {0}%").format(
+						f"{discount_percentage:g}"
+					),
+				}
+			)
+		# Preserve the complete payable item amount on narrow 58 mm paper.
 		blocks.append(
 			{
 				"type": "text",
-				"text": _money(row.get("amount"), currency),
+				"text": _money(amount, currency),
 				"align": "right",
 			}
 		)
@@ -92,9 +106,10 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 		blocks.append({"type": "text", "text": company, "align": "center", "bold": True})
 	if branch:
 		blocks.append({"type": "text", "text": branch, "align": "center"})
+	receipt_label = _("Return Receipt") if cint(doc.get("is_return")) else definition["label"]
 	blocks.extend(
 		[
-			{"type": "text", "text": definition["label"], "align": "center", "bold": True},
+			{"type": "text", "text": receipt_label, "align": "center", "bold": True},
 			{"type": "text", "text": doc.name, "align": "center"},
 			{"type": "rule"},
 		]
@@ -112,6 +127,15 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 			{
 				"type": "text",
 				"text": _("Subtotal: {0}").format(_money(doc.get("net_total"), currency)),
+			}
+		)
+	if doc.meta.has_field("discount_amount") and flt(doc.get("discount_amount")):
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Additional Discount: {0}").format(
+					_money(doc.get("discount_amount"), currency)
+				),
 			}
 		)
 	if doc.meta.has_field("total_taxes_and_charges") and flt(doc.get("total_taxes_and_charges")):
@@ -138,6 +162,21 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 	if payment_blocks:
 		blocks.append({"type": "text", "text": _("Payment"), "bold": True})
 		blocks.extend(payment_blocks)
+
+	if doc.meta.has_field("paid_amount") and flt(doc.get("paid_amount")):
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Tendered: {0}").format(_money(doc.get("paid_amount"), currency)),
+			}
+		)
+	if doc.meta.has_field("change_amount") and flt(doc.get("change_amount")):
+		blocks.append(
+			{
+				"type": "text",
+				"text": _("Change: {0}").format(_money(doc.get("change_amount"), currency)),
+			}
+		)
 
 	if doc.meta.has_field("outstanding_amount") and flt(doc.get("outstanding_amount")) > 0:
 		blocks.append(
