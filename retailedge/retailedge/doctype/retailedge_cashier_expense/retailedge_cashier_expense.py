@@ -15,6 +15,7 @@ from retailedge.cashier_expense import append_cashier_expense_action_log
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
 	get_cashier_expense_posting_settings,
+	get_effective_cashier_expense_posting_settings,
 	refresh_cashier_expense_posting_readiness,
 )
 from retailedge.cashier_expense_accounting import attempt_direct_cashier_expense_posting
@@ -47,9 +48,13 @@ class RetailEdgeCashierExpense(Document):
 			self.expense_status = "Submitted"
 		if not getattr(self, "cash_movement_status", None) or getattr(self, "cash_movement_status", None) == "Not Disbursed":
 			self.cash_movement_status = "Disbursed"
-		posting_settings = get_cashier_expense_posting_settings()
+		global_posting_settings = get_cashier_expense_posting_settings()
 		if not getattr(self, "posting_mode_applied", None):
-			self.posting_mode_applied = posting_settings["posting_mode"]
+			self.posting_mode_applied = global_posting_settings["posting_mode"]
+		posting_settings = get_effective_cashier_expense_posting_settings(
+			self,
+			settings=global_posting_settings,
+		)
 		if posting_settings["enabled"] and posting_settings["posting_mode"] == "Direct Posting":
 			self.ledger_status = "Pending Ledger"
 		elif not self.ledger_status:

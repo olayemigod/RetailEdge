@@ -8,8 +8,10 @@ from retailedge.cashier_expense_accounting import (
 	_post_cashier_expense_to_accounts,
 	attempt_direct_cashier_expense_posting,
 )
+from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import RetailEdgeCashierExpense
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
+	get_cashier_expense_posting_settings,
 	get_effective_cashier_expense_posting_settings,
 )
 
@@ -50,6 +52,72 @@ def _expense(*, mode: str, status: str = "Submitted"):
 
 
 class CashierExpensePostingPolicySnapshotTests(unittest.TestCase):
+	@patch("retailedge.cashier_expense_posting.get_retailedge_settings")
+	def test_runtime_posting_document_type_is_always_journal_entry(self, mock_settings):
+		mock_settings.return_value = SimpleNamespace(
+			enable_cashier_expense_accounting_posting=1,
+			cashier_expense_posting_mode="Direct Posting",
+			cashier_expense_posting_document_type="Payment Entry",
+			cashier_expense_posting_roles=[],
+		)
+		settings = get_cashier_expense_posting_settings()
+		self.assertEqual(settings["posting_document_type"], "Journal Entry")
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_effective_cashier_expense_posting_settings"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_cashier_expense_posting_settings"
+	)
+	def test_before_submit_uses_captured_controlled_mode_after_global_switch_to_direct(
+		self,
+		mock_global_settings,
+		mock_effective_settings,
+	):
+		mock_global_settings.return_value = _settings("Direct Posting")
+		mock_effective_settings.return_value = _settings("Controlled Posting")
+		doc = SimpleNamespace(
+			expense_status="Draft",
+			cash_movement_status="Not Disbursed",
+			posting_mode_applied="Controlled Posting",
+			ledger_status="Not Applicable",
+			set_posting_readiness_preview=Mock(),
+		)
+
+		RetailEdgeCashierExpense.before_submit(doc)
+
+		self.assertEqual(doc.expense_status, "Submitted")
+		self.assertEqual(doc.cash_movement_status, "Disbursed")
+		self.assertEqual(doc.posting_mode_applied, "Controlled Posting")
+		self.assertEqual(doc.ledger_status, "Not Applicable")
+		mock_effective_settings.assert_called_once_with(doc, settings=mock_global_settings.return_value)
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_effective_cashier_expense_posting_settings"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_cashier_expense_posting_settings"
+	)
+	def test_before_submit_uses_captured_direct_mode_after_global_switch_to_controlled(
+		self,
+		mock_global_settings,
+		mock_effective_settings,
+	):
+		mock_global_settings.return_value = _settings("Controlled Posting")
+		mock_effective_settings.return_value = _settings("Direct Posting")
+		doc = SimpleNamespace(
+			expense_status="Draft",
+			cash_movement_status="Not Disbursed",
+			posting_mode_applied="Direct Posting",
+			ledger_status="Not Applicable",
+			set_posting_readiness_preview=Mock(),
+		)
+
+		RetailEdgeCashierExpense.before_submit(doc)
+
+		self.assertEqual(doc.posting_mode_applied, "Direct Posting")
+		self.assertEqual(doc.ledger_status, "Pending Ledger")
+
 	def test_effective_settings_preserve_captured_controlled_mode(self):
 		settings = get_effective_cashier_expense_posting_settings(
 			_expense(mode="Controlled Posting"),
