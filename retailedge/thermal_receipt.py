@@ -133,7 +133,7 @@ def _receipt_blocks(doc, definition: dict[str, Any]) -> list[dict[str, Any]]:
 		blocks.append(
 			{
 				"type": "text",
-				"text": _("Additional Discount: {0}").format(
+				"text": _("Additional Discount (included): {0}").format(
 					_money(doc.get("discount_amount"), currency)
 				),
 			}
