@@ -2668,7 +2668,9 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		or candidate.get("customer")
 		or bank_transaction.get("party"),
 		"party": candidate.get("party") or bank_transaction.get("party"),
-		"party_type": candidate.get("party_type") or bank_transaction.get("party_type") or "Customer",
+		"party_type": candidate.get("party_type")
+		or bank_transaction.get("party_type")
+		or ("Customer" if candidate_doctype == "Sales Invoice" else None),
 		"candidate_amount": flt(candidate.get("candidate_amount")),
 		"amount_difference": flt(candidate.get("amount_difference")),
 		"match_confidence": candidate.get("confidence") or "No Match",
