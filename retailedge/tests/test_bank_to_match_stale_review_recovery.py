@@ -49,6 +49,16 @@ def test_stale_review_can_find_and_switch_replacement_candidate():
 	assert "await refresh();" in source
 
 
+def test_review_modal_remounts_on_each_open_to_reset_scroll_position():
+	source = WORKSPACE_JS.read_text(encoding="utf-8")
+
+	assert "instanceKey: 0" in source
+	assert "state.review.instanceKey += 1;" in source
+	review_modal_index = source.index("function renderReviewModal()")
+	modal_key_index = source.index("key: state.review.instanceKey", review_modal_index)
+	assert modal_key_index > review_modal_index
+
+
 def test_historical_reconciled_review_does_not_offer_replacement():
 	source = WORKSPACE_JS.read_text(encoding="utf-8")
 
