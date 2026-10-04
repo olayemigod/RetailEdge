@@ -208,7 +208,7 @@
 		const EdgeTextarea = runtime.getComponent("EdgeTextarea");
 
 		return defineComponent({
-			name: "RetailEdgeBankMatchingReconciliationEdgeSuite",
+			name: "RetailEdgeBankingEdgeSuiteWorkspace",
 			setup() {
 				const state = reactive({
 					direction: "All",
@@ -257,6 +257,7 @@
 						candidateSnapshot: null,
 						decisionNote: "",
 						approvalNote: "",
+						instanceKey: 0,
 					},
 					reconcile: {
 						open: false,
@@ -523,6 +524,7 @@
 				}
 
 				async function showReviewMatchDialog(matchName, candidateSnapshot = null) {
+					state.review.instanceKey += 1;
 					Object.assign(state.review, {
 						open: true,
 						loading: true,
@@ -582,7 +584,6 @@
 										"Live accounting evidence is unavailable. Showing the stored review snapshot instead."
 									)
 								);
-							}
 						} else if (evidenceResult.status === "fulfilled") {
 							state.review.evidence =
 								evidenceResult.value || historicalEvidenceFallback(doc, candidateSnapshot);
@@ -1000,6 +1001,7 @@
 					}
 
 					return h(EdgeModal, {
+						key: state.review.instanceKey,
 						open: state.review.open,
 						title: t("Review Match: {0}", [doc.bank_transaction || state.review.matchName]),
 						subtitle: historicalReadOnly
