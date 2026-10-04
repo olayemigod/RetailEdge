@@ -208,7 +208,7 @@
 		const EdgeTextarea = runtime.getComponent("EdgeTextarea");
 
 		return defineComponent({
-			name: "RetailEdgeBankingEdgeSuiteWorkspace",
+			name: "RetailEdgeBankMatchingReconciliationEdgeSuite",
 			setup() {
 				const state = reactive({
 					direction: "All",
@@ -584,6 +584,7 @@
 										"Live accounting evidence is unavailable. Showing the stored review snapshot instead."
 									)
 								);
+							}
 						} else if (evidenceResult.status === "fulfilled") {
 							state.review.evidence =
 								evidenceResult.value || historicalEvidenceFallback(doc, candidateSnapshot);
