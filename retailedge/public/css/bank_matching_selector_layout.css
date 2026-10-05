@@ -1,0 +1,58 @@
+/* Bank Matching selector bars only.
+   Keep EdgeSuite's shared EdgeActionBar intact while making the two banking
+   selector rows deterministic for longer labels such as "Workflow Status". */
+.retailedge-bank-layout .edge-action-bar {
+	display: flex !important;
+	align-items: center !important;
+	flex-wrap: wrap !important;
+	column-gap: .75rem !important;
+	row-gap: .5rem !important;
+	min-width: 0;
+}
+
+/* Some EdgeActionBar versions position the label independently from the action
+   slot. In this workspace the label must participate in normal flow so the
+   first button can never render underneath it. */
+.retailedge-bank-layout .edge-action-bar > * {
+	position: static !important;
+	inset: auto !important;
+	transform: none !important;
+	min-width: 0;
+	margin-top: 0 !important;
+	margin-bottom: 0 !important;
+}
+
+.retailedge-bank-layout .edge-action-bar > :first-child {
+	flex: 0 0 auto;
+	white-space: nowrap;
+	margin-right: .1rem !important;
+}
+
+.retailedge-bank-layout .edge-action-bar [class*="action"] {
+	min-width: 0;
+}
+
+.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+	display: flex !important;
+	align-items: center !important;
+	flex-wrap: wrap !important;
+	gap: .5rem !important;
+}
+
+.retailedge-bank-layout .edge-action-bar .edge-button {
+	flex: 0 0 auto;
+	margin: 0 !important;
+	white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+	.retailedge-bank-layout .edge-action-bar {
+		align-items: flex-start !important;
+	}
+
+	.retailedge-bank-layout .edge-action-bar > :first-child {
+		flex-basis: 100%;
+		width: 100%;
+		margin-right: 0 !important;
+	}
+}
