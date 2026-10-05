@@ -28,18 +28,23 @@ jobs:
 
           path = Path("retailedge/tests/_cashier_expense_regression_suite.py")
           text = path.read_text()
-          old = '''\t\tmock_set_value.assert_called_once_with(
-\t\t\t"RetailEdge Cashier Expense",
-\t\t\t"RE-CE-0002B",
-\t\t\t"expense_status",
-\t\t\t"Submitted",
-\t\t\tupdate_modified=False,
-\t\t)'''
-          new = old.replace("assert_called_once_with", "assert_any_call", 1)
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f"Expected exactly one stale assertion; found {count}")
-          path.write_text(text.replace(old, new, 1))
+          marker = "def test_approve_normalises_stale_submitted_docstatus("
+          start = text.find(marker)
+          if start < 0:
+              raise SystemExit("Target regression test was not found")
+          end = text.find("\n\t@patch(", start + len(marker))
+          if end < 0:
+              end = len(text)
+          block = text[start:end]
+          old = "mock_set_value.assert_called_once_with("
+          if block.count(old) != 1:
+              raise SystemExit(
+                  f"Expected one stale assertion in target test; found {block.count(old)}"
+              )
+          replacement = "mock_set_value.assert_any_call("
+          updated_block = block.replace(old, replacement, 1)
+          updated = text[:start] + updated_block + text[end:]
+          path.write_text(updated)
           PY
           rm .github/workflows/pr131-assertion-hotfix.yml
 
