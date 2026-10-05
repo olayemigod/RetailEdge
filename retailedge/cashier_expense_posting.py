@@ -242,7 +242,7 @@ def get_cashier_expense_posting_preview(expense_name):
 	return build_cashier_expense_posting_preview(expense_name)
 
 
-def refresh_cashier_expense_posting_readiness(expense_name):
+def refresh_cashier_expense_posting_readiness(expense_name, *, log_action=True):
 	preview = get_cashier_expense_posting_preview(expense_name)
 	frappe.db.set_value(
 		"RetailEdge Cashier Expense",
@@ -259,17 +259,18 @@ def refresh_cashier_expense_posting_readiness(expense_name):
 		},
 		update_modified=False,
 	)
-	append_cashier_expense_action_log(
-		expense_name,
-		action="Posting Readiness Refreshed",
-		previous_status=None,
-		new_status=None,
-		remarks=preview.get("posting_block_reason"),
-		context={
-			"posting_ready": preview.get("posting_ready"),
-			"posting_document_type": preview.get("posting_document_type"),
-		},
-	)
+	if log_action:
+		append_cashier_expense_action_log(
+			expense_name,
+			action="Posting Readiness Refreshed",
+			previous_status=None,
+			new_status=None,
+			remarks=preview.get("posting_block_reason"),
+			context={
+				"posting_ready": preview.get("posting_ready"),
+				"posting_document_type": preview.get("posting_document_type"),
+			},
+		)
 	return preview
 
 
