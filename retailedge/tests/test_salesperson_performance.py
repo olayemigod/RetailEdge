@@ -133,6 +133,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
 		with (
+			patch("retailedge.salesperson_performance.assert_can_access_branch_performance"),
 			patch("retailedge.salesperson_performance._assert_company_access"),
 			patch(
 				"retailedge.salesperson_performance.get_operational_branch_scope",
@@ -323,6 +324,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
 		with (
+			patch("retailedge.salesperson_performance.assert_can_access_branch_performance"),
 			patch("retailedge.salesperson_performance._assert_company_access"),
 			patch(
 				"retailedge.salesperson_performance.get_operational_branch_scope",
