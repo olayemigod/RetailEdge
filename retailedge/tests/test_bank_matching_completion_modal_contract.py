@@ -27,6 +27,23 @@ def test_bank_review_completion_keeps_comparison_first():
 	)
 
 
+def test_bank_review_completion_waits_for_real_vue_review_body_on_reopen():
+	text = source()
+
+	for expected in (
+		'const compareGrid = body.querySelector(".retailedge-bank-compare-grid");',
+		'const recordLinks = body.querySelector(".retailedge-bank-record-links");',
+		'if (!compareGrid || !recordLinks)',
+		'Never inject completion sections into the temporary loading body.',
+	):
+		assert expected in text
+
+	guard = text.index('if (!compareGrid || !recordLinks)')
+	hydration = text.index('await hydrateOperational(matchName);')
+	placement = text.index('placeCompletionSections(body, context, evidenceGrid, guidance);')
+	assert guard < hydration < placement
+
+
 def test_bank_review_viewport_resets_after_async_completion_only():
 	text = source()
 
