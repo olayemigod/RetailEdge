@@ -133,6 +133,35 @@
 			.find((modal) => clean(modal.textContent).includes(t("Review Match:"))) || null;
 	}
 
+	function placeCompletionSections(body, context, evidenceGrid, guidance) {
+		const compareGrid = body.querySelector(".retailedge-bank-compare-grid");
+		const recordLinks = body.querySelector(".retailedge-bank-record-links");
+		const anchor = compareGrid?.nextSibling || recordLinks || null;
+
+		// Keep one deterministic review hierarchy on every open:
+		// comparison first, then operational context/evidence/guidance, then the
+		// remaining review controls rendered by the EdgeSuite workspace.
+		body.insertBefore(context, anchor);
+		body.insertBefore(evidenceGrid, anchor);
+		body.insertBefore(guidance, anchor);
+	}
+
+	function resetReviewViewportAfterEnhancement(modal) {
+		const body = modal?.querySelector?.(".edge-modal__body");
+		if (!body) return;
+
+		const reset = () => {
+			body.scrollTop = 0;
+			body.scrollLeft = 0;
+		};
+		const raf = global.requestAnimationFrame?.bind(global);
+		if (raf) {
+			raf(() => raf(reset));
+			return;
+		}
+		global.setTimeout?.(reset, 0);
+	}
+
 	async function enhanceReviewModal() {
 		scheduled = false;
 		if (!isBankingPage()) return;
@@ -152,8 +181,6 @@
 		const details = parseDetails(doc);
 		const candidate = details.candidate_context || {};
 		const body = modal.querySelector(".edge-modal__body") || modal;
-		const recordLinks = body.querySelector(".retailedge-bank-record-links");
-		const insertBefore = recordLinks || null;
 
 		appendComparisonContext(modal, statement, accounting, doc);
 
@@ -183,10 +210,13 @@
 		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", action));
 		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
 
-		body.insertBefore(guidance, insertBefore);
-		body.insertBefore(evidenceGrid, guidance);
-		body.insertBefore(context, evidenceGrid);
+		placeCompletionSections(body, context, evidenceGrid, guidance);
 		modal.dataset.retailedgeCompletion = "1";
+
+		// EdgeModal opens while the review is still hydrating. Reset only after
+		// the asynchronous completion pass has finished so browser scroll
+		// anchoring cannot reopen the modal at Operational Context/Evidence.
+		resetReviewViewportAfterEnhancement(modal);
 	}
 
 	function scheduleEnhancement() {
