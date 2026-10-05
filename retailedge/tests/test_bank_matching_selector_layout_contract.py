@@ -11,6 +11,7 @@ def test_bank_matching_page_loads_selector_layout_stylesheet():
 
 	assert 'bank_matching_selector_layout.css' in text
 	assert 'loadVersionedStylesheet(SELECTOR_LAYOUT_CSS, "selector-layout")' in text
+	assert 'const STYLE_VERSION = "20261005-3";' in text
 
 
 def test_selector_bars_are_compact_inline_groups_on_wide_screens():
@@ -21,10 +22,13 @@ def test_selector_bars_are_compact_inline_groups_on_wide_screens():
 		'display: inline-flex !important;',
 		'flex-wrap: nowrap !important;',
 		'width: auto !important;',
-		'white-space: nowrap;',
+		'padding: .45rem .55rem !important;',
+		'font-size: .82rem !important;',
 		'.retailedge-bank-layout .edge-action-bar [class*="actions"] {',
-		'flex: 0 1 auto !important;',
-		'gap: .4rem !important;',
+		'gap: .3rem !important;',
+		'.retailedge-bank-layout .edge-action-bar .edge-button {',
+		'min-height: 2rem !important;',
+		'padding: .38rem .58rem !important;',
 	):
 		assert expected in text
 
@@ -32,6 +36,6 @@ def test_selector_bars_are_compact_inline_groups_on_wide_screens():
 def test_selector_bars_wrap_only_at_responsive_breakpoints():
 	text = SELECTOR_CSS.read_text(encoding="utf-8")
 
-	assert '@media (max-width: 1180px)' in text
+	assert '@media (max-width: 1040px)' in text
 	assert '@media (max-width: 760px)' in text
 	assert 'width: 100% !important;' in text
