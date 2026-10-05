@@ -899,7 +899,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_get_doc.return_value = doc
 		result = approve_cashier_expense("RE-CE-0002B", remarks="ok")
 		self.assertEqual(result["expense_status"], "Pending Ledger")
-		mock_set_value.assert_called_once_with(
+		mock_set_value.assert_any_call(
 			"RetailEdge Cashier Expense",
 			"RE-CE-0002B",
 			"expense_status",

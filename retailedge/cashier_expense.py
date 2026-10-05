@@ -102,12 +102,29 @@ def append_cashier_expense_action_log(
 	return log_row
 
 
+def _refresh_posting_readiness_after_lifecycle_transition(doc):
+	"""Synchronise stored posting readiness after a Cashier Expense state transition."""
+	from retailedge.cashier_expense_posting import refresh_cashier_expense_posting_readiness
+
+	preview = refresh_cashier_expense_posting_readiness(doc.name, log_action=False)
+	# Keep the in-memory document aligned with the persisted derived state without
+	# adding a second user-facing "Posting Readiness Refreshed" audit action.
+	doc.posting_ready = 1 if preview.get("posting_ready") else 0
+	doc.posting_block_reason = preview.get("posting_block_reason")
+	doc.resolved_debit_account = preview.get("debit_account")
+	doc.resolved_credit_account = preview.get("credit_account")
+	doc.resolved_posting_cost_center = preview.get("cost_center")
+	doc.posting_preview = preview.get("posting_preview")
+	return doc
+
+
 def submit_cashier_expense(expense_name):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
 	if doc.docstatus == 0:
 		if not doc.has_permission("submit"):
 			frappe.throw("You do not have permission to submit this cashier expense.", frappe.PermissionError)
 		doc.submit()
+		_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -138,6 +155,7 @@ def approve_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -164,6 +182,7 @@ def reject_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -197,6 +216,7 @@ def reopen_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
