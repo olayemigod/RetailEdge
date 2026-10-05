@@ -13,17 +13,25 @@ def test_bank_matching_page_loads_selector_layout_stylesheet():
 	assert 'loadVersionedStylesheet(SELECTOR_LAYOUT_CSS, "selector-layout")' in text
 
 
-def test_selector_bar_reserves_space_for_label_and_wraps_actions():
+def test_selector_bars_are_compact_inline_groups_on_wide_screens():
 	text = SELECTOR_CSS.read_text(encoding="utf-8")
 
 	for expected in (
 		'.retailedge-bank-layout .edge-action-bar {',
-		'display: flex !important;',
-		'flex-wrap: wrap !important;',
-		'column-gap: .75rem !important;',
-		'.retailedge-bank-layout .edge-action-bar > :first-child {',
+		'display: inline-flex !important;',
+		'flex-wrap: nowrap !important;',
+		'width: auto !important;',
 		'white-space: nowrap;',
 		'.retailedge-bank-layout .edge-action-bar [class*="actions"] {',
-		'gap: .5rem !important;',
+		'flex: 0 1 auto !important;',
+		'gap: .4rem !important;',
 	):
 		assert expected in text
+
+
+def test_selector_bars_wrap_only_at_responsive_breakpoints():
+	text = SELECTOR_CSS.read_text(encoding="utf-8")
+
+	assert '@media (max-width: 1180px)' in text
+	assert '@media (max-width: 760px)' in text
+	assert 'width: 100% !important;' in text
