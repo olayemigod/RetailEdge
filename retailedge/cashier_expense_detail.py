@@ -274,7 +274,7 @@ def submit_cashier_expense_for_review(
 	# Native submit owns validation and the Draft → Submitted/Pending Ledger state.
 	doc.submit()
 	doc.reload()
-	refresh_cashier_expense_posting_readiness(doc.name)
+	refresh_cashier_expense_posting_readiness(doc.name, log_action=False)
 	result = get_cashier_expense_detail(doc.name)
 	result["persistence"] = "native_submit"
 	return result
