@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from retailedge.cashier_expense import (
 	_refresh_posting_readiness_after_lifecycle_transition,
@@ -22,7 +22,7 @@ class TestCashierExpenseReadinessLifecycleSync(unittest.TestCase):
 	@patch("retailedge.cashier_expense_posting.refresh_cashier_expense_posting_readiness")
 	def test_lifecycle_sync_refreshes_canonical_readiness_and_reloads_document(self, refresh):
 		doc = SimpleNamespace(name="RE-CE-TEST-0001")
-		doc.reload = unittest.mock.Mock()
+		doc.reload = Mock()
 
 		result = _refresh_posting_readiness_after_lifecycle_transition(doc)
 
