@@ -172,6 +172,17 @@
 		const payload = ensurePayload(matchName);
 		if (!payload?.doc?.name || !payload?.evidence?.match_name) return;
 
+		const body = modal.querySelector(".edge-modal__body") || modal;
+		const compareGrid = body.querySelector(".retailedge-bank-compare-grid");
+		const recordLinks = body.querySelector(".retailedge-bank-record-links");
+		if (!compareGrid || !recordLinks) {
+			// Warm payloads exist on reopen before Vue replaces its loading state.
+			// Never inject completion sections into the temporary loading body.
+			// The MutationObserver will schedule another pass when the real review
+			// content (comparison grid + record links) has been rendered.
+			return;
+		}
+
 		await hydrateOperational(matchName);
 		const doc = payload.doc || {};
 		const evidence = payload.evidence || {};
@@ -180,7 +191,6 @@
 		const accounting = evidence.accounting || {};
 		const details = parseDetails(doc);
 		const candidate = details.candidate_context || {};
-		const body = modal.querySelector(".edge-modal__body") || modal;
 
 		appendComparisonContext(modal, statement, accounting, doc);
 
