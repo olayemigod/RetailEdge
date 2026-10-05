@@ -301,6 +301,17 @@
    "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Expense Register",
+   "link_to": "expense-register",
+   "link_type": "Page",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 0,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Cashier Expenses",
    "link_to": "cashier-expenses",
    "link_type": "Page",

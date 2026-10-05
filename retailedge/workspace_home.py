@@ -78,7 +78,8 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Import Bank Statement", "Page", "bank-statement-imports", "Money & Banking", 40, "bank_ops", "Business Workspace", "Blue"),
 
 	WorkspaceHomeItem("Business Expenses", "Page", "business-expenses", "Expenses", 10, "operations", "Business Workspace", "Green"),
-	WorkspaceHomeItem("Cashier Expenses", "Page", "cashier-expenses", "Expenses", 20, "cashier", "Business Workspace", "Green"),
+	WorkspaceHomeItem("Expense Register", "Page", "expense-register", "Expenses", 20, "operations", "Business Workspace", "Green"),
+	WorkspaceHomeItem("Cashier Expenses", "Page", "cashier-expenses", "Expenses", 30, "cashier", "Business Workspace", "Green"),
 
 	WorkspaceHomeItem("Customers", "DocType", "Customer", "Customers", 10, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Customer Receivables", "Page", "customer-receivables", "Customers", 20, "accounts", "Business Workspace", "Blue"),

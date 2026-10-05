@@ -259,7 +259,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Expenses",
-   "link_count": 2,
+   "link_count": 3,
    "link_type": "Page",
    "onboard": 0,
    "type": "Card Break"
@@ -270,6 +270,16 @@
    "label": "Business Expenses",
    "link_count": 0,
    "link_to": "business-expenses",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Expense Register",
+   "link_count": 0,
+   "link_to": "expense-register",
    "link_type": "Page",
    "onboard": 0,
    "type": "Link"

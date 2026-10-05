@@ -174,6 +174,33 @@ def test_native_workspace_uses_same_task_frequency_taxonomy():
 	assert by_section["Reports"] == {"reports-centre"}
 
 
+
+def test_expense_register_is_dual_entry_under_expenses_and_reports_centre():
+	groups = [
+		_group(
+			"expenses",
+			_item("Business Expenses", "Page", "business-expenses"),
+			_item("Expense Register", "Page", "expense-register"),
+			_item("Cashier Expenses", "Page", "cashier-expenses"),
+		),
+	]
+	_reclassify_navigation_for_task_frequency(groups)
+
+	by_key = {group["key"]: group for group in groups}
+	assert "expenses" in by_key
+	assert "expense-register" in {item["target"] for item in by_key["expenses"]["items"]}
+	assert "expense-register" in {
+		item["target"]
+		for group in REPORT_GROUPS
+		for item in group["items"]
+	}
+	assert "expense-register" in {
+		item.link_to
+		for item in HOME_WORKSPACE_ITEMS
+		if item.section == "Expenses"
+	}
+
+
 def test_product_menu_supports_every_final_navigation_group():
 	source = (ROOT / "public" / "js" / "retailedge_product_menu.bundle.js").read_text(encoding="utf-8")
 	for key, _label, _icon in NAVIGATION_PRESENTATION_GROUPS:
