@@ -13,7 +13,7 @@
 	const SELECTOR_LAYOUT_CSS = "/assets/retailedge/css/bank_matching_selector_layout.css";
 	const PRIMARY_DATE_CSS = "/assets/retailedge/css/bank_matching_primary_date.css";
 	const DARK_CONTRAST_CSS = "/assets/retailedge/css/bank_matching_dark_contrast.css";
-	const STYLE_VERSION = "20261005-2";
+	const STYLE_VERSION = "20261005-3";
 	const WORKSPACE_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_workspace.js";
 	const COMPLETION_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js";
 	const PAGE_ENHANCEMENTS_ASSET = "/assets/retailedge/js/bank_matching_page_enhancements.js";
