@@ -1,13 +1,18 @@
 /* Bank Matching selector bars only.
-   Keep EdgeSuite's shared EdgeActionBar intact while making the two banking
-   selector rows deterministic for longer labels such as "Workflow Status". */
+   Keep EdgeSuite's shared EdgeActionBar intact while making Direction and
+   Workflow Status compact, deterministic and responsive. */
 .retailedge-bank-layout .edge-action-bar {
-	display: flex !important;
+	display: inline-flex !important;
 	align-items: center !important;
-	flex-wrap: wrap !important;
-	column-gap: .75rem !important;
-	row-gap: .5rem !important;
+	flex-wrap: nowrap !important;
+	width: auto !important;
+	max-width: 100%;
 	min-width: 0;
+	vertical-align: top;
+	column-gap: .6rem !important;
+	row-gap: .45rem !important;
+	margin-right: .7rem;
+	margin-bottom: .55rem;
 }
 
 /* Some EdgeActionBar versions position the label independently from the action
@@ -24,8 +29,9 @@
 
 .retailedge-bank-layout .edge-action-bar > :first-child {
 	flex: 0 0 auto;
+	width: auto !important;
 	white-space: nowrap;
-	margin-right: .1rem !important;
+	margin-right: .05rem !important;
 }
 
 .retailedge-bank-layout .edge-action-bar [class*="action"] {
@@ -35,24 +41,49 @@
 .retailedge-bank-layout .edge-action-bar [class*="actions"] {
 	display: flex !important;
 	align-items: center !important;
-	flex-wrap: wrap !important;
-	gap: .5rem !important;
+	flex: 0 1 auto !important;
+	flex-wrap: nowrap !important;
+	width: auto !important;
+	min-width: 0;
+	gap: .4rem !important;
 }
 
 .retailedge-bank-layout .edge-action-bar .edge-button {
-	flex: 0 0 auto;
+	flex: 0 1 auto;
+	min-width: 0;
 	margin: 0 !important;
+	padding-left: .7rem !important;
+	padding-right: .7rem !important;
 	white-space: nowrap;
+}
+
+/* At laptop/tablet widths keep each selector internally tidy, but allow the
+   selector groups themselves and their button rows to wrap instead of collide. */
+@media (max-width: 1180px) {
+	.retailedge-bank-layout .edge-action-bar {
+		flex-wrap: wrap !important;
+	}
+
+	.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+		flex-wrap: wrap !important;
+	}
 }
 
 @media (max-width: 760px) {
 	.retailedge-bank-layout .edge-action-bar {
+		display: flex !important;
+		width: 100% !important;
 		align-items: flex-start !important;
+		margin-right: 0;
 	}
 
 	.retailedge-bank-layout .edge-action-bar > :first-child {
 		flex-basis: 100%;
-		width: 100%;
+		width: 100% !important;
 		margin-right: 0 !important;
+	}
+
+	.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+		width: 100% !important;
 	}
 }
