@@ -102,12 +102,24 @@ def append_cashier_expense_action_log(
 	return log_row
 
 
+def _refresh_posting_readiness_after_lifecycle_transition(doc):
+	"""Synchronise stored posting readiness after a Cashier Expense state transition."""
+	from retailedge.cashier_expense_posting import refresh_cashier_expense_posting_readiness
+
+	refresh_cashier_expense_posting_readiness(doc.name)
+	# The refresh persists derived fields with db.set_value(update_modified=False).
+	# Reload so callers do not continue with stale in-memory readiness fields.
+	doc.reload()
+	return doc
+
+
 def submit_cashier_expense(expense_name):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
 	if doc.docstatus == 0:
 		if not doc.has_permission("submit"):
 			frappe.throw("You do not have permission to submit this cashier expense.", frappe.PermissionError)
 		doc.submit()
+		_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -138,6 +150,7 @@ def approve_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -164,6 +177,7 @@ def reject_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
@@ -197,6 +211,7 @@ def reopen_cashier_expense(expense_name, remarks=None):
 		remarks=remarks,
 		context={"ledger_status": doc.ledger_status},
 	)
+	_refresh_posting_readiness_after_lifecycle_transition(doc)
 	return _status_payload(doc)
 
 
