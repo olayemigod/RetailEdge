@@ -1,6 +1,6 @@
 /* Bank Matching selector bars only.
    Keep EdgeSuite's shared EdgeActionBar intact while making Direction and
-   Workflow Status compact, deterministic and responsive. */
+   Workflow Status compact, readable and actionable on this workspace. */
 .retailedge-bank-layout .edge-action-bar {
 	display: inline-flex !important;
 	align-items: center !important;
@@ -9,10 +9,11 @@
 	max-width: 100%;
 	min-width: 0;
 	vertical-align: top;
-	column-gap: .6rem !important;
-	row-gap: .45rem !important;
-	margin-right: .7rem;
-	margin-bottom: .55rem;
+	column-gap: .4rem !important;
+	row-gap: .3rem !important;
+	margin-right: .45rem;
+	margin-bottom: .45rem;
+	padding: .45rem .55rem !important;
 }
 
 /* Some EdgeActionBar versions position the label independently from the action
@@ -32,6 +33,9 @@
 	width: auto !important;
 	white-space: nowrap;
 	margin-right: .05rem !important;
+	font-size: .82rem !important;
+	line-height: 1.2 !important;
+	font-weight: 600 !important;
 }
 
 .retailedge-bank-layout .edge-action-bar [class*="action"] {
@@ -45,21 +49,25 @@
 	flex-wrap: nowrap !important;
 	width: auto !important;
 	min-width: 0;
-	gap: .4rem !important;
+	gap: .3rem !important;
 }
 
 .retailedge-bank-layout .edge-action-bar .edge-button {
 	flex: 0 1 auto;
 	min-width: 0;
+	min-height: 2rem !important;
+	height: auto !important;
 	margin: 0 !important;
-	padding-left: .7rem !important;
-	padding-right: .7rem !important;
+	padding: .38rem .58rem !important;
+	font-size: .82rem !important;
+	line-height: 1.15 !important;
 	white-space: nowrap;
 }
 
-/* At laptop/tablet widths keep each selector internally tidy, but allow the
-   selector groups themselves and their button rows to wrap instead of collide. */
-@media (max-width: 1180px) {
+/* Keep both selector groups on the same row for normal desktop/laptop widths.
+   Only allow wrapping when the available workspace width genuinely becomes
+   tight enough that one-line controls would stop being readable/actionable. */
+@media (max-width: 1040px) {
 	.retailedge-bank-layout .edge-action-bar {
 		flex-wrap: wrap !important;
 	}
