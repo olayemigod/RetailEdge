@@ -9,11 +9,11 @@
 	max-width: 100%;
 	min-width: 0;
 	vertical-align: top;
-	column-gap: .4rem !important;
-	row-gap: .3rem !important;
-	margin-right: .45rem;
-	margin-bottom: .45rem;
-	padding: .45rem .55rem !important;
+	column-gap: .28rem !important;
+	row-gap: .24rem !important;
+	margin-right: .32rem;
+	margin-bottom: .38rem;
+	padding: .32rem .4rem !important;
 }
 
 /* Some EdgeActionBar versions position the label independently from the action
@@ -32,9 +32,9 @@
 	flex: 0 0 auto;
 	width: auto !important;
 	white-space: nowrap;
-	margin-right: .05rem !important;
-	font-size: .82rem !important;
-	line-height: 1.2 !important;
+	margin-right: 0 !important;
+	font-size: .76rem !important;
+	line-height: 1.15 !important;
 	font-weight: 600 !important;
 }
 
@@ -49,25 +49,26 @@
 	flex-wrap: nowrap !important;
 	width: auto !important;
 	min-width: 0;
-	gap: .3rem !important;
+	gap: .22rem !important;
 }
 
 .retailedge-bank-layout .edge-action-bar .edge-button {
 	flex: 0 1 auto;
 	min-width: 0;
-	min-height: 2rem !important;
+	min-height: 1.8rem !important;
 	height: auto !important;
 	margin: 0 !important;
-	padding: .38rem .58rem !important;
-	font-size: .82rem !important;
-	line-height: 1.15 !important;
+	padding: .3rem .46rem !important;
+	font-size: .76rem !important;
+	line-height: 1.1 !important;
 	white-space: nowrap;
 }
 
-/* Keep both selector groups on the same row for normal desktop/laptop widths.
-   Only allow wrapping when the available workspace width genuinely becomes
-   tight enough that one-line controls would stop being readable/actionable. */
-@media (max-width: 1040px) {
+/* Keep both selector groups on the same row for ordinary desktop/laptop widths,
+   including when the ProcessEdge side menu is expanded. The groups only stack
+   when the viewport is genuinely narrow enough that one-line controls would
+   stop being readable/actionable. */
+@media (max-width: 900px) {
 	.retailedge-bank-layout .edge-action-bar {
 		flex-wrap: wrap !important;
 	}
@@ -77,7 +78,7 @@
 	}
 }
 
-@media (max-width: 760px) {
+@media (max-width: 700px) {
 	.retailedge-bank-layout .edge-action-bar {
 		display: flex !important;
 		width: 100% !important;
