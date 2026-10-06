@@ -43,7 +43,7 @@
 					<div v-if="critical.length" class="action-list">
 						<div v-for="item in critical" :key="itemKey(item)" class="action-row action-row--danger">
 							<div class="action-row-main">
-								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
+								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ actionMetaLabel(item) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
@@ -56,7 +56,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -72,7 +72,7 @@
 					<div v-if="warnings.length" class="action-list">
 						<div v-for="item in warnings" :key="itemKey(item)" class="action-row action-row--warning">
 							<div class="action-row-main">
-								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
+								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ actionMetaLabel(item) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
@@ -85,7 +85,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -97,7 +97,7 @@
 					<div v-else class="action-empty">No attention items match the current Action Centre filters.</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Sources" description="These sources were excluded because your current permissions do not allow them.">
+				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Information" description="Some information is hidden because your current access does not allow it.">
 					<div class="source-list">
 						<div v-for="source in unavailableSources" :key="source.key" class="source-row"><strong>{{ sourceLabel(source.key) }}</strong><small>{{ source.reason }}</small></div>
 					</div>
@@ -106,7 +106,7 @@
 				<EdgeDashboardSection title="How resolution works" description="Follow-up tracking is separate from business resolution." span="2">
 					<div class="action-note">
 						<strong>Follow-up actions do not resolve accounting, stock or workflow exceptions.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze update only the follow-up record. Open workflow takes you to the authoritative page, document or report, where existing permissions, approvals, submission rules and accounting controls remain authoritative.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the follow-up record. Open workflow takes you to the page, document or report where the business issue is maintained; existing permissions, approvals, submission rules and accounting controls still apply.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -207,10 +207,28 @@ export default {
 			}
 			window.location.assign(route);
 		},
-		workflowTitle(item) { if (!this.canOpenWorkflow(item)) return "Advanced Native Desk access is required for this workflow"; return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open workflow"; },
+		workflowTitle(item) { if (!this.canOpenWorkflow(item)) return "You do not have access to open this workflow"; return item?.open_mode === "new_tab" ? "Open workflow in a new tab" : "Open workflow"; },
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
-		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
-		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
+		sourceLabel(source) {
+			const labels = {
+				r11_customer_opportunity: "Customer Opportunity",
+				r11_sales_quality: "Sales Quality",
+				r11_customer_sales: "Customer & Sales",
+				r12_planning: "Forecasting & Planning",
+				stock_position: "Stock Position",
+				stock: "Stock",
+				cash_shift: "Cash Control",
+				bank_controls: "Bank Controls",
+				receivables: "Customer Receivables",
+				payables: "Supplier Payables",
+				expenses: "Expenses",
+			};
+			const key = String(source || "management");
+			if (labels[key]) return labels[key];
+			return key.replace(/^r\d+[_\s-]+/i, "").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+		},
+		basisLabel(value) { return value === "current" ? "Current position" : value === "period" ? "Selected period" : value === "forecast" ? "Forecast" : ""; },
+		actionMetaLabel(item) { return [this.sourceLabel(item?.source), this.basisLabel(item?.time_basis)].filter(Boolean).join(" · "); },
 		formatDateTime(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(value); } catch (_error) { return value; } },
 		formatValue(value, datatype) {
 			if (value === null || value === undefined || value === "") return "—";
