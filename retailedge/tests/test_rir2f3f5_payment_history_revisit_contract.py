@@ -86,6 +86,7 @@ def test_payment_history_is_a_separate_edgesuite_page_linked_from_payment_manage
 	assert '"target": "payment-history"' in navigation
 	assert 'retailedgeConsumeBusinessHubRouteOptions?.("payment-history")' in panel
 
+
 def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_queries():
 	panel = _read(PANEL)
 	for token in (
@@ -103,6 +104,21 @@ def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_qu
 	assert 'kind: "supplier"' in panel
 
 
+def test_history_uses_shared_fuzzy_period_without_changing_backend_date_contract():
+	panel = _read(PANEL)
+	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal", "EdgeSmartDateRange"]' in panel
+	assert "<EdgeSmartDateRange" in panel
+	assert 'label="Period"' in panel
+	assert 'placeholder="e.g. May to June 2026, last 2 months, YTD"' in panel
+	assert 'dateOrder="DMY"' in panel
+	assert '@resolved="onSmartDateResolved"' in panel
+	assert "syncSmartDateFromFilters" in panel
+	assert "this.filters.from_date = value.from_date" in panel
+	assert "this.filters.to_date = value.to_date" in panel
+	assert 'type="date"' not in panel
+	assert "history-period { grid-column:span 2; min-width:0; }" in panel
+
+
 def test_native_payment_open_is_explicit_and_double_gated():
 	panel = _read(PANEL)
 	assert 'v-if="canUseNativeDesk"' in panel
@@ -112,7 +128,7 @@ def test_native_payment_open_is_explicit_and_double_gated():
 
 def test_payment_review_opens_in_modal_instead_of_inline_below_history():
 	panel = _read(PANEL)
-	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"]' in panel
+	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal", "EdgeSmartDateRange"]' in panel
 	assert ':open="detailOpen"' in panel
 	assert "Payment Review ·" in panel
 	assert "detailOpen = true" in panel
