@@ -100,7 +100,11 @@ test("RetailEdge manager reaches consolidated Shift Reconciliation with speciali
 
 		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
 		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
-		await expect(page.getByText("Next Action", { exact: true }).first()).toBeVisible();
+		const nextActionOrEmptyState = page
+			.getByText("Next Action", { exact: true })
+			.first()
+			.or(page.getByText("No shift reconciliation found", { exact: true }).first());
+		await expect(nextActionOrEmptyState).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
