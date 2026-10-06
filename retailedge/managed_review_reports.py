@@ -37,6 +37,7 @@ SURFACES: dict[str, dict[str, Any]] = {
 			"review_status",
 		),
 		"column_labels": {
+			"closing_shift": "Shift",
 			"included_cashier_expenses": "Till Expenses",
 			"actual_closing_cash": "Counted Cash",
 			"review_status": "Audit Status",
@@ -275,18 +276,37 @@ def search_review_report_options(
 	doctype: str,
 	txt: str = "",
 	company: str = "",
+	branch: str = "",
+	pos_profile: str = "",
+	surface_key: str = "",
 ) -> list[dict[str, str]]:
 	doctype = str(doctype or "").strip()
 	txt = str(txt or "").strip()
 	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	pos_profile = str(pos_profile or "").strip()
+	surface_key = str(surface_key or "").strip()
 	if doctype not in ALLOWED_LINK_DOCTYPES:
 		frappe.throw(_("Unsupported review filter search."), frappe.PermissionError)
+
+	if surface_key == "pos-closing-variance" and doctype in {"Branch", "POS Profile", "User"}:
+		from retailedge.daily_sales_audit_page import search_daily_sales_audit_page_options
+
+		kind = {"Branch": "branch", "POS Profile": "pos_profile", "User": "cashier"}[doctype]
+		return search_daily_sales_audit_page_options(
+			kind=kind,
+			txt=txt,
+			company=company,
+			branch=branch,
+			pos_profile=pos_profile,
+		)
+
 	if doctype == "Branch":
 		branches = get_allowed_operating_branches(company=company) if company else []
 		return [
-			{"value": branch, "label": branch}
-			for branch in branches
-			if not txt or txt.lower() in branch.lower()
+			{"value": branch_name, "label": branch_name}
+			for branch_name in branches
+			if not txt or txt.lower() in branch_name.lower()
 		][:20]
 	filters: dict[str, Any] = {}
 	if txt:
