@@ -5,54 +5,33 @@ from unittest import TestCase
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-GUARD = APP_ROOT / "public" / "js" / "retailedge_persistent_page_route_guard.js"
 BOOTSTRAP = APP_ROOT / "public" / "js" / "retailedge_business_hub_bootstrap.js"
+BROWSER_ACCEPTANCE = APP_ROOT.parent / "browser-tests" / "retailedge_rc3_acceptance.spec.cjs"
 
 
-class TestPersistentTransactionPageRouteGuard(TestCase):
-	def test_guard_is_bounded_to_known_persistent_transaction_pages(self):
-		source = GUARD.read_text(encoding="utf-8")
-
-		for page in (
-			"make-sale",
-			"record-purchase",
-			"transfer-stock",
-			"stock-adjustment",
-		):
-			self.assertIn(f'"{page}"', source)
-
-		self.assertIn('^\\/(?:app|desk)\\/retailedge\\/([^/?#]+)\\/?$', source)
-		self.assertIn("PERSISTENT_TRANSACTION_PAGES.has(value)", source)
-		self.assertIn("window.location.replace", source)
-		self.assertIn("window.location.assign", source)
-		self.assertIn("/desk/${target}", source)
-		self.assertNotIn("retailedge-business-hub", source)
-
-	def test_route_repair_is_bootstrap_only_and_does_not_rewrite_frappe_page_lifecycle(self):
-		source = GUARD.read_text(encoding="utf-8")
-
-		self.assertIn("correctModulePrefixedPersistentPage();", source)
-		self.assertNotIn('document.addEventListener("page-change"', source)
-		self.assertNotIn('window.frappe?.router?.on?.("change"', source)
-		self.assertNotIn("addEventListener(\"popstate\"", source)
-
-	def test_canonical_desk_routes_are_not_matched_for_repair(self):
-		source = GUARD.read_text(encoding="utf-8")
-
-		self.assertIn("if (!match) return \"\";", source)
-		self.assertIn("MODULE_PREFIX_RE.exec", source)
-		self.assertNotIn('^\\/(?:app|desk)\\/([^/?#]+)\\/?$', source)
-
-	def test_desk_bootstrap_loads_guard_before_business_hub_controller(self):
+class TestPersistentTransactionPageRouting(TestCase):
+	def test_desk_bootstrap_does_not_rewrite_frappe_page_routes(self):
 		source = BOOTSTRAP.read_text(encoding="utf-8")
 
 		self.assertIn(
-			'const ROUTE_GUARD_ASSET = "/assets/retailedge/js/retailedge_persistent_page_route_guard.js";',
+			'const CONTROLLER_ASSET = "/assets/retailedge/js/retailedge_business_hub_page.js";',
 			source,
 		)
-		self.assertIn("function loadRouteGuard()", source)
-		self.assertIn("loadRouteGuard();", source)
-		self.assertIn("correctPersistentTransactionPageRoute", source)
+		self.assertNotIn("retailedge_persistent_page_route_guard", source)
+		self.assertNotIn("ROUTE_GUARD_ASSET", source)
+		self.assertNotIn("correctPersistentTransactionPageRoute", source)
+		self.assertNotIn("window.location.replace", source)
+
+	def test_browser_acceptance_allows_frappe_v16_module_prefixed_page_routes(self):
+		source = BROWSER_ACCEPTANCE.read_text(encoding="utf-8")
+
+		for page in ("transfer-stock", "record-purchase", "make-sale"):
+			self.assertIn(
+				f'/(?:retailedge\\/)?{page}(?:$|[?#])/',
+				source,
+			)
+
+		self.assertIn('openProductPage(page, "stock-adjustment", "Stock Adjustment")', source)
 
 
 if __name__ == "__main__":
