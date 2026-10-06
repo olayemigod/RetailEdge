@@ -28,14 +28,15 @@
 				<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 				<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 				<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" required placeholder="Search customer" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
-				<label class="edge-field">
-					<span class="edge-field-label">From Date</span>
-					<input v-model="filters.from_date" class="edge-input" type="date" />
-				</label>
-				<label class="edge-field">
-					<span class="edge-field-label">To Date</span>
-					<input v-model="filters.to_date" class="edge-input" type="date" />
-				</label>
+				<EdgeSmartDateRange
+					class="customer-360-period"
+					v-model="smartDate"
+					label="Period"
+					placeholder="e.g. May to June 2026, last 2 months, YTD"
+					:referenceDate="smartDateReference || null"
+					dateOrder="DMY"
+					@resolved="onSmartDateResolved"
+				/>
 				<div class="customer-360-filter-action">
 					<button class="edge-primary-button" type="button" :disabled="loading || !filters.company || !filters.customer" @click="fetchData">
 						{{ loading ? "Loading…" : "Load Customer" }}
@@ -129,7 +130,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeSmartDateRange"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -146,6 +147,7 @@ export default {
 		const today = window.frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "", data: {}, menuItems: [], tenantName: "", branchName: "", userName: "", customerLabel: "", canUseNativeDesk: false,
+			smartDate: {}, smartDateReference: today,
 			filters: { company: "", branch: "", customer: "", from_date: `${today.slice(0, 7)}-01`, to_date: today },
 		};
 	},
@@ -175,6 +177,21 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.metadataError = "";
@@ -184,6 +201,7 @@ export default {
 					typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"),
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}), customer: this.filters.customer || "" };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || this.smartDateReference;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -198,8 +216,10 @@ export default {
 					if (routeOptions.to_date) this.filters.to_date = routeOptions.to_date;
 					if (routeOptions.branch) this.filters.branch = routeOptions.branch;
 					frappe.route_options = null;
-					await this.fetchData();
 				}
+				this.smartDateReference = this.filters.to_date || this.smartDateReference;
+				this.syncSmartDateFromFilters();
+				if (this.filters.customer) await this.fetchData();
 			} catch (error) {
 				this.metadataError = errorMessage(error, "Failed to load Customer 360 controls.");
 			} finally {
@@ -256,6 +276,8 @@ export default {
 .customer-profile-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .customer-360-eyebrow { margin: 0 0 0.25rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .customer-360-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end; }
+.customer-360-filter-grid > * { min-width: 0; }
+.customer-360-period { grid-column: span 2; min-width: 0; }
 .customer-360-filter-action { display: flex; align-items: end; min-height: 56px; }
 .customer-360-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
 .customer-360-metric { padding: 0.9rem; display: grid; gap: 0.3rem; }
@@ -266,5 +288,5 @@ export default {
 dl { display: grid; gap: 0.55rem; margin: 0; } dl div { display: flex; justify-content: space-between; gap: 1rem; } dt { opacity: 0.75; } dd { margin: 0; font-weight: 600; text-align: right; }
 .customer-360-table-wrap { overflow-x: auto; }.customer-360-table { width: 100%; border-collapse: collapse; }.customer-360-table th, .customer-360-table td { padding: 0.65rem; border-bottom: 1px solid var(--border-color, #e5e7eb); text-align: left; white-space: nowrap; }.customer-360-link { border: 0; background: transparent; padding: 0; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; color: inherit; }
 .customer-360-error, .customer-360-loading { padding: 1rem; }
-@media (max-width: 640px) { .customer-profile-card { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 640px) { .customer-profile-card { align-items: flex-start; flex-direction: column; } .customer-360-period { grid-column: 1 / -1; } }
 </style>
