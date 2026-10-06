@@ -12,22 +12,24 @@ from retailedge.master_experience import (
 
 SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
 LEGACY_SHIFT_REVIEW_TARGETS = {
-	"daily-sales-audit",
-	"expense-review",
 	"cash-shift-verification",
 	"daily-sales-audit-register",
+}
+PRESERVED_SHIFT_WORKFLOW_TARGETS = {
+	"daily-sales-audit",
+	"expense-review",
 }
 
 
 def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose one clear shift-control front door without deleting legacy routes.
+	"""Expose one clear shift-control front door without deleting review workflows.
 
 	The final Business Hub context is already permission-filtered before this helper runs.
 	Therefore Shift Reconciliation is only promoted when the current user was already
-	permitted to see the existing POS Closing Variance page. Legacy review pages remain
-	directly routable for backward compatibility and detailed drill-down, but they no
-	longer compete as separate everyday navigation choices when the canonical surface is
-	available.
+	permitted to see the existing POS Closing Variance page. Read-only/detail duplicates
+	leave everyday navigation, while Daily Sales Audit and Cashier Expense Review remain
+	available until their mutation workflows are deliberately absorbed into the canonical
+	surface. All legacy routes remain directly routable for backward compatibility.
 	"""
 	for group in navigation_groups:
 		if group.get("key") != "review-approvals":
