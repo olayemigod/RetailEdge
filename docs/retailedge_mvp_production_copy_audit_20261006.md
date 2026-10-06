@@ -98,6 +98,13 @@ The backend source key is intentionally retained for action fingerprint and comp
 - Replaced the user-facing `Run the site migration` setup error with a production-safe administrator message.
 - Preserved Payment Entry document identity, submission logic, Branch permission checks and the existing advanced-record route.
 
+### Shared Selling Completion and Delivery
+
+- Standard Quotation / Sales Order completion blockers now use `advanced review` and `configured approval workflow` language instead of `Advanced ERPNext`, `EdgeSuite` or `Frappe Workflow` presentation copy.
+- Sales Order creation from Quotation no longer reports mapper/platform names to the user when preparation fails.
+- Delivery Note creation from Sales Order or Sales Invoice now reports business-level preparation/validation errors and uses `full Delivery Note workflow` wording for complex multi-order cases.
+- Submission, source-document mapping, idempotency, Branch validation and stock/accounting side effects remain unchanged.
+
 ## Confirmed remaining production-copy debt
 
 The following areas still contain implementation-oriented wording and require follow-up before declaring the whole application copy-clean.
@@ -119,17 +126,16 @@ These should be replaced with business wording such as `accounting and stock rec
 
 ### Advanced workflow/blocker messages
 
-Repository search found customer-facing `Advanced ERPNext` language in or around:
+Repository search found customer-facing implementation language still in or around:
 
-- other advanced payment paths;
+- customer/supplier payment-submit APIs and guided-payment review;
 - incoming quality inspection;
 - purchase receipts and purchase returns;
 - purchase/sales invoice completion;
 - internal transfers;
-- guided payment;
 - supplier quotation and supplier document flows;
-- stock adjustment / transfer surfaces;
-- Professional Selling and related overlays.
+- stock adjustment / transfer completion surfaces;
+- remaining Professional Selling overlays not covered by the shared selling-completion/delivery cleanup.
 
 Typical replacement rule:
 
@@ -158,7 +164,7 @@ Renaming those can break compatibility without improving user experience.
 
 ## Regression protection
 
-`retailedge/tests/test_production_copy_readiness.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre and Payment History.
+`retailedge/tests/test_production_copy_readiness.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre, Payment History and the shared selling/delivery workflows.
 
 The test deliberately does not ban technical terms repository-wide because legitimate backend code and engineering documentation must retain implementation identity.
 
@@ -174,7 +180,8 @@ Use at least one normal operational user and one authorised manager/admin person
 6. Run a bank reconciliation through the final confirmation. Confirm the button says `Reconcile Match`, safety wording is clear, and execution behavior is unchanged.
 7. Open Reports Centre as both personas. Confirm catalogue descriptions are business-facing and advanced-only reports remain permission-gated.
 8. Open Payment History, inspect draft/submitted payments, trigger an advanced-only draft where possible, and submit a standard draft. Confirm no implementation or migration wording is shown.
-9. Continue the audit through Professional Purchasing, other payment paths, stock, quality inspection and selling completion before the final MVP production-copy sign-off.
+9. Exercise Quotation → Sales Order and Sales Order / Sales Invoice → Delivery Note paths, including an advanced-review blocker, and confirm user messages remain business-facing.
+10. Continue the audit through Professional Purchasing, payment submit, stock, quality inspection and invoice completion before the final MVP production-copy sign-off.
 
 ## Safety / non-regression rules
 
