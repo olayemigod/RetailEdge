@@ -20,8 +20,10 @@
 		"/app/stock-position": "stock-position",
 	});
 	let shellGovernanceInstalled = false;
+	let smartDateGovernanceInstalled = false;
 	let baseReportShell = null;
 	let baseExportMenu = null;
+	let baseSmartDateRange = null;
 
 	function callMethod(method, args = {}) {
 		return new Promise((resolve, reject) => {
@@ -109,6 +111,26 @@
 		popup.document.open(); popup.document.write(result.html); popup.document.close(); popup.document.title = result.title || "RetailEdge Report";
 		window.setTimeout(() => { popup.focus(); popup.print(); }, 120); return true;
 	}
+	function installSmartDateGovernance(runtime = window.EdgeSuiteUI) {
+		if (smartDateGovernanceInstalled || !runtime?.registerComponent || !runtime?.Vue?.defineComponent) return false;
+		baseSmartDateRange = runtime.getComponent?.("EdgeSmartDateRange") || runtime.components?.EdgeSmartDateRange;
+		if (!baseSmartDateRange) return false;
+		const { defineComponent, h } = runtime.Vue;
+		const RetailEdgeSmartDateRange = defineComponent({
+			name: "RetailEdgeSmartDateRange",
+			inheritAttrs: false,
+			render() {
+				return h(baseSmartDateRange, {
+					...this.$attrs,
+					showPresets: false,
+					placeholder: this.$attrs.placeholder || "e.g. last 2 months, May to June 2026, YTD",
+				}, this.$slots);
+			},
+		});
+		runtime.registerComponent("EdgeSmartDateRange", RetailEdgeSmartDateRange, { replace: true });
+		smartDateGovernanceInstalled = true;
+		return true;
+	}
 	function installShellGovernance(runtime = window.EdgeSuiteUI) {
 		if (shellGovernanceInstalled || !runtime?.registerComponent || !runtime?.Vue?.defineComponent) return false;
 		baseReportShell = runtime.getComponent?.("EdgeReportShell") || runtime.components?.EdgeReportShell;
@@ -136,6 +158,7 @@
 		getCapabilities,
 		exportReport,
 		printReport,
+		installSmartDateGovernance,
 		installShellGovernance,
 		setReportRouteHandoff,
 		consumeReportRouteHandoff,
@@ -145,5 +168,10 @@
 	if (typeof window.retailedgeConsumeBusinessHubRouteOptions !== "function") {
 		window.retailedgeConsumeBusinessHubRouteOptions = consumeReportRouteHandoff;
 	}
-	installShellGovernance(window.EdgeSuiteUI); window.addEventListener("edgesuite:report-runtime-ready", () => installShellGovernance(window.EdgeSuiteUI));
+	installSmartDateGovernance(window.EdgeSuiteUI);
+	installShellGovernance(window.EdgeSuiteUI);
+	window.addEventListener("edgesuite:report-runtime-ready", () => {
+		installSmartDateGovernance(window.EdgeSuiteUI);
+		installShellGovernance(window.EdgeSuiteUI);
+	});
 })();
