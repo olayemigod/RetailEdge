@@ -61,7 +61,7 @@ def test_capture_phase_intercepts_raw_and_rewritten_receipt_labels_before_vue_ha
 
 def test_native_receipt_list_and_draft_handoff_remain_advanced_only():
 	source = _read(CONTROLLER)
-	assert 'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"' in source
+	assert 'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts"' in source
 	assert "if (!nativeDeskEnabled()) return;" in source
 	assert "Boolean(access.can_use_native_desk)" in source
 	assert "PREPARE_RECEIPT_METHOD" in source
