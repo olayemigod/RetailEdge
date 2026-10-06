@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Review Purchase Receipt"
-		subtitle="Review ERPNext's receipt mapping before stock is received."
+		subtitle="Review the receipt details before stock is received."
 		size="xl"
 		@close="close"
 	>
@@ -20,7 +20,7 @@
 
 			<div v-if="submitted" class="receipt-preview__ready">
 				<strong>Purchase Receipt {{ submitted.name }} submitted.</strong>
-				<span>ERPNext has posted the receipt stock movement. Continue to supplier billing when applicable.</span>
+				<span>The receipt stock movement has been posted. Continue to supplier billing when applicable.</span>
 				<div class="receipt-preview__next-actions">
 					<button
 						v-for="action in submitted.next_actions"
@@ -38,20 +38,20 @@
 			<div v-else-if="preview.blockers?.length" class="receipt-preview__warning" role="alert">
 				<strong>Advanced handling required</strong>
 				<p>This receipt contains stock controls that this workflow will not simplify or bypass.</p>
-				<ul><li v-for="(blocker, index) in preview.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ blocker.label }}</li></ul>
+				<ul><li v-for="(blocker, index) in preview.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ customerFacingCopy(blocker.label, 'Advanced handling is required.') }}</li></ul>
 			</div>
 			<div v-else class="receipt-preview__ready">
 				<strong v-if="preview.workflow_controlled && preview.workflow_started">Receipt approval is in progress.</strong>
 				<strong v-else>Standard receipt preflight passed.</strong>
-				<span v-if="preview.workflow_controlled && !preview.workflow_started">Start Receipt Approval saves one standard Purchase Receipt draft. No stock is posted until Frappe Workflow reaches a submitting state.</span>
-				<span v-else-if="preview.workflow_controlled">{{ preview.workflow_readiness?.message || 'Choose an available workflow action.' }}</span>
-				<span v-else-if="preview.can_submit">Receive Stock will create and submit the ERPNext Purchase Receipt. ERPNext remains responsible for validation and stock posting.</span>
+				<span v-if="preview.workflow_controlled && !preview.workflow_started">Start Receipt Approval saves one standard Purchase Receipt draft. No stock is posted until the configured approval workflow reaches a submitting state.</span>
+				<span v-else-if="preview.workflow_controlled">{{ customerFacingCopy(preview.workflow_readiness?.message, 'Choose an available workflow action.') }}</span>
+				<span v-else-if="preview.can_submit">Receive Stock will create and submit the Purchase Receipt using standard validation and stock-posting controls.</span>
 				<span v-else>You can review this receipt, but your role cannot submit Purchase Receipts.</span>
 			</div>
 
 			<div v-if="!submitted && preview.workflow_started && !preview.blockers?.length" class="receipt-preview__workflow">
 				<strong>{{ preview.workflow_readiness?.workflow || 'Purchase Receipt Workflow' }}</strong>
-				<span>{{ preview.workflow_readiness?.message || 'Choose an available workflow action.' }}</span>
+				<span>{{ customerFacingCopy(preview.workflow_readiness?.message, 'Choose an available workflow action.') }}</span>
 				<div class="receipt-preview__workflow-actions">
 					<button
 						v-for="action in preview.workflow_readiness?.available_actions || []"
@@ -85,7 +85,7 @@
 
 		<template #footer>
 			<div class="receipt-preview__footer">
-				<button v-if="nativeFallbackEnabled && !submitted" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
+				<button v-if="nativeFallbackEnabled && !submitted" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare Purchase Receipt</button>
 				<div class="receipt-preview__footer-actions">
 					<button type="button" class="edge-button" :disabled="posting" @click="close">Close</button>
 					<button v-if="canStartWorkflow" type="button" class="edge-button edge-button--primary" :disabled="posting" @click="startWorkflow">{{ posting ? 'Starting…' : 'Start Receipt Approval' }}</button>
@@ -112,7 +112,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, ...(type ? { type } : {}), callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 export default {
 	name: "ProfessionalPurchaseReceiptPreviewOverlay",
@@ -141,6 +158,7 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		customerFacingCopy,
 		async loadPreview() {
 			if (!this.purchaseOrder || this.loading || this.posting) return;
 			this.loading = true; this.error = ""; this.preview = null; this.submitted = null;
@@ -198,7 +216,7 @@ export default {
 		confirmSubmit() {
 			if (!this.canSubmitStandard || this.posting) return;
 			frappe.confirm(
-				__("Receive the listed quantities now? This submits an ERPNext Purchase Receipt and posts stock to the shown receiving locations."),
+				__("Receive the listed quantities now? This submits the Purchase Receipt and posts stock to the shown receiving locations."),
 				() => this.submitStandardReceipt(),
 			);
 		},
