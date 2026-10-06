@@ -264,6 +264,24 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		):
 			self.assertNotIn(phrase, text)
 
+	def test_professional_purchasing_shell_hides_implementation_copy(self):
+		text = source("retailedge/page/professional_purchasing/professional_purchasing.js")
+
+		for phrase in (
+			"Advanced: Open in ERPNext",
+			"Advanced: Purchase Receipts in ERPNext",
+			"native ERPNext review",
+			"full ERPNext Purchase Order form",
+			"Preview ERPNext's Purchase Receipt mapping",
+			"EdgeSuite-only operational guard is unavailable",
+			"EdgeSuite UI runtime is unavailable",
+			"bundle is unavailable",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn('ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open Purchase Order"', text)
+		self.assertIn('ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts"', text)
+		self.assertIn("window.retailedge?.userErrorMessage?.(error", text)
+
 
 if __name__ == "__main__":
 	unittest.main()
