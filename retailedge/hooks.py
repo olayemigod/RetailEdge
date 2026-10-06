@@ -156,9 +156,8 @@ jinja = {
 
 # Integration Cleanup
 # -------------------
-# To set up dependencies/integrations with other apps
-# before_app_uninstall = "retailedge.uninstall.before_uninstall"
-# after_app_uninstall = "retailedge.uninstall.after_uninstall"
+# before_app_uninstall = "retailedge.utils.before_app_uninstall"
+# after_app_uninstall = "retailedge.utils.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
@@ -264,7 +263,7 @@ permission_query_conditions = {
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
-	"Item Price": "retailedge.pricing_promotions_workspace.has_price_list_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
