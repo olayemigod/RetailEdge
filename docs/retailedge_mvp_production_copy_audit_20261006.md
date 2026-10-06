@@ -84,6 +84,13 @@ The backend source key is intentionally retained for action fingerprint and comp
 - Confirmation text explains the fresh safety check and accounting action without exposing the underlying platform.
 - Reconciliation execution and approval safety are unchanged.
 
+### Reports Centre
+
+- Removed `R8` / `R12` release references from profitability and forecasting descriptions.
+- Removed `ERPNext` prefixes from sales commissions, purchasing, stock, receivables/payables and financial-report descriptions.
+- Replaced `Native Desk users` wording with `advanced-access users`.
+- Preserved every existing report/page target, permission check and internal `native_desk` capability flag.
+
 ## Confirmed remaining production-copy debt
 
 The following areas still contain implementation-oriented wording and require follow-up before declaring the whole application copy-clean.
@@ -123,19 +130,6 @@ Typical replacement rule:
 - `Open in ERPNext` → `Open Advanced Details` / `Open Full Record` / workflow-specific business action;
 - retain the same permission and handoff behavior.
 
-### Report Center
-
-Confirmed merchant-facing descriptions still include examples such as:
-
-- `R8 transactional contribution`;
-- `ERPNext salesperson commission detail`;
-- `governed ERPNext purchasing workflow`;
-- `Open ERPNext Stock Balance/Stock Ledger/...`;
-- `ERPNext General Ledger truth`;
-- `Open ERPNext Accounts Receivable/Payable...`.
-
-Targets and `native_desk` capability flags should remain unchanged; descriptions should be rewritten only.
-
 ### Bank matching source confirmation
 
 `bank_matching_reconciliation.js` still emits the legacy interception phrase containing `ERPNext`. The confirmation override hides it from the user, but the source phrase should be replaced in a later cleanup and the interceptor contract updated at the same time.
@@ -157,7 +151,7 @@ Renaming those can break compatibility without improving user experience.
 
 ## Regression protection
 
-`retailedge/tests/test_production_copy_contract.py` now protects the first cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch.
+`retailedge/tests/test_production_copy_contract.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre.
 
 The test deliberately does not ban technical terms repository-wide because legitimate backend code and engineering documentation must retain implementation identity.
 
@@ -171,7 +165,8 @@ Use at least one normal operational user and one authorised manager/admin person
 4. Open Settings → Platform Integration and Price List Governance. Confirm no `CoreEdge`, `ERPNext`, `EdgeSuite`, or `Frappe` branding leaks through labels/descriptions.
 5. Open Company Profile as a normal user and as an advanced-authorised user. Confirm the page uses business language and the advanced button still opens the same underlying Company record only when permitted.
 6. Run a bank reconciliation through the final confirmation. Confirm the button says `Reconcile Match`, safety wording is clear, and execution behavior is unchanged.
-7. Continue the audit through Professional Purchasing, payments, stock, quality inspection, selling completion, and Report Center before the final MVP production-copy sign-off.
+7. Open Reports Centre as both personas. Confirm catalogue descriptions are business-facing and advanced-only reports remain permission-gated.
+8. Continue the audit through Professional Purchasing, payments, stock, quality inspection and selling completion before the final MVP production-copy sign-off.
 
 ## Safety / non-regression rules
 
