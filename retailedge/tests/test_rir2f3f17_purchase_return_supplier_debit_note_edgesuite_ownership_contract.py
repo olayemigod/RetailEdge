@@ -47,7 +47,8 @@ class TestRIR2F3F17PurchaseReturnSupplierDebitNoteEdgeSuiteOwnershipContract(uni
 		self.assertIn("Submit Supplier Debit Note", overlay)
 		self.assertIn("expected_source_modified", overlay)
 		self.assertIn('}, "POST")', overlay)
-		self.assertIn("Advanced: Prepare in ERPNext", overlay)
+		self.assertIn("Advanced: Prepare Purchase Return", overlay)
+		self.assertIn("Advanced: Prepare Debit Note", overlay)
 		self.assertIn("nativeFallbackEnabled", overlay)
 		self.assertIn('mode !== ACCESS_MODE', overlay)
 		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt"', overlay)
@@ -94,6 +95,7 @@ class TestRIR2F3F17PurchaseReturnSupplierDebitNoteEdgeSuiteOwnershipContract(uni
 		self.assertIn("if review[\"blockers\"]", backend)
 		self.assertIn("Advanced handling required", overlay)
 		self.assertIn("standard_return_eligible", overlay)
+		self.assertIn("customerFacingCopy(blocker.label", overlay)
 
 	def test_slice_does_not_absorb_quality_inspection_or_landed_cost(self):
 		backend = (APP_ROOT / "professional_purchase_returns.py").read_text(encoding="utf-8")
