@@ -49,7 +49,7 @@ class TestRIR2F3F18IncomingQualityInspectionOwnershipContract(TestCase):
 		self.assertIn("Review Quality Inspections", component)
 		self.assertIn("Submit Quality Inspections", component)
 		self.assertIn("nativeFallbackEnabled", component)
-		self.assertIn("Advanced: Prepare in ERPNext", component)
+		self.assertIn("Prepare Advanced Inspection", component)
 		self.assertIn("expected_source_modified", component)
 		self.assertIn("reading_value", component)
 		self.assertIn("Array.from({ length: 10 }", component)
