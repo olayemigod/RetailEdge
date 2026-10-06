@@ -140,7 +140,7 @@ def get_simple_payment_context(intent: str, managed: int = 0) -> dict[str, Any]:
 		"intent": intent,
 		"title": _(config["title"]),
 		"subtitle": _(
-			"Create a standard ERPNext Payment Entry draft and allocate it to outstanding invoices."
+			"Create a standard Payment Entry draft and allocate it to outstanding invoices."
 		),
 		"submit_label": _("Save Draft"),
 		"full_form_doctype": PAYMENT_ENTRY_DOCTYPE,
@@ -229,7 +229,7 @@ def search_simple_payment_options(
 			txt=txt or "",
 			limit=limit,
 		)
-	frappe.throw(_("Unsupported Simple Payment search field: {0}").format(fieldname))
+	frappe.throw(_("This payment search option is not supported."))
 	return []
 
 
@@ -450,7 +450,7 @@ def create_simple_payment_draft(
 	if party_currency != company_currency or bank_currency != company_currency:
 		frappe.throw(
 			_(
-				"Simple Payment currently supports company-currency payments only. Use the full Payment Entry form for multi-currency payments."
+				"This payment flow currently supports company-currency payments only. Use the full Payment Entry form for multi-currency payments."
 			)
 		)
 
@@ -712,7 +712,7 @@ def _get_reference_snapshot(
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if scope["restricted"] and not branch_field:
 		frappe.throw(
-			_("Branch attribution is unavailable for {0}; use Advanced ERPNext review.").format(reference_doctype),
+			_("Branch attribution is unavailable for {0}. This transaction requires advanced review.").format(reference_doctype),
 			frappe.PermissionError,
 		)
 	if reference_branch:
@@ -805,7 +805,7 @@ def _reference_description(row: frappe._dict) -> str:
 def _get_intent(intent: str) -> dict[str, str]:
 	config = PAYMENT_INTENTS.get(intent)
 	if not config:
-		frappe.throw(_("Unsupported Simple Payment action."))
+		frappe.throw(_("This payment action is not supported."))
 	return config
 
 
@@ -830,5 +830,5 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 		return dict(values)
 	if isinstance(values, dict):
 		return dict(values)
-	frappe.throw(_("Invalid Simple Payment values."))
+	frappe.throw(_("Invalid payment values."))
 	return {}
