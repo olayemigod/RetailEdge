@@ -48,14 +48,13 @@
 				<div class="customer-intelligence-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" class="edge-input" type="date" />
-					</label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						label="Period"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeDropdown v-model="filters.segment" :options="segments" label="Customer Segment" />
 					<div class="filter-action">
@@ -79,7 +78,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -128,6 +127,8 @@ export default {
 			companyCurrency: "",
 			showProfitability: false,
 			customerLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -212,6 +213,8 @@ export default {
 					...(context.default_filters || {}),
 					segment: "All",
 				};
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -278,6 +281,22 @@ export default {
 		clearCustomer() {
 			this.filters.customer = "";
 			this.customerLabel = "";
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
 		},
 		async applyFilters() {
 			this.currentPage = 1;
@@ -355,6 +374,7 @@ export default {
 	gap: 0.85rem;
 	align-items: end;
 }
+.customer-intelligence-filter-grid > * { min-width: 0; max-width: 100%; }
 .edge-field {
 	display: grid;
 	gap: 0.35rem;
