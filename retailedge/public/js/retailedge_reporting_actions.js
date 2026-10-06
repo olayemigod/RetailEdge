@@ -19,9 +19,13 @@
 		"/app/supplier-payables": "supplier-payables",
 		"/app/stock-position": "stock-position",
 	});
+	const RETAILEDGE_SMART_DATE_PLACEHOLDER =
+		"e.g. May to June 2026, last 2 months, previous 2 months, YTD";
 	let shellGovernanceInstalled = false;
+	let smartDatePolicyInstalled = false;
 	let baseReportShell = null;
 	let baseExportMenu = null;
+	let baseSmartDateRange = null;
 
 	function callMethod(method, args = {}) {
 		return new Promise((resolve, reject) => {
@@ -109,7 +113,32 @@
 		popup.document.open(); popup.document.write(result.html); popup.document.close(); popup.document.title = result.title || "RetailEdge Report";
 		window.setTimeout(() => { popup.focus(); popup.print(); }, 120); return true;
 	}
+	function installSmartDatePolicy(runtime = window.EdgeSuiteUI) {
+		if (smartDatePolicyInstalled) return true;
+		if (!runtime?.registerComponent || !runtime?.Vue?.defineComponent || !runtime?.Vue?.h) return false;
+		baseSmartDateRange = runtime.getComponent?.("EdgeSmartDateRange") || runtime.components?.EdgeSmartDateRange;
+		if (!baseSmartDateRange) return false;
+		const { defineComponent, h } = runtime.Vue;
+		const RetailEdgeSmartDateRange = defineComponent({
+			name: "RetailEdgeSmartDateRange",
+			inheritAttrs: false,
+			render() {
+				const attrs = this.$attrs || {};
+				return h(baseSmartDateRange, {
+					...attrs,
+					label: attrs.label || "Period",
+					placeholder: attrs.placeholder || RETAILEDGE_SMART_DATE_PLACEHOLDER,
+					showPresets: false,
+					presets: [],
+				}, this.$slots);
+			},
+		});
+		runtime.registerComponent("EdgeSmartDateRange", RetailEdgeSmartDateRange, { replace: true });
+		smartDatePolicyInstalled = true;
+		return true;
+	}
 	function installShellGovernance(runtime = window.EdgeSuiteUI) {
+		installSmartDatePolicy(runtime);
 		if (shellGovernanceInstalled || !runtime?.registerComponent || !runtime?.Vue?.defineComponent) return false;
 		baseReportShell = runtime.getComponent?.("EdgeReportShell") || runtime.components?.EdgeReportShell;
 		baseExportMenu = runtime.getComponent?.("EdgeExportMenu") || runtime.components?.EdgeExportMenu;
@@ -136,6 +165,7 @@
 		getCapabilities,
 		exportReport,
 		printReport,
+		installSmartDatePolicy,
 		installShellGovernance,
 		setReportRouteHandoff,
 		consumeReportRouteHandoff,
@@ -145,5 +175,10 @@
 	if (typeof window.retailedgeConsumeBusinessHubRouteOptions !== "function") {
 		window.retailedgeConsumeBusinessHubRouteOptions = consumeReportRouteHandoff;
 	}
-	installShellGovernance(window.EdgeSuiteUI); window.addEventListener("edgesuite:report-runtime-ready", () => installShellGovernance(window.EdgeSuiteUI));
+	installSmartDatePolicy(window.EdgeSuiteUI);
+	installShellGovernance(window.EdgeSuiteUI);
+	window.addEventListener("edgesuite:report-runtime-ready", () => {
+		installSmartDatePolicy(window.EdgeSuiteUI);
+		installShellGovernance(window.EdgeSuiteUI);
+	});
 })();
