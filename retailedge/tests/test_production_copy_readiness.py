@@ -143,6 +143,32 @@ class TestProductionCopyReadiness(unittest.TestCase):
 			self.assertNotIn(phrase, frontend)
 		self.assertIn("Open Advanced Payment", frontend)
 
+	def test_shared_selling_workflows_use_business_facing_errors(self):
+		selling = source("standard_selling_completion.py")
+		delivery = source("professional_delivery.py")
+		sales_order = source("professional_sales_order.py")
+
+		for phrase in (
+			"Advanced ERPNext review",
+			"standard EdgeSuite completion",
+			"available workflow action in EdgeSuite",
+			"No active Frappe Workflow",
+			"ERPNext did not submit",
+		):
+			self.assertNotIn(phrase, selling)
+		for phrase in (
+			"Use Advanced ERPNext review",
+			"ERPNext could not prepare a Delivery Note",
+			"ERPNext returned a non-draft Delivery Note mapping",
+		):
+			self.assertNotIn(phrase, delivery)
+		for phrase in (
+			"Use Advanced ERPNext review",
+			"ERPNext could not prepare a Sales Order",
+			"ERPNext returned a non-draft Sales Order mapping",
+		):
+			self.assertNotIn(phrase, sales_order)
+
 
 if __name__ == "__main__":
 	unittest.main()
