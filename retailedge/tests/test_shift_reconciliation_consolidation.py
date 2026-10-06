@@ -4,7 +4,9 @@ import json
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from unittest.mock import patch
 
+from retailedge import managed_review_reports
 from retailedge.managed_review_reports import SURFACES, _format_columns
 from retailedge.navigation_consolidation import (
 	LEGACY_SHIFT_REVIEW_TARGETS,
@@ -106,6 +108,7 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 		surface = SURFACES[SHIFT_RECONCILIATION_TARGET]
 		raw_columns = [
 			{"label": "Company", "fieldname": "company", "fieldtype": "Link"},
+			{"label": "Closing Shift", "fieldname": "closing_shift", "fieldtype": "Link"},
 			{"label": "Included Cashier Expenses", "fieldname": "included_cashier_expenses", "fieldtype": "Currency"},
 			{"label": "Expected Cash", "fieldname": "expected_cash", "fieldtype": "Currency"},
 			{"label": "Actual Closing Cash", "fieldname": "actual_closing_cash", "fieldtype": "Currency"},
@@ -117,9 +120,62 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 		labels = {column["fieldname"]: column["label"] for column in columns}
 
 		self.assertNotIn("company", labels)
+		self.assertEqual(labels["closing_shift"], "Shift")
 		self.assertEqual(labels["included_cashier_expenses"], "Till Expenses")
 		self.assertEqual(labels["actual_closing_cash"], "Counted Cash")
 		self.assertEqual(labels["review_status"], "Audit Status")
+
+	def test_shift_dependent_search_reuses_permission_aware_audit_scope(self):
+		with patch(
+			"retailedge.daily_sales_audit_page.search_daily_sales_audit_page_options",
+			return_value=[{"value": "Ketu POS", "label": "Ketu POS"}],
+		) as scoped_search:
+			result = managed_review_reports.search_review_report_options(
+				doctype="POS Profile",
+				txt="Ketu",
+				company="Retail Company",
+				branch="Ketu",
+				pos_profile="",
+				surface_key=SHIFT_RECONCILIATION_TARGET,
+			)
+
+		self.assertEqual(result, [{"value": "Ketu POS", "label": "Ketu POS"}])
+		scoped_search.assert_called_once_with(
+			kind="pos_profile",
+			txt="Ketu",
+			company="Retail Company",
+			branch="Ketu",
+			pos_profile="",
+		)
+
+	def test_shift_workspace_cascades_filters_and_hands_off_workflow_context(self):
+		managed_vue = (
+			APP_ROOT / "public" / "js" / "managed_review_reports" / "ManagedReviewReport.vue"
+		).read_text()
+		daily_audit_vue = (
+			APP_ROOT / "public" / "js" / "daily_sales_audit" / "DailySalesAuditReport.vue"
+		).read_text()
+
+		for contract in (
+			'@cell-click="handleCellClick"',
+			"surface_key: this.surfaceKey",
+			"branch: this.filters.branch || \"\"",
+			"pos_profile: this.filters.pos_profile || \"\"",
+			'this.filters.pos_profile = "";',
+			'this.filters.cashier = "";',
+			"retailedgeSetReportRouteHandoff",
+			'this.routeWithFilters("daily-sales-audit"',
+			'this.routeWithFilters("expense-review"',
+		):
+			self.assertIn(contract, managed_vue)
+
+		self.assertIn(
+			'window.retailedgeConsumeBusinessHubRouteOptions?.("daily-sales-audit")',
+			daily_audit_vue,
+		)
+		self.assertIn("Approval and clarification workflow", daily_audit_vue)
+		self.assertNotIn("Legacy Daily Sales Audit Register retained", daily_audit_vue)
+		self.assertIn("window.retailedge?.userErrorMessage?.(error, fallback)", daily_audit_vue)
 
 	def test_both_business_hub_rpc_paths_use_final_consolidated_context(self):
 		hooks = (APP_ROOT / "hooks.py").read_text()
