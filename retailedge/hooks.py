@@ -98,7 +98,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -127,7 +127,7 @@ doctype_list_js = {
 # importable_doctypes = [doctype_1]
 
 # Jinja
-# ------------------
+# ----------
 
 # add methods and filters to jinja environment
 jinja = {
@@ -157,8 +157,8 @@ jinja = {
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_app_uninstall"
-# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+# before_app_uninstall = "retailedge.uninstall.before_app_uninstall"
+# after_app_uninstall = "retailedge.uninstall.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
