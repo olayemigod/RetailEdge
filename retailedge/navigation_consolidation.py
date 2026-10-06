@@ -23,10 +23,11 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 	"""Expose one clear shift-control front door without deleting legacy routes.
 
 	The final Business Hub context is already permission-filtered before this helper runs.
-	Therefore Shift Reconciliation is only retained when the current user was already
+	Therefore Shift Reconciliation is only promoted when the current user was already
 	permitted to see the existing POS Closing Variance page. Legacy review pages remain
 	directly routable for backward compatibility and detailed drill-down, but they no
-	longer compete as separate everyday navigation choices.
+	longer compete as separate everyday navigation choices when the canonical surface is
+	available.
 	"""
 	for group in navigation_groups:
 		if group.get("key") != "review-approvals":
@@ -38,13 +39,9 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 			None,
 		)
 		if canonical_item is None:
-			# Fail closed: do not manufacture access that the permission-filtered base
-			# navigation did not already grant.
-			group["items"] = [
-				item
-				for item in items
-				if item.get("target") not in LEGACY_SHIFT_REVIEW_TARGETS
-			]
+			# Preserve the permission-filtered fallback exactly as received. A user who
+			# cannot open Shift Reconciliation must not lose an older permitted review
+			# route merely because the canonical page is unavailable to that role.
 			return
 
 		consolidated = deepcopy(canonical_item)
