@@ -177,6 +177,28 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 		self.assertNotIn("Legacy Daily Sales Audit Register retained", daily_audit_vue)
 		self.assertIn("window.retailedge?.userErrorMessage?.(error, fallback)", daily_audit_vue)
 
+	def test_shift_workspace_surfaces_status_aware_next_actions(self):
+		managed_vue = (
+			APP_ROOT / "public" / "js" / "managed_review_reports" / "ManagedReviewReport.vue"
+		).read_text()
+
+		for contract in (
+			'"next_action"',
+			"shiftNextAction(row = {})",
+			'"Complete Sales Audit"',
+			'"Resolve Shift Data"',
+			'"Resolve Clarification"',
+			'"Resolve Cash Variance"',
+			'"Review Sales Audit"',
+			'"Complete Review"',
+			'"Submit Sales Audit"',
+			'"Reopen Sales Audit"',
+			'"No Action Needed"',
+			'if (column.fieldname === "next_action")',
+			"openShiftNextAction(row)",
+		):
+			self.assertIn(contract, managed_vue)
+
 	def test_managed_review_surfaces_replace_date_presets_with_fuzzy_date_range(self):
 		managed_vue = (
 			APP_ROOT / "public" / "js" / "managed_review_reports" / "ManagedReviewReport.vue"
