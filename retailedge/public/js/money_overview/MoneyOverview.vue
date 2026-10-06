@@ -34,8 +34,15 @@
 		>
 			<template #filters>
 				<div class="money-overview-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="money-overview-period"
+						label="Period"
+						placeholder="e.g. May to June 2026, last 2 months, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -70,7 +77,7 @@
 <script>
 import { defaultDashboardExportOptions, exportDashboard, getDashboardCapabilities, printDashboard } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "money-overview";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
@@ -84,6 +91,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			exportBusy: false, printBusy: false, capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(), sections: {}, headlineSummary: [], attention: [], menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -100,11 +108,29 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.money_dashboard.get_money_dashboard_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.capabilities = context.capabilities || this.capabilities;
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Money Overview controls."); }
 			finally { this.metadataLoading = false; }
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 		},
 		async fetchData() {
 			if (!this.filters.company) return; this.loading = true; this.error = "";
@@ -130,7 +156,9 @@ export default {
 </script>
 
 <style scoped>
-.money-overview-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.money-overview-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr); gap: 12px; align-items: end; }
+.money-overview-period { min-width: 0; }
+.money-overview-filters > * { min-width: 0; }
 .money-section-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .money-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
 .money-metric span, .money-attention-item small { color: var(--edge-text-muted); font-size: 12px; }
