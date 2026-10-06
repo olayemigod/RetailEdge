@@ -9,6 +9,7 @@ PERIOD_SURFACES = (
 	ROOT / "customer_360" / "Customer360.vue",
 	ROOT / "action_center" / "ActionCenter.vue",
 	ROOT / "basket_affinity" / "BasketAffinity.vue",
+	ROOT / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue",
 )
 INVENTORY_PROFITABILITY = ROOT / "inventory_insights" / "InventoryInsightView.vue"
 BUSINESS_EXPENSES = ROOT / "business_expenses" / "BusinessExpenses.vue"
@@ -59,6 +60,7 @@ def test_fuzzy_date_fields_can_shrink_inside_filter_grids_without_forcing_overla
 		"Customer360.vue": "customer-360-period-filter { min-width: 0; width: 100%; }",
 		"ActionCenter.vue": "action-center-period-filter { min-width: 0; width: 100%; }",
 		"BasketAffinity.vue": "basket-affinity-period-filter { min-width: 0; width: 100%; }",
+		"SalespersonPerformanceDashboard.vue": "salesperson-period-filter {",
 	}
 	for path in PERIOD_SURFACES:
 		text = _source(path)
