@@ -12,6 +12,7 @@
 	let identityRequest = null;
 	let identityRefreshedAt = 0;
 	let shellContextRequest = null;
+	let shellAdapterRuntime = null;
 
 	function runtime() {
 		return window.EdgeSuiteUI || window.EdgeUI || null;
@@ -202,6 +203,7 @@
 	function registerRetailEdgeShellAdapter() {
 		const edgeUI = runtime();
 		if (!edgeUI || typeof edgeUI.registerAdapter !== "function") return false;
+		if (shellAdapterRuntime === edgeUI && edgeUI.getAdapter?.(SHELL_ADAPTER_NAME)) return true;
 		const adapter = {
 			async getContext() {
 				const data = await fetchBusinessHubContext();
@@ -228,8 +230,10 @@
 		};
 		try {
 			edgeUI.registerAdapter(SHELL_ADAPTER_NAME, adapter, { replace: true });
+			shellAdapterRuntime = edgeUI;
 			return true;
 		} catch (error) {
+			if (shellAdapterRuntime === edgeUI) shellAdapterRuntime = null;
 			console.warn("[RetailEdge shell] shared shell adapter registration failed", error);
 			return false;
 		}
@@ -459,6 +463,7 @@
 
 	function apply() {
 		scheduled = false;
+		registerRetailEdgeShellAdapter();
 		for (const [shell] of mounts) {
 			if (!shell?.isConnected) cleanup(shell);
 		}
@@ -480,10 +485,22 @@
 		if (observer || !document.body) return;
 		observer = new MutationObserver(schedule);
 		observer.observe(document.body, { childList: true, subtree: true });
-		document.addEventListener("page-change", () => { refreshIdentity().finally(schedule); });
-		document.addEventListener("edgesuite-context-changed", () => { refreshIdentity({ force: true }).finally(schedule); });
-		document.addEventListener("retailedge-operating-context-changed", () => { refreshIdentity({ force: true }).finally(schedule); });
-		window.frappe?.router?.on?.("change", () => { refreshIdentity().finally(schedule); });
+		document.addEventListener("page-change", () => {
+			registerRetailEdgeShellAdapter();
+			refreshIdentity().finally(schedule);
+		});
+		document.addEventListener("edgesuite-context-changed", () => {
+			registerRetailEdgeShellAdapter();
+			refreshIdentity({ force: true }).finally(schedule);
+		});
+		document.addEventListener("retailedge-operating-context-changed", () => {
+			registerRetailEdgeShellAdapter();
+			refreshIdentity({ force: true }).finally(schedule);
+		});
+		window.frappe?.router?.on?.("change", () => {
+			registerRetailEdgeShellAdapter();
+			refreshIdentity().finally(schedule);
+		});
 		refreshIdentity({ force: true }).finally(schedule);
 	}
 
