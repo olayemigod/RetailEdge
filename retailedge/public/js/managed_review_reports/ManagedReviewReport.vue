@@ -35,6 +35,7 @@
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
 			@sort-change="handleSortChange"
+			@cell-click="handleCellClick"
 		>
 			<template #actions>
 				<button v-if="action.route" type="button" class="edge-button edge-button--secondary" @click="openAction">
@@ -192,10 +193,13 @@ export default {
 		primaryFilterFields() { return this.filterFields.slice(0, 6); },
 		advancedFilterFields() { return this.filterFields.slice(6); },
 		reportColumns() {
+			const shiftLinks = this.surfaceKey === "pos-closing-variance"
+				? new Set(["closing_shift", "included_cashier_expenses"])
+				: new Set();
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: false,
+				clickable: shiftLinks.has(column.fieldname),
 			}));
 		},
 		sortedRows() {
@@ -299,6 +303,9 @@ export default {
 					doctype: field.options,
 					txt: txt || "",
 					company: this.filters.company || "",
+					branch: this.filters.branch || "",
+					pos_profile: this.filters.pos_profile || "",
+					surface_key: this.surfaceKey,
 				});
 				return Array.isArray(result) ? result : [];
 			};
@@ -318,10 +325,18 @@ export default {
 			this.filters[field.fieldname] = value;
 			if (field.fieldname === "company") {
 				this.filters.branch = "";
+				this.filters.pos_profile = "";
+				this.filters.cashier = "";
 				this.tenantName = value || "";
 				this.branchName = "";
 			}
-			if (field.fieldname === "branch") this.branchName = value || "";
+			if (field.fieldname === "branch") {
+				this.filters.pos_profile = "";
+				this.filters.cashier = "";
+				this.branchName = value || "";
+			}
+			if (field.fieldname === "pos_profile") this.filters.cashier = "";
+			this.currentPage = 1;
 		},
 		applyFilters() {
 			for (const field of this.filterFields) {
@@ -368,8 +383,53 @@ export default {
 			}
 			return this.customerText(value);
 		},
+		shiftHandoffFilters(row = {}) {
+			const shiftDate = row.shift_date || row.posting_date || "";
+			return {
+				company: row.company || this.filters.company || "",
+				branch: row.branch || this.filters.branch || "",
+				pos_profile: row.pos_profile || this.filters.pos_profile || "",
+				cashier: row.cashier || this.filters.cashier || "",
+				from_date: shiftDate || this.filters.from_date || "",
+				to_date: shiftDate || this.filters.to_date || "",
+			};
+		},
+		routeWithFilters(route, filters = {}) {
+			if (!route) return;
+			if (typeof window.retailedgeSetReportRouteHandoff === "function") {
+				window.retailedgeSetReportRouteHandoff(`/app/${route}`, filters);
+			} else {
+				frappe.route_options = { ...filters };
+			}
+			frappe.set_route(route);
+		},
+		handleCellClick(payload) {
+			if (this.surfaceKey !== "pos-closing-variance") return;
+			const column = payload?.column;
+			const row = payload?.row;
+			if (!column || !row) return;
+			if (column.fieldname === "closing_shift" && row.closing_shift) {
+				this.routeWithFilters("daily-sales-audit", this.shiftHandoffFilters(row));
+				return;
+			}
+			if (column.fieldname === "included_cashier_expenses" && Number(row.included_cashier_expenses || 0) !== 0) {
+				const shift = this.shiftHandoffFilters(row);
+				this.routeWithFilters("expense-review", {
+					company: shift.company,
+					branch: shift.branch,
+					cashier: shift.cashier,
+					from_date: shift.from_date,
+					to_date: shift.to_date,
+				});
+			}
+		},
 		openAction() {
-			if (this.action.route) frappe.set_route(this.action.route);
+			if (!this.action.route) return;
+			if (this.surfaceKey === "pos-closing-variance") {
+				this.routeWithFilters(this.action.route, this.shiftHandoffFilters());
+				return;
+			}
+			frappe.set_route(this.action.route);
 		},
 		mapNavigationGroups(groups) {
 			return (groups || []).map((group) => ({
