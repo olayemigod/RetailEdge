@@ -12,6 +12,7 @@ from retailedge.operating_context import get_allowed_operating_branches, get_ope
 
 
 MAX_VISIBLE_ROWS = 1000
+SHIFT_RECONCILIATION_SURFACE = "pos-closing-variance"
 
 SURFACES: dict[str, dict[str, Any]] = {
 	"pos-closing-variance": {
@@ -48,13 +49,12 @@ SURFACES: dict[str, dict[str, Any]] = {
 		"filters": (
 			{"fieldname": "company", "label": "Company", "fieldtype": "Link", "options": "Company", "required": True},
 			{"fieldname": "branch", "label": "Branch", "fieldtype": "Link", "options": "Branch"},
-			{"fieldname": "from_date", "label": "From Date", "fieldtype": "Date"},
-			{"fieldname": "to_date", "label": "To Date", "fieldtype": "Date"},
+			{"fieldname": "from_date", "label": "From Date", "fieldtype": "Date", "required": True},
+			{"fieldname": "to_date", "label": "To Date", "fieldtype": "Date", "required": True},
 			{"fieldname": "pos_profile", "label": "POS Profile", "fieldtype": "Link", "options": "POS Profile"},
 			{"fieldname": "cashier", "label": "Cashier", "fieldtype": "Link", "options": "User"},
 			{"fieldname": "cash_status", "label": "Cash Status", "fieldtype": "Select", "options": ("", "Balanced", "Shortage", "Overage", "Needs Review", "Missing Opening Shift", "Missing Closing Shift")},
-			{"fieldname": "review_status", "label": "Audit Status", "fieldtype": "Data"},
-			{"fieldname": "only_unsynced", "label": "Only Unsynced Cash Invoices", "fieldtype": "Check"},
+			{"fieldname": "review_status", "label": "Audit Status", "fieldtype": "Select", "options": ("", "Audit Required", "Draft", "Ready for Review", "In Review", "Balanced", "Variance Found", "Clarification Required", "Approved", "Rejected", "Reopened", "Cancelled")},
 		),
 	},
 	"unmatched-bank-transactions": {
@@ -242,6 +242,10 @@ def run_review_report(surface_key: str, filters: dict[str, Any] | str | None = N
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
 	filters = frappe._dict(filters or {})
+	if surface_key == SHIFT_RECONCILIATION_SURFACE:
+		if not filters.get("from_date") or not filters.get("to_date"):
+			frappe.throw(_("From Date and To Date are required for Shift Reconciliation."))
+
 	result = run_query_report(
 		report_name=surface["report_name"],
 		filters=filters,
@@ -249,25 +253,53 @@ def run_review_report(surface_key: str, filters: dict[str, Any] | str | None = N
 		are_default_filters=False,
 	)
 	rows = list(result.get("result") or result.get("rows") or [])
-	truncated = len(rows) > MAX_VISIBLE_ROWS
-	rows = rows[:MAX_VISIBLE_ROWS]
+	completeness: dict[str, Any] = {}
+	if surface_key == SHIFT_RECONCILIATION_SURFACE:
+		from retailedge.shift_reconciliation_completeness import augment_shift_reconciliation_rows
+		from retailedge.retailedge.report.retailedge_cash_shift_verification.retailedge_cash_shift_verification import (
+			get_report_summary,
+		)
+
+		rows, completeness = augment_shift_reconciliation_rows(rows, filters)
+		if len(rows) > MAX_VISIBLE_ROWS:
+			frappe.throw(
+				_("More than {0} shifts match these filters. Narrow the date range or business scope before reconciling shifts.").format(
+					MAX_VISIBLE_ROWS
+				)
+			)
+		raw_summary = get_report_summary(rows)
+		truncated = False
+	else:
+		truncated = len(rows) > MAX_VISIBLE_ROWS
+		rows = rows[:MAX_VISIBLE_ROWS]
+		raw_summary = result.get("report_summary") or result.get("summary") or []
+
 	columns = _format_columns(surface, list(result.get("columns") or []))
 	summary_labels = dict(surface.get("summary_labels") or {})
 	summary = []
-	for card in result.get("report_summary") or result.get("summary") or []:
+	for card in raw_summary:
 		card = dict(card)
 		label = str(card.get("label") or "")
 		card["label"] = _customer_copy(summary_labels.get(label) or label)
 		card["datatype"] = card.get("datatype") or card.get("type") or "Data"
 		card["type"] = card.get("type") or card["datatype"]
 		summary.append(card)
+
+	message = _customer_copy(result.get("message"))
+	if completeness.get("missing_audit_visible"):
+		count = int(completeness["missing_audit_visible"])
+		gap_message = _(
+			"{0} closed shift(s) need a Sales Audit before review is complete. Open the Shift to continue the audit workflow."
+		).format(count)
+		message = f"{message} {gap_message}".strip()
 	return {
 		"columns": columns,
 		"rows": rows,
 		"summary": summary,
-		"message": _customer_copy(result.get("message")),
+		"message": message,
 		"truncated": truncated,
 		"max_visible_rows": MAX_VISIBLE_ROWS,
+		"metadata": {"shift_completeness": completeness} if completeness else {},
 	}
 
 
@@ -289,7 +321,7 @@ def search_review_report_options(
 	if doctype not in ALLOWED_LINK_DOCTYPES:
 		frappe.throw(_("Unsupported review filter search."), frappe.PermissionError)
 
-	if surface_key == "pos-closing-variance" and doctype in {"Branch", "POS Profile", "User"}:
+	if surface_key == SHIFT_RECONCILIATION_SURFACE and doctype in {"Branch", "POS Profile", "User"}:
 		from retailedge.daily_sales_audit_page import search_daily_sales_audit_page_options
 
 		kind = {"Branch": "branch", "POS Profile": "pos_profile", "User": "cashier"}[doctype]
