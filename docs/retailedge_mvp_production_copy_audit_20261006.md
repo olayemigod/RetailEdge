@@ -91,6 +91,13 @@ The backend source key is intentionally retained for action fingerprint and comp
 - Replaced `Native Desk users` wording with `advanced-access users`.
 - Preserved every existing report/page target, permission check and internal `native_desk` capability flag.
 
+### Payment History
+
+- Removed `ERPNext` from Payment History descriptions, review subtitles, confirmations and success messages.
+- Replaced `Advanced ERPNext` with `advanced review` / `advanced access` wording.
+- Replaced the user-facing `Run the site migration` setup error with a production-safe administrator message.
+- Preserved Payment Entry document identity, submission logic, Branch permission checks and the existing advanced-record route.
+
 ## Confirmed remaining production-copy debt
 
 The following areas still contain implementation-oriented wording and require follow-up before declaring the whole application copy-clean.
@@ -114,7 +121,7 @@ These should be replaced with business wording such as `accounting and stock rec
 
 Repository search found customer-facing `Advanced ERPNext` language in or around:
 
-- payment history and advanced payment paths;
+- other advanced payment paths;
 - incoming quality inspection;
 - purchase receipts and purchase returns;
 - purchase/sales invoice completion;
@@ -151,7 +158,7 @@ Renaming those can break compatibility without improving user experience.
 
 ## Regression protection
 
-`retailedge/tests/test_production_copy_contract.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre.
+`retailedge/tests/test_production_copy_readiness.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre and Payment History.
 
 The test deliberately does not ban technical terms repository-wide because legitimate backend code and engineering documentation must retain implementation identity.
 
@@ -166,7 +173,8 @@ Use at least one normal operational user and one authorised manager/admin person
 5. Open Company Profile as a normal user and as an advanced-authorised user. Confirm the page uses business language and the advanced button still opens the same underlying Company record only when permitted.
 6. Run a bank reconciliation through the final confirmation. Confirm the button says `Reconcile Match`, safety wording is clear, and execution behavior is unchanged.
 7. Open Reports Centre as both personas. Confirm catalogue descriptions are business-facing and advanced-only reports remain permission-gated.
-8. Continue the audit through Professional Purchasing, payments, stock, quality inspection and selling completion before the final MVP production-copy sign-off.
+8. Open Payment History, inspect draft/submitted payments, trigger an advanced-only draft where possible, and submit a standard draft. Confirm no implementation or migration wording is shown.
+9. Continue the audit through Professional Purchasing, other payment paths, stock, quality inspection and selling completion before the final MVP production-copy sign-off.
 
 ## Safety / non-regression rules
 
