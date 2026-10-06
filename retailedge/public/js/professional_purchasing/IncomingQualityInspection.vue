@@ -5,7 +5,7 @@
 				<div>
 					<span class="quality-kicker">Receiving quality control</span>
 					<h3>Incoming Quality Inspection</h3>
-					<p>Review the inspection readings required by ERPNext and submit standard incoming Quality Inspections without leaving this workspace.</p>
+					<p>Review required inspection readings and submit standard incoming Quality Inspections without leaving this workspace.</p>
 				</div>
 				<button v-if="nativeFallbackEnabled && context.purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openReceipt">Open Purchase Receipt</button>
 			</div>
@@ -19,7 +19,7 @@
 					@select="onReceiptSelected"
 					@clear="clearReceipt"
 				/>
-				<p class="quality-help">ERPNext remains authoritative for inspection requirements, templates, acceptance criteria and final Accepted/Rejected status. Complex or manual inspections stay in Advanced ERPNext.</p>
+				<p class="quality-help">Inspection requirements, templates and acceptance criteria are revalidated before submission. Complex or manual inspections require advanced review.</p>
 			</div>
 
 			<div v-if="error || notice" class="quality-feedback" :class="{ 'quality-feedback--error': error }">
@@ -27,7 +27,7 @@
 				<span>{{ error || notice }}</span>
 			</div>
 
-			<p v-if="loadingContext" class="quality-loading">Loading ERPNext inspection requirements…</p>
+			<p v-if="loadingContext" class="quality-loading">Loading inspection requirements…</p>
 
 			<div v-else-if="context.purchase_receipt && !review" class="quality-context">
 				<div class="quality-context-summary">
@@ -39,7 +39,7 @@
 				<EdgeEmptyState
 					v-if="!context.items || !context.items.length"
 					title="No rows need incoming inspection"
-					description="ERPNext found no uninspected Purchase Receipt rows currently requiring Incoming Quality Inspection."
+					description="No uninspected Purchase Receipt rows currently require Incoming Quality Inspection."
 				/>
 
 				<div v-else class="quality-table-wrap">
@@ -117,7 +117,7 @@
 
 				<div class="quality-actions quality-actions--review">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="submitting || workflowStarting || workflowApplying || advancedPreparing" @click="cancelReview">Back</button>
-					<button v-if="nativeFallbackEnabled" type="button" class="edge-button edge-button--secondary" :disabled="submitting || workflowStarting || workflowApplying || advancedPreparing" @click="prepareAdvanced">{{ advancedPreparing ? "Preparing…" : "Advanced: Prepare in ERPNext" }}</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button edge-button--secondary" :disabled="submitting || workflowStarting || workflowApplying || advancedPreparing" @click="prepareAdvanced">{{ advancedPreparing ? "Preparing…" : "Prepare Advanced Inspection" }}</button>
 					<button v-if="canStartWorkflowReview" type="button" class="edge-button edge-button--primary" :disabled="workflowStarting || advancedPreparing" @click="startApproval">{{ workflowStarting ? "Starting Approval…" : "Start Inspection Approval" }}</button>
 					<button v-if="canSubmitReview" type="button" class="edge-button edge-button--primary" :disabled="submitting || workflowStarting || advancedPreparing" @click="confirmSubmit">{{ submitting ? "Submitting…" : "Submit Quality Inspections" }}</button>
 				</div>
@@ -176,7 +176,7 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, ...(type ? { type } : {}), callback: (response) => resolve(response?.message ?? response), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc_type || error?.exc || error?._server_messages || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 function linkValue(value) { if (typeof value === "string") return value; return value?.value || value?.name || ""; }
 
 export default {
@@ -245,7 +245,7 @@ export default {
 				const context = await callMethod(CONTEXT_METHOD, { purchase_receipt: this.source });
 				this.context = context || {}; this.review = null; this.readingValues = {}; this.selected = {};
 				this.sampleSizes = Object.fromEntries((this.context.items || []).map((row) => [row.child_row_reference, row.suggested_sample_size || ""]));
-			} catch (error) { this.context = {}; this.error = errorMessage(error, "ERPNext could not load the Purchase Receipt inspection context."); }
+			} catch (error) { this.context = {}; this.error = errorMessage(error, "Purchase Receipt inspection context could not be loaded."); }
 			finally { this.loadingContext = false; }
 		},
 		isSelected(rowName) { return Boolean(this.selected[rowName]); },
@@ -260,7 +260,7 @@ export default {
 			try {
 				this.review = await callMethod(REVIEW_METHOD, { purchase_receipt: this.source, selections: this.selectedRows() });
 				this.initialiseReadingValues();
-			} catch (error) { this.review = null; this.error = errorMessage(error, "ERPNext could not prepare the Quality Inspection review."); }
+			} catch (error) { this.review = null; this.error = errorMessage(error, "Quality Inspection review could not be prepared."); }
 			finally { this.reviewLoading = false; }
 		},
 		initialiseReadingValues() {
@@ -306,7 +306,7 @@ export default {
 				this.readingValues = {};
 				this.selected = {};
 			} catch (error) {
-				this.error = errorMessage(error, "ERPNext could not start Quality Inspection approval.");
+				this.error = errorMessage(error, "Quality Inspection approval could not be started.");
 			} finally {
 				this.workflowStarting = false;
 			}
@@ -329,17 +329,17 @@ export default {
 				}
 				this.workflowSourceModified = result?.source_modified || this.workflowSourceModified;
 				this.notice = Number(current?.docstatus || 0) === 1
-					? `Quality Inspection ${current.name} was submitted through the configured Workflow.`
-					: `Quality Inspection ${current?.name || inspection.name} moved through Workflow action ${action}.`;
+					? `Quality Inspection ${current.name} was submitted through the configured approval workflow.`
+					: `Quality Inspection ${current?.name || inspection.name} moved through approval action ${action}.`;
 			} catch (error) {
-				this.error = errorMessage(error, "ERPNext could not apply the Quality Inspection workflow action.");
+				this.error = errorMessage(error, "Quality Inspection approval action could not be applied.");
 			} finally {
 				this.workflowApplying = false;
 			}
 		},
 		confirmSubmit() {
 			if (!this.canSubmitReview || this.submitting) return;
-			frappe.confirm(__("Submit these Quality Inspections now? ERPNext will calculate Accepted/Rejected status from the configured inspection criteria."), () => this.submitInspections());
+			frappe.confirm(__("Submit these Quality Inspections now? Accepted/Rejected status will be calculated from the configured inspection criteria."), () => this.submitInspections());
 		},
 		async submitInspections() {
 			if (!this.canSubmitReview || this.submitting) return;
@@ -347,9 +347,9 @@ export default {
 			try {
 				const result = await callMethod(SUBMIT_METHOD, { purchase_receipt: this.source, expected_source_modified: this.review?.source_modified || "", selections: this.submissionRows() }, "POST");
 				this.submitted = Array.isArray(result?.created) ? result.created : [];
-				this.notice = `${result?.created_count || this.submitted.length} Quality Inspection${(result?.created_count || this.submitted.length) === 1 ? "" : "s"} submitted through ERPNext.`;
+				this.notice = `${result?.created_count || this.submitted.length} Quality Inspection${(result?.created_count || this.submitted.length) === 1 ? "" : "s"} submitted.`;
 				this.review = null; this.readingValues = {}; this.selected = {}; await this.loadReceiptContext();
-			} catch (error) { this.error = errorMessage(error, "ERPNext could not submit the Quality Inspections."); }
+			} catch (error) { this.error = errorMessage(error, "Quality Inspections could not be submitted."); }
 			finally { this.submitting = false; }
 		},
 		async prepareAdvanced() {
@@ -360,7 +360,7 @@ export default {
 				const first = Array.isArray(result?.created) ? result.created[0] : null;
 				this.review = null; this.readingValues = {};
 				if (first?.name) this.openInspection(first.name);
-			} catch (error) { this.error = errorMessage(error, "ERPNext could not prepare the advanced Quality Inspection drafts."); }
+			} catch (error) { this.error = errorMessage(error, "Advanced Quality Inspection drafts could not be prepared."); }
 			finally { this.advancedPreparing = false; }
 		},
 		openInspection(name) { if (!this.nativeFallbackEnabled || !name) return; frappe.set_route("Form", "Quality Inspection", name); },
