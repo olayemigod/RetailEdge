@@ -247,6 +247,23 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		self.assertIn("Selected advances applied through Payment Reconciliation.", text)
 		self.assertIn("Accounting Control</span><strong>Payment Entries", text)
 
+	def test_incoming_quality_inspection_sanitizes_server_copy(self):
+		text = source("public/js/professional_purchasing/IncomingQualityInspection.vue")
+
+		self.assertIn('function customerFacingCopy(value, fallback = "")', text)
+		self.assertIn('customerFacingCopy(blocker.label, "Advanced handling is required.")', text)
+		self.assertIn("customerFacingCopy(inspection.workflow_readiness.message)", text)
+		self.assertIn("customerFacingCopy(window.retailedge?.userErrorMessage?.(error, fallback)", text)
+		self.assertIn('[/Frappe Workflow/gi, "approval workflow"]', text)
+		self.assertIn('[/ERPNext/gi, "the accounting system"]', text)
+		for phrase in (
+			"Advanced: Prepare in ERPNext",
+			"ERPNext remains authoritative for inspection requirements",
+			"Loading ERPNext inspection requirements",
+			"ERPNext could not prepare the Quality Inspection review",
+		):
+			self.assertNotIn(phrase, text)
+
 
 if __name__ == "__main__":
 	unittest.main()
