@@ -14,8 +14,8 @@ const REVIEW_RECEIPT_TRIGGER_LABEL = "Review Receipt";
 const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts";
 const RECEIPT_HISTORY_TRIGGER_LABEL = "Receipt History";
 const ACCESS_MODE = "edgesuite_only";
-const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext";
-const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext";
+const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open Purchase Order";
+const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts";
 const PREPARE_RECEIPT_METHOD = "retailedge.professional_purchasing.prepare_purchase_receipt_draft";
 
 function requireAsync(assetName) {
@@ -47,7 +47,7 @@ function hideNativePageSidebar(wrapper) {
 
 function installRestrictedOperationalGuard() {
 	if (typeof window.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
-		throw new Error("RetailEdge EdgeSuite-only operational guard is unavailable.");
+		throw new Error("Purchasing workspace controls are unavailable.");
 	}
 	window.retailedgeInstallEdgesuiteOnlyOperationalGuard({
 		pageRoute: PAGE_ROUTE,
@@ -120,7 +120,7 @@ function applyPurchaseOrderOwnership(root) {
 			reference.classList.remove("link-button");
 			reference.classList.add("retailedge-po-reference");
 			reference.setAttribute("aria-disabled", "true");
-			reference.setAttribute("title", __("Purchase Order reference. Use the explicit Advanced action only when native ERPNext review is required."));
+			reference.setAttribute("title", __("Purchase Order reference. Use the Advanced action only when full Purchase Order review is required."));
 			reference.tabIndex = -1;
 		}
 		for (const button of row.querySelectorAll(".actions-cell button")) {
@@ -132,7 +132,7 @@ function applyPurchaseOrderOwnership(root) {
 					continue;
 				}
 				button.textContent = __(ADVANCED_PURCHASE_ORDER_LABEL);
-				button.setAttribute("title", __("Open the full ERPNext Purchase Order form for advanced review."));
+				button.setAttribute("title", __("Open the full Purchase Order for advanced review."));
 				button.setAttribute("data-retailedge-advanced-native", "Purchase Order");
 			}
 			if (label === PREPARE_RECEIPT_TRIGGER_LABEL) {
@@ -140,7 +140,7 @@ function applyPurchaseOrderOwnership(root) {
 				button.removeAttribute("aria-hidden");
 				button.removeAttribute("data-retailedge-parity-blocked");
 				button.textContent = __(REVIEW_RECEIPT_TRIGGER_LABEL);
-				button.setAttribute("title", __("Preview ERPNext's Purchase Receipt mapping in RetailEdge. No draft or stock movement is created."));
+				button.setAttribute("title", __("Preview the Purchase Receipt details before creating any draft or stock movement."));
 				button.setAttribute("data-retailedge-receipt-preview", "true");
 			}
 		}
@@ -267,7 +267,7 @@ function renderLoadError(wrapper, error) {
 	const title = document.createElement("strong");
 	title.textContent = __(`${PAGE_TITLE} failed to load`);
 	const detail = document.createElement("div");
-	detail.textContent = error?.message || __("Unknown page load error");
+	detail.textContent = window.retailedge?.userErrorMessage?.(error, __("Unable to load the purchasing workspace.")) || __("Unable to load the purchasing workspace.");
 	node.append(title, detail);
 	wrapper.appendChild(node);
 }
@@ -283,13 +283,13 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		wrapper.page = page;
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.components) throw new Error("Purchasing interface is unavailable.");
 		await requireAsync(RESTRICTED_GUARD_ASSET);
 		installRestrictedOperationalGuard();
 		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET), requireAsync(PURCHASE_RECEIPT_PREVIEW_ASSET)]);
-		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing bundle is unavailable.");
-		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Professional Purchase Order bundle is unavailable.");
-		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptPreview !== "function") throw new Error("Professional Purchase Receipt preview bundle is unavailable.");
+		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing interface is unavailable.");
+		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Purchase Order interface is unavailable.");
+		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptPreview !== "function") throw new Error("Purchase Receipt review is unavailable.");
 		bootLoading.remove();
 
 		const root = document.createElement("div");
