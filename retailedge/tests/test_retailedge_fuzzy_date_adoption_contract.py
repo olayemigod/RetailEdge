@@ -13,6 +13,9 @@ PERIOD_SURFACES = (
 )
 INVENTORY_PROFITABILITY = ROOT / "inventory_insights" / "InventoryInsightView.vue"
 BUSINESS_EXPENSES = ROOT / "business_expenses" / "BusinessExpenses.vue"
+SALESPERSON_PERFORMANCE = (
+	ROOT / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue"
+)
 
 
 def _source(path):
@@ -65,6 +68,18 @@ def test_fuzzy_date_fields_can_shrink_inside_filter_grids_without_forcing_overla
 	for path in PERIOD_SURFACES:
 		text = _source(path)
 		assert css_contracts[path.name] in text, path
+
+
+def test_salesperson_performance_does_not_restore_legacy_preset_ui_or_parser_dependency():
+	text = _source(SALESPERSON_PERFORMANCE)
+	assert "Date Range Preset" not in text
+	assert "window.retailedge.getPresetDates" not in text
+	assert "onPresetChange" not in text
+	assert "onDateChange" not in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.to_date = ""' in text
+	assert 'this.filters.date_range_preset = "Custom Period"' in text
+	assert "this.currentPage = 1" in text
 
 
 def test_inventory_profitability_uses_shared_period_and_exact_backend_dates():
