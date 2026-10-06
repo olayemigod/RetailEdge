@@ -51,6 +51,18 @@ def test_retailedge_policy_does_not_translate_periods_back_to_free_text_dates():
 	assert "to_date" not in policy
 
 
+def test_clearing_a_resolved_smart_date_clears_exact_backend_period_filters():
+	text = REPORTING_ACTIONS.read_text()
+	assert 'const RETAILEDGE_PERIOD_FILTER_KEYS = Object.freeze(["from_" + "date", "to_" + "date"])' in text
+	assert "function hasResolvedSmartDateRange(value)" in text
+	assert "function clearParentPeriodFilters(component)" in text
+	assert "filters[fromKey] = \"\"" in text
+	assert "filters[toKey] = \"\"" in text
+	assert "hadResolvedPeriod" in text
+	assert "if (this.hadResolvedPeriod && !hasResolvedPeriod) clearParentPeriodFilters(this)" in text
+	assert "parent.pagination.page = 1" in text
+
+
 def test_business_hub_uses_shared_smart_date_control_not_transaction_date_inputs():
 	text = BUSINESS_HUB.read_text()
 	assert "<EdgeSmartDateRange" in text
