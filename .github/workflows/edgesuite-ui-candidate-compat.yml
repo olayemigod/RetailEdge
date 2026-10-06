@@ -79,11 +79,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out governed EdgeSuite UI fuzzy-date candidate
+      - name: Check out merged EdgeSuite UI fuzzy-date runtime
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 29635e0a1293fd05ae9c129ce3bc7b07b5cf592c
+          ref: 7ec34dcab401b71b0f94cabeca33aa0f5137e9de
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "29635e0a1293fd05ae9c129ce3bc7b07b5cf592c"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "7ec34dcab401b71b0f94cabeca33aa0f5137e9de"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
           python - <<'PY'
