@@ -90,7 +90,7 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 test("RetailEdge manager reaches consolidated Shift Reconciliation with specialist workflows preserved", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Shift Reconciliation");
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
 
 		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
 		await expect(sidebar.getByText("Daily Sales Audit", { exact: true }).first()).toBeAttached();
@@ -109,7 +109,7 @@ test("RetailEdge manager reaches consolidated Shift Reconciliation with speciali
 test("RetailEdge branch manager reaches Shift Reconciliation", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.branchManager);
 	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Shift Reconciliation");
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
 		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
@@ -119,7 +119,7 @@ test("RetailEdge branch manager reaches Shift Reconciliation", async ({ browser 
 test("Accounts User reaches Shift Reconciliation", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.accounts);
 	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Shift Reconciliation");
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
 		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
