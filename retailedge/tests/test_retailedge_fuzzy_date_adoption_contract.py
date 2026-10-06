@@ -16,6 +16,10 @@ BUSINESS_EXPENSES = ROOT / "business_expenses" / "BusinessExpenses.vue"
 SALESPERSON_PERFORMANCE = (
 	ROOT / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue"
 )
+SALESPERSON_PERFORMANCE_V2 = (
+	ROOT / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboardV2.vue"
+)
+SALESPERSON_BUNDLE = ROOT / "salesperson_performance.bundle.js"
 
 
 def _source(path):
@@ -80,6 +84,28 @@ def test_salesperson_performance_does_not_restore_legacy_preset_ui_or_parser_dep
 	assert 'this.filters.to_date = ""' in text
 	assert 'this.filters.date_range_preset = "Custom Period"' in text
 	assert "this.currentPage = 1" in text
+
+
+def test_runtime_salesperson_dashboard_uses_shared_period_and_clears_stale_exact_dates():
+	bundle = _source(SALESPERSON_BUNDLE)
+	text = _source(SALESPERSON_PERFORMANCE_V2)
+	assert 'SalespersonPerformanceDashboardV2.vue' in bundle
+	assert "<EdgeSmartDateRange" in text
+	assert 'label="Period"' in text
+	assert '@update:modelValue="onSmartDateModelChange"' in text
+	assert '@resolved="onSmartDateResolved"' in text
+	assert "Date Range Preset" not in text
+	assert 'type="date"' not in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.to_date"' not in text
+	assert "onSmartDateModelChange(value)" in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.to_date = ""' in text
+	assert "this.filters.from_date = value.from_date" in text
+	assert "this.filters.to_date = value.to_date" in text
+	assert 'this.filters.date_range_preset = "Custom Period"' in text
+	assert "this.filters.offset = 0" in text
+	assert "window.retailedge.getPresetDates" not in text
 
 
 def test_inventory_profitability_uses_shared_period_and_exact_backend_dates():
