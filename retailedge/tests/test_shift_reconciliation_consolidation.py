@@ -177,6 +177,22 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 		self.assertNotIn("Legacy Daily Sales Audit Register retained", daily_audit_vue)
 		self.assertIn("window.retailedge?.userErrorMessage?.(error, fallback)", daily_audit_vue)
 
+	def test_managed_review_surfaces_replace_date_presets_with_fuzzy_date_range(self):
+		managed_vue = (
+			APP_ROOT / "public" / "js" / "managed_review_reports" / "ManagedReviewReport.vue"
+		).read_text()
+
+		for contract in (
+			"EdgeSmartDateRange",
+			'fieldname: "__smart_date_range"',
+			'fieldtype: "SmartDateRange"',
+			"this.filters.from_date = value.from_date;",
+			"this.filters.to_date = value.to_date;",
+			"retailedgeConsumeBusinessHubRouteOptions?.(this.surfaceKey)",
+		):
+			self.assertIn(contract, managed_vue)
+		self.assertIn('dateOrder="DMY"', managed_vue)
+
 	def test_both_business_hub_rpc_paths_use_final_consolidated_context(self):
 		hooks = (APP_ROOT / "hooks.py").read_text()
 		target = "retailedge.navigation_consolidation.get_retailedge_business_hub_context"
