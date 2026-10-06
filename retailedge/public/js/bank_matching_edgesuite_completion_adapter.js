@@ -181,7 +181,7 @@
 		guidance.appendChild(node("h3", "", t("Operational Guidance")));
 		const action = clean(operational.recommended_action);
 		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", action));
-		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
+		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. Final reconciliation runs only after confirmation and a fresh accounting safety check.")));
 
 		body.insertBefore(guidance, insertBefore);
 		body.insertBefore(evidenceGrid, guidance);
