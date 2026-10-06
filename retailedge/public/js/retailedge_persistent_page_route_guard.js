@@ -42,8 +42,9 @@
 	};
 	window.retailedge.correctPersistentTransactionPageRoute = correctModulePrefixedPersistentPage;
 
-	if (!correctModulePrefixedPersistentPage()) {
-		document.addEventListener("page-change", correctModulePrefixedPersistentPage);
-		window.frappe?.router?.on?.("change", correctModulePrefixedPersistentPage);
-	}
+	// Repair only the initial malformed nested URL. Do not subscribe to Frappe
+	// route/page lifecycle events: Frappe may internally express a custom Page as
+	// /desk/retailedge/<page> while resolving it, and rewriting that intermediate
+	// state restarts Page initialization in a redirect loop.
+	correctModulePrefixedPersistentPage();
 })();
