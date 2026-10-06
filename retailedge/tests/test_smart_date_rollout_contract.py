@@ -9,6 +9,28 @@ SALES_REPORTING = ROOT / "retailedge" / "public" / "js" / "sales_reporting" / "S
 PURCHASE_REPORTING = ROOT / "retailedge" / "public" / "js" / "purchase_reporting" / "PurchaseReportingReport.vue"
 STOCK_MOVEMENT = ROOT / "retailedge" / "public" / "js" / "stock_movement_history" / "StockMovementHistory.vue"
 PAYMENT_ANALYSIS = ROOT / "retailedge" / "public" / "js" / "payment_settlement_analysis" / "PaymentSettlementAnalysis.vue"
+MONEY_OVERVIEW = ROOT / "retailedge" / "public" / "js" / "money_overview" / "MoneyOverview.vue"
+CUSTOMER_SALES_INTELLIGENCE = ROOT / "retailedge" / "public" / "js" / "customer_sales_intelligence" / "CustomerSalesIntelligence.vue"
+PAYMENT_HISTORY = ROOT / "retailedge" / "public" / "js" / "payment_management" / "PaymentHistoryPanel.vue"
+
+
+SMART_DATE_SURFACES = (
+    BUSINESS_HUB,
+    EXPENSE_REGISTER,
+    SALES_REPORTING,
+    PURCHASE_REPORTING,
+    STOCK_MOVEMENT,
+    PAYMENT_ANALYSIS,
+    MONEY_OVERVIEW,
+    CUSTOMER_SALES_INTELLIGENCE,
+    PAYMENT_HISTORY,
+)
+
+MIGRATED_NATIVE_RANGE_SURFACES = (
+    MONEY_OVERVIEW,
+    CUSTOMER_SALES_INTELLIGENCE,
+    PAYMENT_HISTORY,
+)
 
 
 def test_retailedge_replaces_shared_smart_date_with_one_reporting_policy():
@@ -26,24 +48,40 @@ def test_retailedge_replaces_shared_smart_date_with_one_reporting_policy():
 
 
 def test_known_reporting_surfaces_use_shared_smart_date_component():
-    for source in (
-        BUSINESS_HUB,
-        EXPENSE_REGISTER,
-        SALES_REPORTING,
-        PURCHASE_REPORTING,
-        STOCK_MOVEMENT,
-        PAYMENT_ANALYSIS,
-    ):
+    for source in SMART_DATE_SURFACES:
         text = source.read_text()
         assert "EdgeSmartDateRange" in text, source
 
 
+def test_migrated_period_filters_no_longer_render_native_from_to_date_inputs():
+    for source in MIGRATED_NATIVE_RANGE_SURFACES:
+        text = source.read_text()
+        assert 'type="date"' not in text, source
+        assert 'label="Period"' in text, source
+        assert "onSmartDateResolved" in text, source
+
+
 def test_reporting_smart_dates_still_resolve_to_backend_iso_filter_fields():
-    for source in (SALES_REPORTING, PURCHASE_REPORTING, STOCK_MOVEMENT, PAYMENT_ANALYSIS):
+    for source in (
+        SALES_REPORTING,
+        PURCHASE_REPORTING,
+        STOCK_MOVEMENT,
+        PAYMENT_ANALYSIS,
+        MONEY_OVERVIEW,
+        CUSTOMER_SALES_INTELLIGENCE,
+        PAYMENT_HISTORY,
+    ):
         text = source.read_text()
         assert "from_date" in text, source
         assert "to_date" in text, source
         assert "SmartDateResolved" in text or "smartDateResolved" in text, source
+
+
+def test_migrated_filter_grids_allow_smart_date_to_shrink_without_overlap():
+    for source in MIGRATED_NATIVE_RANGE_SURFACES:
+        text = source.read_text()
+        assert "min-width: 0" in text or "min-width:0" in text, source
+        assert "max-width: 100%" in text or "max-width:100%" in text, source
 
 
 def test_exact_transaction_date_semantics_are_not_globally_replaced():
