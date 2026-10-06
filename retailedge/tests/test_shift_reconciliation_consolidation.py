@@ -5,7 +5,7 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from retailedge.managed_review_reports import SURFACES
+from retailedge.managed_review_reports import SURFACES, _format_columns
 from retailedge.navigation_consolidation import (
 	LEGACY_SHIFT_REVIEW_TARGETS,
 	PRESERVED_SHIFT_WORKFLOW_TARGETS,
@@ -87,16 +87,39 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 
 		self.assertEqual(groups, original)
 
-	def test_shift_reconciliation_surface_uses_customer_facing_copy(self):
+	def test_shift_reconciliation_uses_authoritative_cash_shift_dataset(self):
 		surface = SURFACES[SHIFT_RECONCILIATION_TARGET]
 		self.assertEqual(surface["title"], "Shift Reconciliation")
 		self.assertEqual(surface["eyebrow"], "Cash Control")
+		self.assertEqual(surface["report_name"], "RetailEdge Cash Shift Verification")
 		self.assertEqual(
 			surface["action"],
-			{"label": "Detailed Shift Audit", "route": "cash-shift-verification"},
+			{"label": "Open Sales Audit Review", "route": "daily-sales-audit"},
 		)
-		self.assertIn("cashier expenses", surface["subtitle"].lower())
-		self.assertIn("deposits", surface["subtitle"].lower())
+		self.assertIn("till expenses", surface["subtitle"].lower())
+		self.assertIn("cash deposits", surface["subtitle"].lower())
+		self.assertIn("expected_cash", surface["visible_columns"])
+		self.assertIn("actual_closing_cash", surface["visible_columns"])
+		self.assertIn("cash_variance", surface["visible_columns"])
+
+	def test_shift_reconciliation_columns_are_reduced_and_customer_facing(self):
+		surface = SURFACES[SHIFT_RECONCILIATION_TARGET]
+		raw_columns = [
+			{"label": "Company", "fieldname": "company", "fieldtype": "Link"},
+			{"label": "Included Cashier Expenses", "fieldname": "included_cashier_expenses", "fieldtype": "Currency"},
+			{"label": "Expected Cash", "fieldname": "expected_cash", "fieldtype": "Currency"},
+			{"label": "Actual Closing Cash", "fieldname": "actual_closing_cash", "fieldtype": "Currency"},
+			{"label": "Cash Variance", "fieldname": "cash_variance", "fieldtype": "Currency"},
+			{"label": "Review Status", "fieldname": "review_status", "fieldtype": "Data"},
+		]
+
+		columns = _format_columns(surface, raw_columns)
+		labels = {column["fieldname"]: column["label"] for column in columns}
+
+		self.assertNotIn("company", labels)
+		self.assertEqual(labels["included_cashier_expenses"], "Till Expenses")
+		self.assertEqual(labels["actual_closing_cash"], "Counted Cash")
+		self.assertEqual(labels["review_status"], "Audit Status")
 
 	def test_both_business_hub_rpc_paths_use_final_consolidated_context(self):
 		hooks = (APP_ROOT / "hooks.py").read_text()
