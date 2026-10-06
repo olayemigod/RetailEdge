@@ -6,7 +6,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = APP_ROOT.parent
-EDGESUITE_SHA = "be3ddc2531ecc7e6e59bd745a23aec0d515819a1"
+EDGESUITE_SHA = "4a6bc3b2a04afd355a5158167e33560852750f79"
 
 
 class TestSharedPrintingRetailAdoption(unittest.TestCase):
