@@ -172,11 +172,12 @@
 			</section>
 
 			<section v-if="activeTab === 'controls'" class="form-section">
-				<h4>Controls & audit</h4>
+				<h4>Controls, audit & printing</h4>
 				<div class="control-grid">
 					<label class="check-field"><input v-model="editor.enable_cashier_expense_control" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Cashier Expense Control</strong><small>Use Branch controls for cashier expenses.</small></span></label>
 					<label class="check-field"><input v-model="editor.enable_daily_sales_audit" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Daily Sales Audit</strong><small>Enable Branch daily audit workflows.</small></span></label>
 					<label class="check-field"><input v-model="editor.enable_transaction_branch_attribution" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Transaction Branch Attribution</strong><small>Apply the Branch context to supported new work.</small></span></label>
+					<label class="check-field"><input v-model="editor.show_branch_on_printed_documents" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Show Branch on Printed Documents</strong><small>Show this Branch name on PEdge invoices, receipts and direct thermal receipts.</small></span></label>
 					<label class="check-field"><input v-model="editor.require_pos_closing_shift_for_audit" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Require POS Closing Shift</strong><small>Require closing evidence for the audit flow where applicable.</small></span></label>
 					<label class="edge-field"><span class="edge-field-label">Variance Tolerance</span><input v-model.number="editor.variance_tolerance" class="edge-input" type="number" step="0.01" min="0" /></label>
 					<label class="edge-field edge-field--wide"><span class="edge-field-label">Notes</span><textarea v-model="editor.notes" class="edge-input" rows="4"></textarea></label>
@@ -226,8 +227,8 @@
 <script>
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown"];
 const CONTEXT_METHOD = "retailedge.branch_setup.get_branch_setup_context";
-const GET_METHOD = "retailedge.branch_setup.get_branch_setup";
-const SAVE_METHOD = "retailedge.branch_setup.save_branch_setup";
+const GET_METHOD = "retailedge.branch_print_visibility.get_branch_setup_with_print_visibility";
+const SAVE_METHOD = "retailedge.branch_print_visibility.save_branch_setup_with_print_visibility";
 const SEARCH_METHOD = "retailedge.branch_setup.search_branch_setup_options";
 const CREATE_BRANCH_METHOD = "retailedge.branch_setup.quick_create_branch";
 const REASSIGN_METHOD = "retailedge.retailedge.doctype.retailedge_branch_profile.retailedge_branch_profile.reassign_branch_profile";
@@ -254,7 +255,7 @@ function blankEditor() {
 		default_cost_center: "", default_sales_cost_center: "", default_expense_cost_center: "",
 		default_cash_account: "", default_bank_account: "", default_card_pos_account: "", default_mobile_money_account: "",
 		enable_cashier_expense_control: 1, enable_daily_sales_audit: 1, enable_transaction_branch_attribution: 1,
-		require_pos_closing_shift_for_audit: 0, variance_tolerance: 0, notes: "",
+		show_branch_on_printed_documents: 0, require_pos_closing_shift_for_audit: 0, variance_tolerance: 0, notes: "",
 	};
 }
 const DEPENDENT_FIELDS = [
