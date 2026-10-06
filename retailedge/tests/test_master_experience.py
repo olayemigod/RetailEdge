@@ -88,7 +88,12 @@ class TestMasterExperience(unittest.TestCase):
 		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
 		self.assertIn(
 			'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": '
-			'"retailedge.master_experience.get_retailedge_business_hub_context"',
+			'"retailedge.printing_navigation.get_retailedge_business_hub_context"',
+			hooks,
+		)
+		self.assertIn(
+			'"retailedge.master_experience.get_retailedge_business_hub_context": '
+			'"retailedge.printing_navigation.get_retailedge_business_hub_context"',
 			hooks,
 		)
 
