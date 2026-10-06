@@ -169,6 +169,22 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		):
 			self.assertNotIn(phrase, sales_order)
 
+	def test_customer_payment_backend_uses_business_facing_blockers(self):
+		text = source("standard_customer_payment_submit.py")
+
+		for phrase in (
+			"Advanced ERPNext review",
+			"standard EdgeSuite submission",
+			"available workflow action in EdgeSuite",
+			"Run the site migration",
+			"standard EdgeSuite workflow path",
+			"ERPNext did not submit Payment Entry",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Payments allocated to multiple documents require advanced review.", text)
+		self.assertIn("Branch support for Payment Entry is not available yet.", text)
+		self.assertIn("controlled by active approval workflow", text)
+
 
 if __name__ == "__main__":
 	unittest.main()
