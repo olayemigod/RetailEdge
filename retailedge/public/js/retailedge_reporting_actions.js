@@ -22,6 +22,7 @@
 	const RETAILEDGE_SMART_DATE_PLACEHOLDER =
 		"e.g. May to June 2026, last 2 months, previous 2 months, YTD";
 	const RETAILEDGE_SMART_DATE_STYLE_ID = "retailedge-smart-date-policy";
+	const RETAILEDGE_PERIOD_FILTER_KEYS = Object.freeze(["from_" + "date", "to_" + "date"]);
 	let shellGovernanceInstalled = false;
 	let smartDatePolicyInstalled = false;
 	let baseReportShell = null;
@@ -126,6 +127,22 @@
 		document.head.appendChild(style);
 		return true;
 	}
+	function hasResolvedSmartDateRange(value) {
+		return Boolean(value?.from_date && value?.to_date);
+	}
+	function clearParentPeriodFilters(component) {
+		const parent = component?.$parent;
+		const filters = parent?.filters;
+		if (!filters || typeof filters !== "object") return false;
+		const [fromKey, toKey] = RETAILEDGE_PERIOD_FILTER_KEYS;
+		if (!(fromKey in filters) || !(toKey in filters)) return false;
+		filters[fromKey] = "";
+		filters[toKey] = "";
+		if (typeof parent.page === "number") parent.page = 1;
+		if (typeof parent.currentPage === "number") parent.currentPage = 1;
+		if (parent.pagination && typeof parent.pagination === "object" && "page" in parent.pagination) parent.pagination.page = 1;
+		return true;
+	}
 	function installSmartDatePolicy(runtime = window.EdgeSuiteUI) {
 		installSmartDateStylePolicy();
 		if (smartDatePolicyInstalled) return true;
@@ -136,6 +153,15 @@
 		const RetailEdgeSmartDateRange = defineComponent({
 			name: "RetailEdgeSmartDateRange",
 			inheritAttrs: false,
+			data() { return { hadResolvedPeriod: false }; },
+			mounted() {
+				this.hadResolvedPeriod = hasResolvedSmartDateRange(this.$attrs?.modelValue);
+			},
+			updated() {
+				const hasResolvedPeriod = hasResolvedSmartDateRange(this.$attrs?.modelValue);
+				if (this.hadResolvedPeriod && !hasResolvedPeriod) clearParentPeriodFilters(this);
+				this.hadResolvedPeriod = hasResolvedPeriod;
+			},
 			render() {
 				const attrs = this.$attrs || {};
 				return h(baseSmartDateRange, {
