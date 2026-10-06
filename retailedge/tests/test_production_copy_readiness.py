@@ -19,6 +19,7 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		self.assertIn('r12_planning: "Forecasting & Planning"', text)
 		self.assertIn('{{ actionMetaLabel(item) }}', text)
 		self.assertIn('.filter(Boolean).join(" · ")', text)
+		self.assertIn('.replace(/^r\\d+[_\\s-]+/i, "")', text)
 		self.assertNotIn('R11 Customer Opportunity', text)
 		self.assertNotIn('Advanced Native Desk access is required for this workflow', text)
 
@@ -91,6 +92,56 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		self.assertIn('primary_action_label: __("Reconcile Match")', text)
 		self.assertNotIn('primary_action_label: __("Reconcile Through ERPNext")', text)
 		self.assertNotIn("through ERPNext Bank Reconciliation", text)
+
+	def test_company_profile_uses_business_language(self):
+		text = source("public/js/company_profile/CompanyProfile.vue")
+
+		for phrase in (
+			"ERPNext country",
+			"Advanced ERPNext setup",
+			"Open Company in ERPNext",
+			"Advanced ERPNext access",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Open Advanced Company Settings", text)
+
+	def test_reports_centre_descriptions_use_business_language(self):
+		text = source("report_center.py")
+
+		for phrase in (
+			"Review R8 transactional contribution",
+			"existing R12 sales forecast",
+			"Review ERPNext",
+			"Open ERPNext",
+			"ERPNext accounting statements",
+			"Native Desk users",
+			"governed ERPNext purchasing workflow",
+			"ERPNext General Ledger truth",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Accounting statements and ledgers for authorised advanced-access users.", text)
+
+	def test_payment_history_hides_platform_and_migration_wording(self):
+		backend = source("payment_history.py")
+		frontend = source("public/js/payment_management/PaymentHistoryPanel.vue")
+
+		for phrase in (
+			"Run the site migration",
+			"Advanced ERPNext review",
+			"source_of_truth\": \"ERPNext Payment Entry",
+		):
+			self.assertNotIn(phrase, backend)
+		for phrase in (
+			"permission-visible ERPNext Payment Entries",
+			"Advanced ERPNext access",
+			"Advanced: ERPNext",
+			"Review the ERPNext Payment Entry",
+			"saved ERPNext Payment Entry",
+			"ERPNext will post the authoritative accounting entry",
+			"Payment submitted through ERPNext",
+		):
+			self.assertNotIn(phrase, frontend)
+		self.assertIn("Open Advanced Payment", frontend)
 
 
 if __name__ == "__main__":
