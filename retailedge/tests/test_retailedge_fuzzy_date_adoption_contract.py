@@ -10,6 +10,8 @@ PERIOD_SURFACES = (
 	ROOT / "action_center" / "ActionCenter.vue",
 	ROOT / "basket_affinity" / "BasketAffinity.vue",
 )
+INVENTORY_PROFITABILITY = ROOT / "inventory_insights" / "InventoryInsightView.vue"
+BUSINESS_EXPENSES = ROOT / "business_expenses" / "BusinessExpenses.vue"
 
 
 def _source(path):
@@ -61,3 +63,40 @@ def test_fuzzy_date_fields_can_shrink_inside_filter_grids_without_forcing_overla
 	for path in PERIOD_SURFACES:
 		text = _source(path)
 		assert css_contracts[path.name] in text, path
+
+
+def test_inventory_profitability_uses_shared_period_and_exact_backend_dates():
+	text = _source(INVENTORY_PROFITABILITY)
+	assert '"EdgeSmartDateRange"' in text
+	assert "<EdgeSmartDateRange" in text
+	assert 'v-if="isProfitabilityView"' in text
+	assert 'label="Period"' in text
+	assert 'v-model="smartDate"' in text
+	assert '@update:modelValue="onSmartDateModelChange"' in text
+	assert '@resolved="onSmartDateResolved"' in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.to_date"' not in text
+	assert "this.filters.from_date = value.from_date" in text
+	assert "this.filters.to_date = value.to_date" in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.to_date = ""' in text
+	assert "this.resetResultState()" in text
+	assert "if (!this.isProfitabilityView) { delete filters.from_date; delete filters.to_date; }" in text
+
+
+def test_business_expense_queue_uses_shared_period_but_expense_date_stays_exact():
+	text = _source(BUSINESS_EXPENSES)
+	assert '"EdgeSmartDateRange"' in text
+	assert "<EdgeSmartDateRange" in text
+	assert 'label="Period"' in text
+	assert 'v-model="smartDate"' in text
+	assert '@update:modelValue="onSmartDateModelChange"' in text
+	assert '@resolved="onSmartDateResolved"' in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.to_date"' not in text
+	assert "this.filters.from_date = value.from_date" in text
+	assert "this.filters.to_date = value.to_date" in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.to_date = ""' in text
+	assert "this.pagination.page = 1" in text
+	assert 'v-model="values.expense_date" class="edge-input" type="date" required' in text
