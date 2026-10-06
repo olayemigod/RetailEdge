@@ -40,6 +40,7 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge_shell_context.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
+	"/assets/retailedge/js/retailedge_query_report_smart_date.js",
 	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
@@ -263,7 +264,7 @@ permission_query_conditions = {
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
-	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_price_list_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
