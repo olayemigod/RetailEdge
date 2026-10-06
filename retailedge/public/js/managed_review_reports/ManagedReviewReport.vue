@@ -49,8 +49,16 @@
 			<template #filters>
 				<div class="managed-filter-grid">
 					<template v-for="field in primaryFilterFields" :key="field.fieldname">
+						<EdgeSmartDateRange
+							v-if="field.fieldtype === 'SmartDateRange'"
+							v-model="smartDate"
+							:label="field.label"
+							:referenceDate="smartDateReference || null"
+							dateOrder="DMY"
+							@resolved="onSmartDateResolved"
+						/>
 						<EdgeLinkField
-							v-if="field.fieldtype === 'Link'"
+							v-else-if="field.fieldtype === 'Link'"
 							:modelValue="filters[field.fieldname] || ''"
 							:label="field.label"
 							:placeholder="'Search ' + field.label.toLowerCase()"
@@ -89,8 +97,16 @@
 					<summary>More filters</summary>
 				<div class="managed-filter-grid managed-filter-grid--advanced">
 					<template v-for="field in advancedFilterFields" :key="field.fieldname">
+						<EdgeSmartDateRange
+							v-if="field.fieldtype === 'SmartDateRange'"
+							v-model="smartDate"
+							:label="field.label"
+							:referenceDate="smartDateReference || null"
+							dateOrder="DMY"
+							@resolved="onSmartDateResolved"
+						/>
 						<EdgeLinkField
-							v-if="field.fieldtype === 'Link'"
+							v-else-if="field.fieldtype === 'Link'"
 							:modelValue="filters[field.fieldname] || ''"
 							:label="field.label"
 							:placeholder="'Search ' + field.label.toLowerCase()"
@@ -141,7 +157,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -173,6 +189,8 @@ export default {
 			action: {},
 			filterFields: [],
 			filters: {},
+			smartDate: {},
+			smartDateReference: "",
 			rows: [],
 			columns: [],
 			summary: [],
@@ -190,8 +208,27 @@ export default {
 		};
 	},
 	computed: {
-		primaryFilterFields() { return this.filterFields.slice(0, 6); },
-		advancedFilterFields() { return this.filterFields.slice(6); },
+		managedFilterFields() {
+			const fields = this.filterFields || [];
+			const hasFromDate = fields.some((field) => field.fieldname === "from_date");
+			const hasToDate = fields.some((field) => field.fieldname === "to_date");
+			if (!hasFromDate || !hasToDate) return fields;
+			const output = [];
+			let insertedDateRange = false;
+			for (const field of fields) {
+				if (["from_date", "to_date"].includes(field.fieldname)) {
+					if (!insertedDateRange) {
+						output.push({ fieldname: "__smart_date_range", label: "Date Range", fieldtype: "SmartDateRange" });
+						insertedDateRange = true;
+					}
+					continue;
+				}
+				output.push(field);
+			}
+			return output;
+		},
+		primaryFilterFields() { return this.managedFilterFields.slice(0, 6); },
+		advancedFilterFields() { return this.managedFilterFields.slice(6); },
 		reportColumns() {
 			const shiftLinks = this.surfaceKey === "pos-closing-variance"
 				? new Set(["closing_shift", "included_cashier_expenses", "review_status"])
@@ -259,6 +296,10 @@ export default {
 				this.action = context.action || {};
 				this.filterFields = context.filters || [];
 				this.filters = { ...(context.default_filters || {}) };
+				const routeHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.surfaceKey) || {};
+				this.filters = { ...this.filters, ...routeHandoff };
+				this.smartDateReference = this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.maxVisibleRows = Number(context.max_visible_rows || 1000);
 				this.tenantName = navigation.context?.company || this.filters.company || "";
 				this.branchName = navigation.context?.branch || this.filters.branch || "";
@@ -309,6 +350,27 @@ export default {
 				});
 				return Array.isArray(result) ? result : [];
 			};
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) {
+				this.smartDate = {};
+				return;
+			}
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date
+					? this.filters.from_date
+					: `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
 		},
 		inputType(field) {
 			if (field.fieldtype === "Date") return "date";
