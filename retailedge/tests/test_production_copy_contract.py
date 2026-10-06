@@ -76,6 +76,24 @@ class TestProductionCopyContract(unittest.TestCase):
         self.assertNotIn("Default Selling Price List from ERPNext Selling Settings.", source)
         self.assertNotIn("Default Buying Price List from ERPNext Buying Settings.", source)
 
+    def test_reports_centre_descriptions_use_business_language(self):
+        source = self._read("report_center.py")
+
+        for phrase in (
+            "Review R8 transactional contribution",
+            "existing R12 sales forecast",
+            "Review ERPNext",
+            "Open ERPNext",
+            "ERPNext accounting statements",
+            "Native Desk users",
+            "governed ERPNext purchasing workflow",
+            "ERPNext General Ledger truth",
+        ):
+            self.assertNotIn(phrase, source)
+
+        self.assertIn("Accounting statements and ledgers for authorised advanced-access users.", source)
+        self.assertIn("Review the sales forecast without treating it as a committed receivable schedule.", source)
+
 
 if __name__ == "__main__":
     unittest.main()
