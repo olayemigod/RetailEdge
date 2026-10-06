@@ -28,6 +28,21 @@ class TestPersistentTransactionPageRouteGuard(TestCase):
 		self.assertIn("/desk/${target}", source)
 		self.assertNotIn("retailedge-business-hub", source)
 
+	def test_route_repair_is_bootstrap_only_and_does_not_rewrite_frappe_page_lifecycle(self):
+		source = GUARD.read_text(encoding="utf-8")
+
+		self.assertIn("correctModulePrefixedPersistentPage();", source)
+		self.assertNotIn('document.addEventListener("page-change"', source)
+		self.assertNotIn('window.frappe?.router?.on?.("change"', source)
+		self.assertNotIn("addEventListener(\"popstate\"", source)
+
+	def test_canonical_desk_routes_are_not_matched_for_repair(self):
+		source = GUARD.read_text(encoding="utf-8")
+
+		self.assertIn("if (!match) return \"\";", source)
+		self.assertIn("MODULE_PREFIX_RE.exec", source)
+		self.assertNotIn('^\\/(?:app|desk)\\/([^/?#]+)\\/?$', source)
+
 	def test_desk_bootstrap_loads_guard_before_business_hub_controller(self):
 		source = BOOTSTRAP.read_text(encoding="utf-8")
 
