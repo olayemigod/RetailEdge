@@ -37,7 +37,6 @@ app_include_css = [
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
-	"/assets/retailedge/js/retailedge_persistent_page_route_guard.js",
 	"/assets/retailedge/js/retailedge_shell_context.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
@@ -157,8 +156,8 @@ jinja = {
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.uninstall.before_app_uninstall"
-# after_app_uninstall = "retailedge.uninstall.after_app_uninstall"
+# before_app_uninstall = "retailedge.utils.before_app_uninstall"
+# after_app_uninstall = "retailedge.utils.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
