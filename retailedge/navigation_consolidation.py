@@ -11,6 +11,10 @@ from retailedge.master_experience import (
 
 
 SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
+SHIFT_REVIEW_GROUP_KEYS = {
+	"review-approvals",
+	"operations-review",
+}
 LEGACY_SHIFT_REVIEW_TARGETS = {
 	"cash-shift-verification",
 	"daily-sales-audit-register",
@@ -25,14 +29,17 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 	"""Expose one clear shift-control front door without deleting review workflows.
 
 	The final Business Hub context is already permission-filtered before this helper runs.
-	Therefore Shift Reconciliation is only promoted when the current user was already
-	permitted to see the existing POS Closing Variance page. Read-only/detail duplicates
-	leave everyday navigation, while Daily Sales Audit and Cashier Expense Review remain
-	available until their mutation workflows are deliberately absorbed into the canonical
-	surface. All legacy routes remain directly routable for backward compatibility.
+	Master Experience presents the legacy ``review-approvals`` bucket to users as
+	``operations-review``, so both keys are accepted to keep the helper safe for the
+	final customer-facing context and for older callers. Shift Reconciliation is only
+	promoted when the current user was already permitted to see the existing POS Closing
+	Variance page. Read-only/detail duplicates leave everyday navigation, while Daily
+	Sales Audit and Cashier Expense Review remain available until their mutation workflows
+	are deliberately absorbed into the canonical surface. All legacy routes remain
+	directly routable for backward compatibility.
 	"""
 	for group in navigation_groups:
-		if group.get("key") != "review-approvals":
+		if group.get("key") not in SHIFT_REVIEW_GROUP_KEYS:
 			continue
 
 		items = list(group.get("items") or [])
@@ -44,7 +51,7 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 			# Preserve the permission-filtered fallback exactly as received. A user who
 			# cannot open Shift Reconciliation must not lose an older permitted review
 			# route merely because the canonical page is unavailable to that role.
-			return
+			continue
 
 		consolidated = deepcopy(canonical_item)
 		consolidated["label"] = "Shift Reconciliation"
