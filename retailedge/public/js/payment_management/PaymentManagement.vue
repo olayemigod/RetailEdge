@@ -19,12 +19,12 @@
 			<header class="payment-hero">
 				<div>
 					<div class="payment-eyebrow">Customers & Receivables</div>
-					<h2>Advanced Payment Management</h2>
-					<p>Record customer advances, settle submitted Sales Invoices, and keep ERPNext Payment Entry and Payment Reconciliation as the accounting source of truth.</p>
+					<h2>Payment Management</h2>
+					<p>Record customer advances, settle submitted Sales Invoices, and manage payment allocation and reconciliation safely.</p>
 				</div>
 				<div class="hero-actions">
 					<button class="edge-secondary-button" type="button" @click="openPaymentHistory">Payment History</button>
-					<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced ERPNext</button>
+					<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced Payments</button>
 					<button class="edge-primary-button" type="button" :disabled="!filters.company" @click="openAdvanceDialog">Record Advance</button>
 				</div>
 			</header>
@@ -36,14 +36,14 @@
 			<div class="payment-cards">
 				<article class="metric-card"><span>Available Advances</span><strong>{{ formatCurrency(context.available_advance || 0) }}</strong></article>
 				<article class="metric-card"><span>Unapplied Receipts</span><strong>{{ context.advance_count || 0 }}</strong></article>
-				<article class="metric-card"><span>Accounting Source</span><strong>ERPNext</strong></article>
+				<article class="metric-card"><span>Accounting Control</span><strong>Payment Entries</strong></article>
 			</div>
 
 			<section ref="draftPanel" class="payment-panel">
 				<div class="panel-head">
 					<div>
 						<h3>Draft Payments Awaiting Submission</h3>
-						<p>Review standard customer receipts and advances here before ERPNext posts them. Complex payments remain available through Advanced ERPNext.</p>
+						<p>Review standard customer receipts and advances here before posting. Complex payments require advanced review.</p>
 					</div>
 					<button class="edge-secondary-button" type="button" :disabled="draftLoading || !filters.company || !filters.customer" @click="loadDraftPayments">{{ draftLoading ? "Refreshing…" : "Refresh Drafts" }}</button>
 				</div>
@@ -82,7 +82,7 @@
 					<div class="block-head">
 						<div>
 							<h4>Review {{ draftReview.payment_entry }}</h4>
-							<p>{{ draftReview.payment_kind }} · ERPNext Payment Entry remains authoritative.</p>
+							<p>{{ draftReview.payment_kind }} · Review the saved Payment Entry before posting.</p>
 						</div>
 						<strong>{{ draftReview.workflow_eligible ? "Workflow Action Required" : (draftReview.can_submit ? "Ready to Submit" : "Advanced Review Required") }}</strong>
 					</div>
@@ -97,8 +97,8 @@
 						<article><span>Branch</span><strong>{{ draftReview.branch || "—" }}</strong></article>
 					</div>
 					<div v-if="draftReview.blockers?.length" class="draft-blockers">
-						<strong v-if="draftReview.workflow_eligible">This Payment Entry is controlled by {{ draftReview.workflow_readiness?.workflow || "Frappe Workflow" }}:</strong>
-						<strong v-else>{{ canUseNativeDesk ? "Use Advanced ERPNext for this draft:" : "This draft requires an accounting manager with Advanced ERPNext access:" }}</strong>
+						<strong v-if="draftReview.workflow_eligible">This Payment Entry is controlled by {{ draftReview.workflow_readiness?.workflow || "Approval Workflow" }}:</strong>
+						<strong v-else>{{ canUseNativeDesk ? "Use advanced payment review for this draft:" : "This draft requires an accounting manager with advanced access:" }}</strong>
 						<ul><li v-for="blocker in draftReview.blockers" :key="blocker">{{ blocker }}</li></ul>
 					</div>
 					<div v-if="draftReview.workflow_eligible" class="draft-blockers">
@@ -107,11 +107,11 @@
 							<button v-for="action in draftReview.workflow_readiness?.available_actions || []" :key="action.action" class="edge-primary-button" type="button" :disabled="draftSubmitting" @click="applyPaymentWorkflow(action.action)">
 								{{ draftSubmitting ? "Applying…" : action.action }}<span v-if="action.next_state"> → {{ action.next_state }}</span>
 							</button>
-							<span v-if="!(draftReview.workflow_readiness?.available_actions || []).length">No workflow action is currently available to this user.</span>
+							<span v-if="!(draftReview.workflow_readiness?.available_actions || []).length">No approval action is currently available to this user.</span>
 						</div>
 					</div>
 					<div class="draft-actions">
-						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open in ERPNext</button>
+						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open Advanced Payment</button>
 						<button v-if="!draftReview.workflow_eligible" class="edge-primary-button" type="button" :disabled="draftSubmitting || !draftReview.can_submit" @click="submitPaymentDraft">{{ draftSubmitting ? "Submitting…" : "Submit Payment" }}</button>
 					</div>
 				</div>
@@ -140,18 +140,18 @@
 				</div>
 
 				<EdgeErrorState v-if="settlement.loadError" title="Settlement context failed to load" :message="settlement.loadError" actionLabel="Retry" @retry="loadSettlementInvoice(settlement.invoice)" />
-				<EdgeLoadingState v-else-if="settlement.loading" message="Loading authoritative Sales Invoice payment context…" />
+				<EdgeLoadingState v-else-if="settlement.loading" message="Loading Sales Invoice payment context…" />
 				<template v-else-if="settlement.context.sales_invoice">
 					<div v-if="settlement.actionError" class="payment-error" role="alert">{{ settlement.actionError }}</div>
 					<div class="settlement-summary">
 						<article><span>Invoice</span><strong><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openInvoice(settlement.context.sales_invoice)">{{ settlement.context.sales_invoice }}</button><span v-else>{{ settlement.context.sales_invoice }}</span></strong></article>
 						<article><span>Customer</span><strong>{{ settlement.context.customer }}</strong></article>
-						<article><span>Authoritative Outstanding</span><strong>{{ formatCurrency(settlement.context.outstanding_amount, settlement.context.currency) }}</strong></article>
+						<article><span>Current Outstanding</span><strong>{{ formatCurrency(settlement.context.outstanding_amount, settlement.context.currency) }}</strong></article>
 						<article><span>Eligible Advances</span><strong>{{ formatCurrency(settlement.context.available_advance, settlement.context.currency) }}</strong></article>
 					</div>
 
 					<div v-if="!settlement.context.currency_supported" class="accounting-warning">
-						This invoice uses a non-company currency. Use the full ERPNext Payment Reconciliation and Payment Entry forms for settlement.
+						This invoice uses a non-company currency. Use the full Payment Reconciliation and Payment Entry workflow for settlement.
 					</div>
 					<template v-else>
 						<div class="settlement-block">
@@ -188,7 +188,7 @@
 
 						<div class="settlement-block receipt-block">
 							<div class="block-head">
-								<div><h4>2. Record Additional Receipt</h4><p>Create a standard ERPNext Payment Entry draft allocated to this invoice. Drafts do not reduce outstanding until submitted.</p></div>
+								<div><h4>2. Record Additional Receipt</h4><p>Create a Payment Entry draft allocated to this invoice. Drafts do not reduce outstanding until submitted.</p></div>
 							</div>
 							<div class="receipt-grid">
 								<EdgeLinkField v-model="settlement.receipt.mode_of_payment" :selectedLabel="settlement.receipt.modeLabel" label="Mode of Payment" required placeholder="Choose payment mode" :searcher="paymentModeSearch" @select="onPaymentModeSelected" @clear="clearPaymentMode" />
@@ -199,7 +199,7 @@
 								<label class="edge-field receipt-remarks"><span>Remarks</span><input v-model="settlement.receipt.remarks" class="edge-input" type="text" placeholder="Optional receipt note" /></label>
 							</div>
 							<div class="settlement-actions">
-								<span>Current ERPNext outstanding: <strong>{{ formatCurrency(settlement.context.outstanding_amount, settlement.context.currency) }}</strong></span>
+								<span>Current invoice outstanding: <strong>{{ formatCurrency(settlement.context.outstanding_amount, settlement.context.currency) }}</strong></span>
 								<button class="edge-primary-button" type="button" :disabled="settlement.creatingReceipt || !canCreateReceipt" @click="createReceiptDraft">{{ settlement.creatingReceipt ? "Creating…" : "Create Draft Receipt" }}</button>
 							</div>
 							<div v-if="settlement.lastDraft.name" class="draft-notice">
@@ -213,7 +213,7 @@
 
 			<section class="payment-panel">
 				<div class="panel-head">
-					<div><h3>Customer Advances</h3><p>Submitted customer receipts with a positive ERPNext unallocated amount.</p></div>
+					<div><h3>Customer Advances</h3><p>Submitted customer receipts with a positive unallocated amount.</p></div>
 					<button class="edge-secondary-button" type="button" :disabled="loading" @click="loadAdvances">{{ loading ? "Refreshing…" : "Refresh" }}</button>
 				</div>
 				<div class="filter-grid">
@@ -255,7 +255,7 @@
 			</section>
 
 			<div class="accounting-note">
-				<strong>Accounting safety:</strong> No separate customer wallet or advance ledger is maintained. Submitted Payment Entry <code>unallocated_amount</code>, Sales Invoice <code>outstanding_amount</code>, ERPNext Payment Reconciliation, and standard Payment Entry submission remain authoritative.
+				<strong>Accounting safety:</strong> No separate customer wallet or advance ledger is maintained. Submitted customer receipts, Sales Invoice outstanding balances, Payment Reconciliation, and Payment Entry submission remain authoritative.
 			</div>
 			</template>
 		</section>
@@ -539,14 +539,14 @@ export default {
 					customer: this.filters.customer || null,
 					branch: this.filters.branch || null,
 				});
-				frappe.show_alert({ message: __("Payment workflow action applied: " + action), indicator: "green" });
+				frappe.show_alert({ message: __("Payment approval action applied: " + action), indicator: "green" });
 				if (preview.sales_invoice && Number(result.docstatus || 0) === 1) await this.loadSettlementInvoice(preview.sales_invoice);
 				else await this.loadAdvances();
 				await this.loadDraftPayments();
 				if (this.draftPayments.some((row) => row.payment_entry === preview.payment_entry)) await this.reviewPaymentDraft(preview.payment_entry);
 				else this.draftReview = {};
 			} catch (error) {
-				this.draftError = errorMessage(error, "Payment workflow action failed.");
+				this.draftError = errorMessage(error, "Payment approval action failed.");
 				if (preview.payment_entry) await this.reviewPaymentDraft(preview.payment_entry);
 			} finally { this.draftSubmitting = false; }
 		},
@@ -554,7 +554,7 @@ export default {
 			const preview = this.draftReview;
 			if (!preview?.payment_entry || !preview.can_submit || this.draftSubmitting) return;
 			frappe.confirm(
-				__(`Submit Payment Entry ${preview.payment_entry}? ERPNext will post the payment and update the authoritative customer balance.`),
+				__(`Submit Payment Entry ${preview.payment_entry}? This will post the payment and update the customer balance.`),
 				async () => {
 					this.draftSubmitting = true;
 					this.draftError = "";
@@ -567,7 +567,7 @@ export default {
 							branch: this.filters.branch || null,
 						});
 						this.draftReview = {};
-						frappe.show_alert({ message: __("Customer payment submitted through ERPNext."), indicator: "green" });
+						frappe.show_alert({ message: __("Customer payment submitted."), indicator: "green" });
 						if (result.sales_invoice) await this.loadSettlementInvoice(result.sales_invoice);
 						else await this.loadAdvances();
 						await this.loadDraftPayments();
@@ -694,7 +694,7 @@ export default {
 					sales_invoice: this.settlement.invoice,
 					allocations: this.selectedSettlementAllocations,
 				});
-				frappe.show_alert({ message: __("Selected advances applied through ERPNext Payment Reconciliation."), indicator: "green" });
+				frappe.show_alert({ message: __("Selected advances applied through Payment Reconciliation."), indicator: "green" });
 				await this.loadSettlementInvoice(this.settlement.invoice);
 			} catch (error) { this.settlement.actionError = errorMessage(error, "Customer advance reconciliation failed."); }
 			finally { this.settlement.applying = false; }
@@ -723,7 +723,7 @@ export default {
 		async createReceiptDraft() {
 			if (!this.canCreateReceipt) return;
 			if (this.selectedSettlementAllocations.length) {
-				this.settlement.actionError = __("Apply or clear the selected advances before creating the draft receipt so the receipt uses the latest authoritative outstanding balance.");
+				this.settlement.actionError = __("Apply or clear the selected advances before creating the draft receipt so the receipt uses the latest outstanding balance.");
 				return;
 			}
 			this.settlement.creatingReceipt = true;

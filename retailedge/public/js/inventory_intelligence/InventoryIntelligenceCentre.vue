@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Inventory Intelligence"
 			eyebrow="Inventory Control"
-			subtitle="Use current ERPNext stock, bounded historical demand evidence and native reorder configuration to identify inventory actions."
+			subtitle="Use current stock balances, bounded historical demand evidence and configured reorder rules to identify inventory actions."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -78,7 +78,7 @@
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scope.from_date && scope.to_date">Demand evidence: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span v-if="Number(scan.synthetic_zero_items || 0) > 0">{{ Number(scan.synthetic_zero_items) }} zero-balance item(s) retained from demand/reorder evidence</span>
-				<span>Replenishment uses ERPNext Item Reorder configuration</span>
+				<span>Replenishment uses configured item reorder rules</span>
 				<span>Stock cover is historical estimation, not a forecast</span>
 				<span v-if="!showCosts">Cost values hidden by cost-visibility settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
@@ -201,9 +201,9 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Current Stock Source", value: "ERPNext Bin" },
-				{ label: "Demand Source", value: "Bounded outward ERPNext Stock Ledger Entry evidence" },
-				{ label: "Replenishment Source", value: "ERPNext Item Reorder configuration" },
+				{ label: "Current Stock Source", value: "Current stock balances" },
+				{ label: "Demand Source", value: "Bounded historical outward stock movement" },
+				{ label: "Replenishment Source", value: "Configured item reorder rules" },
 				{ label: "Zero-stock Visibility", value: this.includeZero ? "Included" : "Excluded by filter" },
 				{ label: "Stock Cover", value: "Historical estimate, not forecast" },
 				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by cost-visibility settings" },

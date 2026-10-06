@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Customer & Sales Intelligence"
 			eyebrow="Customer Performance"
-			subtitle="Understand who is buying, who is returning, customer value, receivable exposure and transactional profitability from ERPNext sales truth."
+			subtitle="Understand who is buying, who is returning, customer value, receivable exposure and transactional profitability from submitted sales and receivable records."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -71,9 +71,9 @@
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scope.from_date && scope.to_date">Sales period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span>New/returning uses first submitted sale in the same permitted company/branch scope</span>
-				<span>Outstanding values are current ERPNext receivable exposure, not historical period-end balances</span>
+				<span>Outstanding values are current receivable exposure, not historical period-end balances</span>
 				<span v-if="!showProfitability">Profitability hidden by cost-visibility settings</span>
-				<span v-else>Profitability uses the R8 transactional cost contract</span>
+				<span v-else>Profitability uses recorded transactional cost values</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -184,10 +184,10 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" },
-				{ label: "Customer Status", value: this.metadata.customer_status_truth || "Earliest submitted non-return sale in permitted scope" },
-				{ label: "Receivables", value: this.metadata.receivable_truth || "Current ERPNext outstanding balances" },
-				{ label: "Profitability", value: this.showProfitability ? (this.metadata.profitability_truth || "Transactional profitability") : "Hidden by cost-visibility settings" },
+				{ label: "Sales Source", value: "Submitted sales invoices" },
+				{ label: "Customer Status", value: "Earliest submitted non-return sale in permitted scope" },
+				{ label: "Receivables", value: "Current outstanding receivables" },
+				{ label: "Profitability", value: this.showProfitability ? "Recorded transactional profitability" : "Hidden by cost-visibility settings" },
 			];
 		},
 	},

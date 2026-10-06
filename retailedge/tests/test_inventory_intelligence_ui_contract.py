@@ -53,7 +53,7 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 		self.assertIn("Replenishment Status", component)
 		self.assertIn("Reorder Now", component)
 		self.assertIn("Review warehouse group", component)
-		self.assertIn("ERPNext Item Reorder configuration", component)
+		self.assertIn("Replenishment uses configured item reorder rules", component)
 		self.assertIn("lookback_days: 90", component)
 		self.assertIn("include_zero: 1", component)
 		self.assertIn("Include zero-stock items", component)

@@ -40,7 +40,7 @@ class TestIncomingQualityInspectionUIContract(TestCase):
 		self.assertIn("child_row_reference: row.child_row_reference", component)
 		self.assertIn("Review Quality Inspections", component)
 		self.assertIn("Submit Quality Inspections", component)
-		self.assertIn("Advanced: Prepare in ERPNext", component)
+		self.assertIn("Prepare Advanced Inspection", component)
 
 	def test_scope_changes_reset_quality_source_inside_child_component(self):
 		component = COMPONENT.read_text()

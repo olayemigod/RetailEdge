@@ -72,7 +72,7 @@ def _existing_draft_sales_order_for_quotation(quotation: str):
 	}
 	if linked_quotations != {quotation}:
 		frappe.throw(
-			_("The existing draft Sales Order combines multiple Quotations. Use Advanced ERPNext review.")
+			_("The existing draft Sales Order combines multiple Quotations and requires advanced review.")
 		)
 	return doc
 
@@ -249,7 +249,7 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 		)
 	target = erpnext_make_sales_order(source.name)
 	if not target or target.doctype != "Sales Order":
-		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
+		frappe.throw(_("A Sales Order could not be prepared from this Quotation."))
 
 	# ERPNext requires a header and item Delivery Date before validating the
 	# mapped draft. Use the Quotation validity date when it is still current,
@@ -262,7 +262,7 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 		if item.meta.has_field("delivery_date") and not item.get("delivery_date"):
 			item.delivery_date = delivery_date
 	if target.docstatus != 0:
-		frappe.throw(_("ERPNext returned a non-draft Sales Order mapping; creation was stopped."))
+		frappe.throw(_("The prepared Sales Order was not a draft, so creation was stopped."))
 	_preserve_source_quotation_context(source, target)
 	_company, branch = _assert_mapped_sales_order_context(target)
 

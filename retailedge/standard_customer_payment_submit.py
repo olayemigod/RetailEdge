@@ -96,19 +96,19 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 	if not references:
 		return None, blockers
 	if len(references) != 1:
-		blockers.append(_("Payments allocated to multiple documents require Advanced ERPNext review."))
+		blockers.append(_("Payments allocated to multiple documents require advanced review."))
 		return None, blockers
 
 	row = references[0]
 	reference_doctype = str(getattr(row, "reference_doctype", "") or "").strip()
 	if reference_doctype not in {SALES_INVOICE_DOCTYPE, SALES_ORDER_DOCTYPE}:
-		blockers.append(_("Only a single Sales Invoice or Sales Order allocation is supported by standard EdgeSuite submission."))
+		blockers.append(_("Only a single Sales Invoice or Sales Order allocation is supported by the standard payment flow."))
 		return None, blockers
 
 	reference_name = str(getattr(row, "reference_name", "") or "").strip()
 	allocated_amount = flt(getattr(row, "allocated_amount", 0))
 	if not reference_name or allocated_amount <= 0:
-		blockers.append(_("The customer payment allocation is incomplete. Use Advanced ERPNext review."))
+		blockers.append(_("The customer payment allocation is incomplete and requires advanced review."))
 		return None, blockers
 	if not frappe.db.exists(reference_doctype, reference_name):
 		blockers.append(_("Referenced {0} {1} no longer exists.").format(reference_doctype, reference_name))
@@ -144,7 +144,7 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 	if cint(getattr(reference, "docstatus", 0)) != 1:
 		blockers.append(_("Referenced {0} {1} is not submitted.").format(reference_doctype, reference_name))
 	if reference_doctype == SALES_INVOICE_DOCTYPE and cint(getattr(reference, "is_return", 0)):
-		blockers.append(_("Return Sales Invoices require Advanced ERPNext review."))
+		blockers.append(_("Return Sales Invoices require advanced review."))
 	if str(getattr(reference, "company", "") or "") != str(getattr(doc, "company", "") or ""):
 		blockers.append(_("Payment Entry and {0} must belong to the same Company.").format(reference_doctype))
 	if str(getattr(reference, "customer", "") or "") != str(getattr(doc, "party", "") or ""):
@@ -156,7 +156,7 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 	company_currency = _company_currency(company)
 	reference_currency = str(getattr(reference, "currency", "") or company_currency)
 	if reference_currency != company_currency:
-		blockers.append(_("Multi-currency {0} payments require Advanced ERPNext review.").format(reference_doctype))
+		blockers.append(_("Multi-currency {0} payments require advanced review.").format(reference_doctype))
 
 	party = str(getattr(doc, "party", "") or "")
 	party_details = get_party_details(company, CUSTOMER_DOCTYPE, party, nowdate())
@@ -195,11 +195,12 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 		)
 	return payload, blockers
 
+
 def _workflow_submit_blocker(workflow_readiness: dict[str, Any]) -> str:
 	if str(workflow_readiness.get("source") or "") != "frappe":
 		return ""
 	return _(
-		"Payment Entry is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
+		"Payment Entry is controlled by active approval workflow {0}. Use the available workflow action."
 	).format(workflow_readiness.get("workflow") or _("Payment Entry Workflow"))
 
 
@@ -210,9 +211,9 @@ def _standard_submit_blockers(
 ) -> tuple[list[str], dict[str, Any] | None]:
 	blockers: list[str] = []
 	if cint(getattr(doc, "docstatus", 0)) != 0:
-		blockers.append(_("Only draft Payment Entries can use standard EdgeSuite submission."))
+		blockers.append(_("Only draft Payment Entries can use standard payment submission."))
 	if str(getattr(doc, "payment_type", "") or "") != "Receive":
-		blockers.append(_("Only Receive Payment Entries are supported. Use Advanced ERPNext for Pay or Internal Transfer."))
+		blockers.append(_("This customer-payment flow supports Receive entries only. Use the appropriate payment workflow for Pay or Internal Transfer."))
 	if str(getattr(doc, "party_type", "") or "") != CUSTOMER_DOCTYPE:
 		blockers.append(_("Only Customer Payment Entries are supported by this workflow."))
 	if not str(getattr(doc, "company", "") or "") or not str(getattr(doc, "party", "") or ""):
@@ -220,18 +221,18 @@ def _standard_submit_blockers(
 	if flt(getattr(doc, "paid_amount", 0)) <= 0 or flt(getattr(doc, "received_amount", 0)) <= 0:
 		blockers.append(_("Payment amount must be greater than zero."))
 	if not str(getattr(doc, "paid_from", "") or "") or not str(getattr(doc, "paid_to", "") or ""):
-		blockers.append(_("Payment accounts are incomplete. Use Advanced ERPNext review."))
+		blockers.append(_("Payment accounts are incomplete and require advanced review."))
 
 	company = str(getattr(doc, "company", "") or "")
 	company_currency = _company_currency(company) if company else ""
 	paid_from_currency = str(getattr(doc, "paid_from_account_currency", "") or company_currency)
 	paid_to_currency = str(getattr(doc, "paid_to_account_currency", "") or company_currency)
 	if not company_currency or paid_from_currency != company_currency or paid_to_currency != company_currency:
-		blockers.append(_("Multi-currency Payment Entries require Advanced ERPNext review."))
+		blockers.append(_("Multi-currency Payment Entries require advanced review."))
 	if getattr(doc, "book_advance_payments_in_separate_party_account", 0):
-		blockers.append(_("Separate party-account advances require Advanced ERPNext review."))
+		blockers.append(_("Separate party-account advances require advanced review."))
 	if list(getattr(doc, "deductions", None) or []) or abs(flt(getattr(doc, "difference_amount", 0))) > 0.005:
-		blockers.append(_("Payments with deductions or exchange differences require Advanced ERPNext review."))
+		blockers.append(_("Payments with deductions or exchange differences require advanced review."))
 
 	reference, reference_blockers = _reference_preview(doc, payment_branch)
 	blockers.extend(reference_blockers)
@@ -362,7 +363,7 @@ def list_standard_customer_payment_drafts(
 	branch_field = _payment_branch_field()
 	if branch:
 		if not branch_field:
-			frappe.throw(_("Payment Entry branch attribution is unavailable. Run the site migration before using Branch-scoped payment submission."))
+			frappe.throw(_("Branch support for Payment Entry is not available yet. Contact your administrator before using Branch-scoped payment submission."))
 		filters[branch_field] = branch
 
 	rows = frappe.get_list(
@@ -440,7 +441,7 @@ def apply_standard_customer_payment_workflow_action(
 	if not preview.get("workflow_eligible"):
 		frappe.throw(
 			_(
-				"This Payment Entry cannot use the standard EdgeSuite workflow path. Review the current blockers or use Advanced ERPNext."
+				"This Payment Entry cannot use the standard payment workflow. Review the current blockers or use advanced review."
 			)
 		)
 
@@ -489,7 +490,7 @@ def submit_standard_customer_payment(
 	# side effects, Sales Invoice outstanding and customer advance balances.
 	doc.submit()
 	if cint(getattr(doc, "docstatus", 0)) != 1:
-		frappe.throw(_("ERPNext did not submit Payment Entry {0}.").format(doc.name))
+		frappe.throw(_("Payment Entry {0} was not submitted. Refresh and review it before retrying.").format(doc.name))
 	doc.reload()
 
 	invoice_name = reference.get("sales_invoice") if reference else ""

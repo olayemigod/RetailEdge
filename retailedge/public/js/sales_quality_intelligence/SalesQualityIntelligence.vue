@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Discount & Sales Quality"
 			eyebrow="Sales Quality"
-			subtitle="Review recorded price reductions, additional invoice discounts, returns and transactional margin quality without replacing ERPNext accounting truth."
+			subtitle="Review recorded price reductions, additional invoice discounts, returns and transactional margin quality while keeping posted accounting records as the financial source of truth."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -55,11 +55,11 @@
 
 			<template #resultMeta>
 				<span>Reference value uses recorded rate-with-margin, falling back to recorded price-list rate</span>
-				<span>Price Reduction is reference value minus submitted net sales; Additional Discount is shown separately from ERPNext</span>
+				<span>Price Reduction is reference value minus submitted net sales; Additional Discount is shown separately from recorded price reduction</span>
 				<span>Returns are reported separately and are not labelled discount leakage</span>
-				<span v-if="showCosts">Margin uses the R8 transactional incoming-rate × stock-quantity contract</span>
+				<span v-if="showCosts">Margin uses recorded transactional cost against stock quantity</span>
 				<span v-else>Cost and margin data are not fetched under the current cost-visibility policy</span>
-				<span>ERPNext Profit & Loss remains financial profit truth</span>
+				<span>Profit & Loss remains the financial profit source of truth</span>
 			</template>
 		</EdgeReportShell>
 		<div v-if="pagination.total_rows" class="sales-quality-pagination">
@@ -98,7 +98,7 @@ export default {
 				.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined && (entry.key !== "low_margin_percent" || this.showCosts))
 				.map(({ label, value }) => ({ label, value }));
 		},
-		exportMetadata() { return [ { label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice / Sales Invoice Item" }, { label: "Reduction", value: this.metadata.reduction_definition || "Recorded reference value less submitted net sales" }, { label: "Additional Discount", value: this.metadata.additional_discount_truth || "ERPNext invoice-level additional discount" }, { label: "Returns", value: this.metadata.returns || "Reported separately" }, { label: "Financial Profit", value: this.metadata.financial_truth || "ERPNext Profit and Loss" } ]; },
+		exportMetadata() { return [ { label: "Sales Source", value: "Submitted sales invoices and items" }, { label: "Reduction", value: "Recorded reference value less submitted net sales" }, { label: "Additional Discount", value: "Invoice-level additional discount" }, { label: "Returns", value: "Reported separately" }, { label: "Financial Profit", value: "Profit & Loss" } ]; },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
