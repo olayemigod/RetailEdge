@@ -48,14 +48,15 @@
 				<div class="customer-intelligence-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" class="edge-input" type="date" />
-					</label>
+					<EdgeSmartDateRange
+						class="customer-intelligence-period"
+						v-model="smartDate"
+						label="Period"
+						placeholder="e.g. May to June 2026, last 2 months, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeDropdown v-model="filters.segment" :options="segments" label="Customer Segment" />
 					<div class="filter-action">
@@ -79,7 +80,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -128,6 +129,8 @@ export default {
 			companyCurrency: "",
 			showProfitability: false,
 			customerLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -207,13 +210,17 @@ export default {
 					callMethod("retailedge.sales_reporting.get_sales_reporting_context"),
 					navigationPromise,
 				]);
+				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.("customer-sales-intelligence") || {};
 				this.filters = {
 					...this.filters,
 					...(context.default_filters || {}),
-					segment: "All",
+					...handoff,
+					segment: handoff.segment || "All",
 				};
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				this.smartDateReference = handoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.tenantName = handoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = Object.prototype.hasOwnProperty.call(handoff, "branch") ? (handoff.branch || "") : (context.branch_name || this.filters.branch || "");
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -259,6 +266,24 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		customerSearch(txt) { return this.searchOptions("customer", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option?.value || "";
 			this.filters.branch = "";
@@ -355,6 +380,8 @@ export default {
 	gap: 0.85rem;
 	align-items: end;
 }
+.customer-intelligence-filter-grid > * { min-width: 0; }
+.customer-intelligence-period { grid-column: span 2; min-width: 0; }
 .edge-field {
 	display: grid;
 	gap: 0.35rem;
@@ -390,4 +417,5 @@ export default {
 	opacity: 0.55;
 	cursor: not-allowed;
 }
+@media (max-width: 680px) { .customer-intelligence-period { grid-column: 1 / -1; } }
 </style>
