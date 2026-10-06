@@ -23,6 +23,20 @@ class TestMoneyOverviewShell(unittest.TestCase):
 		self.assertIn("mountMoneyOverview", bundle)
 		self.assertIn('const DASHBOARD_ASSET = "money_overview.bundle.js"', controller)
 
+	def test_money_overview_uses_shared_fuzzy_period_and_preserves_exact_backend_filters(self):
+		vue = (APP_ROOT / "public" / "js" / "money_overview" / "MoneyOverview.vue").read_text(encoding="utf-8")
+		self.assertIn("EdgeSmartDateRange", vue)
+		self.assertIn('label="Period"', vue)
+		self.assertIn('placeholder="e.g. May to June 2026, last 2 months, YTD"', vue)
+		self.assertIn('dateOrder="DMY"', vue)
+		self.assertIn('@resolved="onSmartDateResolved"', vue)
+		self.assertIn("syncSmartDateFromFilters", vue)
+		self.assertIn("this.filters.from_date = value.from_date", vue)
+		self.assertIn("this.filters.to_date = value.to_date", vue)
+		self.assertNotIn('type="date"', vue)
+		self.assertIn("grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr)", vue)
+		self.assertIn(".money-overview-filters > * { min-width: 0; }", vue)
+
 	def test_page_definition_exists(self):
 		path = APP_ROOT / "retailedge" / "page" / "money_overview" / "money_overview.json"
 		page = json.loads(path.read_text(encoding="utf-8"))
