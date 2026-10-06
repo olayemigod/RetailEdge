@@ -25,7 +25,7 @@ class TestPersistentTransactionPageRouteGuard(TestCase):
 		self.assertIn("PERSISTENT_TRANSACTION_PAGES.has(value)", source)
 		self.assertIn("window.location.replace", source)
 		self.assertIn("window.location.assign", source)
-		self.assertIn("/app/${target}", source)
+		self.assertIn("/desk/${target}", source)
 		self.assertNotIn("retailedge-business-hub", source)
 
 	def test_desk_bootstrap_loads_guard_before_business_hub_controller(self):
