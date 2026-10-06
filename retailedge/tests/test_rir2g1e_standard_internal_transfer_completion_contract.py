@@ -62,9 +62,10 @@ def test_advanced_payment_shapes_fail_closed():
 		"deductions",
 		"difference_amount",
 		"book_advance_payments_in_separate_party_account",
-		"Advanced ERPNext",
+		"require advanced review",
 	):
 		assert contract in source
+	assert "Advanced ERPNext review" not in source
 
 
 def test_accounts_are_same_company_bank_or_cash_and_company_currency_only():
@@ -80,7 +81,7 @@ def test_accounts_are_same_company_bank_or_cash_and_company_currency_only():
 		'"account_currency"',
 		'{"Bank", "Cash"}',
 		"company_currency",
-		"Multi-currency internal transfers require Advanced ERPNext review",
+		"Multi-currency internal transfers require advanced review",
 	):
 		assert contract in source
 
@@ -147,6 +148,8 @@ def test_direct_submit_locks_stale_checks_revalidates_then_native_submits():
 		".workflow_state =",
 		"frappe.db.commit",
 		"ignore_permissions=True",
+		"available workflow action in EdgeSuite",
+		"ERPNext did not submit Payment Entry",
 	):
 		assert forbidden not in method
 
@@ -169,6 +172,7 @@ def test_workflow_action_uses_f3f27_and_never_assigns_status_truth():
 		assert contract in method
 	assert ".workflow_state =" not in method
 	assert ".docstatus =" not in method
+	assert "No active Frappe Workflow" not in method
 
 
 def test_backend_never_writes_gl_or_payment_ledger_directly():
