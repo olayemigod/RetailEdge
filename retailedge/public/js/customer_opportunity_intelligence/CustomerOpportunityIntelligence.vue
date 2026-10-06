@@ -66,7 +66,7 @@
 				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ formatDate(scope.prior_from_date) }} to {{ formatDate(scope.prior_to_date) }}</span>
 				<span>Threshold: {{ scope.change_threshold_percent || filters.change_threshold_percent }}%</span>
 				<span>Signals describe observed comparable-period behaviour; these customers are not automatically labelled as churned.</span>
-				<span>Outstanding and overdue values are current ERPNext receivable exposure</span>
+				<span>Outstanding and overdue values show current receivable exposure</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -154,10 +154,10 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" },
-				{ label: "Comparison", value: this.metadata.comparison_basis || "Current versus preceding equal-length period" },
-				{ label: "Receivables", value: this.metadata.receivable_truth || "Current ERPNext outstanding exposure" },
-				{ label: "Interpretation", value: this.metadata.signal_rule || "Observed behaviour only; no churn claim" },
+				{ label: "Sales Source", value: "Submitted sales invoices" },
+				{ label: "Comparison", value: "Current versus preceding equal-length period" },
+				{ label: "Receivables", value: "Current outstanding receivables" },
+				{ label: "Interpretation", value: "Observed behaviour only; no churn claim" },
 			];
 		},
 	},
