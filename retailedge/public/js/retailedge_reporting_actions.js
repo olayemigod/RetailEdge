@@ -21,6 +21,7 @@
 	});
 	const RETAILEDGE_SMART_DATE_PLACEHOLDER =
 		"e.g. May to June 2026, last 2 months, previous 2 months, YTD";
+	const RETAILEDGE_SMART_DATE_STYLE_ID = "retailedge-smart-date-policy";
 	let shellGovernanceInstalled = false;
 	let smartDatePolicyInstalled = false;
 	let baseReportShell = null;
@@ -113,7 +114,20 @@
 		popup.document.open(); popup.document.write(result.html); popup.document.close(); popup.document.title = result.title || "RetailEdge Report";
 		window.setTimeout(() => { popup.focus(); popup.print(); }, 120); return true;
 	}
+	function installSmartDateStylePolicy() {
+		if (typeof document === "undefined" || !document.head) return false;
+		if (document.getElementById(RETAILEDGE_SMART_DATE_STYLE_ID)) return true;
+		const style = document.createElement("style");
+		style.id = RETAILEDGE_SMART_DATE_STYLE_ID;
+		style.textContent = [
+			".edge-smart-date__preset-section{display:none!important}",
+			".edge-smart-date,.edge-smart-date__trigger{min-width:0;max-width:100%}",
+		].join("");
+		document.head.appendChild(style);
+		return true;
+	}
 	function installSmartDatePolicy(runtime = window.EdgeSuiteUI) {
+		installSmartDateStylePolicy();
 		if (smartDatePolicyInstalled) return true;
 		if (!runtime?.registerComponent || !runtime?.Vue?.defineComponent || !runtime?.Vue?.h) return false;
 		baseSmartDateRange = runtime.getComponent?.("EdgeSmartDateRange") || runtime.components?.EdgeSmartDateRange;
@@ -165,6 +179,7 @@
 		getCapabilities,
 		exportReport,
 		printReport,
+		installSmartDateStylePolicy,
 		installSmartDatePolicy,
 		installShellGovernance,
 		setReportRouteHandoff,
@@ -175,6 +190,7 @@
 	if (typeof window.retailedgeConsumeBusinessHubRouteOptions !== "function") {
 		window.retailedgeConsumeBusinessHubRouteOptions = consumeReportRouteHandoff;
 	}
+	installSmartDateStylePolicy();
 	installSmartDatePolicy(window.EdgeSuiteUI);
 	installShellGovernance(window.EdgeSuiteUI);
 	window.addEventListener("edgesuite:report-runtime-ready", () => {
