@@ -111,7 +111,23 @@
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeExportMenu", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
 function components() { return window.EdgeSuiteUI?.components || {}; }
 function call(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (r) => resolve(r.message ?? {}), error: reject })); }
-function message(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	return String(value || fallback || "")
+		.replace(/\bERPNext(?:\/Frappe)?\b/gi, "")
+		.replace(/\bFrappe\b/gi, "")
+		.replace(/\bEdgeSuite UI\b/gi, "the application")
+		.replace(/\bEdgeSuite\b/gi, "the application")
+		.replace(/\bCoreEdge\b/gi, "Platform")
+		.replace(/\bNative Desk\b/gi, "advanced records")
+		.replace(/\bR(?:8|9|10|11|12)\b/gi, "")
+		.replace(/\s{2,}/g, " ")
+		.replace(/\s+([,.;:])/g, "$1")
+		.trim();
+}
+function message(error, fallback) {
+	const safe = window.retailedge?.userErrorMessage?.(error, fallback);
+	return customerFacingCopy(safe || error?.message || error?.exc || error?.exception || fallback, fallback);
+}
 
 function openCreateSurface(doctype, defaults = {}) {
 	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
@@ -120,7 +136,7 @@ function openCreateSurface(doctype, defaults = {}) {
 		return Promise.resolve(false);
 	}
 	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
-		frappe.show_alert?.({ message: error?.message || __("Unable to open the create form."), indicator: "red" }, 7);
+		frappe.show_alert?.({ message: message(error, "Unable to open the create form."), indicator: "red" }, 7);
 		return false;
 	});
 }
@@ -138,13 +154,13 @@ export default {
 	}; },
 	computed: {
 		scopeLabel() { return this.scope.branch ? `Branch: ${this.scope.branch}` : (this.scope.company ? `Company: ${this.scope.company}` : "Permitted planning scope"); },
-		domainWarnings() { return Object.entries(this.domains || {}).filter(([, d]) => d && d.available === false).map(([key, d]) => ({ key, title: d.title || key.replace(/_/g, " "), reason: d.reason || "Not available for this selection." })); },
+		domainWarnings() { return Object.entries(this.domains || {}).filter(([, d]) => d && d.available === false).map(([key, d]) => ({ key, title: d.title || key.replace(/_/g, " "), reason: customerFacingCopy(d.reason, "Not available for this selection.") })); },
 		inventoryRows() { return this.domains?.inventory?.available ? (this.domains.inventory.rows || []) : []; },
-		inventoryReason() { const d = this.domains?.inventory; return d && d.available === false ? d.reason : ""; },
+		inventoryReason() { const d = this.domains?.inventory; return d && d.available === false ? customerFacingCopy(d.reason) : ""; },
 		cashCommitments() { return this.domains?.cash?.available ? (this.domains.cash.commitment_rows || []) : []; },
-		cashCommitmentReason() { const d = this.domains?.cash; if (!d) return ""; if (d.available === false) return d.reason || "Cash planning is unavailable."; const meta = d.metadata?.known_due_schedule || {}; return meta.available === false ? (meta.reason || "Known due commitments are unavailable.") : ""; },
+		cashCommitmentReason() { const d = this.domains?.cash; if (!d) return ""; if (d.available === false) return customerFacingCopy(d.reason, "Cash planning is unavailable."); const meta = d.metadata?.known_due_schedule || {}; return meta.available === false ? customerFacingCopy(meta.reason, "Known due commitments are unavailable.") : ""; },
 		budgetSummary() { return this.domains?.budget?.available ? (this.domains.budget.summary || []) : []; },
-		budgetReason() { const d = this.domains?.budget; return d && d.available === false ? d.reason : ""; },
+		budgetReason() { const d = this.domains?.budget; return d && d.available === false ? customerFacingCopy(d.reason) : ""; },
 		exportDataset() { return { title: "Forecasting & Planning", filename: `ProcessEdge Retail Forecasting Planning ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { return Object.entries({ company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", sales_adjustment_percent: "Sales Adjustment (%)", expense_adjustment_percent: "Expense Adjustment (%)", cash_adjustment_percent: "Cash Adjustment (%)", inventory_safety_percent: "Inventory Safety (%)" }).map(([key, label]) => ({ label, value: this.filters[key] })).filter((x) => x.value !== "" && x.value !== null && x.value !== undefined); },
 		exportMetadata() { return [{ label: "Accounting Source", value: "Posted accounting records" }, { label: "Budget Source", value: "Submitted budgets" }, { label: "Scenario Model", value: "Planning assumptions only" }]; },
