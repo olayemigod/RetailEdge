@@ -231,7 +231,7 @@ export default {
 		advancedFilterFields() { return this.managedFilterFields.slice(6); },
 		reportColumns() {
 			const shiftLinks = this.surfaceKey === "pos-closing-variance"
-				? new Set(["closing_shift", "included_cashier_expenses", "review_status"])
+				? new Set(["closing_shift", "included_cashier_expenses", "review_status", "next_action"])
 				: new Set();
 			return (this.columns || []).map((column) => ({
 				...column,
@@ -322,8 +322,9 @@ export default {
 					surface_key: this.surfaceKey,
 					filters: this.filters,
 				});
-				this.rows = result.rows || [];
-				this.columns = result.columns || [];
+				const prepared = this.prepareRows(result.rows || [], result.columns || []);
+				this.rows = prepared.rows;
+				this.columns = prepared.columns;
 				this.summary = result.summary || [];
 				this.message = result.message || "";
 				this.truncated = Boolean(result.truncated);
@@ -337,6 +338,59 @@ export default {
 			} finally {
 				this.loading = false;
 			}
+		},
+		prepareRows(rows, columns) {
+			if (this.surfaceKey !== "pos-closing-variance") {
+				return { rows, columns };
+			}
+			const preparedRows = (rows || []).map((row) => {
+				const nextAction = this.shiftNextAction(row);
+				return {
+					...row,
+					next_action: nextAction.label,
+					next_action_route: nextAction.route,
+				};
+			});
+			const preparedColumns = [...(columns || [])];
+			if (!preparedColumns.some((column) => column.fieldname === "next_action")) {
+				preparedColumns.push({ label: "Next Action", fieldname: "next_action", fieldtype: "Data" });
+			}
+			return { rows: preparedRows, columns: preparedColumns };
+		},
+		shiftNextAction(row = {}) {
+			const reviewStatus = String(row.review_status || "").trim();
+			const cashStatus = String(row.cash_status || "").trim();
+			if (reviewStatus === "Audit Required") {
+				return { label: "Complete Sales Audit", route: "daily-sales-audit" };
+			}
+			if (["Missing Opening Shift", "Missing Closing Shift"].includes(cashStatus)) {
+				return { label: "Resolve Shift Data", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "Clarification Required") {
+				return { label: "Resolve Clarification", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "Variance Found" || ["Shortage", "Overage", "Needs Review"].includes(cashStatus)) {
+				return { label: "Resolve Cash Variance", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "Ready for Review") {
+				return { label: "Review Sales Audit", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "In Review") {
+				return { label: "Complete Review", route: "daily-sales-audit" };
+			}
+			if (["Draft", "Reopened"].includes(reviewStatus)) {
+				return { label: "Submit Sales Audit", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "Rejected") {
+				return { label: "Reopen Sales Audit", route: "daily-sales-audit" };
+			}
+			if (reviewStatus === "Cancelled") {
+				return { label: "Inspect Cancelled Audit", route: "daily-sales-audit" };
+			}
+			if (["Approved", "Balanced"].includes(reviewStatus) && cashStatus === "Balanced") {
+				return { label: "No Action Needed", route: "" };
+			}
+			return { label: "Review Sales Audit", route: "daily-sales-audit" };
 		},
 		linkSearcher(field) {
 			return async (txt) => {
@@ -466,11 +520,31 @@ export default {
 			}
 			frappe.set_route(route);
 		},
+		openShiftNextAction(row) {
+			const route = String(row?.next_action_route || "").trim();
+			if (!route) return;
+			if (route === "expense-review") {
+				const shift = this.shiftHandoffFilters(row);
+				this.routeWithFilters(route, {
+					company: shift.company,
+					branch: shift.branch,
+					cashier: shift.cashier,
+					from_date: shift.from_date,
+					to_date: shift.to_date,
+				});
+				return;
+			}
+			this.routeWithFilters(route, this.shiftHandoffFilters(row));
+		},
 		handleCellClick(payload) {
 			if (this.surfaceKey !== "pos-closing-variance") return;
 			const column = payload?.column;
 			const row = payload?.row;
 			if (!column || !row) return;
+			if (column.fieldname === "next_action") {
+				this.openShiftNextAction(row);
+				return;
+			}
 			if (["closing_shift", "review_status"].includes(column.fieldname) && row.closing_shift) {
 				this.routeWithFilters("daily-sales-audit", this.shiftHandoffFilters(row));
 				return;
