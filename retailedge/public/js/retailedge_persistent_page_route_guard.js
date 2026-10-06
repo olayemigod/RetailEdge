@@ -16,7 +16,7 @@
 
 	function barePagePath(page) {
 		const target = normalisePage(page);
-		return target ? `/app/${target}` : "";
+		return target ? `/desk/${target}` : "";
 	}
 
 	function correctedPersistentPagePath(pathname = window.location?.pathname || "") {
