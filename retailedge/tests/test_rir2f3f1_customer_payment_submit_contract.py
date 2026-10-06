@@ -43,6 +43,7 @@ def test_draft_listing_is_permission_aware_and_requires_operating_scope():
 	assert "frappe.get_all(" not in listing
 	assert "except (frappe.PermissionError, frappe.ValidationError)" in listing
 	assert "legacy/stale draft" in listing
+	assert "Run the site migration" not in listing
 
 
 def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex_allocations():
@@ -50,12 +51,14 @@ def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex
 	assert '!= "Receive"' in source
 	assert '!= CUSTOMER_DOCTYPE' in source
 	assert "Pay or Internal Transfer" in source
-	assert "Multi-currency Payment Entries require Advanced ERPNext review" in source
-	assert "Payments allocated to multiple documents require Advanced ERPNext review" in source
-	assert "Only a single Sales Invoice or Sales Order allocation is supported by standard EdgeSuite submission" in source
-	assert "Return Sales Invoices require Advanced ERPNext review" in source
-	assert "Payments with deductions or exchange differences require Advanced ERPNext review" in source
-	assert "Separate party-account advances require Advanced ERPNext review" in source
+	assert "Multi-currency Payment Entries require advanced review" in source
+	assert "Payments allocated to multiple documents require advanced review" in source
+	assert "Only a single Sales Invoice or Sales Order allocation is supported by the standard payment flow" in source
+	assert "Return Sales Invoices require advanced review" in source
+	assert "Payments with deductions or exchange differences require advanced review" in source
+	assert "Separate party-account advances require advanced review" in source
+	assert "Advanced ERPNext review" not in source
+	assert "standard EdgeSuite submission" not in source
 
 
 def test_restricted_blank_disabled_branch_and_context_tampering_fail_closed():
@@ -85,6 +88,7 @@ def test_submit_is_post_only_locked_stale_safe_and_erpnext_authoritative():
 	assert 'frappe.new_doc("Payment Ledger Entry")' not in source
 	assert "db_set(" not in source
 	assert '"source_of_truth": "ERPNext Payment Entry submit"' in submit
+	assert "ERPNext did not submit Payment Entry" not in submit
 
 
 def test_payment_management_reviews_and_submits_without_forced_native_handoff():
