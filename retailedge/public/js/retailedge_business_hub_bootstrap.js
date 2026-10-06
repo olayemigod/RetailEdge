@@ -2,12 +2,10 @@
 	"use strict";
 
 	const CONTROLLER_ASSET = "/assets/retailedge/js/retailedge_business_hub_page.js";
-	const ROUTE_GUARD_ASSET = "/assets/retailedge/js/retailedge_persistent_page_route_guard.js";
 	const POLL_INTERVAL_MS = 50;
 	const MAX_WAIT_MS = 30000;
 	const startedAt = Date.now();
 	let loading = false;
-	let routeGuardLoading = false;
 
 	function currentUser() {
 		return (
@@ -35,33 +33,9 @@
 		return typeof global.retailedgeRegisterBusinessHubPage === "function";
 	}
 
-	function routeGuardAlreadyLoaded() {
-		return typeof global.retailedge?.correctPersistentTransactionPageRoute === "function";
-	}
-
-	function loadRouteGuard() {
-		if (routeGuardLoading || routeGuardAlreadyLoaded()) return;
-		routeGuardLoading = true;
-		try {
-			const pending = global.frappe.require(ROUTE_GUARD_ASSET);
-			if (pending && typeof pending.then === "function") {
-				pending
-					.then(() => {
-						routeGuardLoading = false;
-						global.retailedge?.correctPersistentTransactionPageRoute?.();
-					})
-					.catch((error) => {
-						routeGuardLoading = false;
-						console.error("[RetailEdge] Persistent page route guard failed to load", error);
-					});
-			}
-		} catch (error) {
-			routeGuardLoading = false;
-			console.error("[RetailEdge] Persistent page route guard failed to load", error);
-		}
-	}
-
 	function bootController() {
+		if (loading || controllerAlreadyLoaded()) return;
+
 		const user = currentUser();
 		if (user === "Guest") {
 			// The controller is Desk-only. Login / website contexts intentionally do nothing.
@@ -74,9 +48,6 @@
 			}
 			return;
 		}
-
-		loadRouteGuard();
-		if (loading || controllerAlreadyLoaded()) return;
 
 		loading = true;
 		try {
