@@ -105,6 +105,15 @@ The backend source key is intentionally retained for action fingerprint and comp
 - Delivery Note creation from Sales Order or Sales Invoice now reports business-level preparation/validation errors and uses `full Delivery Note workflow` wording for complex multi-order cases.
 - Submission, source-document mapping, idempotency, Branch validation and stock/accounting side effects remain unchanged.
 
+### Customer and Supplier Payment Submit Backends
+
+- Standard customer and supplier Payment Entry blockers now use `advanced review` / workflow-specific business wording instead of `Advanced ERPNext` and `EdgeSuite` terminology.
+- Active workflow messages now describe a configured approval workflow without exposing the underlying framework.
+- Branch-support setup failures no longer tell normal users to `Run the site migration`; they direct the user to an administrator.
+- Failed submission messages now describe the Payment Entry outcome rather than the implementation platform.
+- Internal `source_of_truth` metadata and Payment Entry posting/accounting behaviour remain unchanged.
+- The supplier-payment contract test was reconciled with the current operational Branch-scope implementation (`get_operational_branch_scope` / `resolve_operational_branch`) instead of the retired Branch helper assertions.
+
 ## Confirmed remaining production-copy debt
 
 The following areas still contain implementation-oriented wording and require follow-up before declaring the whole application copy-clean.
@@ -124,11 +133,22 @@ High-priority examples include:
 
 These should be replaced with business wording such as `accounting and stock records`, `configured approval workflow`, `advanced review`, `allocated cost`, and `full purchasing workflow`. Internal routing and document ownership must not change.
 
-### Advanced workflow/blocker messages
+### Guided payment frontend
+
+`SimplePaymentDialog.vue` still contains visible implementation wording in customer/supplier review copy, including examples such as:
+
+- `before ERPNext posts...`;
+- `Frappe Workflow` fallback labels;
+- `This draft needs Advanced ERPNext review...`;
+- `native ERPNext Payment Entry submit flow`;
+- `Open in ERPNext` advanced actions.
+
+The backend messages are now clean; this dialog must be rewritten separately without changing its save/review/submit or explicit advanced-route behaviour.
+
+### Other advanced workflow/blocker messages
 
 Repository search found customer-facing implementation language still in or around:
 
-- customer/supplier payment-submit APIs and guided-payment review;
 - incoming quality inspection;
 - purchase receipts and purchase returns;
 - purchase/sales invoice completion;
@@ -164,7 +184,7 @@ Renaming those can break compatibility without improving user experience.
 
 ## Regression protection
 
-`retailedge/tests/test_production_copy_readiness.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre, Payment History and the shared selling/delivery workflows.
+`retailedge/tests/test_production_copy_readiness.py` protects the cleaned MVP surfaces from the specific release/platform wording regressions addressed in this branch, including Reports Centre, Payment History, shared selling/delivery workflows, and customer/supplier payment-submit backends.
 
 The test deliberately does not ban technical terms repository-wide because legitimate backend code and engineering documentation must retain implementation identity.
 
@@ -181,7 +201,8 @@ Use at least one normal operational user and one authorised manager/admin person
 7. Open Reports Centre as both personas. Confirm catalogue descriptions are business-facing and advanced-only reports remain permission-gated.
 8. Open Payment History, inspect draft/submitted payments, trigger an advanced-only draft where possible, and submit a standard draft. Confirm no implementation or migration wording is shown.
 9. Exercise Quotation → Sales Order and Sales Order / Sales Invoice → Delivery Note paths, including an advanced-review blocker, and confirm user messages remain business-facing.
-10. Continue the audit through Professional Purchasing, payment submit, stock, quality inspection and invoice completion before the final MVP production-copy sign-off.
+10. Exercise customer and supplier payment backend blockers through Payment History or Payment Management and confirm returned validation/setup text is business-facing. The guided payment dialog itself is still pending copy cleanup.
+11. Continue the audit through Professional Purchasing, guided payment UI, stock, quality inspection and invoice completion before the final MVP production-copy sign-off.
 
 ## Safety / non-regression rules
 
