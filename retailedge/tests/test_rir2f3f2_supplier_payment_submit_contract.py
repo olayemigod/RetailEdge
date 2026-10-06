@@ -32,16 +32,16 @@ def test_preview_is_read_only_scoped_and_exposes_submit_blockers():
 
 def test_draft_listing_is_permission_aware_and_requires_operating_scope():
 	source = _read(BACKEND)
-	listing = _function_source(source, "list_standard_supplier_payment_drafts", "submit_standard_supplier_payment")
+	listing = _function_source(source, "list_standard_supplier_payment_drafts", "apply_standard_supplier_payment_workflow_action")
 	assert "Choose Company and Supplier before reviewing draft payments" in listing
-	assert "Choose a Branch before reviewing draft payments for restricted access" in listing
-	assert "validate_user_branch_access(" in listing
-	assert "user_has_global_branch_access(user=frappe.session.user)" in listing
+	assert "get_operational_branch_scope(company, user=frappe.session.user)" in listing
+	assert "resolve_operational_branch(" in listing
 	assert "frappe.get_list(" in listing
 	assert '"docstatus": 0' in listing
 	assert '"payment_type": "Pay"' in listing
 	assert '"party_type": SUPPLIER_DOCTYPE' in listing
 	assert "frappe.get_all(" not in listing
+	assert "Run the site migration" not in listing
 
 
 def test_standard_shape_supports_bounded_same_scope_purchase_invoice_settlement_without_advance_or_complexity():
@@ -51,26 +51,28 @@ def test_standard_shape_supports_bounded_same_scope_purchase_invoice_settlement_
 	assert "MAX_STANDARD_REFERENCES = 20" in source
 	assert "def _reference_previews" in source
 	assert "Only Purchase Invoice allocations are supported by standard supplier settlement" in source
-	assert "Supplier advances require Advanced ERPNext review" in source
-	assert "Return Purchase Invoices require Advanced ERPNext review" in source
-	assert "Multi-currency Purchase Invoice payments require Advanced ERPNext review" in source
-	assert "Multi-currency Payment Entries require Advanced ERPNext review" in source
+	assert "Supplier advances require advanced review" in source
+	assert "Return Purchase Invoices require advanced review" in source
+	assert "Multi-currency Purchase Invoice payments require advanced review" in source
+	assert "Multi-currency Payment Entries require advanced review" in source
 	assert "Standard supplier settlement must allocate the full payment across its Purchase Invoices" in source
 	assert "All Purchase Invoice allocations in a standard supplier settlement must belong to one Branch" in source
 	assert "The Payment Entry must carry the Branch of its Purchase Invoice allocations" in source
-	assert "Supplier advances or unallocated amounts require Advanced ERPNext review" in source
-	assert "Payments with deductions or exchange differences require Advanced ERPNext review" in source
+	assert "Supplier advances or unallocated amounts require advanced review" in source
+	assert "Payments with deductions or exchange differences require advanced review" in source
 	assert "Standard supplier payment requires a Bank or Cash payment account" in source
 	assert "Standard supplier payment requires the Supplier payable account" in source
 	assert '"references": references' in source
 	assert '"reference_count": len(references)' in source
+	assert "Advanced ERPNext review" not in source
+	assert "standard EdgeSuite submission" not in source
 
 
 def test_restricted_blank_branch_and_context_tampering_fail_closed():
 	source = _read(BACKEND)
 	assert "_payment_branch(doc)" in source
-	assert "user_has_global_branch_access(user=frappe.session.user)" in source
-	assert "validate_user_branch_access(" in source
+	assert "get_operational_branch_scope(company, user=frappe.session.user)" in source
+	assert "resolve_operational_branch(" in source
 	assert "has no Branch attribution for your restricted access" in source
 	assert "does not belong to the selected Company" in source
 	assert "does not belong to the selected Supplier" in source
@@ -93,6 +95,7 @@ def test_submit_is_post_only_locked_stale_safe_and_erpnext_authoritative():
 	assert 'frappe.new_doc("Payment Ledger Entry")' not in source
 	assert "db_set(" not in source
 	assert '"source_of_truth": "ERPNext Payment Entry submit"' in submit
+	assert "ERPNext did not submit Payment Entry" not in submit
 
 
 def test_business_hub_supplier_payment_reviews_and_submits_without_forced_native_handoff():
