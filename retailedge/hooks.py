@@ -49,6 +49,7 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge_shell_context.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
+	"/assets/retailedge/js/retailedge_query_report_smart_date.js",
 	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
@@ -115,7 +116,6 @@ doctype_list_js = {
 
 # Svg Icons
 # ------------------
-# include app icons in desk
 
 # Home Pages
 # ----------
@@ -160,13 +160,13 @@ jinja = {
 # To set up dependencies/integrations with other apps
 # Name of app being installed is passed as an argument
 
-# before_app_install = "retailedge.utils.before_app_install"
-# after_app_install = "retailedge.utils.after_app_install"
+# before_app_install = "retailedge.utils.before_install"
+# after_app_install = "retailedge.utils.after_install"
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_app_uninstall"
-# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+# before_app_uninstall = "retailedge.uninstall.before_uninstall"
+# after_app_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
