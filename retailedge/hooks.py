@@ -11,6 +11,15 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# EdgeSuite product availability is product-owned. RetailEdge explicitly
+# publishes its descriptor rather than relying on installation alone.
+edgesuite_product_availability_providers = [
+	"retailedge.product_context.get_product_availability",
+]
+edgesuite_print_context_validators = [
+	"retailedge.product_context.validate_print_context",
+]
+
 # Apps
 # ------------------
 
@@ -40,7 +49,6 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge_shell_context.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
-	"/assets/retailedge/js/retailedge_query_report_smart_date.js",
 	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
@@ -98,7 +106,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_documents_list.js",
+	"Purchase Order": "public/js/purchase_order_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -249,6 +257,7 @@ after_migrate = [
 	"retailedge.pos_cashier_expense.ensure_pos_closing_cashier_expense_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
+	"retailedge.print_output_settings.ensure_print_output_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 	"retailedge.desktop_identity.sync_retailedge_desktop_identity",
 ]
@@ -264,7 +273,7 @@ permission_query_conditions = {
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
-	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_price_list_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
@@ -277,7 +286,8 @@ has_permission = {
 # ------------------------------
 override_whitelisted_methods = {
 	"pos_next.api.shifts.get_closing_shift_data": "retailedge.pos_cashier_expense.get_posnext_closing_shift_data_with_cashier_expenses",
-	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.master_experience.get_retailedge_business_hub_context",
+	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.printing_navigation.get_retailedge_business_hub_context",
+	"retailedge.master_experience.get_retailedge_business_hub_context": "retailedge.printing_navigation.get_retailedge_business_hub_context",
 	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
 	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",
 	"retailedge.guided_payment.search_simple_payment_options": "retailedge.guided_link_search.search_simple_payment_options",

@@ -97,7 +97,16 @@
 									{{ previewLoading ? "Refreshing..." : "Refresh" }}
 								</button>
 								<button type="button" class="edge-button edge-button--secondary" :disabled="!previewHtml || previewLoading" @click="printPreview">
-									Print
+									Print Document
+								</button>
+								<button
+									v-if="canDirectReceiptPrint"
+									type="button"
+									class="edge-button edge-button--primary"
+									:disabled="thermalPrinting"
+									@click="directPrintReceipt"
+								>
+									{{ thermalPrinting ? "Printing..." : "Print Receipt" }}
 								</button>
 								<button type="button" class="edge-button edge-button--primary" :disabled="!details.can_print" @click="downloadPdf">
 									Download PDF
@@ -189,6 +198,12 @@
 </template>
 
 <script>
+import {
+	isRetailReceiptPrintable,
+	openRetailPrinterSetup,
+	printRetailReceipt,
+} from "../thermalReceiptPrinting";
+
 const CONTEXT_METHOD = "retailedge.document_output.get_document_output_context";
 const SEARCH_METHOD = "retailedge.document_output.search_output_documents";
 const DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
@@ -292,6 +307,7 @@ export default {
 			emailMessage: "",
 			sendingEmail: false,
 			preparingWhatsApp: false,
+			thermalPrinting: false,
 			searchTimer: null,
 		};
 	},
@@ -314,6 +330,13 @@ export default {
 				&& this.details?.can_print
 				&& this.details?.email_configured
 				&& String(this.emailRecipient || "").trim()
+			);
+		},
+		canDirectReceiptPrint() {
+			return Boolean(
+				this.details?.can_print
+				&& Number(this.details?.docstatus || 0) === 1
+				&& isRetailReceiptPrintable(this.details)
 			);
 		},
 		canEditSelectedSalesInvoice() {
@@ -388,8 +411,27 @@ export default {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
 			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
-			if (item.target_type === "Page") frappe.set_route(item.target);
-			else if (item.target) window.open(route || item.target, "_blank", "noopener,noreferrer");
+			if (item.target_type === "Page") {
+				frappe.set_route(item.target);
+				return;
+			}
+			const target = String(route || item.target || "").trim();
+			if (!target) return;
+			let url = null;
+			try {
+				url = new URL(target, window.location.origin);
+			} catch (_error) {
+				// Non-URL targets keep their existing external fallback below.
+			}
+			if (
+				url
+				&& url.origin === window.location.origin
+				&& (url.pathname.startsWith("/app/") || url.pathname.startsWith("/desk/"))
+			) {
+				window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+				return;
+			}
+			window.open(target, "_blank", "noopener,noreferrer");
 		},
 		resetDocumentSelection() {
 			this.searchText = "";
@@ -485,6 +527,46 @@ export default {
 			if (!frame?.contentWindow) return;
 			frame.contentWindow.focus();
 			frame.contentWindow.print();
+		},
+		async directPrintReceipt() {
+			if (!this.canDirectReceiptPrint || this.thermalPrinting) return;
+			this.thermalPrinting = true;
+			const printerContext = {
+				company: this.details?.company || this.tenantName || "",
+				branch: this.details?.branch || this.branchName || "",
+			};
+			try {
+				const result = await printRetailReceipt({
+					document: this.selectedDocumentKey,
+					name: this.details.name,
+					...printerContext,
+				});
+				frappe.show_alert({
+					message: __("{0} receipt copy/copies printed.", [result.copies || 1]),
+					indicator: "green",
+				});
+			} catch (error) {
+				const message = errorMessage(error, "Unable to print the receipt.");
+				const setupRequired = [
+					"RETAIL_PRINTER_PROFILE_REQUIRED",
+					"RETAIL_DIRECT_PRINTER_REQUIRED",
+					"RETAIL_PRINTER_SETUP_REQUIRED",
+				].includes(error?.code);
+				if (setupRequired) {
+					frappe.confirm(
+						__(message + " Open Devices & Printing now?"),
+						() => openRetailPrinterSetup(printerContext),
+					);
+				} else {
+					frappe.msgprint({
+						title: __("Receipt printing failed"),
+						message,
+						indicator: "red",
+					});
+				}
+			} finally {
+				this.thermalPrinting = false;
+			}
 		},
 		downloadPdf() {
 			if (!this.details?.can_print) return;

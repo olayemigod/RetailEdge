@@ -27,7 +27,6 @@ jobs:
     env:
       RETAILEDGE_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RETAILEDGE_BASE_URL: http://retail-browser.localhost:8000
-      RETAILEDGE_BROWSER_PASSWORD: RetailEdgeBrowser1!
 
     services:
       redis:
@@ -99,7 +98,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 7ec34dcab401b71b0f94cabeca33aa0f5137e9de
+          ref: be3ddc2531ecc7e6e59bd745a23aec0d515819a1
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -109,7 +108,7 @@ jobs:
           bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
           bench get-app --branch develop --skip-assets https://github.com/frappe/payments.git
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "7ec34dcab401b71b0f94cabeca33aa0f5137e9de"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "be3ddc2531ecc7e6e59bd745a23aec0d515819a1"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
           test "$(git -C apps/retailedge rev-parse HEAD)" = "$RETAILEDGE_CANDIDATE_SHA"
 
@@ -128,19 +127,35 @@ jobs:
       - name: Seed browser personas
         working-directory: frappe-bench
         run: |
-          bench --site retail-browser.localhost execute retailedge.tests.rc3_browser_fixture.seed_rc3_personas
+          seed_output="$(bench --site retail-browser.localhost execute retailedge.tests.rc3_browser_fixture.seed_rc3_personas)"
+          browser_password="$(SEED_OUTPUT="$seed_output" python - <<'PY'
+          import json
+          import os
+
+          password = ""
+          for line in reversed(os.environ.get("SEED_OUTPUT", "").splitlines()):
+              try:
+                  payload = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              if isinstance(payload, dict) and payload.get("password"):
+                  password = str(payload["password"])
+                  break
+          if not password:
+              raise SystemExit("Browser fixture password was not returned by the persona seed.")
+          print(password)
+          PY
+          )"
+          echo "::add-mask::$browser_password"
+          printf 'RETAILEDGE_BROWSER_PASSWORD=%s\n' "$browser_password" >> "$GITHUB_ENV"
           bench --site retail-browser.localhost clear-cache
 
       - name: Build browser candidate assets
         working-directory: frappe-bench
         run: |
-          # This bench was intentionally created with --skip-assets while apps
-          # were fetched. Browser acceptance needs the complete Frappe/ERPNext
-          # Desk runtime as well as EdgeSuite UI and RetailEdge bundles.
           bench build
           bench --site retail-browser.localhost migrate
 
-          # Fail before Playwright if the native Desk shell was not built.
           compgen -G "sites/assets/frappe/dist/js/desk.bundle*.js" > /dev/null
           compgen -G "sites/assets/frappe/dist/css/desk.bundle*.css" > /dev/null
 
@@ -171,6 +186,7 @@ jobs:
           npx playwright test \
             browser-tests/retailedge_mvp_smoke.spec.cjs \
             browser-tests/retailedge_rc3_acceptance.spec.cjs \
+            browser-tests/retailedge_printing_shell.spec.cjs \
             --config=browser-tests/playwright.config.cjs
 
       - name: Preserve browser QA evidence

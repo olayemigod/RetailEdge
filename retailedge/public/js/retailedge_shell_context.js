@@ -3,11 +3,15 @@
 
 	const PRODUCT_SELECTOR = ".edge-app-shell[data-edge-product]";
 	const HOST_CLASS = "retailedge-topbar-branch-switcher";
+	const SHELL_ADAPTER_NAME = "shell:retailedge";
+	const BUSINESS_HUB_CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
+	const SHELL_CONTEXT_CACHE_TTL_MS = 30_000;
 	const mounts = new Map();
 	let observer = null;
 	let scheduled = false;
 	let identityRequest = null;
 	let identityRefreshedAt = 0;
+	let shellContextRequest = null;
 
 	function runtime() {
 		return window.EdgeSuiteUI || window.EdgeUI || null;
@@ -74,10 +78,160 @@
 	function clearRetailEdgeContextCaches() {
 		window.__retailedgeBusinessHubContextCache = null;
 		window.__retailedgeBusinessHubContextRequest = null;
+		shellContextRequest = null;
 		try {
 			sessionStorage.removeItem("retailedge.operating_context");
 		} catch (_error) {
 			// Session storage is optional.
+		}
+	}
+
+	function cachedBusinessHubContext() {
+		const cache = window.__retailedgeBusinessHubContextCache;
+		if (!cache?.data || !cache.fetchedAt) return null;
+		if (Date.now() - Number(cache.fetchedAt || 0) > SHELL_CONTEXT_CACHE_TTL_MS) return null;
+		return cache.data;
+	}
+
+	function cacheBusinessHubContext(data) {
+		if (typeof window.retailedgeCacheBusinessHubContext === "function") {
+			return window.retailedgeCacheBusinessHubContext(data || {});
+		}
+		const normalized = data || {};
+		window.__retailedgeBusinessHubContextCache = { data: normalized, fetchedAt: Date.now() };
+		return normalized;
+	}
+
+	function fetchBusinessHubContext() {
+		if (typeof window.retailedgeGetBusinessHubContext === "function") {
+			return window.retailedgeGetBusinessHubContext();
+		}
+		const cached = cachedBusinessHubContext();
+		if (cached) return Promise.resolve(cached);
+		if (shellContextRequest) return shellContextRequest;
+		shellContextRequest = new Promise((resolve, reject) => {
+			frappe.call({
+				method: BUSINESS_HUB_CONTEXT_METHOD,
+				callback: (response) => resolve(cacheBusinessHubContext(response.message || {})),
+				error: reject,
+			});
+		}).finally(() => { shellContextRequest = null; });
+		return shellContextRequest;
+	}
+
+	function shellRouteForTarget(item, nativeFallbackEnabled) {
+		if (!item) return "";
+		if (!nativeFallbackEnabled && ["DocType", "Report"].includes(item.target_type)) return "";
+		if (item.target_type === "URL") return String(item.target || "").trim();
+		if (item.target_type === "DocType") {
+			const slug = frappe.router?.slug?.(item.target)
+				|| String(item.target || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+			return slug ? `/app/${slug}` : "";
+		}
+		if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
+		if (item.target_type === "Page") return `/app/${item.target}`;
+		return "";
+	}
+
+	function shellMenuItems(data = {}) {
+		const nativeFallbackEnabled = Boolean(data.access?.can_use_native_desk)
+			&& data.feature_flags?.native_document_fallback_enabled !== false;
+		return (data.navigation_groups || [])
+			.map((group) => ({
+				key: group.key,
+				label: group.label,
+				icon: group.icon || "layers",
+				defaultCollapsed: group.key !== "home",
+				items: (group.items || [])
+					.filter((item) => nativeFallbackEnabled || !["DocType", "Report"].includes(item.target_type))
+					.map((item) => ({
+						label: item.label,
+						description: item.description || "",
+						route: shellRouteForTarget(item, nativeFallbackEnabled),
+						icon: item.icon || "list",
+						link_type: item.target_type,
+						link_to: item.target,
+						source: item,
+					}))
+					.filter((item) => item.route),
+			}))
+			.filter((group) => group.items.length);
+	}
+
+	function openShellRoute(route) {
+		const value = String(route || "").trim();
+		if (!value) return false;
+		if (/^https?:\/\//i.test(value)) {
+			window.location.assign(value);
+			return true;
+		}
+		let url = null;
+		try {
+			url = new URL(value, window.location.origin);
+		} catch (_error) {
+			// Fall back to normal Frappe routing below.
+		}
+		if (url?.search || url?.hash) {
+			window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+			return true;
+		}
+		const path = url?.pathname || value;
+		if (path.startsWith("/app/") || path.startsWith("/desk/")) {
+			const normalized = path.replace(/^\/(?:app|desk)\//, "");
+			let parts = normalized.split("/").filter(Boolean).map((part) => {
+				try {
+					return decodeURIComponent(part);
+				} catch (_error) {
+					return part;
+				}
+			});
+			// Frappe v16 may serialize Page routes as /desk/retailedge/<page>.
+			// Keep RetailEdge's established public page routes stable when the shared shell adapter opens them.
+			if (parts.length > 1 && String(parts[0] || "").toLowerCase() === "retailedge") {
+				parts = parts.slice(1);
+			}
+			if (parts.length) {
+				frappe.set_route(...parts);
+				return true;
+			}
+		}
+		frappe.set_route(value);
+		return true;
+	}
+
+	function registerRetailEdgeShellAdapter() {
+		const edgeUI = runtime();
+		if (!edgeUI || typeof edgeUI.registerAdapter !== "function") return false;
+		const adapter = {
+			async getContext() {
+				const data = await fetchBusinessHubContext();
+				const context = data.context || {};
+				if (typeof window.retailedgeSyncShellIdentity === "function") {
+					window.retailedgeSyncShellIdentity({
+						active_company: context.company || "",
+						active_branch: context.branch || "",
+						branch_options: Array.isArray(context.branch_options) ? context.branch_options : [],
+						can_switch_branch: Boolean(context.can_switch_branch),
+					});
+				}
+				return {
+					title: "ProcessEdge Retail",
+					tenantName: context.company_label || context.company || "",
+					branchName: context.branch || "",
+					userName: context.user_name || "",
+					menuItems: shellMenuItems(data),
+				};
+			},
+			open(route) {
+				return openShellRoute(route);
+			},
+		};
+		try {
+			edgeUI.registerAdapter(SHELL_ADAPTER_NAME, adapter, { replace: true });
+			return true;
+		} catch (error) {
+			console.warn("[RetailEdge shell] shared shell adapter registration failed", error);
+			return false;
 		}
 	}
 
@@ -322,6 +476,7 @@
 	}
 
 	function start() {
+		registerRetailEdgeShellAdapter();
 		if (observer || !document.body) return;
 		observer = new MutationObserver(schedule);
 		observer.observe(document.body, { childList: true, subtree: true });

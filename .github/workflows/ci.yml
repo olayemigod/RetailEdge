@@ -91,7 +91,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 7ec34dcab401b71b0f94cabeca33aa0f5137e9de
+          ref: be3ddc2531ecc7e6e59bd745a23aec0d515819a1
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -111,7 +111,7 @@ jobs:
           bench get-app \
             --skip-assets \
             "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "7ec34dcab401b71b0f94cabeca33aa0f5137e9de"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "be3ddc2531ecc7e6e59bd745a23aec0d515819a1"
 
           bench get-app \
             --skip-assets \
@@ -159,6 +159,7 @@ jobs:
         working-directory: frappe-bench
         run: |
           grep -Eq 'edgeui\.bundle' sites/assets/assets.json
+          grep -Fq 'edgeui_print.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_business_hub\.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_product_menu\.bundle' sites/assets/assets.json
           grep -Eq 'salesperson_performance\.bundle' sites/assets/assets.json
