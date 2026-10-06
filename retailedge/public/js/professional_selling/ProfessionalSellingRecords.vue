@@ -40,19 +40,14 @@
 				label="Status"
 				@change="reload"
 			/>
-			<EdgeInput
-				v-model="filters.from_date"
-				label="From Date"
-				type="date"
-				:max="filters.to_date || undefined"
-				@change="reload"
-			/>
-			<EdgeInput
-				v-model="filters.to_date"
-				label="To Date"
-				type="date"
-				:min="filters.from_date || undefined"
-				@change="reload"
+			<EdgeSmartDateRange
+				v-model="smartDate"
+				class="selling-record-period-filter"
+				label="Period"
+				placeholder="e.g. last 30 days, May to June 2026, YTD"
+				:referenceDate="smartDateReference || null"
+				dateOrder="DMY"
+				@resolved="onSmartDateResolved"
 			/>
 		</div>
 
@@ -133,7 +128,7 @@
 
 <script>
 const LIST_METHOD = "retailedge.professional_selling.get_professional_selling_list";
-const REQUIRED_COMPONENTS = ["EdgeInput", "EdgeDropdown", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge"];
+const REQUIRED_COMPONENTS = ["EdgeInput", "EdgeDropdown", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
@@ -170,6 +165,8 @@ export default {
 			requestToken: 0,
 			searchTimer: null,
 			flyUpRows: {},
+			smartDate: {},
+			smartDateReference: window.frappe?.datetime?.get_today?.() || "",
 			filters: {
 				search: "",
 				status: "All",
@@ -239,6 +236,14 @@ export default {
 		},
 		clearFilters() {
 			this.filters = { search: "", status: "All", from_date: "", to_date: "" };
+			this.smartDate = {};
+			this.reload();
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 			this.reload();
 		},
 		scheduleReload() {
@@ -400,7 +405,8 @@ export default {
 .selling-record-tab { appearance:none; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--edge-color-ink-500,var(--text-muted)); padding:.65rem .85rem; font:inherit; font-weight:650; white-space:nowrap; cursor:pointer; }
 .selling-record-tab:hover { color:var(--edge-color-ink-950,var(--text-color)); background:var(--edge-color-surface-muted,var(--control-bg)); }
 .selling-record-tab.active { color:var(--edge-color-brand-700,var(--primary)); border-bottom-color:var(--edge-color-brand-600,var(--primary)); }
-.selling-record-filters { display:grid; grid-template-columns:minmax(15rem,2fr) minmax(10rem,1fr) minmax(10rem,1fr) minmax(10rem,1fr); gap:.75rem; align-items:end; }
+.selling-record-filters { display:grid; grid-template-columns:minmax(15rem,2fr) minmax(10rem,1fr) minmax(13rem,1.35fr); gap:.75rem; align-items:end; }
+.selling-record-period-filter { min-width:0; width:100%; }
 .selling-record-table-wrap { width:100%; overflow-x:auto; border:1px solid var(--edge-color-border,var(--border-color)); border-radius:.7rem; background:var(--edge-color-surface,var(--card-bg)); }
 .selling-record-table { width:100%; min-width:58rem; border-collapse:collapse; table-layout:fixed; }
 .selling-record-table th,.selling-record-table td { padding:.75rem .8rem; border-bottom:1px solid var(--edge-color-border,var(--border-color)); text-align:left; vertical-align:middle; }
