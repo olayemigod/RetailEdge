@@ -86,7 +86,7 @@
 				<div v-if="review.blockers && review.blockers.length" class="quality-blockers" role="alert">
 					<strong>Advanced handling required</strong>
 					<p>This workflow will not approximate this inspection.</p>
-					<ul><li v-for="(blocker, index) in review.blockers" :key="`${blocker.key}-${index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : "" }}{{ blocker.label }}</li></ul>
+					<ul><li v-for="(blocker, index) in review.blockers" :key="`${blocker.key}-${index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : "" }}{{ customerFacingCopy(blocker.label, "Advanced handling is required.") }}</li></ul>
 				</div>
 
 				<article v-for="item in review.items || []" :key="item.child_row_reference" class="quality-review-card">
@@ -130,7 +130,7 @@
 						<span>{{ inspection.name }}</span>
 						<strong>{{ inspection.workflow_readiness?.current_state || inspection.status || (inspection.docstatus === 1 ? "Submitted" : "Draft") }}</strong>
 					</div>
-					<p v-if="inspection.workflow_readiness?.message" class="quality-help">{{ inspection.workflow_readiness.message }}</p>
+					<p v-if="inspection.workflow_readiness?.message" class="quality-help">{{ customerFacingCopy(inspection.workflow_readiness.message) }}</p>
 					<div v-if="inspection.docstatus === 0 && inspection.workflow_readiness?.available_actions?.length" class="quality-actions">
 						<button
 							v-for="action in inspection.workflow_readiness?.available_actions || []"
@@ -176,7 +176,27 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, ...(type ? { type } : {}), callback: (response) => resolve(response?.message ?? response), error: reject }));
 }
-function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	let text = String(value ?? "").trim();
+	if (!text) return fallback;
+	const replacements = [
+		[/Use Advanced ERPNext review/gi, "Use advanced review"],
+		[/requires Advanced ERPNext handling/gi, "requires advanced handling"],
+		[/requires Advanced ERPNext/gi, "requires advanced review"],
+		[/Advanced ERPNext review/gi, "advanced review"],
+		[/Advanced ERPNext/gi, "advanced review"],
+		[/active Frappe Workflow/gi, "active approval workflow"],
+		[/Frappe Workflow/gi, "approval workflow"],
+		[/standard EdgeSuite submission/gi, "standard submission"],
+		[/available workflow action in EdgeSuite/gi, "available approval action"],
+		[/EdgeSuite/gi, "this workspace"],
+		[/ERPNext Banking/gi, "bank reconciliation"],
+		[/ERPNext/gi, "the accounting system"],
+	];
+	for (const [pattern, replacement] of replacements) text = text.replace(pattern, replacement);
+	return text.replace(/\s+/g, " ").trim() || fallback;
+}
+function errorMessage(error, fallback) { return customerFacingCopy(window.retailedge?.userErrorMessage?.(error, fallback) || fallback, fallback); }
 function linkValue(value) { if (typeof value === "string") return value; return value?.value || value?.name || ""; }
 
 export default {
@@ -229,6 +249,7 @@ export default {
 		catch (error) { this.error = errorMessage(error, "Incoming Quality Inspection capability could not be loaded."); }
 	},
 	methods: {
+		customerFacingCopy,
 		async receiptSearch(txt) {
 			const result = await callMethod(SEARCH_METHOD, { txt, company: this.company || null, branch: this.branch || null, supplier: this.supplier || null });
 			return Array.isArray(result) ? result : [];
