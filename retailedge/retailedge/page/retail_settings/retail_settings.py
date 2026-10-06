@@ -15,16 +15,16 @@ PRICE_LIST_PRIORITY_OPTIONS = {
 		{"value": "pos_profile", "label": "POS Profile Default", "description": "Price List from the resolved POS Profile."},
 		{"value": "branch_default", "label": "Branch Default", "description": "Selling Price List configured in Branch Setup."},
 		{"value": "user_default", "label": "User Default", "description": "Selling Price List saved as the user's default."},
-		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from ERPNext User Permissions."},
-		{"value": "erpnext_default", "label": "Selling Settings Default", "description": "Default Selling Price List from ERPNext Selling Settings."},
+		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from your assigned permissions."},
+		{"value": "erpnext_default", "label": "Selling Settings Default", "description": "Default Selling Price List from selling settings."},
 		{"value": "standard_price_list", "label": "Standard Selling", "description": "Standard Selling fallback Price List."},
 	),
 	"buying_price_list_precedence": (
 		{"value": "party_default", "label": "Supplier Default", "description": "Supplier default Price List."},
 		{"value": "branch_default", "label": "Branch Default", "description": "Buying Price List configured in Branch Setup."},
 		{"value": "user_default", "label": "User Default", "description": "Buying Price List saved as the user's default."},
-		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from ERPNext User Permissions."},
-		{"value": "erpnext_default", "label": "Buying Settings Default", "description": "Default Buying Price List from ERPNext Buying Settings."},
+		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from your assigned permissions."},
+		{"value": "erpnext_default", "label": "Buying Settings Default", "description": "Default Buying Price List from buying settings."},
 		{"value": "standard_price_list", "label": "Standard Buying", "description": "Standard Buying fallback Price List."},
 	),
 }
@@ -270,6 +270,8 @@ def _customer_copy(value: Any) -> str:
 		.replace("RetailEdge", "")
 		.replace("EdgeSuite UI", "the application")
 		.replace("EdgeSuite", "the application")
+		.replace("CoreEdge ", "Platform ")
+		.replace("CoreEdge", "Platform")
 		.replace("ERPNext ", "")
 		.replace("Frappe ", "")
 		.strip()
