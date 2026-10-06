@@ -29,8 +29,15 @@
 		>
 			<template #filters>
 				<div class="action-center-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange
+						class="action-center-period"
+						v-model="smartDate"
+						label="Period"
+						placeholder="e.g. May to June 2026, last 2 months, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeDropdown v-model="filters.follow_up_status" :options="['All', 'Open', 'Acknowledged', 'Snoozed']" label="Follow-up Status" />
 					<EdgeDropdown v-model="filters.assignment_scope" :options="[{ value: 'all', label: 'All Actions' }, { value: 'mine', label: 'My Actions' }]" label="Assignment" />
 					<EdgeDropdown v-model="filters.due_scope" :options="[{ value: 'all', label: 'All Timing' }, { value: 'due', label: 'Due / Overdue' }]" label="Follow-up Timing" />
@@ -115,7 +122,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown", "EdgeSmartDateRange"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
@@ -127,6 +134,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "", mutatingFingerprint: "",
 			summary: [], items: [], sources: {}, metadata: {}, menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
@@ -138,12 +146,25 @@ export default {
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+		},
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.action_center.get_action_center_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Action Centre controls."); }
 			finally { this.metadataLoading = false; }
@@ -231,6 +252,8 @@ export default {
 
 <style scoped>
 .action-center-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.action-center-filters > * { min-width: 0; }
+.action-center-period { grid-column: span 2; min-width: 0; }
 .action-list, .source-list { display: grid; gap: 9px; }
 .action-row { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
 .action-row--danger { border-color: var(--red-300, var(--edge-border)); }
@@ -245,5 +268,5 @@ export default {
 .action-controls { display: flex; flex-wrap: wrap; gap: 7px; }
 .source-row, .action-note { padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
 @media (max-width: 900px) { .action-center-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .action-center-filters { grid-template-columns: 1fr; } .action-row-main { align-items: flex-start; } .action-controls .edge-button { flex: 1 1 auto; } }
+@media (max-width: 720px) { .action-center-filters { grid-template-columns: 1fr; } .action-center-period { grid-column: 1 / -1; } .action-row-main { align-items: flex-start; } .action-controls .edge-button { flex: 1 1 auto; } }
 </style>
