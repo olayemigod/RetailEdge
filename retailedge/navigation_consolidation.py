@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+import frappe
+
+from retailedge.master_experience import (
+	get_retailedge_business_hub_context as _get_master_business_hub_context,
+)
+
+
+SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
+LEGACY_SHIFT_REVIEW_TARGETS = {
+	"daily-sales-audit",
+	"expense-review",
+	"cash-shift-verification",
+	"daily-sales-audit-register",
+}
+
+
+def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose one clear shift-control front door without deleting legacy routes.
+
+	The final Business Hub context is already permission-filtered before this helper runs.
+	Therefore Shift Reconciliation is only retained when the current user was already
+	permitted to see the existing POS Closing Variance page. Legacy review pages remain
+	directly routable for backward compatibility and detailed drill-down, but they no
+	longer compete as separate everyday navigation choices.
+	"""
+	for group in navigation_groups:
+		if group.get("key") != "review-approvals":
+			continue
+
+		items = list(group.get("items") or [])
+		canonical_item = next(
+			(item for item in items if item.get("target") == SHIFT_RECONCILIATION_TARGET),
+			None,
+		)
+		if canonical_item is None:
+			# Fail closed: do not manufacture access that the permission-filtered base
+			# navigation did not already grant.
+			group["items"] = [
+				item
+				for item in items
+				if item.get("target") not in LEGACY_SHIFT_REVIEW_TARGETS
+			]
+			return
+
+		consolidated = deepcopy(canonical_item)
+		consolidated["label"] = "Shift Reconciliation"
+		consolidated["icon"] = "check-circle"
+
+		cleaned = [
+			item
+			for item in items
+			if item.get("target") not in LEGACY_SHIFT_REVIEW_TARGETS
+			and item.get("target") != SHIFT_RECONCILIATION_TARGET
+		]
+
+		# Keep the consolidated cash-control entry close to Action Centre / other
+		# operational review work rather than among low-level historical reports.
+		insert_at = next(
+			(
+				index + 1
+				for index, item in enumerate(cleaned)
+				if item.get("target") == "action-center"
+			),
+			0,
+		)
+		cleaned.insert(insert_at, consolidated)
+		group["items"] = cleaned
+		return
+
+
+@frappe.whitelist()
+def get_retailedge_business_hub_context() -> dict[str, Any]:
+	"""Return final RetailEdge navigation with consolidated shift review surfaces."""
+	context = deepcopy(_get_master_business_hub_context() or {})
+	navigation_groups = context.get("navigation_groups") or []
+	_consolidate_shift_review_navigation(navigation_groups)
+	context["navigation_groups"] = navigation_groups
+	return context
