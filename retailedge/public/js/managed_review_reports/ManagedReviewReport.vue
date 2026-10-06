@@ -194,7 +194,7 @@ export default {
 		advancedFilterFields() { return this.filterFields.slice(6); },
 		reportColumns() {
 			const shiftLinks = this.surfaceKey === "pos-closing-variance"
-				? new Set(["closing_shift", "included_cashier_expenses"])
+				? new Set(["closing_shift", "included_cashier_expenses", "review_status"])
 				: new Set();
 			return (this.columns || []).map((column) => ({
 				...column,
@@ -390,6 +390,7 @@ export default {
 				branch: row.branch || this.filters.branch || "",
 				pos_profile: row.pos_profile || this.filters.pos_profile || "",
 				cashier: row.cashier || this.filters.cashier || "",
+				pos_closing_shift: row.closing_shift || "",
 				from_date: shiftDate || this.filters.from_date || "",
 				to_date: shiftDate || this.filters.to_date || "",
 			};
@@ -408,7 +409,7 @@ export default {
 			const column = payload?.column;
 			const row = payload?.row;
 			if (!column || !row) return;
-			if (column.fieldname === "closing_shift" && row.closing_shift) {
+			if (["closing_shift", "review_status"].includes(column.fieldname) && row.closing_shift) {
 				this.routeWithFilters("daily-sales-audit", this.shiftHandoffFilters(row));
 				return;
 			}
