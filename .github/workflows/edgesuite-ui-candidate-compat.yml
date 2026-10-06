@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 73dc1e39df74c3ac1068420bd9d73e9afb1e5a42
+          ref: 29635e0a1293fd05ae9c129ce3bc7b07b5cf592c
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "73dc1e39df74c3ac1068420bd9d73e9afb1e5a42"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "29635e0a1293fd05ae9c129ce3bc7b07b5cf592c"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
