@@ -15,11 +15,11 @@ MAX_VISIBLE_ROWS = 1000
 
 SURFACES: dict[str, dict[str, Any]] = {
 	"pos-closing-variance": {
-		"title": "POS Closing Variance & Expenses",
+		"title": "Shift Reconciliation",
 		"eyebrow": "Cash Control",
-		"subtitle": "Review POS closing variance, cashier expenses and unresolved cash differences in one operational view.",
+		"subtitle": "Reconcile expected and counted shift cash with cashier expenses, deposits, and unresolved differences in one operational view.",
 		"report_name": "POS Closing Variance vs Expenses",
-		"action": {"label": "Cash Shift Verification", "route": "cash-shift-verification"},
+		"action": {"label": "Detailed Shift Audit", "route": "cash-shift-verification"},
 		"filters": (
 			{"fieldname": "company", "label": "Company", "fieldtype": "Link", "options": "Company"},
 			{"fieldname": "branch", "label": "Branch", "fieldtype": "Link", "options": "Branch"},
