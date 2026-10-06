@@ -487,7 +487,7 @@ test("RC3 Stock User reaches Transfer Stock and cannot see manager-only adjustme
 		const transferAction = page.locator(".home-quick-action").filter({ hasText: "Transfer Stock" }).first();
 		await expect(transferAction).toBeVisible();
 		await transferAction.click();
-		await expect(page).toHaveURL(/\/(?:app|desk)\/transfer-stock(?:$|[?#])/);
+		await expect(page).toHaveURL(/\/(?:app|desk)\/(?:retailedge\/)?transfer-stock(?:$|[?#])/);
 		await page.getByRole("heading", { name: "Transfer Stock", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
 
@@ -523,7 +523,7 @@ test("RC3 Purchasing persona reaches Purchase Operations, Direct Purchase and pu
 		const purchaseAction = page.locator(".home-quick-action").filter({ hasText: "Direct Purchase" }).first();
 		await expect(purchaseAction).toBeVisible();
 		await purchaseAction.click();
-		await expect(page).toHaveURL(/\/(?:app|desk)\/record-purchase(?:$|[?#])/);
+		await expect(page).toHaveURL(/\/(?:app|desk)\/(?:retailedge\/)?record-purchase(?:$|[?#])/);
 		await page.getByRole("heading", { name: "Purchase Entry", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
 
@@ -546,7 +546,7 @@ test("RC3 Sales persona reaches Make Sale, Quick Sale and selling workspaces", a
 		const saleAction = page.locator(".home-quick-action").filter({ hasText: "Make Sale" }).first();
 		await expect(saleAction).toBeVisible();
 		await saleAction.click();
-		await expect(page).toHaveURL(/\/(?:app|desk)\/make-sale(?:$|[?#])/);
+		await expect(page).toHaveURL(/\/(?:app|desk)\/(?:retailedge\/)?make-sale(?:$|[?#])/);
 		await page.getByRole("heading", { name: "Make Sale", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
 

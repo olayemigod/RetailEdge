@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import timedelta
+from pathlib import Path
 
 import frappe
 from frappe.utils import add_days, get_first_day, getdate, nowdate
@@ -87,31 +88,48 @@ class TestReportingDateRanges(unittest.TestCase):
 		self.assertIsNone(f)
 		self.assertIsNone(t)
 
-	def test_frontend_preset_helper_uses_stable_filter_shape(self):
+	def test_frontend_query_report_period_helper_delegates_to_edgesuite(self):
 		retailedge_path = frappe.get_app_path("retailedge")
-		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
-		with open(js_path) as f:
-			content = f.read()
-
-		self.assertIn("window.retailedge.getPresetDates", content)
-		self.assertIn("from_date", content)
-		self.assertIn("to_date", content)
-		self.assertIn('case "Full History"', content)
-		self.assertIn('case "Full Branch History"', content)
-		self.assertIn('from_date: ""', content)
-		self.assertIn('to_date: ""', content)
-
-	def test_frontend_preset_binder_updates_visible_controls_before_refresh(self):
-		retailedge_path = frappe.get_app_path("retailedge")
-		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
+		js_path = os.path.join(
+			retailedge_path,
+			"public",
+			"js",
+			"retailedge_query_report_smart_date.js",
+		)
 		with open(js_path) as f:
 			content = f.read()
 
 		self.assertIn("window.retailedge.setupDateRangePresets", content)
-		self.assertIn("filter.fieldname || (filter.df && filter.df.fieldname)", content)
-		self.assertIn("await setFilterControlValue(fromField, dates.from_date)", content)
-		self.assertIn("await setFilterControlValue(toField, dates.to_date)", content)
-		self.assertIn("queryReport.__retailedge_applying_preset", content)
+		self.assertIn('runtime?.getComponent?.("EdgeSmartDateRange")', content)
+		self.assertIn("runtime?.components?.EdgeSmartDateRange", content)
+		self.assertIn("runtime?.Vue", content)
+		self.assertIn("__retailedgeSmartDateApp", content)
+		self.assertIn("__retailedgeSmartDateHost", content)
+		self.assertIn("hideFilterControl(presetFilter)", content)
+		self.assertIn("hideFilterControl(fromFilter)", content)
+		self.assertIn("hideFilterControl(toFilter)", content)
+		self.assertIn("await setExactPeriod(value?.from_date || \"\", value?.to_date || \"\")", content)
 		self.assertIn("queryReport._no_refresh = true", content)
 		self.assertIn("queryReport.refresh()", content)
-		self.assertIn('queryReport.set_filter_value(presetField, "Custom Period")', content)
+		self.assertIn("window.retailedge.getPresetDates = undefined", content)
+		self.assertNotIn('case "This Month"', content)
+		self.assertNotIn('case "Last Quarter"', content)
+
+	def test_all_native_query_report_period_callers_use_central_helper(self):
+		retailedge_path = Path(frappe.get_app_path("retailedge"))
+		report_root = retailedge_path / "retailedge" / "report"
+		expected = {
+			"pos_closing_variance_vs_expenses",
+			"retailedge_invoice_payment_audit",
+			"retailedge_cashier_expense_review",
+			"retailedge_daily_sales_audit_register",
+			"retailedge_branch_performance_summary",
+			"retailedge_bank_transaction_matching",
+			"retailedge_stock_movement_history",
+		}
+		actual = set()
+		for script in report_root.glob("*/*.js"):
+			if "setupDateRangePresets(report)" in script.read_text():
+				actual.add(script.parent.name)
+
+		self.assertEqual(actual, expected)

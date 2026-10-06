@@ -44,7 +44,7 @@
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.item" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
-					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
+					<EdgeSmartDateRange v-model="smartDate" label="Period" :referenceDate="smartDateReference || null" dateOrder="DMY" @update:modelValue="onSmartDateModelChange" @resolved="onSmartDateResolved" />
 					<EdgeDropdown :modelValue="String(filters.limit)" :options="['25', '50', '100']" label="Rows per page" @change="filters.limit = Number($event?.value || $event || 50); resetAndFetch()" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="resetAndFetch">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
@@ -166,8 +166,19 @@ export default {
 			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
 			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
 		},
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.to_date = "";
+			this.filters.date_range_preset = "Custom Period";
+			this.filters.offset = 0;
+		},
 		onSmartDateResolved(value) {
-			if (!value?.from_date || !value?.to_date) return;
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
+				return;
+			}
 			this.smartDate = { ...value };
 			this.filters.from_date = value.from_date;
 			this.filters.to_date = value.to_date;

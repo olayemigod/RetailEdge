@@ -79,11 +79,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out governed EdgeSuite UI 1.1.0 runtime
+      - name: Check out merged EdgeSuite UI fuzzy-date runtime
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 6f90676dbbf492d9f65923282d2e4dc53ef58d7b
+          ref: 7ec34dcab401b71b0f94cabeca33aa0f5137e9de
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,12 +112,9 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "6f90676dbbf492d9f65923282d2e4dc53ef58d7b"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "7ec34dcab401b71b0f94cabeca33aa0f5137e9de"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
-          # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
-          # never a CoreEdge-local compatibility bridge. This keeps RetailEdge standalone
-          # and avoids shared-bench module resolution collisions.
           python - <<'PY'
           import json
           from pathlib import Path
@@ -133,8 +130,6 @@ jobs:
           test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/vue-bridge.js
           grep -Fq 'export const withKeys = Vue.withKeys;' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/vue-bridge.js
 
-          # RIR2C1: keyboard commands are owned by the governed shared EdgeSuite UI runtime.
-          # RetailEdge must not revive its historical duplicate global listener.
           test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_k_guard.js
           test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js
           grep -Fq '/assets/edgesuite_ui/js/edgeui_ctrl_k_guard.js' apps/edgesuite_ui/edgesuite_ui/hooks.py
@@ -152,8 +147,6 @@ jobs:
 
           bench build --app edgesuite_ui
 
-          # Reproduce the shared-bench condition that exposed the stale alias: a CoreEdge
-          # bridge may exist elsewhere in apps/, but RetailEdge must ignore it completely.
           mkdir -p apps/coreedge/coreedge/public/js/edgeui
           cat > apps/coreedge/coreedge/public/js/edgeui/vue-bridge.js <<'JS'
           export const createApp = () => {};

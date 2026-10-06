@@ -214,8 +214,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 	def test_frontend_filter_bar_and_stat_cards_are_business_facing(self):
 		content = self._read_vue()
 		for label in (
-			"From Date",
-			"To Date",
+			"Period",
 			"Branch",
 			"Salesperson",
 			"Customer",

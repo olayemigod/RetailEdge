@@ -102,6 +102,9 @@ def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_qu
 	assert "retailedge.purchase_reporting.search_purchase_reporting_options" in panel
 	assert 'this.filters.party_type === "Customer"' in panel
 	assert 'kind: "supplier"' in panel
+	assert "EdgeSmartDateRange" in panel
+	assert 'label="Period"' in panel
+	assert 'type="date"' not in panel
 
 
 def test_native_payment_open_is_explicit_and_double_gated():
@@ -113,7 +116,7 @@ def test_native_payment_open_is_explicit_and_double_gated():
 
 def test_payment_review_opens_in_modal_instead_of_inline_below_history():
 	panel = _read(PANEL)
-	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"]' in panel
+	assert 'const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal", "EdgeSmartDateRange"]' in panel
 	assert ':open="detailOpen"' in panel
 	assert "Payment Review ·" in panel
 	assert "detailOpen = true" in panel
