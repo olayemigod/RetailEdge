@@ -67,6 +67,15 @@ class TestProductionCopyReadiness(unittest.TestCase):
 				with self.subTest(path=path, phrase=phrase):
 					self.assertNotIn(phrase, text)
 
+	def test_forecasting_sanitizes_runtime_reasons_and_errors(self):
+		text = source("public/js/forecasting_planning/ForecastingPlanning.vue")
+
+		self.assertIn("function customerFacingCopy(value, fallback = \"\")", text)
+		self.assertIn("window.retailedge?.userErrorMessage?.(error, fallback)", text)
+		self.assertIn("reason: customerFacingCopy(d.reason", text)
+		self.assertIn("customerFacingCopy(meta.reason", text)
+		self.assertIn("message(error, \"Unable to open the create form.\")", text)
+
 	def test_settings_customer_copy_hides_platform_implementation_names(self):
 		text = source("retailedge/page/retail_settings/retail_settings.py")
 
@@ -75,6 +84,13 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		self.assertNotIn('Default Price List from ERPNext User Permissions.', text)
 		self.assertNotIn('Default Selling Price List from ERPNext Selling Settings.', text)
 		self.assertNotIn('Default Buying Price List from ERPNext Buying Settings.', text)
+
+	def test_reconciliation_confirmation_uses_business_wording(self):
+		text = source("public/js/bank_reconciliation_confirmation.js")
+
+		self.assertIn('primary_action_label: __("Reconcile Match")', text)
+		self.assertNotIn('primary_action_label: __("Reconcile Through ERPNext")', text)
+		self.assertNotIn("through ERPNext Bank Reconciliation", text)
 
 
 if __name__ == "__main__":
