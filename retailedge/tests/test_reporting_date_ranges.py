@@ -90,7 +90,12 @@ class TestReportingDateRanges(unittest.TestCase):
 
 	def test_frontend_query_report_period_helper_delegates_to_edgesuite(self):
 		retailedge_path = frappe.get_app_path("retailedge")
-		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
+		js_path = os.path.join(
+			retailedge_path,
+			"public",
+			"js",
+			"retailedge_query_report_smart_date.js",
+		)
 		with open(js_path) as f:
 			content = f.read()
 
@@ -106,7 +111,7 @@ class TestReportingDateRanges(unittest.TestCase):
 		self.assertIn("await setExactPeriod(value?.from_date || \"\", value?.to_date || \"\")", content)
 		self.assertIn("queryReport._no_refresh = true", content)
 		self.assertIn("queryReport.refresh()", content)
-		self.assertNotIn("window.retailedge.getPresetDates", content)
+		self.assertIn("window.retailedge.getPresetDates = undefined", content)
 		self.assertNotIn('case "This Month"', content)
 		self.assertNotIn('case "Last Quarter"', content)
 
