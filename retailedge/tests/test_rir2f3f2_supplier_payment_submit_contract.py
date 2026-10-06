@@ -105,10 +105,12 @@ def test_business_hub_supplier_payment_reviews_and_submits_without_forced_native
 	assert 'this.intent === "pay-supplier"' in page
 	assert "expected_payment_entry_modified" in page
 	assert "Submit Payment" in page
-	assert "Open in ERPNext" in page
+	assert "Open Advanced Payment" in page
 	assert "Quick Pay Supplier supports one Purchase Invoice per payment" in page
 	assert "allowMultiReferenceSupplierPayment" in page
 	assert "Managed Supplier Settlement supports up to" in page
+	assert "Advanced ERPNext" not in page
+	assert "Frappe Workflow" not in page
 	supplier_creation = page[page.index("async saveDraft()"):page.index("formatAmount(value)")]
 	assert 'this.$emit("saved", result);' in supplier_creation
 	assert "if (this.isSupplierPayment)" in supplier_creation
@@ -123,7 +125,8 @@ def test_supplier_submit_stays_standard_and_native_open_is_explicit():
 	assert "async submitSupplierPayment()" in page
 	assert "SUPPLIER_SUBMIT_METHOD" in page
 	assert "expected_payment_entry_modified: this.supplierReview.payment_entry_modified" in page
-	assert "frappe.confirm(" in page
+	assert "confirmAction(" in page
+	assert "confirmAboveEdgeModal" in page
 	submit = page[page.index("async submitSupplierPayment()"):page.index("async saveDraft()")]
 	assert 'this.$emit("saved", result);' in submit
 	assert 'this.$emit("close");' in submit
