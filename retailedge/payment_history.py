@@ -52,7 +52,7 @@ def _resolve_branch_condition(company: str, branch: str = "") -> tuple[str | Non
 		if not branch_field:
 			frappe.throw(
 				_(
-					"Payment Entry branch attribution is unavailable. Run the site migration before using Branch-scoped payment history."
+					"Branch-scoped Payment History is not ready on this site. Contact your administrator."
 				)
 			)
 		return branch_field, branch, scope
@@ -227,7 +227,7 @@ def list_payment_history(
 			"source": scope.get("source") or "",
 			"allowed_branches": list(scope.get("allowed_branches") or []),
 		},
-		"source_of_truth": "ERPNext Payment Entry",
+		"source_of_truth": "Payment Entry",
 	}
 
 
@@ -286,13 +286,13 @@ def _standard_draft_review(doc: Any, payment_branch: str) -> dict[str, Any]:
 			"kind": "advanced",
 			"advanced_only": True,
 			"review": None,
-			"blockers": [_("This draft requires Advanced ERPNext review.")],
+			"blockers": [_("This draft requires advanced review before it can be submitted.")],
 		}
 	return {
 		"kind": "advanced",
 		"advanced_only": True,
 		"review": None,
-		"blockers": [_("This Payment Entry shape is outside standard RetailEdge submission.")],
+		"blockers": [_("This Payment Entry requires advanced review before submission.")],
 	}
 
 
@@ -347,5 +347,5 @@ def get_payment_history_detail(
 		"modified": str(getattr(doc, "modified", "") or ""),
 		"references": references,
 		"standard_review": classification,
-		"source_of_truth": "ERPNext Payment Entry",
+		"source_of_truth": "Payment Entry",
 	}
