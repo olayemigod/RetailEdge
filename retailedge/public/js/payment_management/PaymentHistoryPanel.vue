@@ -4,7 +4,7 @@
 			<div>
 				<div class="payment-history-eyebrow">Money & Payments</div>
 				<h3>Payment History</h3>
-				<p>Find and revisit permission-visible ERPNext Payment Entries.</p>
+				<p>Find and revisit Payment Entries available to your current access.</p>
 			</div>
 			<button class="edge-secondary-button" type="button" :disabled="loading || !filters.company" @click="loadPaymentHistory(1)">
 				{{ loading ? "Refreshing…" : "Refresh" }}
@@ -125,7 +125,7 @@
 					<div v-if="standardReview.blockers?.length" class="review-warning">
 						<strong>{{ standardReview.advanced_only ? "Advanced review required" : "Submission checks" }}</strong>
 						<ul><li v-for="blocker in standardReview.blockers" :key="blocker">{{ blocker }}</li></ul>
-						<p v-if="standardReview.advanced_only && !canUseNativeDesk">An accounting manager with Advanced ERPNext access must handle this payment shape.</p>
+						<p v-if="standardReview.advanced_only && !canUseNativeDesk">An accounting manager with advanced access must handle this payment.</p>
 					</div>
 					<div v-else-if="Number(paymentDetail.docstatus) !== 0" class="read-only-note">Submitted and cancelled payments are inspect-only here. Posted accounting documents are not mutated.</div>
 				</template>
@@ -134,7 +134,7 @@
 			<template #footer>
 				<div class="payment-review-footer">
 					<div class="detail-actions">
-						<button v-if="canUseNativeDesk && paymentDetail.payment_entry" class="edge-secondary-button" type="button" :disabled="submitting || detailLoading" @click="openPaymentInERPNext(paymentDetail.payment_entry)">Advanced: ERPNext</button>
+						<button v-if="canUseNativeDesk && paymentDetail.payment_entry" class="edge-secondary-button" type="button" :disabled="submitting || detailLoading" @click="openPaymentInERPNext(paymentDetail.payment_entry)">Open Advanced Payment</button>
 					</div>
 					<div class="detail-actions">
 						<button v-if="canSubmitStandard" class="edge-primary-button" type="button" :disabled="submitting || detailLoading" @click="submitStandardDraft">{{ submitting ? "Submitting…" : "Submit Standard Payment" }}</button>
@@ -184,8 +184,8 @@ export default {
 		},
 		paymentDetailSubtitle() {
 			return Number(this.paymentDetail.docstatus) === 0
-				? "Review the ERPNext Payment Entry and submit it only when standard accounting controls permit."
-				: "Review the saved ERPNext Payment Entry. Submitted and cancelled accounting records remain read-only.";
+				? "Review this Payment Entry and submit it only when standard accounting controls permit."
+				: "Review the saved Payment Entry. Submitted and cancelled accounting records remain read-only.";
 		},
 		standardReview() { return this.paymentDetail.standard_review || {}; },
 		canSubmitStandard() {
@@ -287,7 +287,7 @@ export default {
 			const review = this.standardReview.review || {};
 			if (!this.canSubmitStandard || this.submitting) return;
 			const paymentEntry = this.paymentDetail.payment_entry;
-			confirmAboveEdgeModal(__(`Submit Payment Entry ${paymentEntry}? ERPNext will post the authoritative accounting entry.`), async () => {
+			confirmAboveEdgeModal(__(`Submit Payment Entry ${paymentEntry}? This will post the accounting entry.`), async () => {
 				this.submitting = true; this.detailError = "";
 				try {
 					const isCustomer = this.standardReview.kind === "standard_customer";
@@ -300,7 +300,7 @@ export default {
 						...(isCustomer ? { customer: this.paymentDetail.party } : { supplier: this.paymentDetail.party }),
 					};
 					await callMethod(method, args);
-					frappe.show_alert({ message: __("Payment submitted through ERPNext."), indicator: "green" });
+					frappe.show_alert({ message: __("Payment submitted."), indicator: "green" });
 					await this.loadPaymentHistory(Number(this.pagination.page || 1));
 					await this.reviewHistoryPayment(paymentEntry);
 				} catch (error) {
