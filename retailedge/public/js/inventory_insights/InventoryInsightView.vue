@@ -77,14 +77,13 @@
 						<span class="edge-field-label">Aged Stock Threshold (Days)</span>
 						<input v-model.number="filters.aged_threshold_days" class="edge-input" type="number" min="1" max="3650" step="1" />
 					</label>
-					<label v-if="isProfitabilityView" class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" />
-					</label>
-					<label v-if="isProfitabilityView" class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" class="edge-input" type="date" />
-					</label>
+					<EdgeSmartDateRange
+						v-if="isProfitabilityView"
+						v-model="smartDate"
+						label="Period"
+						@update:modelValue="onSmartDateModelChange"
+						@resolved="onSmartDateResolved"
+					/>
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
@@ -119,7 +118,7 @@
 <script>
 import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
 const VIEW_CONFIG = {
 	ageing: {
 		title: "Inventory Ageing",
@@ -171,6 +170,16 @@ function monthStartValue() {
 	return frappe.datetime?.month_start?.() || `${todayValue().slice(0, 7)}-01`;
 }
 
+function smartDateValue(fromDate, toDate) {
+	if (!fromDate || !toDate) return {};
+	return {
+		expression: "custom",
+		from_date: fromDate,
+		to_date: toDate,
+		label: fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`,
+	};
+}
+
 export default {
 	name: "InventoryInsightView",
 	props: {
@@ -183,6 +192,8 @@ export default {
 		SimpleStockTransferDialog,
 	},
 	data() {
+		const initialFromDate = monthStartValue();
+		const initialToDate = todayValue();
 		return {
 			edgeUIValid: true,
 			missingComponents: [],
@@ -207,6 +218,7 @@ export default {
 			sort: null,
 			exportCapabilities: { can_export: false, can_print: false },
 			exportAction: "export",
+			smartDate: smartDateValue(initialFromDate, initialToDate),
 			filters: {
 				company: "",
 				branch: "",
@@ -215,8 +227,8 @@ export default {
 				item_code: "",
 				age_ranges: "30,60,90,180",
 				aged_threshold_days: 90,
-				from_date: monthStartValue(),
-				to_date: todayValue(),
+				from_date: initialFromDate,
+				to_date: initialToDate,
 				page_size: 50,
 			},
 			currentPage: 1,
@@ -312,6 +324,26 @@ export default {
 	mounted() { this.fetchMetadata(); },
 	methods: {
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
+		syncSmartDateFromFilters() {
+			this.smartDate = smartDateValue(this.filters.from_date, this.filters.to_date);
+		},
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.to_date = "";
+			this.resetResultState();
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
+				return;
+			}
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.resetResultState();
+		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -331,6 +363,7 @@ export default {
 					from_date: this.filters.from_date,
 					to_date: this.filters.to_date,
 				};
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";

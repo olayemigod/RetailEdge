@@ -61,48 +61,15 @@
 			<!-- EdgeFilterBar in default slot body flow -->
 			<EdgeFilterBar title="Filter Records">
 				<div class="edge-filter-grid">
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Date Range Preset</label>
-						<select
-							v-model="filters.date_range_preset"
-							class="edge-select filter-select"
-							:disabled="metadataLoading"
-							@change="onPresetChange"
-						>
-							<option value="This Month">This Month</option>
-							<option value="Today">Today</option>
-							<option value="Yesterday">Yesterday</option>
-							<option value="This Week">This Week</option>
-							<option value="This Quarter">This Quarter</option>
-							<option value="This Year">This Year</option>
-							<option value="Last Week">Last Week</option>
-							<option value="Last Month">Last Month</option>
-							<option value="Last Quarter">Last Quarter</option>
-							<option value="Last Year">Last Year</option>
-							<option value="Custom Period">Custom Period</option>
-							<option value="Full History">Full History</option>
-						</select>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">From Date</label>
-						<input
-							type="date"
-							v-model="filters.from_date"
-							class="edge-input filter-input"
-							:disabled="metadataLoading"
-							@change="onDateChange"
-						/>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">To Date</label>
-						<input
-							type="date"
-							v-model="filters.to_date"
-							class="edge-input filter-input"
-							:disabled="metadataLoading"
-							@change="onDateChange"
-						/>
-					</div>
+					<EdgeSmartDateRange
+						class="salesperson-period-filter"
+						v-model="smartDate"
+						label="Period"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@update:modelValue="onSmartDateModelChange"
+						@resolved="onSmartDateResolved"
+					/>
 					<div class="edge-field filter-group">
 						<label class="edge-field-label filter-label">Branch</label>
 						<select
@@ -538,6 +505,7 @@ const requiredEdgeUIComponents = [
 	"EdgeLoadingState",
 	"EdgeEmptyState",
 	"EdgeErrorState",
+	"EdgeSmartDateRange",
 ];
 
 const resolveEdgeUIComponents = () => {
@@ -552,6 +520,23 @@ const resolveEdgeUIComponents = () => {
 		])
 	);
 };
+
+function todayValue() {
+	if (typeof frappe !== "undefined" && frappe.datetime?.get_today) {
+		return frappe.datetime.get_today();
+	}
+	return new Date().toISOString().slice(0, 10);
+}
+
+function smartDateValue(fromDate, toDate) {
+	if (!fromDate || !toDate) return {};
+	return {
+		expression: "custom",
+		from_date: fromDate,
+		to_date: toDate,
+		label: fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`,
+	};
+}
 
 export default {
 	name: "SalespersonPerformanceDashboard",
@@ -572,8 +557,10 @@ export default {
 			branchName: "",
 			userName: "",
 			searchTimeout: null,
+			smartDate: {},
+			smartDateReference: todayValue(),
 			filters: {
-				date_range_preset: "This Month",
+				date_range_preset: "Custom Period",
 				from_date: "",
 				to_date: "",
 				branch: "",
@@ -609,42 +596,27 @@ export default {
 		this.fetchMetadata();
 	},
 	methods: {
-		async onPresetChange() {
-			const val = this.filters.date_range_preset;
-			if (val && val !== "Custom Period") {
-				const dates =
-					window.retailedge && window.retailedge.getPresetDates
-						? window.retailedge.getPresetDates(val)
-						: null;
-				if (dates) {
-					this.__applying_preset = true;
-					this.filters.from_date = dates.from_date;
-					this.filters.to_date = dates.to_date;
-					await this.$nextTick();
-					this.__applying_preset = false;
-				}
-			}
-			this.fetchData();
+		syncSmartDateFromFilters() {
+			this.smartDate = smartDateValue(this.filters.from_date, this.filters.to_date);
 		},
-		onDateChange() {
-			if (this.__applying_preset) {
-				this.fetchData();
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.to_date = "";
+			this.filters.date_range_preset = "Custom Period";
+			this.currentPage = 1;
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
 				return;
 			}
-			const val = this.filters.date_range_preset;
-			if (val && val !== "Custom Period") {
-				const dates =
-					window.retailedge && window.retailedge.getPresetDates
-						? window.retailedge.getPresetDates(val)
-						: null;
-				if (dates) {
-					const currentFrom = this.filters.from_date || "";
-					const currentTo = this.filters.to_date || "";
-					if (currentFrom !== dates.from_date || currentTo !== dates.to_date) {
-						this.filters.date_range_preset = "Custom Period";
-					}
-				}
-			}
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.date_range_preset = "Custom Period";
+			this.currentPage = 1;
 			this.fetchData();
 		},
 		formatDate(dateStr) {
@@ -687,6 +659,9 @@ export default {
 						if (r.message.default_filters) {
 							this.filters = { ...this.filters, ...r.message.default_filters };
 						}
+						this.filters.date_range_preset = "Custom Period";
+						this.smartDateReference = todayValue();
+						this.syncSmartDateFromFilters();
 					}
 					this.fetchData();
 				},
@@ -707,6 +682,7 @@ export default {
 			this.error = "";
 
 			this.filters.offset = (this.currentPage - 1) * this.filters.limit;
+			this.filters.date_range_preset = "Custom Period";
 
 			frappe.call({
 				method: "retailedge.salesperson_performance.get_salesperson_performance",
@@ -759,6 +735,11 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: var(--edge-space-xs);
+}
+
+.salesperson-period-filter {
+	min-width: 0;
+	width: 100%;
 }
 
 .filter-label {

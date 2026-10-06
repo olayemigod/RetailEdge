@@ -54,8 +54,12 @@
 						<EdgeLinkField v-model="filters.branch" label="Branch" :searcher="branchSearch" placeholder="All permitted branches" @select="selectFilterBranch" @clear="clearFilterBranch" />
 						<EdgeLinkField v-model="filters.expense_category" label="Expense Category" :searcher="categorySearchForFilter" placeholder="All categories" @select="selectFilterCategory" @clear="clearFilterCategory" />
 						<EdgeDropdown v-model="filters.expense_status" :options="statuses" label="Status" placeholder="All statuses" />
-						<label class="field-wrap"><span>From Date</span><input v-model="filters.from_date" class="edge-input" type="date" /></label>
-						<label class="field-wrap"><span>To Date</span><input v-model="filters.to_date" class="edge-input" type="date" /></label>
+						<EdgeSmartDateRange
+							v-model="smartDate"
+							label="Period"
+							@update:modelValue="onSmartDateModelChange"
+							@resolved="onSmartDateResolved"
+						/>
 						<label class="field-wrap filter-search"><span>Search</span><input v-model="filters.search_text" class="edge-input" placeholder="Reference, payee, supplier..." @keyup.enter="applyFilters" /></label>
 						<div class="filter-action"><button type="button" class="edge-button edge-button--primary" :disabled="listLoading" @click="applyFilters">{{ listLoading ? "Loading..." : "Apply" }}</button></div>
 					</div>
@@ -200,7 +204,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeDropdown", "EdgeSmartDateRange"];
 const CONTEXT_METHOD = "retailedge.business_expense.get_business_expense_context";
 const LIST_METHOD = "retailedge.business_expense.get_business_expenses";
 const SEARCH_METHOD = "retailedge.business_expense.search_business_expense_options";
@@ -229,6 +233,15 @@ function errorMessage(error, fallback) { return window.retailedge?.userErrorMess
 function blankValues() {
 	return { company: "", branch: "", expense_date: "", expense_category: "", amount: "", description: "", payee_type: "Other", supplier: "", payee_name: "", reference_no: "", payment_account: "", cost_center: "", project: "" };
 }
+function smartDateValue(fromDate, toDate) {
+	if (!fromDate || !toDate) return {};
+	return {
+		expression: "custom",
+		from_date: fromDate,
+		to_date: toDate,
+		label: fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`,
+	};
+}
 
 export default {
 	name: "BusinessExpenses",
@@ -242,6 +255,7 @@ export default {
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			canCreate: false, canReview: false, canManageSettings: false, featureMessage: "", settings: {}, statuses: [], defaultValues: {},
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", search_text: "", page_size: 25 },
+			smartDate: {},
 			rows: [], summary: {}, pagination: {}, scope: {}, listSort: null, screen: "list", values: blankValues(),
 			categoryDefaults: {}, current: {}, editingName: "", actionRemarks: "",
 		};
@@ -257,6 +271,24 @@ export default {
 	},
 	mounted() { this.loadMetadata(); },
 	methods: {
+		syncSmartDateFromFilters() { this.smartDate = smartDateValue(this.filters.from_date, this.filters.to_date); },
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.to_date = "";
+			this.pagination.page = 1;
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
+				return;
+			}
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.pagination.page = 1;
+		},
 		async loadMetadata() {
 			this.metadataLoading = true; this.metadataError = "";
 			try {
@@ -264,7 +296,7 @@ export default {
 				const [context, navigation] = await Promise.all([callMethod(CONTEXT_METHOD), navigationPromise]);
 				this.tenantName = context.default_values?.company || ""; this.branchName = context.default_values?.branch || ""; this.userName = navigation.context?.user_name || frappe.session?.user || "";
 				this.defaultValues = { ...blankValues(), ...(context.default_values || {}) }; this.values = { ...this.defaultValues };
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.settings = context.settings || {}; this.statuses = context.statuses || [];
+				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.syncSmartDateFromFilters(); this.settings = context.settings || {}; this.statuses = context.statuses || [];
 				this.canCreate = Boolean(context.capabilities?.can_create); this.canReview = Boolean(context.capabilities?.can_review); this.canManageSettings = Boolean(context.capabilities?.can_manage_settings);
 				this.featureMessage = context.feature?.message || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);

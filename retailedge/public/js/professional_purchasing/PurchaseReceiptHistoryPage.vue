@@ -27,8 +27,15 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
 					<label class="history-input"><span>Search</span><input v-model="filters.search" type="search" placeholder="Receipt or supplier" @keyup.enter="applyFilters" /></label>
-					<label class="history-input"><span>From Date</span><input v-model="filters.from_date" type="date" /></label>
-					<label class="history-input"><span>To Date</span><input v-model="filters.to_date" type="date" /></label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="history-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 				</div>
 				<div class="history-control-actions">
 					<button type="button" class="edge-button edge-button--primary" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Refreshing…" : "Apply Filters" }}</button>
@@ -91,7 +98,7 @@ const HISTORY_METHOD = "retailedge.professional_purchase_receipt.get_professiona
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const PREPARE_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_receipt";
 const PAGE_SIZE = 40;
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeSmartDateRange"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, type = "GET") {
@@ -115,6 +122,8 @@ export default {
 			loaded: false,
 			error: "",
 			preparingInvoice: "",
+			smartDate: {},
+			smartDateReference: window.frappe?.datetime?.get_today?.() || "",
 			filters: { company: "", branch: "", supplier: "", search: "", from_date: "", to_date: "" },
 			history: { receipts: [], has_more: false, next_start: 0 },
 		};
@@ -151,6 +160,12 @@ export default {
 				// History API remains authoritative and will return a permission-aware error.
 			}
 			await this.applyFilters();
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 		},
 		async fetchHistory(start = 0) {
 			return callMethod(HISTORY_METHOD, {
@@ -205,6 +220,7 @@ export default {
 		clearSupplier() { this.filters.supplier = ""; this.applyFilters(); },
 		clearOptionalFilters() {
 			this.filters = { ...this.filters, branch: "", supplier: "", search: "", from_date: "", to_date: "" };
+			this.smartDate = {};
 			this.applyFilters();
 		},
 		async prepareInvoice(row) {
@@ -250,5 +266,5 @@ export default {
 </script>
 
 <style scoped>
-.purchase-receipt-history-page{min-height:100%;display:grid;gap:1rem}.receipt-history-fallback,.edge-panel{border:1px solid var(--edge-border,#d9d9d9);border-radius:var(--edge-radius-lg,10px);background:var(--edge-surface,#fff)}.receipt-history-fallback{margin:20px;padding:24px;display:flex;flex-direction:column;gap:8px}.history-controls,.receipt-history{padding:18px}.history-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:.75rem}.history-input{display:grid;gap:.35rem;color:var(--edge-text-muted,#667085);font-size:.8rem;font-weight:600}.history-input input{min-height:40px;border:1px solid var(--edge-border,#d9d9d9);border-radius:8px;background:var(--edge-surface,#fff);color:inherit;padding:0 .7rem}.history-control-actions,.row-actions,.history-scope,.history-pagination{display:flex;gap:.55rem;flex-wrap:wrap;align-items:center}.history-control-actions{margin-top:.85rem}.history-scope{margin-bottom:.8rem;color:var(--edge-text-muted,#667085);font-size:.82rem}.history-inline-error{margin-bottom:.8rem;padding:.65rem .75rem;border:1px solid var(--red-400,#f04438);border-radius:.5rem;color:var(--red-700,#b42318)}.table-responsive{overflow:auto}.receipt-history-table{min-width:960px;width:100%}.receipt-history-table td{vertical-align:top}.num{text-align:right}.history-pagination{justify-content:space-between;margin-top:1rem}.edge-button,.edge-small-button{border:1px solid var(--edge-border,#d9d9d9);border-radius:8px;background:var(--edge-surface,#fff);color:inherit;cursor:pointer;font-weight:600}.edge-button{min-height:38px;padding:0 12px}.edge-small-button{min-height:30px;padding:0 9px;white-space:nowrap}.edge-button--primary,.edge-small-button--primary{border-color:var(--edge-primary,#0f766e);background:var(--edge-primary,#0f766e);color:#fff}button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:900px){.history-filter-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}}@media(max-width:560px){.history-filter-grid{grid-template-columns:1fr}.history-control-actions{flex-direction:column;align-items:stretch}.history-control-actions .edge-button{width:100%}}
+.purchase-receipt-history-page{min-height:100%;display:grid;gap:1rem}.receipt-history-fallback,.edge-panel{border:1px solid var(--edge-border,#d9d9d9);border-radius:var(--edge-radius-lg,10px);background:var(--edge-surface,#fff)}.receipt-history-fallback{margin:20px;padding:24px;display:flex;flex-direction:column;gap:8px}.history-controls,.receipt-history{padding:18px}.history-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:.75rem}.history-period-filter{min-width:0;width:100%}.history-input{display:grid;gap:.35rem;color:var(--edge-text-muted,#667085);font-size:.8rem;font-weight:600}.history-input input{min-height:40px;border:1px solid var(--edge-border,#d9d9d9);border-radius:8px;background:var(--edge-surface,#fff);color:inherit;padding:0 .7rem}.history-control-actions,.row-actions,.history-scope,.history-pagination{display:flex;gap:.55rem;flex-wrap:wrap;align-items:center}.history-control-actions{margin-top:.85rem}.history-scope{margin-bottom:.8rem;color:var(--edge-text-muted,#667085);font-size:.82rem}.history-inline-error{margin-bottom:.8rem;padding:.65rem .75rem;border:1px solid var(--red-400,#f04438);border-radius:.5rem;color:var(--red-700,#b42318)}.table-responsive{overflow:auto}.receipt-history-table{min-width:960px;width:100%}.receipt-history-table td{vertical-align:top}.num{text-align:right}.history-pagination{justify-content:space-between;margin-top:1rem}.edge-button,.edge-small-button{border:1px solid var(--edge-border,#d9d9d9);border-radius:8px;background:var(--edge-surface,#fff);color:inherit;cursor:pointer;font-weight:600}.edge-button{min-height:38px;padding:0 12px}.edge-small-button{min-height:30px;padding:0 9px;white-space:nowrap}.edge-button--primary,.edge-small-button--primary{border-color:var(--edge-primary,#0f766e);background:var(--edge-primary,#0f766e);color:#fff}button:disabled{opacity:.55;cursor:not-allowed}@media(max-width:900px){.history-filter-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}}@media(max-width:560px){.history-filter-grid{grid-template-columns:1fr}.history-control-actions{flex-direction:column;align-items:stretch}.history-control-actions .edge-button{width:100%}}
 </style>

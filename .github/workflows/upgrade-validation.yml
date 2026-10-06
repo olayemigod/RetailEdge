@@ -91,7 +91,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 0c00dd8b4418a37b6c48c4def7721ba7a58e1adc
+          ref: 7ec34dcab401b71b0f94cabeca33aa0f5137e9de
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -101,7 +101,7 @@ jobs:
           bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
           bench get-app --branch develop --skip-assets https://github.com/frappe/payments.git
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "0c00dd8b4418a37b6c48c4def7721ba7a58e1adc"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "7ec34dcab401b71b0f94cabeca33aa0f5137e9de"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
 
       - name: Install frozen RetailEdge release predecessor

@@ -47,8 +47,15 @@
 			</div>
 			<EdgeDropdown v-model="filters.payment_type" :options="['Receive', 'Pay', 'Internal Transfer']" label="Payment Type" placeholder="All payment types" />
 			<EdgeDropdown v-model="filters.docstatus" :options="[{ value: 'all', label: 'All states' }, { value: 'draft', label: 'Draft' }, { value: 'submitted', label: 'Submitted' }, { value: 'cancelled', label: 'Cancelled' }]" label="Document State" />
-			<label class="edge-field"><span>From Date</span><input v-model="filters.from_date" class="edge-input" type="date" /></label>
-			<label class="edge-field"><span>To Date</span><input v-model="filters.to_date" class="edge-input" type="date" /></label>
+			<EdgeSmartDateRange
+				v-model="smartDate"
+				class="history-period-filter"
+				label="Period"
+				placeholder="e.g. last 30 days, May to June 2026, YTD"
+				:referenceDate="smartDateReference || null"
+				dateOrder="DMY"
+				@resolved="onSmartDateResolved"
+			/>
 			<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="loadPaymentHistory(1)">Apply Filters</button></div>
 		</div>
 
@@ -149,7 +156,7 @@
 <script>
 import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
 
-const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal"];
+const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeModal", "EdgeSmartDateRange"];
 const HISTORY_METHOD = "retailedge.payment_history.list_payment_history";
 const DETAIL_METHOD = "retailedge.payment_history.get_payment_history_detail";
 const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
@@ -174,6 +181,7 @@ export default {
 			loading: false, error: "", detailLoading: false, detailError: "", detailOpen: false, submitting: false,
 			paymentHistory: [], paymentDetail: {}, pagination: { page: 1, page_size: 25, has_previous: false, has_next: false },
 			canUseNativeDesk: false, companyLabel: "", branchLabel: "", partyLabel: "",
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", party_type: "", party: "", payment_type: "", docstatus: "all", from_date: "", to_date: "", page_size: 25 },
 		};
 	},
@@ -213,6 +221,8 @@ export default {
 				const requestedBranch = String(handoff.branch || routeOptions.branch || "").trim();
 				const requestedPartyType = String(handoff.party_type || routeOptions.party_type || "").trim();
 				const requestedParty = String(handoff.party || routeOptions.party || "").trim();
+				const requestedFromDate = String(handoff.from_date || routeOptions.from_date || "").trim();
+				const requestedToDate = String(handoff.to_date || routeOptions.to_date || "").trim();
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
 					callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"),
@@ -232,12 +242,32 @@ export default {
 				this.filters.branch = validBranch;
 				this.filters.party_type = ["Customer", "Supplier"].includes(requestedPartyType) ? requestedPartyType : "";
 				this.filters.party = this.filters.party_type ? requestedParty : "";
+				this.filters.from_date = requestedFromDate || context.default_filters?.from_date || "";
+				this.filters.to_date = requestedToDate || context.default_filters?.to_date || "";
+				this.smartDateReference = this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.companyLabel = this.filters.company;
 				this.branchLabel = this.filters.branch;
 				this.partyLabel = this.filters.party;
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (this.filters.company) await this.loadPaymentHistory(1);
 			} catch (error) { this.error = errorMessage(error, "Payment History controls failed to load."); }
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.clearPaymentDetail();
 		},
 		async searchReceivables(kind, txt) {
 			const result = await callMethod("retailedge.customer_receivables.search_customer_receivables_options", { kind, txt: txt || "", company: this.filters.company });
@@ -326,6 +356,7 @@ export default {
 .payment-history-head p { margin:0; color:var(--edge-text-muted,#667085); }
 .payment-history-eyebrow { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--edge-primary,#0f766e); }
 .history-filter-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }
+.history-period-filter { min-width:0; width:100%; }
 .edge-field { display:flex; flex-direction:column; gap:6px; color:var(--edge-text,#101828); font-size:.82rem; font-weight:600; }
 .edge-input,.edge-primary-button,.edge-secondary-button,.edge-small-button { min-height:38px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); padding:0 10px; }
 .edge-input--readonly { display:flex; align-items:center; color:var(--edge-text-muted,#667085); background:var(--edge-surface-subtle,#f8fafc); }
