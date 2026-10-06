@@ -19,6 +19,7 @@
 			:payload="payload"
 			:dateModel="smartDate"
 			dateOrder="DMY"
+			:showDateControl="false"
 			:loading="loading || metadataLoading"
 			:error="error"
 			:exportEnabled="hasData && capabilities.can_export"
@@ -36,6 +37,14 @@
 			@print="handlePrint"
 		>
 			<template #contextFilters>
+				<EdgeSmartDateRange
+					v-model="smartDate"
+					label="Period"
+					placeholder="e.g. May to June 2026, last 2 months, YTD"
+					dateOrder="DMY"
+					:disabled="loading || metadataLoading"
+					@resolved="onSmartDateResolved"
+				/>
 				<EdgeDropdown
 					v-model="filters.composition_dimension"
 					:options="compositionOptions"
@@ -66,7 +75,7 @@ import {
 } from "../retailedge_dashboard_actions";
 
 const DASHBOARD_KEY = "owner-dashboard";
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeFinancialDashboard", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeFinancialDashboard", "EdgeDropdown", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || window.EdgeUI?.components || {};
