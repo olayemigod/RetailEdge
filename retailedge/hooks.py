@@ -156,8 +156,9 @@ jinja = {
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_app_uninstall"
-# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+# To set up dependencies/integrations with other apps
+# before_app_uninstall = "retailedge.uninstall.before_uninstall"
+# after_app_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
@@ -263,7 +264,7 @@ permission_query_conditions = {
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
-	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_price_list_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
@@ -276,7 +277,8 @@ has_permission = {
 # ------------------------------
 override_whitelisted_methods = {
 	"pos_next.api.shifts.get_closing_shift_data": "retailedge.pos_cashier_expense.get_posnext_closing_shift_data_with_cashier_expenses",
-	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.master_experience.get_retailedge_business_hub_context",
+	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.navigation_consolidation.get_retailedge_business_hub_context",
+	"retailedge.master_experience.get_retailedge_business_hub_context": "retailedge.navigation_consolidation.get_retailedge_business_hub_context",
 	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
 	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",
 	"retailedge.guided_payment.search_simple_payment_options": "retailedge.guided_link_search.search_simple_payment_options",
