@@ -81,8 +81,8 @@ doctype_js = {
 	"Delivery Note": "public/js/sales_documents.js",
 	"Stock Reconciliation": "public/js/inventory_documents.js",
 	"Stock Ledger Entry": "public/js/inventory_documents.js",
-	"Bin": "public/js/cost_visibility_doctype.js",
-	"Serial No": "public/js/cost_visibility_doctype.js",
+	"Bin": "public/js/inventory_documents.js",
+	"Serial No": "public/js/inventory_documents.js",
 	"Item Price": "public/js/cost_visibility_doctype.js",
 	"Supplier Quotation": "public/js/cost_visibility_doctype.js",
 	"Stock Entry": "public/js/stock_entry.js",
@@ -166,7 +166,7 @@ jinja = {
 # Integration Cleanup
 # -------------------
 # before_app_uninstall = "retailedge.uninstall.before_uninstall"
-# after_app_uninstall = "retailedge.uninstall.after_install"
+# after_app_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
