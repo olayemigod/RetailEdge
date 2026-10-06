@@ -20,7 +20,7 @@
 				<div>
 					<p class="eyebrow">Owner Planning</p>
 					<h2>Forecasting & Planning</h2>
-					<p class="muted">ERPNext actuals remain authoritative. Forecast and Plan are analytical layers and never create accounting or stock transactions.</p>
+					<p class="muted">Posted accounting and stock records remain the source of truth. Forecast and Plan are analytical only and do not create transactions.</p>
 				</div>
 				<div class="header-actions">
 					<button
@@ -28,8 +28,8 @@
 						type="button"
 						@click="newScenario"
 						:disabled="!filters.company || !canCreateScenario || !canUseNativeDesk"
-						:title="!canUseNativeDesk ? 'Advanced workflow: Native Desk access is required to save Planning Scenarios' : (canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios')"
-					>{{ canUseNativeDesk ? "Save as Scenario" : "Advanced: Save Scenario" }}</button>
+						:title="!canUseNativeDesk ? 'You do not have access to save Planning Scenarios' : (canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios')"
+					>Save as Scenario</button>
 					<EdgeExportMenu v-if="rows.length" :dataset="exportDataset" :loadDataset="loadExportDataset" />
 				</div>
 			</header>
@@ -65,13 +65,13 @@
 					<div class="panel-heading"><div><p class="eyebrow">Actual / Forecast / Plan</p><h3>Monthly planning view</h3></div><span class="muted">{{ scopeLabel }}</span></div>
 					<div v-if="!rows.length" class="empty">No planning rows are available for this scope.</div>
 					<div v-else class="table-wrap">
-						<table><thead><tr><th>Month</th><th>Domain</th><th>Type</th><th class="num">Actual</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Plan vs Forecast</th></tr></thead>
+						<table><thead><tr><th>Month</th><th>Area</th><th>Type</th><th class="num">Actual</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Plan vs Forecast</th></tr></thead>
 						<tbody><tr v-for="row in rows" :key="`${row.period_start}-${row.domain}-${row.row_type}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td>{{ row.row_type }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.variance) }}</td></tr></tbody></table>
 					</div>
 				</section>
 
 				<section v-if="domainWarnings.length" class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Availability</p><h3>Domains not evaluated</h3></div></div>
+					<div class="panel-heading"><div><p class="eyebrow">Availability</p><h3>Planning information unavailable</h3></div></div>
 					<div class="warning-grid"><div v-for="item in domainWarnings" :key="item.key" class="warning-card"><strong>{{ item.title }}</strong><span>{{ item.reason }}</span></div></div>
 				</section>
 
@@ -83,7 +83,7 @@
 				</section>
 
 				<section class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Budget Governance</p><h3>ERPNext Budget reference</h3></div><span class="muted">R12 does not create a second budget ledger.</span></div>
+					<div class="panel-heading"><div><p class="eyebrow">Budget Governance</p><h3>Budget reference</h3></div><span class="muted">Planning uses your existing submitted budgets; it does not create a second budget ledger.</span></div>
 					<div v-if="budgetReason" class="empty">{{ budgetReason }}</div>
 					<div v-else class="metric-grid compact"><div v-for="card in budgetSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div>
 				</section>
@@ -96,11 +96,11 @@
 				</section>
 
 				<section v-if="scenarioName" class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the Planning Scenario record' : 'Advanced workflow: Native Desk access is required to open Planning Scenario records'" @click="openScenario">{{ canUseNativeDesk ? "Open Scenario" : "Advanced: Open Scenario" }}</button></div>
+					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the Planning Scenario record' : 'You do not have access to open Planning Scenario records'" @click="openScenario">Open Scenario</button></div>
 					<EdgeLoadingState v-if="performanceLoading" message="Loading scenario performance…" :skeleton="true" />
 					<EdgeErrorState v-else-if="performanceError" title="Scenario performance could not load" :message="performanceError" @retry="fetchPerformance" />
 					<EdgeEmptyState v-else-if="!performanceRows.length" title="No completed scenario periods" description="No forecast months in this scenario have completed actuals yet." />
-					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
+					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Area</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
 				</section>
 			</template>
 		</div>
@@ -116,7 +116,7 @@ function message(error, fallback) { return error?.message || error?.exc || error
 function openCreateSurface(doctype, defaults = {}) {
 	const openCreate = window.EdgeSuiteUI?.openCreateSurface;
 	if (typeof openCreate !== "function") {
-		frappe.show_alert?.({ message: __("EdgeSuite create navigation is unavailable."), indicator: "red" }, 7);
+		frappe.show_alert?.({ message: __("The create form is unavailable right now."), indicator: "red" }, 7);
 		return Promise.resolve(false);
 	}
 	return Promise.resolve(openCreate(doctype, { defaults })).catch((error) => {
@@ -138,7 +138,7 @@ export default {
 	}; },
 	computed: {
 		scopeLabel() { return this.scope.branch ? `Branch: ${this.scope.branch}` : (this.scope.company ? `Company: ${this.scope.company}` : "Permitted planning scope"); },
-		domainWarnings() { return Object.entries(this.domains || {}).filter(([, d]) => d && d.available === false).map(([key, d]) => ({ key, title: d.title || key.replace(/_/g, " "), reason: d.reason || "Not safely available for this scope." })); },
+		domainWarnings() { return Object.entries(this.domains || {}).filter(([, d]) => d && d.available === false).map(([key, d]) => ({ key, title: d.title || key.replace(/_/g, " "), reason: d.reason || "Not available for this selection." })); },
 		inventoryRows() { return this.domains?.inventory?.available ? (this.domains.inventory.rows || []) : []; },
 		inventoryReason() { const d = this.domains?.inventory; return d && d.available === false ? d.reason : ""; },
 		cashCommitments() { return this.domains?.cash?.available ? (this.domains.cash.commitment_rows || []) : []; },
@@ -147,7 +147,7 @@ export default {
 		budgetReason() { const d = this.domains?.budget; return d && d.available === false ? d.reason : ""; },
 		exportDataset() { return { title: "Forecasting & Planning", filename: `ProcessEdge Retail Forecasting Planning ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { return Object.entries({ company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", sales_adjustment_percent: "Sales Adjustment (%)", expense_adjustment_percent: "Expense Adjustment (%)", cash_adjustment_percent: "Cash Adjustment (%)", inventory_safety_percent: "Inventory Safety (%)" }).map(([key, label]) => ({ label, value: this.filters[key] })).filter((x) => x.value !== "" && x.value !== null && x.value !== undefined); },
-		exportMetadata() { return [{ label: "Accounting Truth", value: this.metadata.accounting_truth || "ERPNext GL / P&L" }, { label: "Budget Truth", value: this.metadata.budget_truth || "Submitted ERPNext Budget" }, { label: "Scenario Model", value: this.metadata.scenario_truth || "Assumptions only" }]; },
+		exportMetadata() { return [{ label: "Accounting Source", value: "Posted accounting records" }, { label: "Budget Source", value: "Submitted budgets" }, { label: "Scenario Model", value: "Planning assumptions only" }]; },
 	},
 	created() { const c = components(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !c[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.canCreateScenario = Boolean(frappe.model?.can_create?.("RetailEdge Planning Scenario")); this.bootstrap(); },
