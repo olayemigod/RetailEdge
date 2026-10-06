@@ -36,6 +36,10 @@ function printingUrl(route) {
 	return `${BASE_URL}/app/${route}`;
 }
 
+function edgeSuitePageRoute(route) {
+	return new RegExp(`/(?:app|desk)/(?:edgesuite-ui/)?${route}$`);
+}
+
 async function assertRetailEdgeShellPresence(page) {
 	const shell = page.locator('.edge-app-shell[data-edge-product="retailedge"]:visible');
 	await expect(shell).toHaveCount(1);
@@ -104,7 +108,7 @@ test("Document Output menu keeps Devices & Printing in the same virtual-printer 
 		const printingMenuItem = printingSection.locator(".edge-sidebar-item").filter({ hasText: "Devices & Printing" }).first();
 		await expect(printingMenuItem).toBeVisible();
 		await printingMenuItem.click();
-		await page.waitForURL(/\/(?:app|desk)\/edge-printing$/, { timeout: 25_000 });
+		await page.waitForURL(edgeSuitePageRoute("edge-printing"), { timeout: 25_000 });
 		await page.getByRole("heading", { name: "Devices & Printing", exact: true }).waitFor({
 			state: "visible",
 			timeout: 25_000,
@@ -152,7 +156,7 @@ test("printing administration pages mount the real RetailEdge EdgeSuite shell", 
 
 		await assertNoAssetOrRuntimeErrors(page, async () => {
 			await page.getByRole("button", { name: "Manage Print Profiles", exact: true }).click();
-			await page.waitForURL(/\/(?:app|desk)\/edge-print-profiles$/, { timeout: 25_000 });
+			await page.waitForURL(edgeSuitePageRoute("edge-print-profiles"), { timeout: 25_000 });
 			await page.getByRole("heading", { name: "Print Profiles", exact: true }).waitFor({
 				state: "visible",
 				timeout: 25_000,
