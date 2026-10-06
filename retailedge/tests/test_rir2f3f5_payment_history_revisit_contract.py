@@ -29,11 +29,11 @@ def test_history_backend_is_permission_aware_bounded_and_branch_safe():
 	assert "branch_assignment" in _read(ROOT / "operating_context.py")
 
 
-def test_history_is_read_only_and_keeps_erpnext_payment_entry_authoritative():
+def test_history_is_read_only_and_keeps_payment_entry_authoritative():
 	source = _read(BACKEND)
 	assert "list_payment_history" in source
 	assert "get_payment_history_detail" in source
-	assert '"source_of_truth": "ERPNext Payment Entry"' in source
+	assert '"source_of_truth": "Payment Entry"' in source
 	assert "doc.save(" not in source
 	assert "doc.submit(" not in source
 	assert "doc.cancel(" not in source
@@ -86,6 +86,7 @@ def test_payment_history_is_a_separate_edgesuite_page_linked_from_payment_manage
 	assert '"target": "payment-history"' in navigation
 	assert 'retailedgeConsumeBusinessHubRouteOptions?.("payment-history")' in panel
 
+
 def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_queries():
 	panel = _read(PANEL)
 	for token in (
@@ -105,7 +106,7 @@ def test_history_filters_cover_operational_revisit_dimensions_and_smart_party_qu
 
 def test_native_payment_open_is_explicit_and_double_gated():
 	panel = _read(PANEL)
-	assert 'v-if="canUseNativeDesk"' in panel
+	assert 'v-if="canUseNativeDesk && paymentDetail.payment_entry"' in panel
 	assert "if (!this.canUseNativeDesk || !name) return" in panel
 	assert 'frappe.set_route("Form", "Payment Entry", name)' in panel
 
@@ -119,7 +120,8 @@ def test_payment_review_opens_in_modal_instead_of_inline_below_history():
 	assert "payment-detail-panel" not in panel
 	assert "payment-review-footer" in panel
 	assert "Submit Standard Payment" in panel
-	assert "Advanced: ERPNext" in panel
+	assert "Open Advanced Payment" in panel
+	assert "Advanced: ERPNext" not in panel
 	assert "confirmAboveEdgeModal" in panel
 	assert "const paymentEntry = this.paymentDetail.payment_entry;" in panel
 
