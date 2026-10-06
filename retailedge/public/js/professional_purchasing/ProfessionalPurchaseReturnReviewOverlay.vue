@@ -22,21 +22,21 @@
 
 			<div v-if="review.blockers?.length" class="return-review__warning" role="alert">
 				<strong>Advanced handling required</strong>
-				<p>This workflow will not simplify or bypass ERPNext stock controls for this return.</p>
+				<p>This workflow will not simplify or bypass stock controls for this return.</p>
 				<ul>
 					<li v-for="(blocker, index) in review.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">
-						{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ blocker.label }}
+						{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ customerFacingCopy(blocker.label, 'Advanced handling is required.') }}
 					</li>
 				</ul>
 			</div>
 			<div v-else class="return-review__ready">
 				<strong>Standard return preflight passed.</strong>
 				<template v-if="review.workflow_controlled">
-					<span>{{ review.workflow_readiness?.message || 'This return is controlled by Frappe Workflow.' }}</span>
-					<span v-if="!review.workflow_started">Starting approval saves one canonical ERPNext return draft; it does not post stock or accounting.</span>
-					<span v-else>Only workflow actions currently permitted by Frappe are available below.</span>
+					<span>{{ customerFacingCopy(review.workflow_readiness?.message, 'This return is controlled by the configured approval workflow.') }}</span>
+					<span v-if="!review.workflow_started">Starting approval saves one standard return draft; it does not post stock or accounting.</span>
+					<span v-else>Only workflow actions currently available to this user are shown below.</span>
 				</template>
-				<span v-else-if="review.can_submit">Submission will use ERPNext's canonical return document and standard posting lifecycle.</span>
+				<span v-else-if="review.can_submit">Submission will use the standard return document and posting lifecycle.</span>
 				<span v-else>You can review this return, but your role cannot submit the target document.</span>
 			</div>
 
@@ -59,7 +59,7 @@
 		<template #footer>
 			<div class="return-review__footer">
 				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="submitting || loading" @click="openAdvanced">
-					Advanced: Prepare in ERPNext
+					{{ advancedLabel }}
 				</button>
 				<div class="return-review__footer-actions">
 					<button type="button" class="edge-button" :disabled="submitting" @click="close">Close</button>
@@ -100,7 +100,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, ...(type ? { type } : {}), callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 export default {
 	name: "ProfessionalPurchaseReturnReviewOverlay",
@@ -128,9 +145,10 @@ export default {
 		},
 		isDebitNote() { return this.sourceType === "purchase_invoice"; },
 		title() { return this.isDebitNote ? "Review Supplier Debit Note" : "Review Purchase Return"; },
-		subtitle() { return this.isDebitNote ? "Review ERPNext's supplier Debit Note mapping before accounting or stock effects are posted." : "Review ERPNext's Purchase Receipt return mapping before stock is posted out."; },
+		subtitle() { return this.isDebitNote ? "Review the supplier Debit Note before accounting or stock effects are posted." : "Review the Purchase Receipt return before stock is posted out."; },
 		submitLabel() { return this.isDebitNote ? "Submit Supplier Debit Note" : "Submit Purchase Return"; },
 		startWorkflowLabel() { return this.isDebitNote ? "Start Debit Note Approval" : "Start Return Approval"; },
+		advancedLabel() { return this.isDebitNote ? "Advanced: Prepare Debit Note" : "Advanced: Prepare Purchase Return"; },
 		canSubmitStandard() { return Boolean(this.review?.standard_return_eligible && this.review?.can_submit && !this.review?.workflow_controlled); },
 		canStartWorkflow() { return Boolean(this.review?.standard_return_eligible && this.review?.workflow_controlled && !this.review?.workflow_started && this.review?.can_start_workflow); },
 		workflowActions() {
@@ -152,6 +170,7 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		customerFacingCopy,
 		async loadReview() {
 			if (!this.sourceType || !this.sourceName || this.loading || this.submitting) return;
 			this.loading = true;
@@ -206,7 +225,7 @@ export default {
 					this.submitting = false;
 					this.close();
 					const label = this.isDebitNote ? __("Supplier Debit Note") : __("Purchase Return");
-					frappe.show_alert({ message: __(`${label} ${result.name || ''} submitted through Frappe Workflow.`), indicator: "green" }, 7);
+					frappe.show_alert({ message: __(`${label} ${result.name || ''} submitted through the approval workflow.`), indicator: "green" }, 7);
 					window.dispatchEvent(new CustomEvent(REFRESH_EVENT));
 					return;
 				}
@@ -221,8 +240,8 @@ export default {
 		confirmSubmit() {
 			if (!this.canSubmitStandard || this.submitting) return;
 			const message = this.isDebitNote
-				? __("Submit this ERPNext supplier Debit Note now? Standard ERPNext accounting and any enabled stock effects will be posted.")
-				: __("Submit this ERPNext Purchase Return now? Standard ERPNext stock posting will return the listed quantities to the supplier.");
+				? __("Submit this supplier Debit Note now? Standard accounting and any enabled stock effects will be posted.")
+				: __("Submit this Purchase Return now? Standard stock posting will return the listed quantities to the supplier.");
 			frappe.confirm(message, () => this.submitStandard());
 		},
 		async submitStandard() {
@@ -258,7 +277,7 @@ export default {
 				if (result.name) frappe.set_route("Form", result.doctype || (this.isDebitNote ? "Purchase Invoice" : "Purchase Receipt"), result.name);
 			} catch (error) {
 				this.submitting = false;
-				this.error = errorMessage(error, "Unable to prepare the advanced ERPNext return draft.");
+				this.error = errorMessage(error, "Unable to prepare the advanced return draft.");
 			}
 		},
 		controlLabel(row) {
