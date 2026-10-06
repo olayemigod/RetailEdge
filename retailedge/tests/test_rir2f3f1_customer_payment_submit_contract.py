@@ -99,9 +99,12 @@ def test_payment_management_reviews_and_submits_without_forced_native_handoff():
 	assert "submit_standard_customer_payment" in page
 	assert "expected_payment_entry_modified" in page
 	assert "Submit Payment" in page
-	assert "Open in ERPNext" in page
+	assert "Open Advanced Payment" in page
 	assert "Create Draft Receipt" in page
-	assert "Customer advance draft created. Review it below before submission." in page
+	assert "Customer advance draft created. Review it before submission." in page
+	assert "Advanced ERPNext" not in page
+	assert "Frappe Workflow" not in page
+	assert "Customer payment submitted through ERPNext" not in page
 	advance_creation = page[page.index("async openAdvanceDialog"):page.index("openPaymentEntries()")]
 	assert 'frappe.set_route("Form", "Payment Entry", result.name)' not in advance_creation
 
