@@ -201,6 +201,52 @@ class TestProductionCopyReadiness(unittest.TestCase):
 		self.assertIn("Branch support for Payment Entry is not available yet.", text)
 		self.assertIn("controlled by active approval workflow", text)
 
+	def test_guided_payment_dialog_hides_platform_implementation_copy(self):
+		text = source("public/js/retailedge_business_hub/SimplePaymentDialog.vue")
+
+		for phrase in (
+			"Advanced ERPNext",
+			"Open in ERPNext",
+			"Frappe Workflow",
+			"native ERPNext Payment Entry submit flow",
+			"ERPNext will post",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Open Advanced Payment", text)
+		self.assertIn("standard accounting controls", text)
+
+	def test_internal_transfer_dialog_hides_platform_implementation_copy(self):
+		text = source("public/js/retailedge_business_hub/StandardInternalTransferCompletionDialog.vue")
+
+		for phrase in (
+			"Advanced: Open in ERPNext",
+			"ERPNext posting authority",
+			"Frappe Workflow",
+			"existing ERPNext before-submit hook",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Open Advanced Payment", text)
+		self.assertIn("Accounting posting", text)
+		self.assertIn("window.retailedge?.userErrorMessage?.(error, fallback)", text)
+
+	def test_payment_management_hides_platform_and_source_of_truth_copy(self):
+		text = source("public/js/payment_management/PaymentManagement.vue")
+
+		for phrase in (
+			"Advanced ERPNext",
+			"Open in ERPNext",
+			"Frappe Workflow",
+			"ERPNext Payment Entry remains authoritative",
+			"ERPNext Payment Reconciliation",
+			"Current ERPNext outstanding",
+			"Customer payment submitted through ERPNext",
+			"Accounting Source</span><strong>ERPNext",
+		):
+			self.assertNotIn(phrase, text)
+		self.assertIn("Open Advanced Payment", text)
+		self.assertIn("Selected advances applied through Payment Reconciliation.", text)
+		self.assertIn("Accounting Control</span><strong>Payment Entries", text)
+
 
 if __name__ == "__main__":
 	unittest.main()
