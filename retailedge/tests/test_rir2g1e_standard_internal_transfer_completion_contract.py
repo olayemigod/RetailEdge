@@ -196,10 +196,19 @@ def test_completion_dialog_uses_server_authoritative_actions_only():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Open Advanced Payment",
+		"window.retailedge?.userErrorMessage?.(error, fallback)",
 	):
 		assert contract in source
-	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
+	for forbidden in (
+		".workflow_state =",
+		".docstatus =",
+		".status =",
+		"Advanced: Open in ERPNext",
+		"ERPNext posting authority",
+		"Frappe Workflow",
+		"existing ERPNext before-submit hook",
+	):
 		assert forbidden not in source
 
 
