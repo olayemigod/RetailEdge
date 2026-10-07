@@ -166,6 +166,16 @@ class TestShiftReconciliationConsolidation(unittest.TestCase):
 			"retailedgeSetReportRouteHandoff",
 			'this.routeWithFilters("daily-sales-audit"',
 			'this.routeWithFilters("expense-review"',
+			"shiftCurrentFilterContext()",
+			'from_date: current.from_date || shiftDate',
+			'to_date: current.to_date || shiftDate',
+			'pos_closing_shift: row.closing_shift || ""',
+			'audit_status: DAILY_AUDIT_STATUSES.has(reviewStatus) ? reviewStatus : ""',
+			'audit_result: CASH_STATUS_TO_AUDIT_RESULT[cashStatus] || ""',
+			'linked_pos_closing_shift: row.closing_shift || ""',
+			'this.shiftHandoffFilters(row, "daily-sales-audit")',
+			'this.shiftHandoffFilters(row, "expense-review")',
+			'this.shiftHandoffFilters({}, this.action.route)',
 		):
 			self.assertIn(contract, managed_vue)
 
