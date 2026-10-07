@@ -83,7 +83,7 @@
 				</div>
 
 				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="selling-completion-blockers">
-					<strong>Standard completion is blocked</strong>
+					<strong>Completion needs attention</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
 					</ul>
@@ -91,8 +91,8 @@
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="selling-completion-workflow">
 					<div>
-						<span>Frappe Workflow</span>
-						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
+						<span>Approval workflow</span>
+						<strong>{{ preview.workflow_readiness.workflow || "Active approval workflow" }}</strong>
 					</div>
 					<p>{{ preview.workflow_readiness.message }}</p>
 					<p v-if="preview.workflow_readiness.current_state">
@@ -245,8 +245,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 0
-				? "Review the saved ERPNext draft and complete it through native submission or the active Frappe Workflow."
-				: "Review the saved ERPNext document and continue with any permitted next workflow.";
+				? "Review the saved draft and submit it, or continue through the active approval workflow."
+				: "Review the saved document and continue with any permitted next step.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
