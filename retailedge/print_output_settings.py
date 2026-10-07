@@ -151,8 +151,8 @@ def get_receipt_presentation_settings() -> dict[str, Any]:
 	"""Return the canonical merchant receipt-presentation policy.
 
 	Labels and visibility are configurable; transaction status, payment methods and
-	amounts are not. Missing schema safely falls back to production defaults during
-	upgrade/migration boundaries.
+	amounts are not. Missing schema or NULL values safely inherit production defaults
+	during upgrade/migration boundaries. Explicit zero/blank values remain intentional.
 	"""
 	result = dict(RECEIPT_PRESENTATION_DEFAULTS)
 	if not frappe.db.exists("DocType", "RetailEdge Settings"):
@@ -175,10 +175,14 @@ def get_receipt_presentation_settings() -> dict[str, Any]:
 			continue
 		value = doc.get(fieldname)
 		if key in check_keys:
+			if value is None or value == "":
+				continue
 			result[key] = 1 if cint(value) else 0
 		elif key in label_keys:
 			result[key] = str(value or "").strip() or str(RECEIPT_PRESENTATION_DEFAULTS[key])
 		elif key == "footer_message":
+			if value is None:
+				continue
 			# Blank is intentional: merchants may explicitly choose no footer text.
-			result[key] = str(value or "").strip()
+			result[key] = str(value).strip()
 	return result
