@@ -74,7 +74,7 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		for contract in (
 			"Save Draft",
 			"create_professional_quotation_draft",
-			"Advanced: Open in ERPNext",
+			"Advanced: Open Quotation",
 			'v-if="canUseNativeDesk"',
 		):
 			self.assertIn(contract, component)
@@ -82,7 +82,7 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		self.assertIn("ProfessionalQuotationDialog", workspace)
 		# Internal form-submit handling and explanatory references to submitted
 		# source documents are valid. The guided editor itself must not expose a
-		# user action that submits the ERPNext document.
+		# user action that submits the accounting document.
 		self.assertNotIn(">Submit<", component)
 		self.assertNotIn('>Submit Quotation<', component)
 		self.assertNotIn('@click="submit', component)
