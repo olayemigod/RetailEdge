@@ -15,7 +15,7 @@
 					<div><span>Customer</span><strong>{{ preview.customer || "Not set" }}</strong></div>
 					<div><span>Company</span><strong>{{ preview.company || "Not set" }}</strong></div>
 					<div><span>Branch</span><strong>{{ preview.branch || "Company-wide" }}</strong></div>
-					<div><span>Selling Price List</span><strong>{{ preview.selling_price_list || "ERPNext default" }}</strong></div>
+					<div><span>Selling Price List</span><strong>{{ preview.selling_price_list || "Default price list" }}</strong></div>
 					<div><span>Total</span><strong>{{ preview.currency || "" }} {{ preview.grand_total }}</strong></div>
 					<div><span>Mode</span><strong>{{ preview.update_stock ? "Accounting + Stock" : "Accounting only" }}</strong></div>
 				</div>
@@ -34,7 +34,7 @@
 						<EdgeInput id="invoice-remarks" v-model="draftRemarks" label="Remarks" type="text" :disabled="busy" />
 					<label v-if="preview.can_edit_update_stock" class="guided-check-field">
 						<input v-model="draftUpdateStock" type="checkbox" :true-value="1" :false-value="0" :disabled="busy" />
-						<span><strong>Update Stock</strong><small>ERPNext and Branch/Stock Location validation run again when draft changes are saved.</small></span>
+						<span><strong>Update Stock</strong><small>Branch and Stock Location validation runs again when draft changes are saved.</small></span>
 					</label>
 					</div>
 					<div class="invoice-edit-items">
@@ -53,7 +53,7 @@
 						</div>
 					</div>
 					<p v-if="draftItems.some((row) => row.source_locked)" class="invoice-completion-hint">Source-linked items stay attached to their originating document and cannot be removed here.</p>
-					<p class="invoice-completion-hint">ERPNext recalculates taxes, totals, source quantity limits and accounting validation when the draft is saved.</p>
+					<p class="invoice-completion-hint">Taxes, totals, source quantity limits and accounting checks are recalculated when the draft is saved.</p>
 				</section>
 
 				<div v-if="preview.source_name" class="invoice-source-note">
@@ -65,10 +65,10 @@
 					<strong>Credit Note outstanding treatment</strong>
 					<p>{{ preview.return_outstanding_policy.message }}</p>
 					<p v-if="preview.return_outstanding_policy.mode === 'reduce_source_outstanding'">
-						ERPNext will submit this return with Update Outstanding for Self turned off so the credit reduces the source invoice outstanding.
+						This Credit Note will reduce the outstanding balance of the source invoice when submitted.
 					</p>
 					<p v-else>
-						ERPNext will keep the credit on this Credit Note for later reconciliation or refund; the source invoice is not mutated by RetailEdge.
+						The credit will remain on this Credit Note for later reconciliation or refund. The source invoice itself is not changed.
 					</p>
 				</div>
 
@@ -78,7 +78,7 @@
 						<span>{{ row.item_code || row.item_name || "Item" }}</span>
 						<span>Qty {{ row.qty }}</span>
 						<span>{{ preview.currency || "" }} {{ row.amount }}</span>
-						<span v-if="preview.update_stock">{{ row.warehouse || "No Warehouse" }}</span>
+						<span v-if="preview.update_stock">{{ row.warehouse || "No Stock Location" }}</span>
 					</div>
 					<p v-if="preview.item_count > preview.items.length" class="invoice-completion-hint">
 						Showing {{ preview.items.length }} of {{ preview.item_count }} items.
@@ -86,7 +86,7 @@
 				</div>
 
 				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="invoice-completion-blockers">
-					<strong>Standard Sales Invoice completion is blocked</strong>
+					<strong>Completion needs attention</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
 					</ul>
@@ -94,8 +94,8 @@
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="invoice-completion-workflow">
 					<div>
-						<span>Frappe Workflow</span>
-						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
+						<span>Approval workflow</span>
+						<strong>{{ preview.workflow_readiness.workflow || "Active approval workflow" }}</strong>
 					</div>
 					<p>{{ preview.workflow_readiness.message }}</p>
 					<p v-if="preview.workflow_readiness.current_state">
@@ -106,7 +106,7 @@
 				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
 						<strong>{{ completedResult.is_return ? "Return / Credit Note submitted" : "Sales Invoice submitted" }}</strong>
-						<p>{{ completedResult.is_return ? "ERPNext has posted the governed return. Use output actions or close this review." : "Choose the next permitted workflow. The invoice stays open until you choose an action or close it." }}</p>
+						<p>{{ completedResult.is_return ? "Use output actions or close this review." : "Choose the next permitted workflow. The invoice stays open until you choose an action or close it." }}</p>
 					</div>
 					<div class="invoice-next-buttons">
 						<button
@@ -239,8 +239,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 0
-				? "Review the saved ERPNext Sales Invoice and complete it through native submission or the active Frappe Workflow."
-				: "Review the submitted ERPNext Sales Invoice and continue with any permitted next workflow.";
+				? "Review the saved Sales Invoice and submit it, or continue through the active approval workflow."
+				: "Review the submitted Sales Invoice and continue with any permitted next step.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];

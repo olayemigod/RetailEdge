@@ -240,7 +240,7 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		ui = (PUBLIC_JS / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue").read_text(encoding="utf-8")
 		self.assertIn("Credit Note outstanding treatment", ui)
 		self.assertIn("preview.return_outstanding_policy?.message", ui)
-		self.assertIn("Update Outstanding for Self turned off", ui)
+		self.assertIn("This Credit Note will reduce the outstanding balance of the source invoice when submitted.", ui)
 		self.assertIn("later reconciliation or refund", ui)
 
 	def test_selling_lineage_routes_existing_documents_and_reuses_drafts(self):
