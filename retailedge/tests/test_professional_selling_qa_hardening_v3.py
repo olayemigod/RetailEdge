@@ -41,14 +41,19 @@ def test_all_four_draft_selling_documents_support_safe_edit_and_item_additions()
 
 	for dialog in (selling_dialog, delivery_dialog, invoice_dialog):
 		assert "Edit draft before completion" in dialog
-		assert "Additional Items" in dialog
-		assert "EdgeChildTable" in dialog
 		assert "Save Draft Changes" in dialog
 
 	for dialog in (selling_dialog, delivery_dialog):
+		assert "Additional Items" in dialog
+		assert "EdgeChildTable" in dialog
 		assert "removeDraftItem" in dialog
 		assert "draftItems.length !== original.length" in dialog
 		assert 'title="Remove item"' in dialog
+
+	assert "addDraftItem" in invoice_dialog
+	assert "removeDraftItem" in invoice_dialog
+	assert "Additional Items" not in invoice_dialog
+	assert "EdgeChildTable" not in invoice_dialog
 
 
 def test_submitted_rows_have_operational_view_and_print_share_while_drafts_keep_edit_complete():
