@@ -60,9 +60,12 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'_("Subtotal")',
 			'_("Total Qty")',
 			'_("Balance Due")',
-			'_("Thank you for your business.")',
+			'receipt.get("show_footer")',
+			'receipt.get("show_footer_separator")',
+			'receipt.get("footer_message")',
 		):
 			self.assertIn(contract, source)
+		self.assertNotIn('_("Thank you for your business.")', source)
 		for forbidden in ("navigator.serial", "requestPort", "0x1b", "0x1d", "ESC @"):
 			self.assertNotIn(forbidden, source)
 
@@ -71,7 +74,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		for contract in (
 			'row.get("net_rate") if row.get("net_rate") is not None else row.get("rate")',
 			'row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")',
-			'blocks.extend(_payment_blocks(doc, currency, paper_width))',
+			'receipt.get("show_payment_method")',
+			'receipt.get("payment_method")',
 			'_("Discount")',
 			'_("Tax / Charges")',
 			'_("Paid")',
@@ -80,6 +84,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'_("Credit / Refund Due")',
 		):
 			self.assertIn(contract, source)
+		self.assertNotIn("_payment_blocks", source)
 
 	def test_browser_adapter_uses_shared_runtime_and_queryless_setup_route(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
@@ -129,6 +134,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_final_devices_navigation_is_internal_page_without_query_context(self):
 		source = self.read_app("printing_navigation.py")
 		hooks = self.read_app("hooks.py")
+		final_navigation = self.read_app("navigation_consolidation.py")
 		for contract in (
 			'PRINTING_PAGE = "edge-printing"',
 			'item["target_type"] = "Page"',
@@ -138,9 +144,11 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 		self.assertIn(
-			'"retailedge.master_experience.get_retailedge_business_hub_context": "retailedge.printing_navigation.get_retailedge_business_hub_context"',
+			'"retailedge.master_experience.get_retailedge_business_hub_context": "retailedge.navigation_consolidation.get_retailedge_business_hub_context"',
 			hooks,
 		)
+		self.assertIn("from retailedge.printing_navigation import normalize_printing_navigation", final_navigation)
+		self.assertIn("return normalize_printing_navigation(context)", final_navigation)
 
 	def test_branch_print_policy_is_opt_in_and_presentation_only(self):
 		settings = self.read_app("print_output_settings.py")
