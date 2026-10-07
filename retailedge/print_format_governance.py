@@ -32,11 +32,11 @@ _RECEIPT_PAYMENT_AMOUNT_ROWS = (
 _RECEIPT_IN_WORDS_ROW = (
 	'{% if doc.get("in_words") %}<div class="receipt-words">{{ doc.get("in_words") }}</div>{% endif %}'
 )
-_RECEIPT_PRESENTATION_ROWS = r'''{% if receipt.get("show_status") and receipt.get("status") %}<div class="receipt-total"><span>{{ receipt.get("status_label") }}</span><strong>{{ receipt.get("status") }}</strong></div>{% endif %}
+_RECEIPT_PRESENTATION_ROWS = '''{% if receipt.get("show_status") and receipt.get("status") %}<div class="receipt-total"><span>{{ receipt.get("status_label") }}</span><strong>{{ receipt.get("status") }}</strong></div>{% endif %}
 	{% if receipt.get("show_payment_method") and receipt.get("payment_method") %}<div class="receipt-total"><span>{{ receipt.get("payment_method_label") }}</span><strong>{{ receipt.get("payment_method") }}</strong></div>{% endif %}
 	{% if receipt.get("show_amount_in_words") and receipt.get("amount_in_words") %}<div class="receipt-words"><strong>{{ receipt.get("amount_in_words_label") }}:</strong> {{ receipt.get("amount_in_words") }}</div>{% endif %}'''
 _RECEIPT_FOOTER_ROW = '<div class="receipt-footer">Thank you for your business.</div>'
-_RECEIPT_GOVERNED_FOOTER = r'''{% if receipt.get("show_footer") and receipt.get("footer_message") and receipt.get("show_footer_separator") %}<div class="receipt-rule"></div>{% endif %}
+_RECEIPT_GOVERNED_FOOTER = '''{% if receipt.get("show_footer") and receipt.get("footer_message") and receipt.get("show_footer_separator") %}<div class="receipt-rule"></div>{% endif %}
 	{% if receipt.get("show_footer") and receipt.get("footer_message") %}<div class="receipt-footer">{{ receipt.get("footer_message") }}</div>{% endif %}'''
 
 
