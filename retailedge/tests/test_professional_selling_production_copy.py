@@ -60,3 +60,60 @@ def test_professional_quotation_dialog_uses_business_copy_and_preserves_handoff(
 	assert 'const CREATE_METHOD = "retailedge.professional_quotation.create_professional_quotation_draft"' in text
 	assert 'const PRICING_METHOD = "retailedge.professional_selling.get_professional_selling_item_pricing"' in text
 	assert 'const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context"' in text
+
+
+def test_professional_sales_order_dialog_uses_business_copy_and_preserves_mapping():
+	text = _read("public/js/professional_selling/ProfessionalSalesOrderDialog.vue")
+
+	assert "ERPNext" not in text
+	assert "native mapping" not in text
+	assert "Advanced: Open in ERPNext" not in text
+	assert "while preserving the accepted commercial terms" in text
+	assert "Final conversion eligibility is checked before the draft is created." in text
+	assert "Only enabled Selling Shipping Rules for this Company are shown." in text
+	assert "Shipping charges follow the selected Shipping Rule." in text
+	assert "Advanced: Open Sales Order" in text
+
+	# Mapping, pricing and native handoff contracts remain unchanged.
+	assert 'v-if="canUseNativeDesk"' in text
+	assert "$emit('open-native', 'Sales Order')" in text
+	assert 'const CREATE_METHOD = "retailedge.professional_sales_order.create_professional_sales_order_draft"' in text
+	assert 'const MAP_METHOD = "retailedge.professional_sales_order.create_sales_order_from_quotation"' in text
+	assert 'const PRICING_METHOD = "retailedge.professional_selling.get_professional_selling_item_pricing"' in text
+
+
+def test_professional_sales_invoice_dialog_uses_business_copy_and_preserves_accounting_paths():
+	text = _read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
+
+	assert "ERPNext" not in text
+	assert "Frappe Workflow" not in text
+	assert "Advanced: Open in ERPNext" not in text
+	assert "prepare a Return / Credit Note without forcing a rigid selling path" in text
+	assert "Checking current Loyalty Points..." in text
+	assert "Any configured approval workflow still applies" in text
+	assert "no refund or customer payment is created automatically" in text
+	assert "Delivery charges follow the selected Shipping Rule." in text
+	assert "Advanced: Open Sales Invoice" in text
+
+	# Return, conversion, pricing and native handoff ownership remain unchanged.
+	assert 'v-if="canUseNativeDesk"' in text
+	assert "$emit('open-native', 'Sales Invoice')" in text
+	assert 'const CREATE_NEW = "retailedge.professional_sales_invoice.create_professional_sales_invoice_draft"' in text
+	assert 'const CREATE_FROM_QUOTATION = "retailedge.professional_sales_invoice.create_sales_invoice_from_quotation"' in text
+	assert 'const CREATE_FROM_ORDER = "retailedge.professional_sales_invoice.create_sales_invoice_from_sales_order"' in text
+	assert 'const CREATE_FROM_DELIVERY = "retailedge.professional_sales_invoice.create_sales_invoice_from_delivery_note"' in text
+	assert 'const CREATE_RETURN = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft"' in text
+
+
+def test_professional_selling_records_uses_document_specific_advanced_copy():
+	text = _read("public/js/professional_selling/ProfessionalSellingRecords.vue")
+
+	assert "Advanced: Open in ERPNext" not in text
+	assert "without changing the table structure" not in text
+	assert "Search, filter, review, print or share, and complete permitted selling records." in text
+	assert 'label: `Advanced: Open ${this.activeDocument?.label || "Record"}`' in text
+
+	# The advanced action remains permission-gated and emits the same action identifier.
+	assert "if (this.canUseNativeDesk)" in text
+	assert 'value: "advanced"' in text
+	assert 'this.$emit("action", { action, actionDefinition: option, document: this.activeDocument, row });' in text
