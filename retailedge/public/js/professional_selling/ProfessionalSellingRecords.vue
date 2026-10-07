@@ -356,7 +356,7 @@ export default {
 			if (this.canUseNativeDesk) {
 				actions.push({
 					value: "advanced",
-					label: "Advanced: Open in ERPNext",
+					label: `Advanced: Open ${this.activeDocument?.label || "Record"}`,
 				});
 			}
 			return actions;
