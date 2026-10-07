@@ -93,9 +93,9 @@ def test_edgesuite_overlay_submits_standard_rfq_without_native_route():
 def test_standard_success_stays_in_edgesuite_and_advanced_fallback_remains_separate():
 	overlay = _read(OVERLAY)
 	bundle = _read(BUNDLE)
-	assert "Request for Quotation {{ submitted.name }} submitted in ERPNext" in overlay
+	assert "Request for Quotation {{ submitted.name }} submitted." in overlay
 	assert "Use RFQ History to review the submitted document" in overlay
-	assert "Advanced: Prepare Draft in ERPNext" in overlay
+	assert "Advanced: Prepare RFQ" in overlay
 	assert "nativeFallbackEnabled" in overlay
 	assert 'const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced"' in bundle
 	assert "if (!nativeDeskEnabled()) return;" in bundle

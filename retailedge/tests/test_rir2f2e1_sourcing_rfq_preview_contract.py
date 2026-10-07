@@ -89,7 +89,7 @@ def test_rfq_preview_overlay_selects_suppliers_before_creating_a_document():
 def test_native_rfq_draft_handoff_is_explicit_advanced_only():
 	bundle = _read(BUNDLE)
 	overlay = _read(OVERLAY)
-	assert "Advanced: Prepare Draft in ERPNext" in overlay
+	assert "Advanced: Prepare RFQ" in overlay
 	assert "nativeFallbackEnabled" in overlay
 	assert 'const ACCESS_MODE = "edgesuite_only"' in overlay
 	assert 'Boolean(access.can_use_native_desk)' in overlay

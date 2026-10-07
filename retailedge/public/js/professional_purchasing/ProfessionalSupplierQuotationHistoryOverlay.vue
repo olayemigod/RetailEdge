@@ -53,7 +53,7 @@
 							<td>{{ formatDate(row.valid_till) }}</td>
 							<td>{{ row.status || 'Draft' }}</td>
 							<td><button v-if="canPreparePurchaseOrder(row)" type="button" class="edge-small-button edge-small-button--primary" @click="preparePurchaseOrder(row.name)">Prepare PO</button><span v-else>—</span></td>
-							<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open in ERPNext</button></td>
+							<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open Supplier Quotation</button></td>
 						</tr>
 					</tbody>
 				</table>
@@ -62,7 +62,7 @@
 
 		<template #footer>
 			<div class="supplier-quote-history__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: Supplier Quotations in ERPNext</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: Supplier Quotations</button>
 				<button type="button" class="edge-button edge-button--primary" @click="close">Close</button>
 			</div>
 		</template>
@@ -81,7 +81,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 function comparable(value) { if (value === null || value === undefined) return ""; if (typeof value === "number") return value; return String(value).toLowerCase(); }
 
 export default {

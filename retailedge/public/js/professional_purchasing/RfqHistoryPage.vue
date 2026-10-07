@@ -19,7 +19,7 @@
 				<div class="scope"><span><strong>Company:</strong> {{ history.company || filters.company || "—" }}</span><span><strong>Branch:</strong> {{ history.branch || "All permitted" }}</span><span><strong>Supplier:</strong> {{ history.supplier || "All suppliers" }}</span><span><strong>Loaded:</strong> {{ rows.length }}</span></div>
 				<EdgeEmptyState v-if="!rows.length" title="No RFQs" description="No permission-visible RFQs match the selected scope." />
 				<div v-else class="table-responsive"><table class="table history-table"><thead><tr><th>RFQ</th><th>Date</th><th>Suppliers</th><th>Items</th><th>Branch</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-					<tr v-for="row in rows" :key="row.name"><td><strong>{{ row.name }}</strong></td><td>{{ formatDate(row.transaction_date || row.modified) }}</td><td>{{ (row.suppliers || []).join(", ") || "—" }}</td><td>{{ row.item_count || 0 }}</td><td>{{ row.branch || "—" }}</td><td>{{ row.status || statusLabel(row.docstatus) }}</td><td><div class="row-actions"><button v-if="canRecordQuote(row)" type="button" class="edge-small-button edge-small-button--primary" @click="recordSupplierQuote(row)">Record Supplier Quote</button><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: ERPNext</button></div></td></tr>
+					<tr v-for="row in rows" :key="row.name"><td><strong>{{ row.name }}</strong></td><td>{{ formatDate(row.transaction_date || row.modified) }}</td><td>{{ (row.suppliers || []).join(", ") || "—" }}</td><td>{{ row.item_count || 0 }}</td><td>{{ row.branch || "—" }}</td><td>{{ row.status || statusLabel(row.docstatus) }}</td><td><div class="row-actions"><button v-if="canRecordQuote(row)" type="button" class="edge-small-button edge-small-button--primary" @click="recordSupplierQuote(row)">Record Supplier Quote</button><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open RFQ</button></div></td></tr>
 				</tbody></table></div>
 				<div class="pagination"><span>{{ history.has_more ? "More RFQs are available." : (rows.length ? "End of matching RFQs." : "") }}</span><button v-if="history.has_more" type="button" class="edge-button edge-button--primary" :disabled="loadingMore" @click="loadMore">{{ loadingMore ? "Loading…" : "Load More" }}</button></div>
 			</section>
@@ -33,7 +33,8 @@ const PAGE_SIZE = 40;
 const REQUIRED = ["EdgeAppShell","EdgePageLayout","EdgePageHeader","EdgeLinkField","EdgeLoadingState","EdgeErrorState","EdgeEmptyState"];
 function runtime(){ return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method,args={}){ return new Promise((resolve,reject)=>frappe.call({method,args,callback:r=>resolve(r.message||{}),error:reject})); }
-function err(error,fallback){ return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value,fallback=""){ const text=String(value||"").trim(); if(!text)return fallback; return text.replace(/Advanced ERPNext/gi,"advanced review").replace(/Frappe Workflow/gi,"approval workflow").replace(/ERPNext/gi,"the accounting system").replace(/EdgeSuite/gi,"the workspace").replace(/Native Desk/gi,"advanced access"); }
+function err(error,fallback){ const message=window.retailedge?.userErrorMessage?.(error,fallback)||error?.message||error?.exc||error?._server_messages||fallback; return customerFacingCopy(message,fallback); }
 export default {
 	name:"RfqHistoryPage",
 	components:Object.fromEntries(REQUIRED.map(name=>[name,runtime()[name]])),
