@@ -32,6 +32,13 @@ def _document_date(doc) -> str:
 
 
 def _document_branch(doc) -> str:
+	# RetailEdge transaction attribution is the canonical branch snapshot for
+	# submitted documents. Read it first; generic branch-like fields remain a
+	# compatibility fallback for documents that predate that custom field.
+	if doc.meta.has_field("retailedge_branch"):
+		branch = _clean(doc.get("retailedge_branch"))
+		if branch:
+			return branch
 	for fieldname in BRANCH_FIELD_CANDIDATES:
 		if not doc.meta.has_field(fieldname):
 			continue
