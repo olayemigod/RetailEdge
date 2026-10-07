@@ -22,16 +22,18 @@ def test_all_four_draft_selling_documents_support_safe_edit_and_item_additions()
 	for contract in (
 		'doc.append("items"',
 		"Existing item identity cannot be replaced here.",
-		"Source-linked item",
+		"doc.remove(row)",
 		"resolve_sales_item_pricing",
 		"_validate_warehouse_branch",
 		"MAX_DRAFT_ITEMS",
 	):
 		assert contract in helper
+	assert "Source-linked item" not in helper
 
 	assert "def update_standard_selling_draft(" in selling_service
 	assert "SUPPORTED_DOCTYPES = {\"Quotation\", \"Sales Order\"}" in selling_service
 	assert "update_draft_items(" in selling_service
+	assert "Only draft documents can be edited here." in selling_service
 	assert "def update_standard_delivery_draft(" in delivery_service
 	assert "update_draft_items(" in delivery_service
 	assert "def update_standard_sales_invoice_draft(" in invoice_service
@@ -42,6 +44,11 @@ def test_all_four_draft_selling_documents_support_safe_edit_and_item_additions()
 		assert "Additional Items" in dialog
 		assert "EdgeChildTable" in dialog
 		assert "Save Draft Changes" in dialog
+
+	for dialog in (selling_dialog, delivery_dialog):
+		assert "removeDraftItem" in dialog
+		assert "draftItems.length !== original.length" in dialog
+		assert 'title="Remove item"' in dialog
 
 
 def test_submitted_rows_have_operational_view_and_print_share_while_drafts_keep_edit_complete():
