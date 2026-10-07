@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="New Sales Order"
-		subtitle="Create a new ERPNext Sales Order draft or convert a submitted Customer Quotation using ERPNext's native mapping."
+		subtitle="Create a new Sales Order draft or convert a submitted Customer Quotation while preserving the accepted commercial terms."
 		size="xl"
 		@close="requestClose"
 	>
@@ -22,12 +22,12 @@
 				:modelValue="sourceQuotation"
 				label="Submitted Quotation"
 				placeholder="Search submitted customer quotation"
-				description="ERPNext will map the submitted Quotation into a new draft Sales Order. The source Quotation is not modified."
+				description="Convert the submitted Quotation into a new draft Sales Order. The source Quotation is not modified."
 				:required="true"
 				:searcher="searchSourceQuotation"
 				@update:modelValue="sourceQuotation = $event || ''"
 			/>
-			<p class="selling-form-hint">Expired, lost, cancelled and fully ordered quotations are not offered here. ERPNext performs the final conversion eligibility checks.</p>
+			<p class="selling-form-hint">Expired, lost, cancelled and fully ordered quotations are not offered here. Final conversion eligibility is checked before the draft is created.</p>
 		</div>
 
 		<form v-else class="selling-form" @submit.prevent="saveDraft">
@@ -93,7 +93,7 @@
 					:modelValue="values.shipping_rule"
 					label="Shipping Rule"
 					placeholder="Optional delivery charge rule"
-					description="Only enabled ERPNext Selling Shipping Rules for this Company are shown."
+					description="Only enabled Selling Shipping Rules for this Company are shown."
 					:searcher="searchShippingRule"
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
@@ -119,7 +119,7 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">Rates are resolved again on the server. Shipping charges are applied through ERPNext's native Shipping Rule engine.</p>
+			<p class="selling-form-hint">Rates are resolved again when the draft is saved. Shipping charges follow the selected Shipping Rule.</p>
 
 			<label class="selling-field selling-field--wide">
 				<span>Terms / Notes</span>
@@ -129,7 +129,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Advanced: Open in ERPNext</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Advanced: Open Sales Order</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode === 'quotation' && !sourceQuotation)" @click="saveDraft">{{ saving ? "Saving..." : mode === 'quotation' ? "Create Draft from Quotation" : "Save Draft" }}</button>
