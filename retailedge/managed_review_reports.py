@@ -12,23 +12,49 @@ from retailedge.operating_context import get_allowed_operating_branches, get_ope
 
 
 MAX_VISIBLE_ROWS = 1000
+SHIFT_RECONCILIATION_SURFACE = "pos-closing-variance"
 
 SURFACES: dict[str, dict[str, Any]] = {
 	"pos-closing-variance": {
-		"title": "POS Closing Variance & Expenses",
+		"title": "Shift Reconciliation",
 		"eyebrow": "Cash Control",
-		"subtitle": "Review POS closing variance, cashier expenses and unresolved cash differences in one operational view.",
-		"report_name": "POS Closing Variance vs Expenses",
-		"action": {"label": "Cash Shift Verification", "route": "cash-shift-verification"},
+		"subtitle": "Reconcile opening cash, cash sales, till expenses and cash deposits against counted closing cash, then focus on exceptions.",
+		"report_name": "RetailEdge Cash Shift Verification",
+		"action": {"label": "Open Sales Audit Review", "route": "daily-sales-audit"},
+		"visible_columns": (
+			"shift_date",
+			"branch",
+			"pos_profile",
+			"cashier",
+			"closing_shift",
+			"opening_cash",
+			"cash_sales",
+			"included_cashier_expenses",
+			"cash_deposits",
+			"expected_cash",
+			"actual_closing_cash",
+			"cash_variance",
+			"cash_status",
+			"review_status",
+		),
+		"column_labels": {
+			"closing_shift": "Shift",
+			"included_cashier_expenses": "Till Expenses",
+			"actual_closing_cash": "Counted Cash",
+			"review_status": "Audit Status",
+		},
+		"summary_labels": {
+			"Actual Closing Cash": "Counted Cash",
+		},
 		"filters": (
-			{"fieldname": "company", "label": "Company", "fieldtype": "Link", "options": "Company"},
+			{"fieldname": "company", "label": "Company", "fieldtype": "Link", "options": "Company", "required": True},
 			{"fieldname": "branch", "label": "Branch", "fieldtype": "Link", "options": "Branch"},
 			{"fieldname": "from_date", "label": "From Date", "fieldtype": "Date", "required": True},
 			{"fieldname": "to_date", "label": "To Date", "fieldtype": "Date", "required": True},
 			{"fieldname": "pos_profile", "label": "POS Profile", "fieldtype": "Link", "options": "POS Profile"},
 			{"fieldname": "cashier", "label": "Cashier", "fieldtype": "Link", "options": "User"},
-			{"fieldname": "cost_center", "label": "Expense Cost Centre", "fieldtype": "Link", "options": "Cost Center"},
-			{"fieldname": "include_cogs", "label": "Include Cost of Goods Sold", "fieldtype": "Check"},
+			{"fieldname": "cash_status", "label": "Cash Status", "fieldtype": "Select", "options": ("", "Balanced", "Shortage", "Overage", "Needs Review", "Missing Opening Shift", "Missing Closing Shift")},
+			{"fieldname": "review_status", "label": "Audit Status", "fieldtype": "Select", "options": ("", "Audit Required", "Draft", "Ready for Review", "In Review", "Balanced", "Variance Found", "Clarification Required", "Approved", "Rejected", "Reopened", "Cancelled")},
 		),
 	},
 	"unmatched-bank-transactions": {
@@ -141,6 +167,40 @@ def _customer_copy(value: Any) -> str:
 	)
 
 
+def _format_columns(surface: dict[str, Any], raw_columns: list[Any]) -> list[dict[str, Any]]:
+	visible_columns = tuple(surface.get("visible_columns") or ())
+	visible_set = set(visible_columns)
+	column_labels = dict(surface.get("column_labels") or {})
+	columns: list[dict[str, Any]] = []
+	for raw_column in raw_columns:
+		if isinstance(raw_column, str):
+			fieldname = raw_column
+			if visible_set and fieldname not in visible_set:
+				continue
+			columns.append(
+				{
+					"label": _customer_copy(column_labels.get(fieldname) or raw_column),
+					"fieldname": fieldname,
+					"fieldtype": "Data",
+				}
+			)
+			continue
+		column = dict(raw_column)
+		if column.get("hidden"):
+			continue
+		fieldname = str(column.get("fieldname") or "").strip()
+		if visible_set and fieldname not in visible_set:
+			continue
+		column["label"] = _customer_copy(
+			column_labels.get(fieldname) or column.get("label") or fieldname
+		)
+		columns.append(column)
+	if visible_columns:
+		position = {fieldname: index for index, fieldname in enumerate(visible_columns)}
+		columns.sort(key=lambda column: position.get(column.get("fieldname"), len(position)))
+	return columns
+
+
 def _default_filters(surface: dict[str, Any]) -> dict[str, Any]:
 	context = get_operating_context() or {}
 	defaults = {
@@ -182,6 +242,10 @@ def run_review_report(surface_key: str, filters: dict[str, Any] | str | None = N
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
 	filters = frappe._dict(filters or {})
+	if surface_key == SHIFT_RECONCILIATION_SURFACE:
+		if not filters.get("from_date") or not filters.get("to_date"):
+			frappe.throw(_("From Date and To Date are required for Shift Reconciliation."))
+
 	result = run_query_report(
 		report_name=surface["report_name"],
 		filters=filters,
@@ -189,32 +253,53 @@ def run_review_report(surface_key: str, filters: dict[str, Any] | str | None = N
 		are_default_filters=False,
 	)
 	rows = list(result.get("result") or result.get("rows") or [])
-	truncated = len(rows) > MAX_VISIBLE_ROWS
-	rows = rows[:MAX_VISIBLE_ROWS]
-	columns = []
-	for column in result.get("columns") or []:
-		if isinstance(column, str):
-			columns.append({"label": _customer_copy(column), "fieldname": column, "fieldtype": "Data"})
-			continue
-		column = dict(column)
-		if column.get("hidden"):
-			continue
-		column["label"] = _customer_copy(column.get("label") or column.get("fieldname"))
-		columns.append(column)
+	completeness: dict[str, Any] = {}
+	if surface_key == SHIFT_RECONCILIATION_SURFACE:
+		from retailedge.shift_reconciliation_completeness import augment_shift_reconciliation_rows
+		from retailedge.retailedge.report.retailedge_cash_shift_verification.retailedge_cash_shift_verification import (
+			get_report_summary,
+		)
+
+		rows, completeness = augment_shift_reconciliation_rows(rows, filters)
+		if len(rows) > MAX_VISIBLE_ROWS:
+			frappe.throw(
+				_("More than {0} shifts match these filters. Narrow the date range or business scope before reconciling shifts.").format(
+					MAX_VISIBLE_ROWS
+				)
+			)
+		raw_summary = get_report_summary(rows)
+		truncated = False
+	else:
+		truncated = len(rows) > MAX_VISIBLE_ROWS
+		rows = rows[:MAX_VISIBLE_ROWS]
+		raw_summary = result.get("report_summary") or result.get("summary") or []
+
+	columns = _format_columns(surface, list(result.get("columns") or []))
+	summary_labels = dict(surface.get("summary_labels") or {})
 	summary = []
-	for card in result.get("report_summary") or result.get("summary") or []:
+	for card in raw_summary:
 		card = dict(card)
-		card["label"] = _customer_copy(card.get("label"))
+		label = str(card.get("label") or "")
+		card["label"] = _customer_copy(summary_labels.get(label) or label)
 		card["datatype"] = card.get("datatype") or card.get("type") or "Data"
 		card["type"] = card.get("type") or card["datatype"]
 		summary.append(card)
+
+	message = _customer_copy(result.get("message"))
+	if completeness.get("missing_audit_visible"):
+		count = int(completeness["missing_audit_visible"])
+		gap_message = _(
+			"{0} closed shift(s) need a Sales Audit before review is complete. Open the Shift to continue the audit workflow."
+		).format(count)
+		message = f"{message} {gap_message}".strip()
 	return {
 		"columns": columns,
 		"rows": rows,
 		"summary": summary,
-		"message": _customer_copy(result.get("message")),
+		"message": message,
 		"truncated": truncated,
 		"max_visible_rows": MAX_VISIBLE_ROWS,
+		"metadata": {"shift_completeness": completeness} if completeness else {},
 	}
 
 
@@ -223,18 +308,37 @@ def search_review_report_options(
 	doctype: str,
 	txt: str = "",
 	company: str = "",
+	branch: str = "",
+	pos_profile: str = "",
+	surface_key: str = "",
 ) -> list[dict[str, str]]:
 	doctype = str(doctype or "").strip()
 	txt = str(txt or "").strip()
 	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	pos_profile = str(pos_profile or "").strip()
+	surface_key = str(surface_key or "").strip()
 	if doctype not in ALLOWED_LINK_DOCTYPES:
 		frappe.throw(_("Unsupported review filter search."), frappe.PermissionError)
+
+	if surface_key == SHIFT_RECONCILIATION_SURFACE and doctype in {"Branch", "POS Profile", "User"}:
+		from retailedge.daily_sales_audit_page import search_daily_sales_audit_page_options
+
+		kind = {"Branch": "branch", "POS Profile": "pos_profile", "User": "cashier"}[doctype]
+		return search_daily_sales_audit_page_options(
+			kind=kind,
+			txt=txt,
+			company=company,
+			branch=branch,
+			pos_profile=pos_profile,
+		)
+
 	if doctype == "Branch":
 		branches = get_allowed_operating_branches(company=company) if company else []
 		return [
-			{"value": branch, "label": branch}
-			for branch in branches
-			if not txt or txt.lower() in branch.lower()
+			{"value": branch_name, "label": branch_name}
+			for branch_name in branches
+			if not txt or txt.lower() in branch_name.lower()
 		][:20]
 	filters: dict[str, Any] = {}
 	if txt:

@@ -5,6 +5,7 @@ const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!
 
 const USERS = {
 	manager: "browser-manager@example.com",
+	branchManager: "browser-branch-manager@example.com",
 	cashier: "browser-cashier@example.com",
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
@@ -81,6 +82,87 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
 		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge manager reaches consolidated Shift Reconciliation with specialist workflows preserved", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
+
+		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+		await expect(sidebar.getByText("Daily Sales Audit", { exact: true }).first()).toBeAttached();
+		await expect(sidebar.getByText("Cashier Expense Review", { exact: true }).first()).toBeAttached();
+		await expect(sidebar.getByText("Cash Shift Verification", { exact: true })).toHaveCount(0);
+		await expect(sidebar.getByText("Daily Sales Audit Register", { exact: true })).toHaveCount(0);
+
+		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
+		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
+		const nextActionOrEmptyState = page
+			.getByText("Next Action", { exact: true })
+			.first()
+			.or(page.getByText("No shift reconciliation found", { exact: true }).first());
+		await expect(nextActionOrEmptyState).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge branch manager reaches Shift Reconciliation", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.branchManager);
+	try {
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
+		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("Accounts User reaches Shift Reconciliation", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.accounts);
+	try {
+		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
+		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge cashier cannot open Shift Reconciliation", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.cashier);
+	try {
+		await page.goto(`${BASE_URL}/app/pos-closing-variance`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		const titleVisible = await page
+			.getByRole("heading", { name: "Shift Reconciliation", exact: true })
+			.first()
+			.isVisible()
+			.catch(() => false);
+		expect(titleVisible).toBeFalsy();
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge manager sees one fuzzy Period on remaining control surfaces", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "business-control-center", "Business Control Centre");
+		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("To Date", { exact: true })).toHaveCount(0);
+
+		await openProductPage(page, "stock-accounting-integrity", "Stock & Accounting Integrity");
+		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("As On Date", { exact: true })).toHaveCount(0);
 	} finally {
 		await context.close().catch(() => {});
 	}
