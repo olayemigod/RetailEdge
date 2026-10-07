@@ -618,6 +618,7 @@ export default {
 			handler(next, previous) {
 				if (this.open && next !== previous) this.loadContext();
 			},
+		},
 	},
 	mounted() {
 		if (this.open) this.loadContext();
