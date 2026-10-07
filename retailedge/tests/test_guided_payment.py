@@ -295,7 +295,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertIn("get_simple_payment_mode_details", component)
 		self.assertIn("search_simple_payment_options", component)
 		self.assertIn("create_simple_payment_draft", component)
-		self.assertIn("Open in ERPNext", component)
+		self.assertIn("Advanced Payment", component)
 		self.assertIn('this.$emit("open-native", "Payment Entry")', component)
 		self.assertNotIn("frappe.get_list", component)
 		self.assertNotIn("frappe.db.insert", component)

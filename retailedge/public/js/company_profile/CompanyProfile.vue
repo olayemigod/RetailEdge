@@ -40,7 +40,7 @@
 						<div class="company-profile-summary">
 							<span><small>Abbreviation</small><strong>{{ profile.abbr || "—" }}</strong></span>
 							<span><small>Currency</small><strong>{{ profile.currency || "—" }}</strong></span>
-							<span><small>ERPNext country</small><strong>{{ profile.country || "—" }}</strong></span>
+							<span><small>Country</small><strong>{{ profile.country || "—" }}</strong></span>
 							<span><small>Tax ID</small><strong>{{ profile.tax_id || "—" }}</strong></span>
 							<span><small>Working Branch</small><strong>{{ operatingContext.branch || "Company-wide" }}</strong></span>
 						</div>
@@ -61,7 +61,7 @@
 						<div>
 							<p class="edge-eyebrow">Owner-managed business profile</p>
 							<h2>Company details</h2>
-							<p>These fields are ProcessEdge Retail presentation/contact information. ERPNext Company remains authoritative for accounting and statutory setup.</p>
+							<p>These fields are ProcessEdge Retail presentation and contact information. Accounting and statutory settings remain controlled in the advanced Company configuration.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--primary" :disabled="!canWrite || savingProfile" @click="saveProfile">
 							{{ savingProfile ? "Saving..." : "Save Company profile" }}
@@ -103,7 +103,7 @@
 						<div>
 							<p class="edge-eyebrow">Business contact location</p>
 							<h2>Company address</h2>
-							<p>This address belongs to the ProcessEdge Retail business profile. It does not alter ERPNext accounting configuration.</p>
+							<p>This address belongs to the ProcessEdge Retail business profile. It does not alter accounting configuration.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--primary" :disabled="!canManageAddress || savingAddress" @click="saveAddress">
 							{{ savingAddress ? "Saving..." : "Save address" }}
@@ -125,14 +125,14 @@
 
 				<section class="edge-panel company-profile-advanced">
 					<div>
-						<p class="edge-eyebrow">Advanced ERPNext setup</p>
+						<p class="edge-eyebrow">Advanced company setup</p>
 						<h2>Accounting and statutory Company configuration</h2>
-						<p>Official Company name, abbreviation, base currency, country, tax setup, chart of accounts and default accounts remain in ERPNext Company.</p>
+						<p>Official Company name, abbreviation, base currency, country, tax setup, chart of accounts and default accounts remain in advanced Company settings.</p>
 					</div>
 					<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvanced">
-						Advanced: Open Company in ERPNext
+						Open Advanced Company Settings
 					</button>
-					<span v-else class="company-profile-muted">Advanced ERPNext access is not enabled for this user.</span>
+					<span v-else class="company-profile-muted">Advanced company settings are not available to this user.</span>
 				</section>
 			</div>
 		</EdgePageLayout>

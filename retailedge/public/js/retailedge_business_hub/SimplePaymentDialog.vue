@@ -3,10 +3,10 @@
 		:open="open"
 		:title="customerReview ? 'Customer Payment Review' : (supplierReview ? 'Supplier Payment Review' : (formContext.title || 'Payment'))"
 		:subtitle="customerReview
-			? 'Review the draft Payment Entry before ERPNext posts the customer payment.'
+			? 'Review the draft Payment Entry before posting the customer payment.'
 			: (supplierReview
-				? 'Review the draft Payment Entry before ERPNext posts the supplier payment.'
-				: (formContext.subtitle || 'Create a Payment Entry draft using ERPNext payment and allocation controls.'))"
+				? 'Review the draft Payment Entry before posting the supplier payment.'
+				: (formContext.subtitle || 'Create a Payment Entry draft using standard payment and allocation controls.'))"
 		size="xl"
 		@close="requestClose"
 	>
@@ -50,8 +50,8 @@
 			</div>
 
 			<div v-if="customerReview.blockers && customerReview.blockers.length" class="supplier-review-blockers" role="alert">
-				<strong v-if="customerReview.workflow_eligible">This Payment Entry is controlled by {{ customerReview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
-				<strong v-else>This draft needs Advanced ERPNext review before it can be submitted.</strong>
+				<strong v-if="customerReview.workflow_eligible">This Payment Entry is controlled by {{ customerReview.workflow_readiness?.workflow || 'Approval Workflow' }}.</strong>
+				<strong v-else>This draft needs advanced review before it can be submitted.</strong>
 				<ul>
 					<li v-for="blocker in customerReview.blockers" :key="blocker">{{ blocker }}</li>
 				</ul>
@@ -111,7 +111,7 @@
 
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
+				Submitting posts the Payment Entry through standard accounting controls. This workflow does not directly change
 				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
 			</p>
 		</div>
@@ -141,8 +141,8 @@
 			</div>
 
 			<div v-if="supplierReview.blockers && supplierReview.blockers.length" class="supplier-review-blockers" role="alert">
-				<strong v-if="supplierReview.workflow_eligible">This Payment Entry is controlled by {{ supplierReview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
-				<strong v-else>This draft needs Advanced ERPNext review before it can be submitted.</strong>
+				<strong v-if="supplierReview.workflow_eligible">This Payment Entry is controlled by {{ supplierReview.workflow_readiness?.workflow || 'Approval Workflow' }}.</strong>
+				<strong v-else>This draft needs advanced review before it can be submitted.</strong>
 				<ul>
 					<li v-for="blocker in supplierReview.blockers" :key="blocker">{{ blocker }}</li>
 				</ul>
@@ -204,7 +204,7 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
+				Submitting posts the Payment Entry through standard accounting controls. This workflow does not directly change
 				the Purchase Invoice outstanding amount, GL Entry, Payment Ledger Entry, or supplier balance.
 			</p>
 		</div>
@@ -330,7 +330,7 @@
 
 			<p class="guided-payment-hint">
 				<template v-if="isCustomerPayment">
-					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Quick Receive Customer Payment supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance. Payment Management handles advances and single-invoice settlement; multi-document allocation requires Advanced ERPNext.
+					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Quick Receive Customer Payment supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance. Payment Management handles advances and single-invoice settlement; multi-document allocation requires advanced review.
 				</template>
 				<template v-if="isSupplierPayment && !allowMultiReferenceSupplierPayment">
 					Only submitted Purchase Invoices with a positive outstanding balance are offered. Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.
@@ -360,7 +360,7 @@
 					:disabled="submitting"
 					@click="openReviewedCustomerPaymentInERPNext"
 				>
-					Open in ERPNext
+					Open Advanced Payment
 				</button>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="submitting" @click="requestClose">
@@ -395,7 +395,7 @@
 					:disabled="submitting"
 					@click="openReviewedPaymentInERPNext"
 				>
-					Open in ERPNext
+					Open Advanced Payment
 				</button>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="submitting" @click="requestClose">
@@ -425,7 +425,7 @@
 			<div v-else class="guided-payment-footer">
 				<div class="guided-payment-footer-actions">
 					<button v-if="canOpenManagedPage" type="button" class="edge-button" :disabled="saving" @click="openManagedPaymentPage">Open {{ managedPageLabel }}</button>
-					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced ERPNext</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced Payment</button>
 				</div>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
@@ -671,7 +671,7 @@ export default {
 				throw new Error(
 					this.allowMultiReferenceSupplierPayment
 						? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-						: "Quick Payment supports one invoice or order reference. Multi-document allocation requires Advanced ERPNext."
+						: "Quick Payment supports one invoice or order reference. Multi-document allocation requires advanced review."
 				);
 			}
 			const referenceNames = requestedReferenceNames.slice(0, maxReferences);
@@ -815,7 +815,7 @@ export default {
 			if (populatedReferences.length > maxReferences) {
 				this.saveError = this.allowMultiReferenceSupplierPayment
 					? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-					: "Quick Payment supports one invoice or order reference. Use Payment Management or Supplier Payables for managed settlement; multi-document customer allocation requires Advanced ERPNext.";
+					: "Quick Payment supports one invoice or order reference. Use Payment Management or Supplier Payables for managed settlement; multi-document customer allocation requires advanced review.";
 				this.values.references = previousRows;
 				return;
 			}
@@ -861,7 +861,7 @@ export default {
 			const references = (this.values.references || []).filter((row) => row?.reference_name);
 			const maxReferences = Number(this.formContext.limits?.max_references || 1);
 			if (references.length > maxReferences) {
-				throw new Error("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference. Multi-document allocation requires Advanced ERPNext.");
+				throw new Error("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference. Multi-document allocation requires advanced review.");
 			}
 			if (this.intent === "receive-sales-order-payment" && references.length !== 1) {
 				throw new Error("Receive Sales Order Payment requires one Sales Order reference.");
@@ -952,7 +952,7 @@ export default {
 				if (kind === "customer") await this.loadCustomerReview(review.payment_entry);
 				else await this.loadSupplierReview(review.payment_entry);
 			} catch (error) {
-				this.submitError = errorMessage(error, "Unable to apply the Payment Entry workflow action.");
+				this.submitError = errorMessage(error, "Unable to apply the payment approval action.");
 				try {
 					if (kind === "customer") await this.loadCustomerReview(review.payment_entry);
 					else await this.loadSupplierReview(review.payment_entry);
@@ -967,7 +967,7 @@ export default {
 			if (this.submitting || !this.customerReview?.can_submit) return;
 			this.submitError = "";
 			const confirmed = await confirmAction(
-				`Submit Payment Entry ${this.customerReview.payment_entry}? ERPNext will post this customer payment.`
+				`Submit Payment Entry ${this.customerReview.payment_entry}? This will post the customer payment.`
 			);
 			if (!confirmed) return;
 
@@ -997,7 +997,7 @@ export default {
 			if (this.submitting || !this.supplierReview?.can_submit) return;
 			this.submitError = "";
 			const confirmed = await confirmAction(
-				`Submit Payment Entry ${this.supplierReview.payment_entry}? ERPNext will post this supplier payment.`
+				`Submit Payment Entry ${this.supplierReview.payment_entry}? This will post the supplier payment.`
 			);
 			if (!confirmed) return;
 

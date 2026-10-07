@@ -34,8 +34,16 @@
 		>
 			<template #filters>
 				<div class="business-control-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="business-control-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@update:modelValue="onSmartDateModelChange"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeDropdown v-model="filters.follow_up_status" :options="['All', 'Open', 'Acknowledged', 'Snoozed']" label="Follow-up Status" />
 					<EdgeDropdown v-model="filters.assignment_scope" :options="[{ value: 'all', label: 'All Actions' }, { value: 'mine', label: 'My Actions' }]" label="Assignment" />
 					<EdgeDropdown v-model="filters.due_scope" :options="[{ value: 'all', label: 'All Timing' }, { value: 'due', label: 'Due / Overdue' }]" label="Follow-up Timing" />
@@ -127,7 +135,7 @@ import BusinessControlRow from "./BusinessControlRow.vue";
 import FinancialOverview from "./FinancialOverview.vue";
 import OwnerControlDetails from "./OwnerControlDetails.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown", "EdgeSmartDateRange"];
 const FILE_SCOPE_KEY = "business-control-center";
 const FILE_CAPABILITY_KEY = "owner-dashboard";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -169,6 +177,8 @@ export default {
 			canUseNativeDesk: false,
 			tenantName: "",
 			userName: "",
+			smartDate: {},
+			smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
@@ -192,6 +202,32 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.to_date = "";
+			this.resetLazyDetails();
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
+				return;
+			}
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.resetLazyDetails();
+		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -199,6 +235,8 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.action_center.get_action_center_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -225,6 +263,7 @@ export default {
 			try {
 				const result = await callMethod("retailedge.business_control_center.get_business_control_center", { filters: this.filters });
 				this.filters = { ...this.filters, ...(result.filters || {}) };
+				this.syncSmartDateFromFilters();
 				this.summaryRaw = result.summary || {};
 				this.items = result.items || [];
 				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
@@ -355,6 +394,7 @@ export default {
 
 <style scoped>
 .business-control-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.business-control-period-filter { min-width: 0; width: 100%; }
 .business-control-notice { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--orange-300, var(--edge-border)); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
 .business-control-notice span, .control-empty, .source-row small, .control-note span, .signal-row small { color: var(--edge-text-muted); font-size: 12px; }
 .control-list, .source-list { display: grid; gap: 9px; }

@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Complete Cash Movement"
-		subtitle="Review the saved ERPNext Internal Transfer and complete it through native submission or the active Frappe Workflow."
+		subtitle="Review the saved cash movement and complete it through submission or the configured approval workflow."
 		size="lg"
 		@close="requestClose"
 	>
@@ -39,12 +39,12 @@
 					<p v-if="preview.custody">
 						Available shift cash now: {{ preview.currency || "" }} {{ preview.custody.available_cash }}
 					</p>
-					<p>Final submission rechecks cashier custody and the approved Bank Account through the existing ERPNext before-submit hook.</p>
+					<p>Final submission rechecks cashier custody and the approved Bank Account before posting.</p>
 				</div>
 
 				<div class="authority-note">
-					<strong>ERPNext posting authority</strong>
-					<p>This workflow does not create General Ledger or Payment Ledger entries directly. Native Payment Entry submission remains authoritative.</p>
+					<strong>Accounting posting</strong>
+					<p>This review does not create ledger entries directly. Payment Entry submission handles the accounting posting.</p>
 				</div>
 
 				<div v-if="preview.blockers?.length" class="transfer-blockers">
@@ -56,7 +56,7 @@
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="workflow-note">
 					<div>
-						<span>Frappe Workflow</span>
+						<span>Approval workflow</span>
 						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
 					</div>
 					<p>{{ preview.workflow_readiness.message }}</p>
@@ -78,7 +78,7 @@
 					:disabled="busy"
 					@click="openAdvanced"
 				>
-					Advanced: Open in ERPNext
+					Open Advanced Payment
 				</button>
 				<div class="transfer-actions">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
@@ -124,7 +124,7 @@ function callMethod(method, args = {}) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export default {
@@ -218,7 +218,7 @@ export default {
 				}
 				await this.loadPreview();
 			} catch (error) {
-				this.actionError = errorMessage(error, "Unable to apply the Payment Entry workflow action.");
+				this.actionError = errorMessage(error, "Unable to apply the approval workflow action.");
 				await this.loadPreview();
 			} finally {
 				this.busy = false;

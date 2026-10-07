@@ -32,11 +32,11 @@
 					label: __("Accounting action"),
 					read_only: 1,
 					default: __(
-						"RetailEdge will run a fresh safety check and then reconcile the confirmed accounting candidate through ERPNext Bank Reconciliation. This action should be performed only once.",
+						"A fresh safety check will run before the confirmed accounting match is reconciled. This action should be performed only once.",
 					),
 				},
 			],
-			primary_action_label: __("Reconcile Through ERPNext"),
+			primary_action_label: __("Reconcile Match"),
 			primary_action: async () => {
 				if (submitting) return;
 				submitting = true;

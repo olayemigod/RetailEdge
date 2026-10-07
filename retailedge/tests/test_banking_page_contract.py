@@ -126,14 +126,16 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn("-webkit-line-clamp: 2", dense_css)
 		self.assertIn("@media (max-width: 900px)", dense_css)
 
-	def test_candidate_selection_is_edgesuite_and_keeps_fuzzy_supplemental(self):
+	def test_candidate_selection_is_edgesuite_and_runtime_copy_is_business_facing(self):
 		asset = WORKSPACE_JS.read_text()
+		completion = COMPLETION_JS.read_text()
 		self.assertIn("get_direction_aware_bank_candidates", asset)
 		self.assertIn("prepare_direction_aware_bank_candidate", asset)
 		self.assertIn('h(EdgeDropdown, {', asset)
-		self.assertIn("Accounting / Hard Score", asset)
-		self.assertIn("Supplemental Fuzzy Score", asset)
-		self.assertIn("Fuzzy evidence is supplemental only", asset)
+		self.assertIn('"Accounting / Hard Score", "Accounting Match Score"', completion)
+		self.assertIn('"Supplemental Fuzzy Score", "Supporting Match Score"', completion)
+		self.assertIn('"Fuzzy evidence is supplemental only", "Supporting evidence only"', completion)
+		self.assertIn("productionizeVisibleCopy", completion)
 
 	def test_smart_date_reuses_shared_edgesuite_component_and_only_sets_exact_filters(self):
 		fuzzy = FUZZY_JS.read_text()
@@ -234,18 +236,19 @@ class BankingPageContractTests(unittest.TestCase):
 			self.assertIn(class_name, page_css)
 		self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr))", page_css)
 
-	def test_final_reconciliation_requires_explicit_edgesuite_confirmation(self):
+	def test_final_reconciliation_requires_explicit_confirmation_and_business_copy(self):
 		asset = WORKSPACE_JS.read_text()
+		completion = COMPLETION_JS.read_text()
 		self.assertIn("Final Reconciliation", asset)
-		self.assertIn("ERPNext remains the reconciliation authority", asset)
-		self.assertIn("Submitted accounting documents will not be mutated", asset)
 		self.assertIn("state.reconcile.confirmed", asset)
 		self.assertIn('type: "checkbox"', asset)
-		self.assertIn("Reconcile Through ERPNext", asset)
 		self.assertIn("retailedge.banking_operations.match_and_reconcile", asset)
 		self.assertIn("confirm_match: 0", asset)
 		self.assertIn("confirm_reconciliation: 1", asset)
 		self.assertIn("state.reconcile.busy || !state.reconcile.confirmed", asset)
+		self.assertIn('"Reconcile Through ERPNext", "Reconcile Match"', completion)
+		self.assertIn('"ERPNext remains the reconciliation authority.", "Reconciliation uses the current accounting records."', completion)
+		self.assertIn("Submitted accounting documents will not be changed.", completion)
 
 
 if __name__ == "__main__":

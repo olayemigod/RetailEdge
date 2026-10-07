@@ -13,6 +13,10 @@ PERIOD_SURFACES = (
 )
 INVENTORY_PROFITABILITY = ROOT / "inventory_insights" / "InventoryInsightView.vue"
 BUSINESS_EXPENSES = ROOT / "business_expenses" / "BusinessExpenses.vue"
+BUSINESS_CONTROL = ROOT / "business_control_center" / "BusinessControlCenter.vue"
+STOCK_ACCOUNTING_INTEGRITY = (
+	ROOT / "stock_accounting_integrity" / "StockAccountingIntegrityReport.vue"
+)
 SALESPERSON_PERFORMANCE = (
 	ROOT / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue"
 )
@@ -143,3 +147,40 @@ def test_business_expense_queue_uses_shared_period_but_expense_date_stays_exact(
 	assert 'this.filters.to_date = ""' in text
 	assert "this.pagination.page = 1" in text
 	assert 'v-model="values.expense_date" class="edge-input" type="date" required' in text
+
+
+def test_business_control_uses_shared_period_and_preserves_from_to_backend_contract():
+	text = _source(BUSINESS_CONTROL)
+	assert '"EdgeSmartDateRange"' in text
+	assert "<EdgeSmartDateRange" in text
+	assert 'label="Period"' in text
+	assert ':referenceDate="smartDateReference || null"' in text
+	assert '@update:modelValue="onSmartDateModelChange"' in text
+	assert '@resolved="onSmartDateResolved"' in text
+	assert 'type="date"' not in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.to_date"' not in text
+	assert "this.filters.from_date = value.from_date" in text
+	assert "this.filters.to_date = value.to_date" in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.to_date = ""' in text
+	assert "business-control-period-filter { min-width: 0; width: 100%; }" in text
+
+
+def test_stock_accounting_integrity_uses_shared_period_and_preserves_native_date_contract():
+	text = _source(STOCK_ACCOUNTING_INTEGRITY)
+	assert '"EdgeSmartDateRange"' in text
+	assert "<EdgeSmartDateRange" in text
+	assert 'label="Period"' in text
+	assert ':referenceDate="smartDateReference || null"' in text
+	assert '@update:modelValue="onSmartDateModelChange"' in text
+	assert '@resolved="onSmartDateResolved"' in text
+	assert 'type="date"' not in text
+	assert 'v-model="filters.from_date"' not in text
+	assert 'v-model="filters.as_on_date"' not in text
+	assert "this.filters.from_date = value.from_date" in text
+	assert "this.filters.as_on_date = value.to_date" in text
+	assert 'this.filters.from_date = ""' in text
+	assert 'this.filters.as_on_date = ""' in text
+	assert "integrity-period-filter {" in text
+	assert "grid-template-columns: repeat(3, minmax(0, 1fr)) auto;" in text

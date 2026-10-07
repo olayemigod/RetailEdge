@@ -90,7 +90,7 @@ def _existing_draft_delivery_for_sales_order(sales_order: str):
 	}
 	if linked_orders != {sales_order}:
 		frappe.throw(
-			_("The existing draft Delivery Note combines multiple Sales Orders. Use Advanced ERPNext review.")
+			_("The existing draft Delivery Note combines multiple Sales Orders and requires advanced review.")
 		)
 	return doc
 
@@ -202,7 +202,7 @@ def _validate_mapped_delivery_stock_context(target, *, company: str, source_bran
 		frappe.throw(
 			_(
 				"The mapped Delivery Note spans Stock Locations from multiple Branches. "
-				"Use the native Delivery Note workflow to split the delivery safely."
+				"Use the full Delivery Note workflow to split the delivery safely."
 			)
 		)
 	mapped_branch = next(iter(resolved_branches), "") or _source_branch(target) or source_branch
@@ -248,9 +248,9 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 	# references, packed items, tax mapping and stock semantics.
 	target = erpnext_make_delivery_note(source.name)
 	if not target or target.doctype != "Delivery Note":
-		frappe.throw(_("ERPNext could not prepare a Delivery Note from this Sales Order."))
+		frappe.throw(_("A Delivery Note could not be prepared from this Sales Order."))
 	if target.docstatus != 0:
-		frappe.throw(_("ERPNext returned a non-draft Delivery Note mapping; creation was stopped."))
+		frappe.throw(_("The prepared Delivery Note was not a draft, so creation was stopped."))
 	if not target.get("items"):
 		frappe.throw(_("There are no remaining deliverable quantities on this Sales Order."))
 	if str(target.get("company") or "") != company:
@@ -306,9 +306,9 @@ def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any
 
 	target = erpnext_make_delivery_note_from_invoice(source.name)
 	if not target or target.doctype != "Delivery Note":
-		frappe.throw(_("ERPNext could not prepare a Delivery Note from this Sales Invoice."))
+		frappe.throw(_("A Delivery Note could not be prepared from this Sales Invoice."))
 	if target.docstatus != 0:
-		frappe.throw(_("ERPNext returned a non-draft Delivery Note mapping; creation was stopped."))
+		frappe.throw(_("The prepared Delivery Note was not a draft, so creation was stopped."))
 	if not target.get("items"):
 		frappe.throw(_("There are no remaining deliverable quantities on this Sales Invoice."))
 	if str(target.get("company") or "") != company:

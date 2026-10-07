@@ -11,6 +11,8 @@ DAILY_SALES_AUDIT_DOCTYPE = "RetailEdge Daily Sales Audit"
 REGISTER_BUSINESS_FILTERS = (
 	"pos_profile",
 	"cashier",
+	"pos_opening_shift",
+	"pos_closing_shift",
 	"audit_status",
 	"audit_result",
 )

@@ -122,19 +122,19 @@ def _standard_transfer_blockers(doc) -> list[str]:
 		blockers.append(_("Only Internal Transfer Payment Entries are supported by this standard path."))
 
 	if _clean(doc.get("party_type")) or _clean(doc.get("party")):
-		blockers.append(_("Party-based Payment Entries require Advanced ERPNext review."))
+		blockers.append(_("Party-based Payment Entries require advanced review."))
 	if list(doc.get("references") or []):
-		blockers.append(_("Allocated Payment Entries require Advanced ERPNext review."))
+		blockers.append(_("Allocated Payment Entries require advanced review."))
 	if list(doc.get("deductions") or []):
-		blockers.append(_("Payment Entries with deductions require Advanced ERPNext review."))
+		blockers.append(_("Payment Entries with deductions require advanced review."))
 	if abs(flt(doc.get("difference_amount"))) > 0.005:
-		blockers.append(_("Payment Entries with exchange differences require Advanced ERPNext review."))
+		blockers.append(_("Payment Entries with exchange differences require advanced review."))
 	if cint(doc.get("book_advance_payments_in_separate_party_account")):
-		blockers.append(_("Separate party-account advances require Advanced ERPNext review."))
+		blockers.append(_("Separate party-account advances require advanced review."))
 
 	custody_type = _clean(doc.get("retailedge_cash_custody_type"))
 	if custody_type and custody_type != CASH_DEPOSIT_TYPE:
-		blockers.append(_("Unsupported RetailEdge cash-custody Payment Entry requires Advanced ERPNext review."))
+		blockers.append(_("Unsupported cash-custody Payment Entry requires advanced review."))
 
 	return list(dict.fromkeys(blockers))
 
@@ -186,7 +186,7 @@ def _validate_accounts(doc, *, company: str) -> dict[str, Any]:
 		from_details["account_currency"] != company_currency
 		or to_details["account_currency"] != company_currency
 	):
-		blockers.append(_("Multi-currency internal transfers require Advanced ERPNext review."))
+		blockers.append(_("Multi-currency internal transfers require advanced review."))
 
 	paid_amount = flt(doc.get("paid_amount"))
 	received_amount = flt(doc.get("received_amount"))
@@ -387,7 +387,7 @@ def submit_standard_internal_transfer(
 	if _clean(workflow_readiness.get("source")) == "frappe":
 		frappe.throw(
 			_(
-				"Payment Entry is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
+				"Payment Entry is controlled by active approval workflow {0}. Use the available workflow action."
 			).format(workflow_readiness.get("workflow") or _("Payment Entry Workflow")),
 			frappe.ValidationError,
 		)
@@ -402,7 +402,7 @@ def submit_standard_internal_transfer(
 	# Marked Cash Deposits also execute the existing before_submit custody hook.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit Payment Entry {0}.").format(name))
+		frappe.throw(_("Payment Entry {0} was not submitted. Refresh and review it before retrying.").format(name))
 	doc.reload()
 	return {
 		"doctype": PAYMENT_ENTRY_DOCTYPE,
@@ -458,7 +458,7 @@ def apply_standard_internal_transfer_workflow_action(
 	)
 	if _clean(workflow_readiness.get("source")) != "frappe":
 		frappe.throw(
-			_("No active Frappe Workflow owns this Payment Entry."),
+			_("No active configured approval workflow owns this Payment Entry."),
 			frappe.ValidationError,
 		)
 

@@ -6,6 +6,17 @@
 	const EVIDENCE_METHOD = "retailedge.banking_readiness.get_match_account_evidence";
 	const OPERATIONAL_METHOD = "retailedge.banking_operations.get_bank_match_operational_status";
 	const payloads = new Map();
+	const PRODUCTION_COPY_REPLACEMENTS = [
+		["ERPNext reconciliation could not be completed.", "Reconciliation could not be completed."],
+		["Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.", "Confirmed match — reconciliation remains governed by approval and fresh accounting safety checks."],
+		["ERPNext remains the reconciliation authority.", "Reconciliation uses the current accounting records."],
+		["RetailEdge will run a fresh safety check against current accounting data before ERPNext Banking reconciliation. Submitted accounting documents will not be mutated.", "RetailEdge will run a fresh safety check against current accounting data before reconciliation. Submitted accounting documents will not be changed."],
+		["Reconcile Through ERPNext", "Reconcile Match"],
+		["Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking.", "Match bank inflows and outflows to valid accounting records, then reconcile after review."],
+		["Accounting / Hard Score", "Accounting Match Score"],
+		["Supplemental Fuzzy Score", "Supporting Match Score"],
+		["Fuzzy evidence is supplemental only", "Supporting evidence only"],
+	];
 	let latestMatchName = "";
 	let scheduled = false;
 
@@ -27,6 +38,28 @@
 			.replace(/[_-]+/g, " ")
 			.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
 			.replace(/\b\w/g, (letter) => letter.toUpperCase());
+	}
+
+	function productionizeText(value) {
+		let result = String(value ?? "");
+		for (const [from, to] of PRODUCTION_COPY_REPLACEMENTS) {
+			if (result.includes(from)) result = result.split(from).join(t(to));
+		}
+		return result;
+	}
+
+	function productionizeVisibleCopy(root = document.body) {
+		if (!root || !global.NodeFilter) return;
+		const walker = document.createTreeWalker(root, global.NodeFilter.SHOW_TEXT);
+		const nodes = [];
+		while (walker.nextNode()) nodes.push(walker.currentNode);
+		for (const textNode of nodes) {
+			const parentTag = textNode.parentElement?.tagName;
+			if (parentTag === "SCRIPT" || parentTag === "STYLE") continue;
+			const current = textNode.nodeValue || "";
+			const next = productionizeText(current);
+			if (next !== current) textNode.nodeValue = next;
+		}
 	}
 
 	function parseDetails(doc) {
@@ -86,7 +119,7 @@
 			});
 			payload.operational = response?.message || {};
 		} catch (_error) {
-			// The primary EdgeSuite review remains usable even if guidance hydration fails.
+			// The primary review remains usable even if guidance hydration fails.
 		}
 	}
 
@@ -136,6 +169,7 @@
 	async function enhanceReviewModal() {
 		scheduled = false;
 		if (!isBankingPage()) return;
+		productionizeVisibleCopy();
 		const modal = findReviewModal();
 		if (!modal || modal.dataset.retailedgeCompletion === "1") return;
 		const matchName = latestMatchName;
@@ -162,31 +196,32 @@
 		const grid = node("div", "retailedge-bank-completion-grid");
 		[
 			contextItem(t("Bank Narration"), doc.bank_narration || statement.description || details.bank_context?.description),
-			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank/GL mismatch.")),
-			contextItem(t("Payment Event Source"), doc.payment_event_source || candidate.payment_event_source),
+			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank-account mismatch.")),
+			contextItem(t("Payment Source"), doc.payment_event_source || candidate.payment_event_source),
 			contextItem(t("Business Category"), humanize(evidence.transaction_category || evidence.candidate_category || candidate.transaction_category || candidate.candidate_category)),
 		].filter(Boolean).forEach((item) => grid.appendChild(item));
 		context.appendChild(grid);
 
 		const hardEvidence = doc.match_reason_summary || doc.match_reason || candidate.accounting_evidence;
-		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supplemental fuzzy evidence recorded.");
+		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supporting match evidence recorded.");
 		const evidenceGrid = node("section", "retailedge-bank-review-section retailedge-bank-completion-evidence-grid");
 		evidenceGrid.appendChild(node("h3", "retailedge-bank-completion-evidence-title", t("Matching Evidence")));
 		const panels = node("div", "retailedge-bank-completion-evidence-panels");
-		panels.appendChild(evidencePanel(t("Accounting / Hard Match Evidence"), hardEvidence, "accounting"));
-		panels.appendChild(evidencePanel(t("Fuzzy / Supplemental Evidence"), fuzzyEvidence, "fuzzy"));
+		panels.appendChild(evidencePanel(t("Accounting Evidence"), hardEvidence, "accounting"));
+		panels.appendChild(evidencePanel(t("Supporting Match Evidence"), fuzzyEvidence, "fuzzy"));
 		evidenceGrid.appendChild(panels);
 
 		const guidance = node("section", "retailedge-bank-review-section retailedge-bank-completion-guidance");
 		guidance.appendChild(node("h3", "", t("Operational Guidance")));
 		const action = clean(operational.recommended_action);
-		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", action));
-		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
+		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", productionizeText(action)));
+		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. Final reconciliation runs only after confirmation and a fresh accounting safety check.")));
 
 		body.insertBefore(guidance, insertBefore);
 		body.insertBefore(evidenceGrid, guidance);
 		body.insertBefore(context, evidenceGrid);
 		modal.dataset.retailedgeCompletion = "1";
+		productionizeVisibleCopy(modal);
 	}
 
 	function scheduleEnhancement() {
@@ -207,6 +242,6 @@
 	};
 
 	const observer = new MutationObserver(scheduleEnhancement);
-	observer.observe(document.documentElement, { childList: true, subtree: true });
+	observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 	global.retailedgeBankingEdgeSuiteCompletionInstalled = true;
 })(window);

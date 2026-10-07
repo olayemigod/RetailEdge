@@ -53,7 +53,7 @@
 			<template #resultMeta>
 				<span>{{ scan.rows || 0 }} matching audit{{ Number(scan.rows || 0) === 1 ? "" : "s" }}</span>
 				<span>Bounded audit dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
-				<span>Legacy Daily Sales Audit Register retained for detailed comparison</span>
+				<span>Approval and clarification workflow</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -65,7 +65,7 @@ const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "daily-sales-audit";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 
 export default {
 	name: "DailySalesAuditReport",
@@ -94,9 +94,12 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.daily_sales_audit_page.get_daily_sales_audit_page_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("daily-sales-audit") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.cashierLabel = hubHandoff.cashier || "";
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
-				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Daily Sales Audit controls."); }
 			finally { this.metadataLoading = false; }

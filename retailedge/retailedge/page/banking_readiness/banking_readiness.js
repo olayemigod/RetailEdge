@@ -208,7 +208,7 @@
 							h(EdgeStatusBadge, { status: row.readiness || "Warning" }),
 						]),
 						h("div", { class: "retailedge-readiness-context-grid" }, [
-							contextItem("GL Account", row.resolved_gl_account),
+							contextItem("Ledger Account", row.resolved_gl_account),
 							contextItem("Branch Scope", branchScope, row.branch ? "Scoped" : "Company Wide"),
 							contextItem("Mode of Payment", modes.join(", ") || t("No default"), modes.length ? "Configured" : "Supporting only"),
 							contextItem("Reconciliation", reconciliation, row.can_reconcile ? "Allowed" : "Blocked"),
@@ -218,8 +218,8 @@
 							h("ul", items.map(issueRow)),
 						]) : h("p", { class: "retailedge-readiness-clear" }, t("No banking setup issues were detected for this account.")),
 						h("footer", { class: "retailedge-readiness-card__actions" }, [
-							state.canUseNativeDesk && row.resolved_gl_account ? actionButton(t("Open GL Account"), "secondary", () => global.frappe.set_route("Form", "Account", row.resolved_gl_account)) : null,
-							state.canUseNativeDesk ? actionButton(t("Open ERPNext Bank Account"), "secondary", () => openNativeBankAccount(row.bank_account)) : null,
+							state.canUseNativeDesk && row.resolved_gl_account ? actionButton(t("Open Ledger Account"), "secondary", () => global.frappe.set_route("Form", "Account", row.resolved_gl_account)) : null,
+							state.canUseNativeDesk ? actionButton(t("Open Bank Account"), "secondary", () => openNativeBankAccount(row.bank_account)) : null,
 						]),
 					]);
 				}
@@ -244,7 +244,7 @@
 						header: () => h(EdgePageHeader, {
 							eyebrow: t("Banking"),
 							title: t("Banking Setup & Readiness"),
-							subtitle: t("Verify ERPNext Bank Account, GL, company and supporting payment context before matching or reconciliation."),
+							subtitle: t("Verify bank account, ledger account, company and supporting payment context before matching or reconciliation."),
 						}, {
 							actions: () => [
 								actionButton(t("Bank Matching & Reconciliation"), "secondary", () => global.frappe.set_route("bank-matching-reconciliation")),
@@ -279,7 +279,7 @@
 							state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
 							!state.loading && !state.error && !visibleRows.value.length ? h(EdgeEmptyState, {
 								title: state.readinessFilter === "All" ? t("No Bank Accounts found") : t("No bank accounts in this readiness state"),
-								description: state.readinessFilter === "All" ? t("Select another company or configure an ERPNext Bank Account that you are permitted to use.") : t("Choose another readiness state or company to continue."),
+								description: state.readinessFilter === "All" ? t("Select another company or configure a Bank Account that you are permitted to use.") : t("Choose another readiness state or company to continue."),
 							}) : null,
 							!state.loading && !state.error ? h("div", { class: "retailedge-readiness-list" }, visibleRows.value.map(rowCard)) : null,
 						],
