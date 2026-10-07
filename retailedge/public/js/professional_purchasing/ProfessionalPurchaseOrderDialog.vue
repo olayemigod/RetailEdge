@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="formContext.title || 'New Purchase Order'"
-		:subtitle="formContext.subtitle || 'Prepare a standard ERPNext Purchase Order draft.'"
+		:subtitle="customerFacingCopy(formContext.subtitle, 'Prepare a standard Purchase Order draft with supplier, receiving location and buying-price controls.')"
 		size="xl"
 		@close="requestClose"
 	>
@@ -26,7 +26,7 @@
 					:modelValue="values.supplier"
 					label="Supplier"
 					placeholder="Search supplier"
-					description="Only suppliers permitted by ERPNext are available."
+					description="Only suppliers available within your permitted purchasing scope are shown."
 					:required="true"
 					:searcher="searchSupplier"
 					:context="searchContext"
@@ -94,7 +94,7 @@
 			/>
 
 			<p class="guided-po-hint">
-				Buying Rate is resolved again on the server from the Price List selected by the merchant's governance policy, ERPNext item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
+				Buying Rate is resolved again from the governed Buying Price List, configured item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -105,7 +105,7 @@
 
 		<template #footer>
 			<div class="guided-po-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open Purchase Order</button>
 				<div class="guided-po-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">
@@ -147,6 +147,19 @@ function emptyValues() {
 	};
 }
 
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/\bERPNext\b/gi, "")
+		.replace(/\bFrappe\b/gi, "")
+		.replace(/\bEdgeSuite\b/gi, "the workspace")
+		.replace(/\bNative Desk\b/gi, "advanced access")
+		.replace(/\s{2,}/g, " ")
+		.replace(/\s+([.,;:])/g, "$1")
+		.trim();
+}
+
 function sourceLabel(source) {
 	return {
 		branch_default: "Branch default",
@@ -155,10 +168,10 @@ function sourceLabel(source) {
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
 		party_default: "Supplier default",
-		erpnext_default: "ERPNext default",
+		erpnext_default: "Default Buying Price List",
 		standard_price_list: "Standard Buying",
 		item_fallback: "Item fallback",
-	}[source] || "ERPNext pricing";
+	}[source] || "Configured pricing";
 }
 
 export default {
@@ -214,6 +227,7 @@ export default {
 	},
 	mounted() { if (this.open) this.loadContext(); },
 	methods: {
+		customerFacingCopy,
 		async loadContext() {
 			this.loading = true;
 			this.loadError = "";
