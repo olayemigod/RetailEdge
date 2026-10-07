@@ -151,6 +151,23 @@ test("RetailEdge cashier cannot open Shift Reconciliation", async ({ browser }) 
 	}
 });
 
+test("RetailEdge manager sees one fuzzy Period on remaining control surfaces", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "business-control-center", "Business Control Centre");
+		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("To Date", { exact: true })).toHaveCount(0);
+
+		await openProductPage(page, "stock-accounting-integrity", "Stock & Accounting Integrity");
+		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("As On Date", { exact: true })).toHaveCount(0);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
