@@ -11,6 +11,15 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# EdgeSuite product availability is product-owned. RetailEdge explicitly
+# publishes its descriptor rather than relying on installation alone.
+edgesuite_product_availability_providers = [
+	"retailedge.product_context.get_product_availability",
+]
+edgesuite_print_context_validators = [
+	"retailedge.product_context.validate_print_context",
+]
+
 # Apps
 # ------------------
 
@@ -98,7 +107,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_documents_list.js",
+	"Purchase Order": "public/js/purchase_order_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -107,7 +116,6 @@ doctype_list_js = {
 
 # Svg Icons
 # ------------------
-# include app icons in desk
 
 # Home Pages
 # ----------
@@ -152,13 +160,13 @@ jinja = {
 # To set up dependencies/integrations with other apps
 # Name of app being installed is passed as an argument
 
-# before_app_install = "retailedge.utils.before_app_install"
-# after_app_install = "retailedge.utils.after_app_install"
+# before_app_install = "retailedge.utils.before_install"
+# after_app_install = "retailedge.utils.after_install"
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_app_uninstall"
-# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+# before_app_uninstall = "retailedge.uninstall.before_uninstall"
+# after_app_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
@@ -249,6 +257,7 @@ after_migrate = [
 	"retailedge.pos_cashier_expense.ensure_pos_closing_cashier_expense_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
+	"retailedge.print_output_settings.ensure_print_output_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 	"retailedge.desktop_identity.sync_retailedge_desktop_identity",
 ]

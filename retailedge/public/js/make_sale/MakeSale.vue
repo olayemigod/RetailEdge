@@ -48,6 +48,15 @@
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
+						<button
+							v-if="Number(savedDocument.docstatus || 0) === 1"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="receiptPrinting"
+							@click="printSavedReceipt"
+						>
+							{{ receiptPrinting ? "Printing..." : "Print Receipt" }}
+						</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" type="button" class="edge-button" @click="runSavedNextAction('output')">Print / Share</button>
 						<button type="button" class="edge-button" @click="startAnother">Start Another Sale</button>
 					</div>
@@ -309,6 +318,10 @@ import {
 import StandardDeliveryCompletionDialog from "../professional_selling/StandardDeliveryCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
+import {
+	openRetailPrinterSetup,
+	printRetailReceipt,
+} from "../thermalReceiptPrinting";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
@@ -411,6 +424,7 @@ export default {
 			editingSavedDraft: false,
 			workflowBusy: false,
 			workflowError: "",
+			receiptPrinting: false,
 			deliveryCompletionOpen: false,
 			deliveryCompletionDocument: null,
 			paymentOpen: false,
@@ -1271,6 +1285,46 @@ export default {
 			if (payload?.action === "output" && payload?.name) {
 				this.closeDeliveryCompletion();
 				this.openDocumentOutput("delivery-note", payload.name);
+			}
+		},
+		async printSavedReceipt() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 1 || this.receiptPrinting) return;
+			this.receiptPrinting = true;
+			const printerContext = {
+				company: this.savedDocument.company || this.values.company || this.tenantName || "",
+				branch: this.savedDocument.branch || this.values.branch || this.branchName || "",
+			};
+			try {
+				const result = await printRetailReceipt({
+					document: "sales-invoice",
+					name: this.savedDocument.name,
+					...printerContext,
+				});
+				frappe.show_alert({
+					message: `${result.copies || 1} receipt copy/copies printed.`,
+					indicator: "green",
+				});
+			} catch (error) {
+				const message = errorMessage(error, "Unable to print this Sales Invoice receipt.");
+				const setupRequired = [
+					"RETAIL_PRINTER_PROFILE_REQUIRED",
+					"RETAIL_DIRECT_PRINTER_REQUIRED",
+					"RETAIL_PRINTER_SETUP_REQUIRED",
+				].includes(error?.code);
+				if (setupRequired) {
+					frappe.confirm(
+						`${message} Open Devices & Printing now?`,
+						() => openRetailPrinterSetup(printerContext),
+					);
+				} else {
+					frappe.msgprint({
+						title: "Receipt printing failed",
+						message,
+						indicator: "red",
+					});
+				}
+			} finally {
+				this.receiptPrinting = false;
 			}
 		},
 		openDocumentOutput(document, name) {
