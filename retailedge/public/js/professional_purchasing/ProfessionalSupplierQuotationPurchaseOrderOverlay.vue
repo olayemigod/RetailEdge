@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Prepare Purchase Order"
-		subtitle="Review ERPNext's Supplier Quotation mapping before creating a draft Purchase Order."
+		subtitle="Review the Supplier Quotation details before creating a draft Purchase Order."
 		size="xl"
 		@close="close"
 	>
@@ -28,8 +28,8 @@
 				<span>An active Purchase Order already references this Supplier Quotation. Review the existing order instead of creating a duplicate.</span>
 			</div>
 			<div v-else class="quotation-po-preview__ready">
-				<strong>ERPNext mapping preview passed.</strong>
-				<span>No Purchase Order has been saved yet. Quotation rates, taxes and item references come from ERPNext's standard mapper.</span>
+				<strong>Purchase Order preview passed.</strong>
+				<span>No Purchase Order has been saved yet. Quotation rates, taxes and item references are carried into the draft using standard purchasing rules.</span>
 			</div>
 
 			<div class="table-responsive">
@@ -79,7 +79,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 export default {
 	name: "ProfessionalSupplierQuotationPurchaseOrderOverlay",
