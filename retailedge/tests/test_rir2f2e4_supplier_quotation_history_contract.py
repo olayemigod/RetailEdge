@@ -82,8 +82,8 @@ def test_native_supplier_quotation_access_is_explicit_advanced_only():
 	assert 'const ACCESS_MODE = "edgesuite_only"' in overlay
 	assert 'Boolean(access.can_use_native_desk)' in overlay
 	assert "nativeFallbackEnabled" in overlay
-	assert "Advanced: Open in ERPNext" in overlay
-	assert "Advanced: Supplier Quotations in ERPNext" in overlay
+	assert "Advanced: Open Supplier Quotation" in overlay
+	assert "Advanced: Supplier Quotations" in overlay
 	assert 'frappe.set_route("Form", "Supplier Quotation", name)' in overlay
 	assert 'frappe.set_route("List", "Supplier Quotation")' in overlay
 	assert '"Supplier Quotation",' in guard
