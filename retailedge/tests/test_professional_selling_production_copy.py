@@ -110,7 +110,24 @@ def test_professional_selling_records_uses_document_specific_advanced_copy():
 	text = _read("public/js/professional_selling/ProfessionalSellingRecords.vue")
 
 	assert "Advanced: Open in ERPNext" not in text
+	assert "without changing the table structure" not in text
+	assert "Search, filter, review, print or share, and complete permitted selling records." in text
 	assert '`Advanced: Open ${this.activeDocument?.label || "Record"}`' in text
 	assert 'if (this.canUseNativeDesk)' in text
 	assert 'value: "advanced"' in text
 	assert 'this.$emit("action", { action, actionDefinition: option, document: this.activeDocument, row });' in text
+
+
+def test_guided_workflow_completion_uses_business_advanced_copy_and_safe_errors():
+	text = _read("public/js/retailedge_business_hub/GuidedWorkflowCompletionDialog.vue")
+
+	assert "Advanced: Open in ERPNext" not in text
+	assert "Advanced: Open {{ label }}" in text
+	assert "window.retailedge?.userErrorMessage?.(error, fallback) || fallback" in text
+
+	# Advanced access remains permission-gated and keeps the existing route behavior.
+	assert 'v-if="canUseNativeDesk && document?.name"' in text
+	assert "if (!this.canUseNativeDesk || !this.document?.doctype || !this.document?.name) return;" in text
+	assert "const slug = frappe.router.slug(this.document.doctype);" in text
+	assert "window.open(" in text
+	assert '`/app/${slug}/${encodeURIComponent(this.document.name)}`' in text

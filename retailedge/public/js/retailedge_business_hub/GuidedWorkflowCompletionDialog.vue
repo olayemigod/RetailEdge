@@ -48,7 +48,7 @@
 					:disabled="busy"
 					@click="openAdvanced"
 				>
-					Advanced: Open in ERPNext
+					Advanced: Open {{ label }}
 				</button>
 				<div class="workflow-actions">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">
@@ -91,7 +91,7 @@ function callMethod(method, args = {}) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export default {
