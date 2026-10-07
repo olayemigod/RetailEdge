@@ -38,6 +38,9 @@ def test_delivery_completion_uses_business_facing_copy_and_preserves_stock_autho
 	):
 		assert contract in text
 
+	# Keep Vue methods outside the watch block; this catches accidental brace loss in full-file edits.
+	assert "\t\t},\n\t},\n\tmethods: {" in text
+
 	for forbidden in (
 		".workflow_state =",
 		".docstatus =",
