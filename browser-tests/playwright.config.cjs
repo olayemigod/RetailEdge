@@ -2,7 +2,7 @@ const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
 	testDir: __dirname,
-	testMatch: /retailedge_(?:mvp_smoke|rc3_acceptance)\.spec\.cjs/,
+	testMatch: /retailedge_(?:mvp_smoke|rc3_acceptance|printing_shell)\.spec\.cjs/,
 	fullyParallel: false,
 	retries: 0,
 	workers: 1,

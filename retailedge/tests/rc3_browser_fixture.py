@@ -23,6 +23,7 @@ EXTRA_PERSONAS = {
 }
 
 ACTIVE_ASSIGNMENTS = {
+	"Administrator": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-branch-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-cashier@example.com": (("RetailEdge RC3 Lagos", "Cashier", 1),),
@@ -158,6 +159,12 @@ def seed_rc3_personas() -> dict:
 			default_warehouse=warehouses[branch_name],
 			is_default=index == 0,
 		)
+
+	# Printing acceptance uses Administrator so seed the same deterministic
+	# operating Company/Branch contract as the product personas. This stays in
+	# the browser fixture only; production operating-context resolution remains
+	# permission- and assignment-aware.
+	frappe.defaults.set_user_default("Company", COMPANY, user="Administrator")
 
 	for email, assignments in ACTIVE_ASSIGNMENTS.items():
 		for branch_name, branch_role, is_primary in assignments:

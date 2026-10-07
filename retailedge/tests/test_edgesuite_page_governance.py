@@ -14,6 +14,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "operating_context" / "operating_context.js",
 		"bundle": APP_ROOT / "public" / "js" / "operating_context.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "operating_context" / "OperatingContext.vue",
+		"runtime_asset": "edgeui.bundle.js",
 		"asset": "operating_context.bundle.js",
 		"mount": "mountRetailEdgeOperatingContext",
 		"component_name": "OperatingContext.vue",
@@ -22,6 +23,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.js",
 		"bundle": APP_ROOT / "public" / "js" / "retailedge_setup.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "retailedge_setup" / "RetailEdgeSetup.vue",
+		"runtime_asset": "edgeui.bundle.js",
 		"asset": "retailedge_setup.bundle.js",
 		"mount": "mountRetailEdgeSetup",
 		"component_name": "RetailEdgeSetup.vue",
@@ -30,6 +32,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "transaction_workspace" / "transaction_workspace.js",
 		"bundle": APP_ROOT / "public" / "js" / "transaction_workspace.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "transaction_workspace" / "TransactionWorkspace.vue",
+		"runtime_asset": "edgeui.bundle.js",
 		"asset": "transaction_workspace.bundle.js",
 		"mount": "mountRetailEdgeTransactionWorkspace",
 		"component_name": "TransactionWorkspace.vue",
@@ -38,6 +41,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "professional_selling" / "professional_selling.js",
 		"bundle": APP_ROOT / "public" / "js" / "professional_selling.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSelling.vue",
+		"runtime_asset": "edgeui.bundle.js",
 		"asset": "professional_selling.bundle.js",
 		"mount": "mountRetailEdgeProfessionalSelling",
 		"component_name": "ProfessionalSelling.vue",
@@ -46,6 +50,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "document_output_sharing" / "document_output_sharing.js",
 		"bundle": APP_ROOT / "public" / "js" / "document_output_sharing.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "document_output_sharing" / "DocumentOutputSharing.vue",
+		"runtime_asset": "edgesuite_ui.bundle.js",
 		"asset": "document_output_sharing.bundle.js",
 		"mount": "mountRetailEdgeDocumentOutputSharing",
 		"component_name": "DocumentOutputSharing.vue",
@@ -61,7 +66,7 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 				bundle = files["bundle"].read_text(encoding="utf-8")
 				component = files["component"].read_text(encoding="utf-8")
 
-				self.assertIn('"edgeui.bundle.js"', loader)
+				self.assertIn(f'"{files["runtime_asset"]}"', loader)
 				self.assertIn(f'"{files["asset"]}"', loader)
 				self.assertIn("window.EdgeSuiteUI", loader)
 				self.assertIn(files["mount"], loader)
@@ -75,6 +80,11 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 				self.assertIn("EdgeLoadingState", component)
 				self.assertIn("EdgeErrorState", component)
 				self.assertIn("retailedge.master_experience.get_retailedge_business_hub_context", component)
+
+	def test_document_output_keeps_canonical_runtime_lineage_for_shared_printing_navigation(self):
+		loader = EDGE_SUITE_REQUIRED_PAGES["document_output_sharing"]["loader"].read_text(encoding="utf-8")
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js";', loader)
+		self.assertNotIn('const EDGEUI_ASSET = "edgeui.bundle.js";', loader)
 
 	def test_operating_context_keeps_server_authority(self):
 		component = EDGE_SUITE_REQUIRED_PAGES["operating_context"]["component"].read_text(encoding="utf-8")
