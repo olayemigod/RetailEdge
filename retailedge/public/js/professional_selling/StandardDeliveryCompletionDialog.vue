@@ -61,8 +61,8 @@
 				</section>
 
 				<div class="delivery-stock-note">
-					<strong>Stock posting</strong>
-					<p>Submitting this Delivery Note uses ERPNext native stock posting. This workflow does not create Stock Ledger entries or valuation effects directly.</p>
+					<strong>Stock impact</strong>
+					<p>Submitting this Delivery Note updates stock through the normal stock controls. This review screen does not post stock independently.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="delivery-completion-items">
@@ -78,7 +78,7 @@
 				</div>
 
 				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="delivery-completion-blockers">
-					<strong>Standard delivery completion is blocked</strong>
+					<strong>Completion needs attention</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
 					</ul>
@@ -86,8 +86,8 @@
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="delivery-completion-workflow">
 					<div>
-						<span>Frappe Workflow</span>
-						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
+						<span>Approval workflow</span>
+						<strong>{{ preview.workflow_readiness.workflow || "Active approval workflow" }}</strong>
 					</div>
 					<p>{{ preview.workflow_readiness.message }}</p>
 					<p v-if="preview.workflow_readiness.current_state">
@@ -230,8 +230,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 0
-				? "Review the saved ERPNext Delivery Note and complete it through native stock submission or the active Frappe Workflow."
-				: "Review the saved ERPNext Delivery Note and continue with any permitted next workflow.";
+				? "Review the saved Delivery Note and submit it, or continue through the active approval workflow."
+				: "Review the saved Delivery Note and continue with any permitted next step.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
@@ -268,7 +268,6 @@ export default {
 			handler() {
 				if (this.open) this.loadPreview();
 			},
-		},
 	},
 	methods: {
 		async loadPreview() {
