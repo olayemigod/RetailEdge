@@ -8,6 +8,7 @@ import frappe
 from retailedge.master_experience import (
 	get_retailedge_business_hub_context as _get_master_business_hub_context,
 )
+from retailedge.printing_navigation import normalize_printing_navigation
 
 
 SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
@@ -81,9 +82,12 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return final RetailEdge navigation with consolidated shift review surfaces."""
+	"""Return final RetailEdge navigation with shift and printing governance composed."""
 	context = deepcopy(_get_master_business_hub_context() or {})
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
 	context["navigation_groups"] = navigation_groups
-	return context
+	# Printing normalization is presentation/navigation-only. It runs last so the
+	# final Business Hub keeps the current consolidated review model while shared
+	# Devices & Printing remains a queryless internal Page route.
+	return normalize_printing_navigation(context)
