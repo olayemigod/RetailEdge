@@ -81,6 +81,27 @@ SETTINGS_GROUPS = (
 		),
 	},
 	{
+		"key": "receipt-presentation",
+		"label": "Receipts & Printing",
+		"description": "Control customer-facing receipt wording and optional presentation without changing transaction or accounting truth.",
+		"sections": (
+			{
+				"label": "Receipt Content",
+				"fields": (
+					"show_receipt_status",
+					"receipt_status_label",
+					"show_receipt_payment_method",
+					"receipt_payment_method_label",
+					"show_receipt_amount_in_words",
+					"receipt_amount_in_words_label",
+					"show_receipt_footer_separator",
+					"show_receipt_footer",
+					"receipt_footer_message",
+				),
+			},
+		),
+	},
+	{
 		"key": "cashier-expenses",
 		"label": "Cashier Expenses",
 		"description": "Cashier expense capture, shift controls and accounting-posting readiness.",
