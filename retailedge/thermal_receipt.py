@@ -193,15 +193,38 @@ def _item_table_blocks(doc, paper_width: int) -> list[dict[str, Any]]:
 	return blocks
 
 
-def _payment_blocks(doc, currency: str, paper_width: int) -> list[dict[str, Any]]:
+def _receipt_presentation_blocks(receipt: dict[str, Any], paper_width: int) -> list[dict[str, Any]]:
+	"""Render optional merchant-controlled receipt content from canonical context."""
 	blocks: list[dict[str, Any]] = []
-	payments = doc.get("payments") if doc.meta.has_field("payments") else []
-	for payment in payments or []:
-		amount = flt(payment.get("amount"))
-		if not amount:
-			continue
-		label = _text(payment.get("mode_of_payment")) or _("Payment")
-		blocks.extend(_label_value_blocks(label, _money(amount, currency), paper_width))
+	status = _text(receipt.get("status"))
+	if cint(receipt.get("show_status")) and status:
+		blocks.extend(
+			_label_value_blocks(
+				_text(receipt.get("status_label")) or _("Status"),
+				status,
+				paper_width,
+				bold=True,
+			)
+		)
+	payment_method = _text(receipt.get("payment_method"))
+	if cint(receipt.get("show_payment_method")) and payment_method:
+		blocks.extend(
+			_label_value_blocks(
+				_text(receipt.get("payment_method_label")) or _("Payment Method"),
+				payment_method,
+				paper_width,
+			)
+		)
+	amount_in_words = _text(receipt.get("amount_in_words"))
+	if cint(receipt.get("show_amount_in_words")) and amount_in_words:
+		label = _text(receipt.get("amount_in_words_label")) or _("Amount in Words")
+		blocks.append(
+			{
+				"type": "text",
+				"text": f"{label}: {amount_in_words}",
+				"align": "center",
+			}
+		)
 	return blocks
 
 
@@ -222,6 +245,7 @@ def _receipt_blocks(doc, definition: dict[str, Any], paper_width: int) -> list[d
 	"""Return a thermal-safe rendition of the canonical PEdge receipt template."""
 	currency = _text(doc.get("currency")) or "NGN"
 	output = get_business_print_context(doc)
+	receipt = dict(output.get("receipt") or {})
 	company_label = _text(output.get("display_name") or output.get("company") or doc.get("company"))
 	address = _text(output.get("address"))
 	phone = _text(output.get("phone"))
@@ -269,7 +293,6 @@ def _receipt_blocks(doc, definition: dict[str, Any], paper_width: int) -> list[d
 			)
 		)
 
-	blocks.extend(_payment_blocks(doc, currency, paper_width))
 	if doc.meta.has_field("paid_amount") and flt(doc.get("paid_amount")):
 		blocks.extend(_label_value_blocks(_("Paid"), _money(doc.get("paid_amount"), currency), paper_width))
 	if doc.meta.has_field("change_amount") and flt(doc.get("change_amount")):
@@ -300,21 +323,18 @@ def _receipt_blocks(doc, definition: dict[str, Any], paper_width: int) -> list[d
 			)
 		)
 
-	in_words = _text(doc.get("in_words")) if doc.meta.has_field("in_words") else ""
-	if in_words:
-		blocks.append({"type": "text", "text": in_words, "align": "center"})
+	blocks.extend(_receipt_presentation_blocks(receipt, paper_width))
 
-	blocks.append({"type": "rule"})
 	qr_payload = get_business_document_qr_payload(doc, company_label)
 	if qr_payload:
 		blocks.append({"type": "qr", "value": qr_payload, "align": "center", "size": 4})
-	blocks.append(
-		{
-			"type": "text",
-			"text": _("Thank you for your business."),
-			"align": "center",
-		}
-	)
+
+	footer_message = _text(receipt.get("footer_message"))
+	show_footer = bool(cint(receipt.get("show_footer")) and footer_message)
+	if show_footer and cint(receipt.get("show_footer_separator")):
+		blocks.append({"type": "rule"})
+	if show_footer:
+		blocks.append({"type": "text", "text": footer_message, "align": "center"})
 	return blocks
 
 
