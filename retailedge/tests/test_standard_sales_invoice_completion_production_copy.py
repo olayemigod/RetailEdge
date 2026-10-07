@@ -50,7 +50,7 @@ def test_sales_invoice_completion_uses_business_facing_copy_and_preserves_accoun
 		"apply_standard_sales_invoice_workflow_action",
 		"get_standard_sales_invoice_completion_item_pricing",
 		"get_professional_selling_record_actions",
-		"return_outstanding_policy?.mode === 'reduce_source_outstanding'",
+		"preview.return_outstanding_policy.mode === 'reduce_source_outstanding'",
 		"preview.can_edit_update_stock",
 		"canOverrideRate",
 		"source_locked",
