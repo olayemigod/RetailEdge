@@ -28,6 +28,25 @@ def test_professional_purchasing_shell_uses_business_facing_copy():
 	assert "window.retailedge?.userErrorMessage?.(error" in text
 
 
+def test_purchase_order_dialog_uses_business_facing_copy():
+	text = _read("public/js/professional_purchasing/ProfessionalPurchaseOrderDialog.vue")
+
+	for phrase in (
+		"standard ERPNext Purchase Order",
+		"permitted by ERPNext",
+		"ERPNext item pricing",
+		"ERPNext default",
+		"ERPNext pricing",
+		"Advanced: Open in ERPNext",
+	):
+		assert phrase not in text
+
+	assert "Advanced: Open Purchase Order" in text
+	assert "Default Buying Price List" in text
+	assert "Configured pricing" in text
+	assert "customerFacingCopy(formContext.subtitle" in text
+
+
 def test_rfq_history_overlay_sanitizes_static_and_runtime_copy():
 	text = _read("public/js/professional_purchasing/ProfessionalRfqHistoryOverlay.vue")
 
@@ -66,6 +85,21 @@ def test_purchase_receipt_review_hides_platform_implementation_copy():
 	assert "customerFacingCopy(blocker.label" in text
 	assert "customerFacingCopy(preview.workflow_readiness?.message" in text
 	assert "window.retailedge?.userErrorMessage?.(error" in text
+
+
+def test_purchase_receipt_history_hides_platform_implementation_copy():
+	text = _read("public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue")
+
+	for phrase in (
+		"Advanced: Open in ERPNext",
+		"Advanced: Purchase Receipts in ERPNext",
+	):
+		assert phrase not in text
+
+	assert "Advanced: Open Purchase Receipt" in text
+	assert "Advanced: Purchase Receipts" in text
+	assert "window.retailedge?.userErrorMessage?.(error" in text
+	assert "customerFacingCopy(message" in text
 
 
 def test_purchase_return_review_hides_platform_implementation_copy():
