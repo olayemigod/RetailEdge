@@ -109,10 +109,9 @@
 				</div>
 			</div>
 
-
 			<p class="guided-payment-hint">
-				Submitting posts the Payment Entry through standard accounting controls. This workflow does not directly change
-				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
+				Submitting posts the Payment Entry through standard accounting controls.
+				The payment is applied through the normal posting process; this review does not directly edit the source Sales Invoice/Sales Order or customer balance.
 			</p>
 		</div>
 
@@ -204,8 +203,8 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting posts the Payment Entry through standard accounting controls. This workflow does not directly change
-				the Purchase Invoice outstanding amount, GL Entry, Payment Ledger Entry, or supplier balance.
+				Submitting posts the Payment Entry through standard accounting controls.
+				The payment is applied through the normal posting process; this review does not directly edit the Purchase Invoice outstanding amount or supplier balance.
 			</p>
 		</div>
 
