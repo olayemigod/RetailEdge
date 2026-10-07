@@ -158,6 +158,23 @@
 
 <script>
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
+const DAILY_AUDIT_STATUSES = new Set([
+	"Draft",
+	"Ready for Review",
+	"In Review",
+	"Balanced",
+	"Variance Found",
+	"Clarification Required",
+	"Approved",
+	"Rejected",
+	"Cancelled",
+	"Reopened",
+]);
+const CASH_STATUS_TO_AUDIT_RESULT = {
+	Balanced: "Balanced",
+	Shortage: "Shortage",
+	Overage: "Overage",
+};
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -499,17 +516,50 @@ export default {
 			}
 			return this.customerText(value);
 		},
-		shiftHandoffFilters(row = {}) {
-			const shiftDate = row.shift_date || row.posting_date || "";
+		shiftCurrentFilterContext() {
 			return {
-				company: row.company || this.filters.company || "",
-				branch: row.branch || this.filters.branch || "",
-				pos_profile: row.pos_profile || this.filters.pos_profile || "",
-				cashier: row.cashier || this.filters.cashier || "",
-				pos_closing_shift: row.closing_shift || "",
-				from_date: shiftDate || this.filters.from_date || "",
-				to_date: shiftDate || this.filters.to_date || "",
+				company: this.filters.company || "",
+				branch: this.filters.branch || "",
+				pos_profile: this.filters.pos_profile || "",
+				cashier: this.filters.cashier || "",
+				from_date: this.filters.from_date || "",
+				to_date: this.filters.to_date || "",
+				review_status: this.filters.review_status || "",
+				cash_status: this.filters.cash_status || "",
 			};
+		},
+		shiftHandoffFilters(row = {}, route = "daily-sales-audit") {
+			const current = this.shiftCurrentFilterContext();
+			const shiftDate = row.shift_date || row.posting_date || "";
+			const base = {
+				company: current.company || row.company || "",
+				branch: current.branch || row.branch || "",
+				pos_profile: current.pos_profile || row.pos_profile || "",
+				cashier: current.cashier || row.cashier || "",
+				from_date: current.from_date || shiftDate,
+				to_date: current.to_date || shiftDate,
+			};
+			if (route === "daily-sales-audit") {
+				const reviewStatus = String(current.review_status || "").trim();
+				const cashStatus = String(current.cash_status || "").trim();
+				return {
+					...base,
+					pos_closing_shift: row.closing_shift || "",
+					audit_status: DAILY_AUDIT_STATUSES.has(reviewStatus) ? reviewStatus : "",
+					audit_result: CASH_STATUS_TO_AUDIT_RESULT[cashStatus] || "",
+				};
+			}
+			if (route === "expense-review") {
+				return {
+					company: base.company,
+					branch: base.branch,
+					cashier: base.cashier,
+					from_date: base.from_date,
+					to_date: base.to_date,
+					linked_pos_closing_shift: row.closing_shift || "",
+				};
+			}
+			return base;
 		},
 		routeWithFilters(route, filters = {}) {
 			if (!route) return;
@@ -523,18 +573,7 @@ export default {
 		openShiftNextAction(row) {
 			const route = String(row?.next_action_route || "").trim();
 			if (!route) return;
-			if (route === "expense-review") {
-				const shift = this.shiftHandoffFilters(row);
-				this.routeWithFilters(route, {
-					company: shift.company,
-					branch: shift.branch,
-					cashier: shift.cashier,
-					from_date: shift.from_date,
-					to_date: shift.to_date,
-				});
-				return;
-			}
-			this.routeWithFilters(route, this.shiftHandoffFilters(row));
+			this.routeWithFilters(route, this.shiftHandoffFilters(row, route));
 		},
 		handleCellClick(payload) {
 			if (this.surfaceKey !== "pos-closing-variance") return;
@@ -546,24 +585,17 @@ export default {
 				return;
 			}
 			if (["closing_shift", "review_status"].includes(column.fieldname) && row.closing_shift) {
-				this.routeWithFilters("daily-sales-audit", this.shiftHandoffFilters(row));
+				this.routeWithFilters("daily-sales-audit", this.shiftHandoffFilters(row, "daily-sales-audit"));
 				return;
 			}
 			if (column.fieldname === "included_cashier_expenses" && Number(row.included_cashier_expenses || 0) !== 0) {
-				const shift = this.shiftHandoffFilters(row);
-				this.routeWithFilters("expense-review", {
-					company: shift.company,
-					branch: shift.branch,
-					cashier: shift.cashier,
-					from_date: shift.from_date,
-					to_date: shift.to_date,
-				});
+				this.routeWithFilters("expense-review", this.shiftHandoffFilters(row, "expense-review"));
 			}
 		},
 		openAction() {
 			if (!this.action.route) return;
 			if (this.surfaceKey === "pos-closing-variance") {
-				this.routeWithFilters(this.action.route, this.shiftHandoffFilters());
+				this.routeWithFilters(this.action.route, this.shiftHandoffFilters({}, this.action.route));
 				return;
 			}
 			frappe.set_route(this.action.route);
