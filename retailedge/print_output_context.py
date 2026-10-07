@@ -92,6 +92,10 @@ def _receipt_payment_methods(doc) -> list[str]:
 		return []
 	methods: list[str] = []
 	for payment in doc.get("payments") or []:
+		# POS/payment rows may include configured but unused methods. A zero-amount
+		# method must not be presented to the customer as a method used for this sale.
+		if not flt(payment.get("amount")):
+			continue
 		method = _clean(payment.get("mode_of_payment"))
 		if method and method not in methods:
 			methods.append(method)
