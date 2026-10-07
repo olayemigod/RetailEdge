@@ -42,3 +42,21 @@ def test_professional_delivery_dialog_uses_business_copy_and_preserves_handoff()
 	assert 'v-if="canUseNativeDesk"' in text
 	assert "$emit('open-native', 'Delivery Note')" in text
 	assert 'const CREATE_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_order"' in text
+
+
+def test_professional_quotation_dialog_uses_business_copy_and_preserves_handoff():
+	text = _read("public/js/professional_selling/ProfessionalQuotationDialog.vue")
+
+	assert "ERPNext" not in text
+	assert "Advanced: Open in ERPNext" not in text
+	assert "using governed pricing, Shipping Rules and the current Operating Context" in text
+	assert "Only enabled Selling Shipping Rules for this Company are shown." in text
+	assert "Delivery charges are calculated from the selected Shipping Rule when the draft is saved." in text
+	assert "Advanced: Open Quotation" in text
+
+	# Pricing, save and native handoff contracts remain unchanged.
+	assert 'v-if="canUseNativeDesk"' in text
+	assert "$emit('open-native', 'Quotation')" in text
+	assert 'const CREATE_METHOD = "retailedge.professional_quotation.create_professional_quotation_draft"' in text
+	assert 'const PRICING_METHOD = "retailedge.professional_selling.get_professional_selling_item_pricing"' in text
+	assert 'const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context"' in text
