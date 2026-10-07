@@ -47,13 +47,12 @@ def _quantity(value: Any) -> str:
 
 
 def _branch(doc) -> str:
-	# Use the stored RetailEdge transaction attribution first. This is the
-	# authoritative branch snapshot for profile resolution on submitted sales.
-	if doc.meta.has_field("retailedge_branch"):
-		value = _text(doc.get("retailedge_branch"))
-		if value:
-			return value
-	for fieldname in BRANCH_FIELD_CANDIDATES:
+	fieldnames = ("retailedge_branch", *BRANCH_FIELD_CANDIDATES)
+	seen: set[str] = set()
+	for fieldname in fieldnames:
+		if not fieldname or fieldname in seen:
+			continue
+		seen.add(fieldname)
 		if doc.meta.has_field(fieldname):
 			value = _text(doc.get(fieldname))
 			if value:
@@ -133,7 +132,9 @@ def _item_table_blocks(doc, paper_width: int) -> list[dict[str, Any]]:
 
 	The table intentionally omits a currency prefix in each item cell so 58 mm paper
 	can preserve Product / Qty / Price / Subtotal as true horizontal columns. Currency
-	remains explicit in the receipt summary immediately below the table.
+	remains explicit in the receipt summary immediately below the table. Row numbering
+	is intentionally omitted because it consumes scarce Product width on 58 mm paper
+	and can force short item names onto unnecessary continuation lines.
 	"""
 	product_width, qty_width, price_width, subtotal_width = ITEM_COLUMN_WIDTHS.get(
 		paper_width,
@@ -157,8 +158,7 @@ def _item_table_blocks(doc, paper_width: int) -> list[dict[str, Any]]:
 		qty = _quantity(row.get("qty"))
 		rate = row.get("net_rate") if row.get("net_rate") is not None else row.get("rate")
 		amount = row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")
-		idx = cint(row.get("idx")) or 1
-		product_lines = _wrap_chunks(f"{idx}. {_item_label(row)}", product_width)
+		product_lines = _wrap_chunks(_item_label(row), product_width)
 		qty_lines = _wrap_chunks(qty, qty_width)
 		price_lines = _wrap_chunks(_compact_amount(rate), price_width)
 		subtotal_lines = _wrap_chunks(_compact_amount(amount), subtotal_width)
