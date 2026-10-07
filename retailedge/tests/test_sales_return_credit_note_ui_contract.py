@@ -21,7 +21,7 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn("Prepare Draft Return / Credit Note", component)
 		self.assertIn("create_sales_return_credit_note_draft", component)
 		self.assertIn('if (this.mode === "return") { method = CREATE_RETURN; args = { sales_invoice: this.sourceDocument }; }', component)
-		self.assertIn("no refund or Payment Entry is created automatically", component)
+		self.assertIn("no refund or payment record is created automatically", component)
 
 	def test_return_mode_is_governed_inside_edgesuite_for_edgesuite_only_users(self):
 		component = (SELLING_UI / "ProfessionalSalesInvoiceDialog.vue").read_text()
@@ -31,7 +31,9 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn("visibleModes()", component)
 		self.assertIn("return this.modes;", component)
 		self.assertNotIn('option.key !== "return" || this.canUseNativeDesk', component)
-		self.assertIn("RetailEdge reviews the canonical return draft", component)
+		self.assertIn("Any configured approval workflow is respected", component)
+		self.assertNotIn("ERPNext", component)
+		self.assertNotIn("Frappe Workflow", component)
 		self.assertIn(':sourceMode="salesInvoiceCompletionSourceMode"', page)
 		self.assertIn('"sales_return"', page)
 		self.assertIn("create-return-credit-note", page)
