@@ -2,7 +2,7 @@ const EDGEUI_ASSET = "edgeui.bundle.js";
 const REPORT_ASSET = "managed_review_report.bundle.js";
 const PAGE_ROUTE = "pos-closing-variance";
 const SURFACE_KEY = "pos-closing-variance";
-const PAGE_TITLE = "POS Closing Variance & Expenses";
+const PAGE_TITLE = "Shift Reconciliation";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {

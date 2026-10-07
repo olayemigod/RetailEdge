@@ -77,14 +77,16 @@
 						@select="onAccountSelected"
 						@clear="clearAccount"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" required />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">As On Date</span>
-						<input v-model="filters.as_on_date" class="edge-input" type="date" required />
-					</label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="integrity-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@update:modelValue="onSmartDateModelChange"
+						@resolved="onSmartDateResolved"
+					/>
 					<div class="filter-action">
 						<button
 							class="edge-primary-button"
@@ -111,7 +113,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "stock-accounting-integrity";
 
@@ -158,6 +160,8 @@ export default {
 			nativeReportName: "Stock and Account Value Comparison",
 			canOpenNativeReport: false,
 			canUseNativeDesk: false,
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				account: "",
@@ -218,6 +222,32 @@ export default {
 	},
 	methods: {
 		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.as_on_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.as_on_date,
+				label: this.filters.from_date === this.filters.as_on_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.as_on_date}`,
+			};
+		},
+		onSmartDateModelChange(value) {
+			this.smartDate = value && typeof value === "object" ? { ...value } : {};
+			if (value?.from_date && value?.to_date) return;
+			this.filters.from_date = "";
+			this.filters.as_on_date = "";
+			this.currentPage = 1;
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) {
+				this.onSmartDateModelChange(value);
+				return;
+			}
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.as_on_date = value.to_date;
+			this.currentPage = 1;
+		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -230,6 +260,8 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.as_on_date || this.filters.as_on_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
@@ -427,9 +459,13 @@ export default {
 }
 .integrity-filter-grid {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+	grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
 	gap: 12px;
 	align-items: end;
+	width: 100%;
+}
+.integrity-period-filter {
+	min-width: 0;
 	width: 100%;
 }
 .integrity-actions {
