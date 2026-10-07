@@ -2,7 +2,7 @@
 	<section v-if="customer && company" class="credit-summary" aria-label="Customer credit visibility">
 		<div class="credit-summary__heading">
 			<div>
-				<span class="credit-summary__kicker">ERPNext credit control</span>
+				<span class="credit-summary__kicker">Customer credit control</span>
 				<strong>{{ customerLabel }}</strong>
 			</div>
 			<EdgeStatusBadge v-if="credit" :status="statusBadge" />
@@ -10,7 +10,7 @@
 
 		<EdgeLoadingState v-if="loading" message="Checking customer credit..." />
 		<div v-else-if="error" class="credit-summary__message credit-summary__message--muted">
-			Credit visibility is unavailable for this customer. Final ERPNext submission controls still apply.
+			Credit visibility is unavailable for this customer. Final submission controls still apply.
 		</div>
 		<template v-else-if="credit">
 			<div class="credit-summary__metrics">
@@ -24,7 +24,7 @@
 				<ul><li v-for="warning in warnings" :key="warning">{{ warning }}</li></ul>
 			</div>
 			<p class="credit-summary__note">
-				Company-level ERPNext credit exposure is shown for guidance only. Final Sales Order / Sales Invoice submission remains governed by ERPNext credit and overdue controls.
+				Company-level credit exposure is shown for guidance only. Final Sales Order / Sales Invoice submission remains governed by configured credit and overdue controls.
 			</p>
 		</template>
 	</section>
@@ -60,11 +60,11 @@ export default {
 		warnings() {
 			if (!this.credit) return [];
 			const warnings = [];
-			if (this.credit.disabled) warnings.push("Customer is disabled in ERPNext.");
-			if (this.credit.is_frozen) warnings.push("Customer is frozen in ERPNext.");
-			if (this.credit.credit_limit_crossed) warnings.push("Configured ERPNext credit limit is currently crossed.");
-			if (this.credit.overdue_threshold_crossed) warnings.push("Configured ERPNext overdue-billing threshold is currently crossed.");
-			if (this.credit.sales_order_credit_check_bypassed) warnings.push("ERPNext is configured to bypass the Sales Order credit-limit check for this Customer and Company.");
+			if (this.credit.disabled) warnings.push("Customer is disabled.");
+			if (this.credit.is_frozen) warnings.push("Customer is frozen.");
+			if (this.credit.credit_limit_crossed) warnings.push("Configured credit limit is currently crossed.");
+			if (this.credit.overdue_threshold_crossed) warnings.push("Configured overdue-billing threshold is currently crossed.");
+			if (this.credit.sales_order_credit_check_bypassed) warnings.push("Sales Order credit-limit checking is configured to be bypassed for this Customer and Company.");
 			return warnings;
 		},
 	},

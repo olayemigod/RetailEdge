@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Sales Invoice"
-		subtitle="Create a new draft invoice, invoice a submitted source document, or prepare an ERPNext Return / Credit Note without forcing a rigid selling path."
+		subtitle="Create a new draft invoice, invoice a submitted source document, or prepare a Return / Credit Note without forcing a rigid selling path."
 		size="xl"
 		@close="requestClose"
 	>
@@ -87,7 +87,7 @@
 					:modelValue="values.shipping_rule"
 					label="Shipping Rule"
 					placeholder="Optional delivery charge rule"
-					description="ERPNext calculates delivery charges from the selected Selling Shipping Rule."
+					description="Delivery charges are calculated from the selected Selling Shipping Rule."
 					:searcher="searchShippingRule"
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
@@ -103,7 +103,7 @@
 					</div>
 					<a v-if="loyaltyStatus.can_manage_programs" :href="loyaltyStatus.native_route || '/app/loyalty-program'" target="_blank" rel="noopener noreferrer">Manage Programmes</a>
 				</div>
-				<p v-if="loyaltyLoading" class="selling-form-hint">Checking current ERPNext Loyalty Points...</p>
+				<p v-if="loyaltyLoading" class="selling-form-hint">Checking current Loyalty Points...</p>
 				<template v-else-if="loyaltyStatus.enrolled">
 					<div class="loyalty-summary">
 						<div><span>Available Points</span><strong>{{ loyaltyStatus.available_points || 0 }}</strong></div>
@@ -116,7 +116,7 @@
 						<span>Points to Redeem</span>
 						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
 					</label>
-					<p class="selling-form-hint">Estimated redemption: {{ loyaltyRedemptionLabel }}. ERPNext revalidates the balance and final invoice value before saving the draft.</p>
+					<p class="selling-form-hint">Estimated redemption: {{ loyaltyRedemptionLabel }}. Available points and the final invoice value are revalidated before saving the draft.</p>
 				</template>
 				<p v-else class="selling-form-hint">{{ loyaltyStatus.message || "No Loyalty Program is assigned to this Customer." }}</p>
 			</section>
@@ -142,7 +142,7 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">Selling prices are resolved again on the server. Delivery charges remain ERPNext Shipping Rule calculations.</p>
+			<p class="selling-form-hint">Selling prices are resolved again before saving. Delivery charges follow the selected Shipping Rule.</p>
 
 			<label class="selling-field selling-field--wide">
 				<span>Remarks</span>
@@ -154,7 +154,7 @@
 			<div class="selling-form-footer">
 				<div class="selling-form-footer-actions">
 					<button v-if="mode === 'new'" type="button" class="edge-button" :disabled="saving" @click="openMakeSalePage">Open Make Sale Page</button>
-					<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open in ERPNext</button>
+					<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open Sales Invoice</button>
 				</div>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
@@ -254,14 +254,14 @@ export default {
 			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note", return: "Submitted Sales Invoice" }[this.mode] || "Source Document";
 		},
 		sourceDescription() {
-			if (this.mode === "return") return "ERPNext prepares a draft Return / Credit Note from the selected submitted Sales Invoice. The source remains submitted and unchanged.";
+			if (this.mode === "return") return "Prepare a draft Return / Credit Note from the selected submitted Sales Invoice. The source remains submitted and unchanged.";
 			return this.mode === "quotation"
 				? "Create the invoice directly from the accepted Quotation; no Sales Order is created behind the scenes."
-				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
+				: `Create a new Sales Invoice draft from the ${this.sourceLabel.replace("Submitted ", "")} using remaining billable quantities.`;
 		},
 		sourceHint() {
-			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. RetailEdge reviews the canonical return draft and follows any active Frappe Workflow before submission; no refund or Payment Entry is created automatically.";
-			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
+			if (this.mode === "return") return "Return quantities, stock rules, taxes and accounting are revalidated before submission. Any configured approval workflow is respected; no refund or payment record is created automatically.";
+			return "The source remains submitted and unchanged. This workflow creates a new Sales Invoice draft only.";
 		},
 		saveLabel() {
 			if (this.mode === "new") return "Save Draft";

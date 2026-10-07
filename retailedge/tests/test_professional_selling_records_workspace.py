@@ -97,7 +97,7 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 		'placeholder="More"',
 		"moreActions(row)",
 		'"Print & Share"',
-		'"Advanced: Open in ERPNext"',
+		'`Advanced: Open ${this.activeDocument?.label || "Record"}`',
 		'{{ loadingMore ? "Loading..." : "Load more" }}',
 		"runPrimaryAction(row)",
 		'this.$emit("action", { action: "view", document: this.activeDocument, row });',
@@ -281,4 +281,3 @@ def test_sales_return_next_action_requires_professional_selling_page_access():
 	return_index = source.index('actions.append({"value": "create-return-credit-note"')
 	gate_index = source.rfind('_can_open_page("professional-selling")', 0, return_index)
 	assert gate_index >= 0
-
