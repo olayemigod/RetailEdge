@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Review Request for Quotation"
-		subtitle="Preview ERPNext's sourcing mapping before any RFQ is created or supplier email is sent."
+		subtitle="Preview the sourcing details before any RFQ is created or supplier email is sent."
 		size="xl"
 		@close="close"
 	>
@@ -13,7 +13,7 @@
 			</div>
 
 			<div v-if="submitted" class="rfq-preview__submitted" role="status">
-				<strong>Request for Quotation {{ submitted.name }} submitted in ERPNext.</strong>
+				<strong>Request for Quotation {{ submitted.name }} submitted.</strong>
 				<span>No supplier email was sent. Use RFQ History to review the submitted document.</span>
 			</div>
 
@@ -51,7 +51,7 @@
 					</div>
 					<div class="rfq-preview__ready">
 						<strong>RFQ preflight passed.</strong>
-						<span>No RFQ has been saved yet. Standard submission creates and submits the ERPNext RFQ with supplier email explicitly disabled.</span>
+						<span>No RFQ has been saved yet. Standard submission creates and submits the RFQ with supplier email explicitly disabled.</span>
 					</div>
 					<div class="table-responsive">
 						<table class="table rfq-preview__table">
@@ -69,11 +69,11 @@
 					</div>
 					<div v-if="preview.can_submit" class="rfq-preview__submit-note">
 						<strong>Ready to submit.</strong>
-						<span>This creates a submitted ERPNext Request for Quotation. Supplier email remains off for every selected supplier.</span>
+						<span>This creates a submitted Request for Quotation. Supplier email remains off for every selected supplier.</span>
 					</div>
 					<div v-else class="rfq-preview__submit-note" role="alert">
 						<strong>Submission permission required.</strong>
-						<span>You can review this preflight, but your ERPNext role cannot submit a Request for Quotation.</span>
+						<span>You can review this preflight, but your role cannot submit a Request for Quotation.</span>
 					</div>
 				</div>
 			</template>
@@ -81,7 +81,7 @@
 
 		<template #footer>
 			<div class="rfq-preview__footer">
-				<button v-if="nativeFallbackEnabled && preview && !submitted" type="button" class="edge-button" :disabled="submitting" @click="openAdvanced">Advanced: Prepare Draft in ERPNext</button>
+				<button v-if="nativeFallbackEnabled && preview && !submitted" type="button" class="edge-button" :disabled="submitting" @click="openAdvanced">Advanced: Prepare RFQ</button>
 				<div class="rfq-preview__footer-actions">
 					<button v-if="preview?.can_submit && !submitted" type="button" class="edge-button edge-button--primary" :disabled="loading || submitting" @click="submitStandard">
 						{{ submitting ? 'Submitting RFQ…' : 'Create & Submit RFQ' }}
@@ -108,7 +108,24 @@ function callMethod(method, args = {}) {
 function postMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, type: "POST", args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 export default {
 	name: "ProfessionalRfqPreviewOverlay",
@@ -202,7 +219,7 @@ export default {
 				});
 				this.preview = null;
 			} catch (error) {
-				this.error = errorMessage(error, "ERPNext could not submit this Request for Quotation. Refresh the preview and try again.");
+				this.error = errorMessage(error, "Unable to submit this Request for Quotation. Refresh the preview and try again.");
 			} finally {
 				this.submitting = false;
 			}
