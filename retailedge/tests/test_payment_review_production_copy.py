@@ -43,3 +43,7 @@ def test_payment_review_hints_use_business_language_and_preserve_posting_authori
 		".outstanding_amount =",
 	):
 		assert forbidden not in text
+
+	# Keep Vue lifecycle and methods sections outside the watch block.
+	assert "\t\t\t},\n\t\t},\n\t},\n\tmounted() {" in text
+	assert "\t},\n\tmethods: {" in text
