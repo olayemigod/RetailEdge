@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from retailedge.print_format_governance import _govern_receipt_html
+from retailedge.print_output_context import _receipt_payment_methods
 from retailedge.print_output_settings import (
 	RECEIPT_PRESENTATION_DEFAULTS,
 	RECEIPT_SETTING_FIELDS,
@@ -16,6 +17,15 @@ class _ReceiptSettingsMeta:
 
 class _ReceiptSettingsDoc(dict):
 	meta = _ReceiptSettingsMeta()
+
+
+class _PaymentsMeta:
+	def has_field(self, fieldname):
+		return fieldname == "payments"
+
+
+class _PaymentsDoc(dict):
+	meta = _PaymentsMeta()
 
 
 def test_governed_receipt_html_uses_canonical_receipt_policy():
@@ -49,6 +59,19 @@ def test_receipt_governance_preserves_branch_and_net_item_contracts():
 def test_receipt_governance_is_idempotent():
 	governed = _govern_receipt_html(_RECEIPT_HTML)
 	assert _govern_receipt_html(governed) == governed
+
+
+def test_receipt_payment_method_omits_configured_but_unused_zero_value_rows():
+	doc = _PaymentsDoc(
+		payments=[
+			{"mode_of_payment": "Cash", "amount": 0},
+			{"mode_of_payment": "Bank Draft", "amount": 155000},
+			{"mode_of_payment": "Bank Draft", "amount": 25000},
+			{"mode_of_payment": "Card", "amount": 0},
+		]
+	)
+
+	assert _receipt_payment_methods(doc) == ["Bank Draft"]
 
 
 @patch("retailedge.print_output_settings.frappe.db.exists", return_value=True)
