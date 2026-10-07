@@ -114,7 +114,6 @@ def test_linked_sources_are_submitted_same_company_customer_and_branch():
 		assert contract in source
 
 
-
 def test_sales_invoice_item_access_is_revalidated_in_preview_edit_submit_and_workflow():
 	source = _read(SERVICE)
 	assert "def _validate_sales_item_access(doc)" in source
@@ -283,8 +282,6 @@ def test_professional_selling_opens_governed_completion_for_invoices_and_returns
 	assert "create_sales_return_credit_note_draft" in source
 
 
-
-
 def test_sales_return_completion_is_explicit_canonical_and_review_only():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
@@ -351,14 +348,12 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		"Source-linked items stay attached",
 		"busy || !canOverrideRate",
 		"Stock Location",
-		"ERPNext recalculates taxes, totals",
+		"Taxes, totals, source quantity limits and accounting checks are recalculated when the draft is saved.",
 	):
 		assert contract in dialog
 	assert "Additional Items" not in dialog
 	assert "EdgeChildTable" not in dialog
 	assert "ERPNext posting authority" not in dialog
-
-
 
 
 def test_edit_preview_resolves_price_list_governance_and_default_stock_location():
