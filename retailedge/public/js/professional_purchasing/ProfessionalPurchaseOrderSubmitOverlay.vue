@@ -187,6 +187,7 @@ function customerFacingCopy(value, fallback = "") {
 	const text = String(value || "").trim();
 	if (!text) return fallback;
 	return text
+		.replace(/Advanced ERPNext review/gi, "advanced review")
 		.replace(/Advanced ERPNext/gi, "advanced review")
 		.replace(/Frappe Workflow/gi, "approval workflow")
 		.replace(/ERPNext/gi, "the accounting system")
