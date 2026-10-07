@@ -62,7 +62,7 @@
 
 				<div class="delivery-stock-note">
 					<strong>Stock posting</strong>
-					<p>Submitting this Delivery Note uses ERPNext native stock posting. This workflow does not create Stock Ledger entries or valuation effects directly.</p>
+					<p>Submitting this Delivery Note posts stock through standard stock controls. This review does not create Stock Ledger entries or valuation effects directly.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="delivery-completion-items">
@@ -80,16 +80,16 @@
 				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="delivery-completion-blockers">
 					<strong>Standard delivery completion is blocked</strong>
 					<ul>
-						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
+						<li v-for="blocker in preview.blockers" :key="blocker">{{ customerFacingCopy(blocker, 'Advanced review is required.') }}</li>
 					</ul>
 				</div>
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="delivery-completion-workflow">
 					<div>
-						<span>Frappe Workflow</span>
-						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
+						<span>Approval Workflow</span>
+						<strong>{{ customerFacingCopy(preview.workflow_readiness.workflow, "Active Workflow") }}</strong>
 					</div>
-					<p>{{ preview.workflow_readiness.message }}</p>
+					<p>{{ customerFacingCopy(preview.workflow_readiness.message, "Choose an available workflow action.") }}</p>
 					<p v-if="preview.workflow_readiness.current_state">
 						Current state: <strong>{{ preview.workflow_readiness.current_state }}</strong>
 					</p>
@@ -184,8 +184,25 @@ function callMethod(method, args = {}, type = "GET") {
 	});
 }
 
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext review/gi, "advanced review")
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+
 function errorMessage(error, fallback) {
-	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
 }
 
 export default {
@@ -230,8 +247,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 0
-				? "Review the saved ERPNext Delivery Note and complete it through native stock submission or the active Frappe Workflow."
-				: "Review the saved ERPNext Delivery Note and continue with any permitted next workflow.";
+				? "Review the saved Delivery Note and complete it through standard stock submission or the active approval workflow."
+				: "Review the saved Delivery Note and continue with any permitted next workflow.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
@@ -268,9 +285,9 @@ export default {
 			handler() {
 				if (this.open) this.loadPreview();
 			},
-		},
 	},
 	methods: {
+		customerFacingCopy,
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
 			this.loading = true;
