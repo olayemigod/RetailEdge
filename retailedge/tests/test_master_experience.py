@@ -85,17 +85,27 @@ class TestMasterExperience(unittest.TestCase):
 		self.assertEqual(ITEM_ACTION["doctype"], "Item")
 		for action in (CUSTOMER_ACTION, SUPPLIER_ACTION, ITEM_ACTION):
 			self.assertNotIn("submit", action)
+
+		# The final Business Hub hook may be wrapped by later navigation layers, but
+		# master_experience must remain in the runtime chain so native ERPNext master
+		# actions and their permission checks are not bypassed.
 		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+		target = "retailedge.navigation_consolidation.get_retailedge_business_hub_context"
 		self.assertIn(
-			'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": '
-			'"retailedge.printing_navigation.get_retailedge_business_hub_context"',
+			f'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "{target}"',
 			hooks,
 		)
 		self.assertIn(
-			'"retailedge.master_experience.get_retailedge_business_hub_context": '
-			'"retailedge.printing_navigation.get_retailedge_business_hub_context"',
+			f'"retailedge.master_experience.get_retailedge_business_hub_context": "{target}"',
 			hooks,
 		)
+		navigation_consolidation = (APP_ROOT / "navigation_consolidation.py").read_text(encoding="utf-8")
+		self.assertIn(
+			"get_retailedge_business_hub_context as _get_master_business_hub_context",
+			navigation_consolidation,
+		)
+		self.assertIn("normalize_printing_navigation", navigation_consolidation)
+		self.assertIn("return normalize_printing_navigation(context)", navigation_consolidation)
 
 
 if __name__ == "__main__":
