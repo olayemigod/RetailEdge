@@ -10,7 +10,10 @@ from frappe.utils import cint, flt
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES
 from retailedge.branch_profile import get_exact_branch_profile
 from retailedge.company_profile import resolve_company_profile
-from retailedge.print_output_settings import BRANCH_PRINT_VISIBILITY_FIELD
+from retailedge.print_output_settings import (
+	BRANCH_PRINT_VISIBILITY_FIELD,
+	get_receipt_presentation_settings,
+)
 
 
 def _clean(value: Any) -> str:
@@ -84,6 +87,33 @@ def _business_address(profile: dict[str, Any]) -> str:
 	return ", ".join(parts)
 
 
+def _receipt_payment_methods(doc) -> list[str]:
+	if not doc.meta.has_field("payments"):
+		return []
+	methods: list[str] = []
+	for payment in doc.get("payments") or []:
+		method = _clean(payment.get("mode_of_payment"))
+		if method and method not in methods:
+			methods.append(method)
+	return methods
+
+
+def _receipt_presentation(doc) -> dict[str, Any]:
+	presentation = get_receipt_presentation_settings()
+	status = _clean(doc.get("status")) if doc.meta.has_field("status") else ""
+	payment_methods = _receipt_payment_methods(doc)
+	in_words = _clean(doc.get("in_words")) if doc.meta.has_field("in_words") else ""
+	return {
+		**presentation,
+		# These values remain transaction-derived. Settings may only control whether
+		# they are shown and what customer-facing labels are used.
+		"status": status.upper(),
+		"payment_methods": payment_methods,
+		"payment_method": ", ".join(payment_methods),
+		"amount_in_words": in_words,
+	}
+
+
 def get_business_document_qr_payload(doc, company_label: str = "") -> str:
 	"""Return the canonical PEdge document-reference QR payload.
 
@@ -129,7 +159,9 @@ def get_business_print_context(doc) -> dict[str, Any]:
 
 	The source business document is never changed. Logo/QR choices are supplied
 	through request-local Frappe flags by Document Output & Sharing. Branch display
-	is governed by the exact Company + Branch RetailEdge Branch Profile.
+	is governed by the exact Company + Branch RetailEdge Branch Profile. Receipt
+	wording is resolved once here so managed HTML and direct thermal/ESC-POS output
+	consume the same merchant policy.
 	"""
 	options = _active_options()
 	show_logo = bool(cint(options.get("show_logo", 1)))
@@ -163,4 +195,5 @@ def get_business_print_context(doc) -> dict[str, Any]:
 		"address": address,
 		"show_branch": show_branch,
 		"branch": branch if show_branch else "",
+		"receipt": _receipt_presentation(doc),
 	}
