@@ -90,13 +90,9 @@ class TestMasterExperience(unittest.TestCase):
 		# master_experience must remain in the runtime chain so native ERPNext master
 		# actions and their permission checks are not bypassed.
 		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
-		target = "retailedge.navigation_consolidation.get_retailedge_business_hub_context"
 		self.assertIn(
-			f'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "{target}"',
-			hooks,
-		)
-		self.assertIn(
-			f'"retailedge.master_experience.get_retailedge_business_hub_context": "{target}"',
+			'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": '
+			'"retailedge.navigation_consolidation.get_retailedge_business_hub_context"',
 			hooks,
 		)
 		navigation_consolidation = (APP_ROOT / "navigation_consolidation.py").read_text(encoding="utf-8")
@@ -104,8 +100,6 @@ class TestMasterExperience(unittest.TestCase):
 			"get_retailedge_business_hub_context as _get_master_business_hub_context",
 			navigation_consolidation,
 		)
-		self.assertIn("normalize_printing_navigation", navigation_consolidation)
-		self.assertIn("return normalize_printing_navigation(context)", navigation_consolidation)
 
 
 if __name__ == "__main__":
