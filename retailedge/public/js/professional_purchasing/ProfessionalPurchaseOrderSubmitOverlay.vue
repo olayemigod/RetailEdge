@@ -22,7 +22,7 @@
 
 			<div v-if="submitted" class="po-submit-review__success">
 				<strong>Purchase Order {{ submitted.name }} is submitted.</strong>
-				<span>Review the saved ERPNext order and continue with any permitted procurement action below.</span>
+				<span>Review the submitted order and continue with any permitted procurement action below.</span>
 				<div class="po-submit-review__next-actions">
 					<button
 						v-for="action in submitted.next_actions || []"
@@ -38,17 +38,17 @@
 				</div>
 			</div>
 			<div v-else-if="preview.blockers?.length" class="po-submit-review__blocked">
-				<strong v-if="preview.workflow_eligible">This Purchase Order is controlled by {{ preview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
+				<strong v-if="preview.workflow_eligible">This Purchase Order is controlled by {{ customerFacingCopy(preview.workflow_readiness?.workflow, 'the configured approval workflow') }}.</strong>
 				<strong v-else>Standard submission is not available.</strong>
-				<ul><li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li></ul>
+				<ul><li v-for="blocker in preview.blockers" :key="blocker">{{ customerFacingCopy(blocker, 'Advanced handling is required.') }}</li></ul>
 			</div>
 			<div v-else class="po-submit-review__ready">
-				<strong>Ready for standard ERPNext submission.</strong>
+				<strong>Ready for standard submission.</strong>
 				<span>This action submits the existing draft only. It does not create a receipt, invoice, GL Entry or Stock Ledger Entry.</span>
 			</div>
 
 			<div v-if="!submitted && preview.workflow_eligible" class="po-submit-review__workflow">
-				<strong>{{ preview.workflow_readiness?.message || 'Choose an available workflow action.' }}</strong>
+				<strong>{{ customerFacingCopy(preview.workflow_readiness?.message, 'Choose an available workflow action.') }}</strong>
 				<div class="po-submit-review__workflow-actions">
 					<button
 						v-for="action in preview.workflow_readiness?.available_actions || []"
@@ -68,7 +68,7 @@
 				<div class="po-draft-editor__heading">
 					<div>
 						<strong>Edit draft before completion</strong>
-						<p>Company, Supplier, Branch, Buying Price List, Stock Location and existing item identity stay protected. You may add new items; ERPNext recalculates and validates the draft when you save.</p>
+						<p>Company, Supplier, Branch, Buying Price List, Stock Location and existing item identity stay protected. You may add new items; standard purchasing rules recalculate and validate the draft when you save.</p>
 					</div>
 				</div>
 				<div class="po-draft-editor__grid">
@@ -124,7 +124,7 @@
 					</tbody>
 				</table>
 			</div>
-			<p class="po-submit-review__note">Taxes on draft: {{ preview.tax_row_count || 0 }}. Active Purchase Order Workflow is executed through Frappe's permitted transitions; otherwise standard submission uses ERPNext's normal submit path.</p>
+			<p class="po-submit-review__note">Taxes on draft: {{ preview.tax_row_count || 0 }}. Active Purchase Order approval uses the configured workflow; otherwise standard submission uses the normal purchasing submit path.</p>
 		</div>
 
 		<template #footer>
@@ -137,7 +137,7 @@
 						:disabled="submitting || saving"
 						@click="openAdvanced"
 					>
-						Advanced: ERPNext
+						Advanced: Open Purchase Order
 					</button>
 					<button
 						v-if="preview?.can_edit && !submitted"
@@ -183,7 +183,25 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = undefined) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext review/gi, "advanced review")
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 function draftSnapshot(transactionDate, scheduleDate, terms, items) {
 	return JSON.stringify({
@@ -233,8 +251,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 1
-				? "Review the submitted ERPNext Purchase Order and continue with any permitted purchasing workflow."
-				: "Review the current ERPNext draft before submission. Standard submission is blocked when advanced approval or purchasing rules apply.";
+				? "Review the submitted Purchase Order and continue with any permitted purchasing workflow."
+				: "Review the current draft before submission. Standard submission is blocked when advanced approval or purchasing rules apply.";
 		},
 		nativeDeskAllowed() {
 			const access = frappe.boot?.edgesuite_ui_access || {};
@@ -271,6 +289,7 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		customerFacingCopy,
 		resetDraft() {
 			this.draftTransactionDate = "";
 			this.draftScheduleDate = "";

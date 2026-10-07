@@ -18,7 +18,7 @@
 		<EdgePageLayout class="purchase-receipt-history-page">
 			<EdgePageHeader
 				title="Purchase Receipt History"
-				description="Review submitted ERPNext Purchase Receipts with persistent filters and pagination. Continue supplier billing without loading a growing history list into a popup."
+				description="Review submitted Purchase Receipts with persistent filters and pagination. Continue supplier billing without loading a growing history list into a popup."
 			/>
 
 			<section class="edge-panel history-controls">
@@ -74,7 +74,7 @@
 									<div class="row-actions">
 										<button type="button" class="edge-small-button" @click="openDocumentOutput(row.name)">Print & Share</button>
 										<button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button>
-										<button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: ERPNext</button>
+										<button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open Purchase Receipt</button>
 									</div>
 								</td>
 							</tr>
@@ -104,7 +104,24 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 
 export default {
 	name: "PurchaseReceiptHistoryPage",
