@@ -134,6 +134,7 @@ export default {
 			handler() {
 				if (this.open) this.loadReadiness();
 			},
+		},
 	},
 	methods: {
 		async loadReadiness() {
