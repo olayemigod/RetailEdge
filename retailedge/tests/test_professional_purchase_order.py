@@ -82,7 +82,8 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 	def test_purchase_order_dialog_defaults_native_fallback_closed(self):
 		dialog = self.read("public/js/professional_purchasing/ProfessionalPurchaseOrderDialog.vue")
 		self.assertIn('nativeFallbackEnabled: { type: Boolean, default: false }', dialog)
-		self.assertIn("Advanced: Open in ERPNext", dialog)
+		self.assertIn("Advanced: Open Purchase Order", dialog)
+		self.assertNotIn("Advanced: Open in ERPNext", dialog)
 		self.assertNotIn("Open Full Form", dialog)
 
 	def test_edgesuite_only_overlay_disables_native_full_form_fallback(self):
@@ -111,7 +112,7 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 		source = self.read("retailedge/page/professional_purchasing/professional_purchasing.js")
 		for contract in (
 			'const ACCESS_MODE = "edgesuite_only"',
-			'const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext"',
+			'const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open Purchase Order"',
 			"nativeDeskEnabled()",
 			"applyPurchaseOrderOwnership(root)",
 			"installPurchaseOrderOwnership(wrapper, root)",

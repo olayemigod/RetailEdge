@@ -28,7 +28,7 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 			'const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts"',
 			'const RECEIPT_HISTORY_TRIGGER_LABEL = "Receipt History"',
 			'const ADVANCED_PREPARE_RECEIPT_EVENT = "retailedge-advanced-prepare-purchase-receipt"',
-			'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"',
+			'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts"',
 			"applyPurchaseReceiptParityGate(root)",
 			'button.setAttribute("data-retailedge-receipt-preview", "true")',
 			'button.setAttribute("data-retailedge-receipt-history", "true")',
@@ -48,13 +48,14 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
 		preview = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue")
 		history = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue")
-		self.assertIn('const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"', controller)
+		self.assertIn('const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts"', controller)
 		self.assertIn('type: "POST"', controller)
 		self.assertIn("PREPARE_RECEIPT_METHOD", controller)
 		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', controller)
-		self.assertIn("Advanced: Prepare in ERPNext", preview)
+		self.assertIn("Advanced: Prepare Purchase Receipt", preview)
 		self.assertIn("nativeFallbackEnabled", preview)
-		self.assertIn("Advanced: Purchase Receipts in ERPNext", history)
+		self.assertIn("Advanced: Open Purchase Receipt", history)
+		self.assertIn("Advanced: Purchase Receipts", history)
 		self.assertIn('frappe.set_route("List", "Purchase Receipt")', history)
 		self.assertIn("nativeFallbackEnabled", history)
 

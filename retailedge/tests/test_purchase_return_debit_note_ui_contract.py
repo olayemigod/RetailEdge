@@ -56,7 +56,8 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("Review & Submit Debit Note", ownership)
 		self.assertIn("retailedge.professional_purchase_returns.get_purchase_return_review", overlay)
 		self.assertIn("retailedge.professional_purchase_returns.submit_purchase_return_review", overlay)
-		self.assertIn("Advanced: Prepare in ERPNext", overlay)
+		self.assertIn("Advanced: Prepare Purchase Return", overlay)
+		self.assertIn("Advanced: Prepare Debit Note", overlay)
 		self.assertIn("never chains a stock return and supplier debit note automatically", (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text())
 
 	def test_return_review_native_fallback_requires_explicit_desk_grant_and_non_edgesuite_mode(self):
@@ -67,7 +68,7 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("if (!this.nativeFallbackEnabled", overlay)
 
 	def test_existing_professional_purchasing_flows_and_edgesuite_runtime_remain(self):
-		component = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()
+		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
 
 		self.assertIn("Purchase Material Requests", component)
 		self.assertIn("Prepare Draft RFQ", component)

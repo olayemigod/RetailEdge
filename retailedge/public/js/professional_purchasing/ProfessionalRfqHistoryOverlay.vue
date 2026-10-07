@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="capture.active ? 'Record Supplier Quotation' : 'Request for Quotation History'"
-		:subtitle="capture.active ? 'Record a supplier response against the submitted RFQ using ERPNext quotation truth.' : 'Review RFQs within your permitted Company and Branch scope without leaving this workspace.'"
+		:subtitle="capture.active ? 'Record a supplier response against the submitted RFQ using the standard quotation workflow.' : 'Review RFQs within your permitted Company and Branch scope without leaving this workspace.'"
 		size="xl"
 		@close="close"
 	>
@@ -12,7 +12,7 @@
 			<div v-else class="quote-capture">
 				<div v-if="capture.created" class="quote-capture__success">
 					<strong>Supplier Quotation {{ capture.created.name }} submitted.</strong>
-					<span>ERPNext recorded the quotation and updated the RFQ supplier response status through its standard submit logic.</span>
+					<span>The quotation was recorded and the RFQ supplier response status was updated.</span>
 					<span v-if="capture.created.grand_total !== undefined">Total: {{ formatMoney(capture.created.grand_total, capture.created.currency) }}</span>
 				</div>
 				<template v-else>
@@ -34,7 +34,7 @@
 					<div v-if="capture.error" class="quote-capture__error" role="alert">{{ capture.error }}</div>
 					<div v-if="(capture.preview.blockers || []).length" class="quote-capture__blockers" role="alert">
 						<strong>This quotation cannot use the standard guided path:</strong>
-						<ul><li v-for="message in capture.preview.blockers" :key="message">{{ message }}</li></ul>
+						<ul><li v-for="message in capture.preview.blockers" :key="message">{{ customerFacingCopy(message, 'Advanced review is required.') }}</li></ul>
 					</div>
 
 					<div v-if="(capture.preview.items || []).length" class="table-responsive">
@@ -54,7 +54,7 @@
 
 					<div class="quote-capture__safety">
 						<strong>Standard RFQ response only.</strong>
-						<span>This workflow uses ERPNext's RFQ → Supplier Quotation mapper, preserves RFQ item lineage, inserts the native quotation and calls normal ERPNext submit. It does not post GL or Stock Ledger. Ad-hoc quotations, subcontracting, active approval Workflows, extra items, or special tax/currency edits remain Advanced ERPNext.</span>
+						<span>This guided workflow preserves RFQ item lineage, records and submits the Supplier Quotation using standard controls, and does not post GL or Stock Ledger. Ad-hoc quotations, subcontracting, active approval workflows, extra items, or special tax/currency edits require advanced review.</span>
 					</div>
 				</template>
 			</div>
@@ -103,7 +103,7 @@
 								<td>{{ row.branch || '—' }}</td>
 								<td>{{ row.status || statusLabel(row.docstatus) }}</td>
 								<td><button v-if="canRecordQuote(row)" type="button" class="edge-small-button edge-small-button--primary" @click="startQuoteCapture(row)">Record Supplier Quote</button><span v-else>—</span></td>
-								<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open in ERPNext</button></td>
+								<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open RFQ</button></td>
 							</tr>
 						</tbody>
 					</table>
@@ -117,7 +117,7 @@
 				<button v-if="!capture.created" type="button" class="edge-button edge-button--primary" :disabled="!capture.preview.can_record || capture.loading || capture.saving" @click="recordAndSubmitQuote">{{ capture.saving ? 'Recording...' : 'Record & Submit Supplier Quotation' }}</button>
 			</div>
 			<div v-else class="rfq-history__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: RFQs in ERPNext</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: RFQ List</button>
 				<button type="button" class="edge-button edge-button--primary" @click="close">Close</button>
 			</div>
 		</template>
@@ -136,7 +136,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 function comparable(value) { if (value === null || value === undefined) return ""; if (typeof value === "number") return value; return String(value).toLowerCase(); }
 function emptyCapture() {
 	return {
@@ -196,6 +213,7 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		customerFacingCopy,
 		async loadHistory() {
 			if (this.loading) return;
 			this.loading = true; this.error = "";
@@ -263,7 +281,7 @@ export default {
 				}, "POST");
 				this.capture.created = result || {};
 				window.dispatchEvent(new CustomEvent("retailedge-refresh-professional-supplier-quotation-history"));
-			} catch (error) { this.capture.error = errorMessage(error, "ERPNext could not record and submit the Supplier Quotation."); }
+			} catch (error) { this.capture.error = errorMessage(error, "Unable to record and submit the Supplier Quotation."); }
 			finally { this.capture.saving = false; }
 		},
 		leaveCapture() { if (this.capture.saving) return; this.capture = emptyCapture(); this.open = false; frappe.set_route("rfq-history"); },
