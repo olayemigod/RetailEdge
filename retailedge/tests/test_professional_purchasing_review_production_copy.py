@@ -20,7 +20,6 @@ def test_purchase_order_review_hides_platform_implementation_copy():
 		text,
 		(
 			"saved ERPNext order",
-			"Frappe Workflow",
 			"Ready for standard ERPNext submission",
 			"ERPNext recalculates and validates",
 			"Frappe's permitted transitions",
@@ -35,6 +34,12 @@ def test_purchase_order_review_hides_platform_implementation_copy():
 	assert "customerFacingCopy(blocker" in text
 	assert "customerFacingCopy(preview.workflow_readiness?.message" in text
 	assert "window.retailedge?.userErrorMessage?.(error" in text
+	assert '.replace(/Frappe Workflow/gi, "approval workflow")' in text
+	full_review = '.replace(/Advanced ERPNext review/gi, "advanced review")'
+	short_platform = '.replace(/Advanced ERPNext/gi, "advanced review")'
+	assert full_review in text
+	assert short_platform in text
+	assert text.index(full_review) < text.index(short_platform)
 	assert 'frappe.set_route("Form", "Purchase Order", this.purchaseOrder)' in text
 
 
