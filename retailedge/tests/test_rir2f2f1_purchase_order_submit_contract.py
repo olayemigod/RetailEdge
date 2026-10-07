@@ -154,7 +154,7 @@ def test_submit_overlay_requires_review_and_stays_inside_edgesuite():
 	assert "Submit Purchase Order" in overlay
 	assert '}, "POST")' in overlay
 	assert "expected_purchase_order_modified" in overlay
-	assert "Advanced: ERPNext" in overlay
+	assert "Advanced: Open Purchase Order" in overlay
 	assert "nativeDeskAllowed" in overlay
 	assert 'frappe.set_route("Form", "Purchase Order", this.purchaseOrder)' in overlay
 	assert "frappe.new_doc" not in overlay
