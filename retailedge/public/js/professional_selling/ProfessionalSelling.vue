@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-professional-selling-page">
 			<EdgePageHeader
 				title="Professional Selling"
-				description="Prepare quotations, orders, deliveries and invoices using the documents your transaction actually needs while ERPNext remains the system of record."
+				description="Prepare quotations, orders, deliveries and invoices using the documents your transaction actually needs while preserving the configured pricing, stock and accounting rules."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -33,7 +33,7 @@
 					</div>
 					<div class="context-meta">
 						<span>Selling Price List</span>
-						<strong>{{ pricing.price_list || "ERPNext default" }}</strong>
+						<strong>{{ pricing.price_list || "Configured default" }}</strong>
 					</div>
 					<button type="button" class="edge-button edge-button--secondary" @click="openOperatingContext">Change Operating Context</button>
 				</section>
@@ -42,7 +42,7 @@
 					<div>
 						<span class="selling-kicker">Flexible selling paths</span>
 						<h3>Use the next document the business transaction requires</h3>
-						<p>A Quotation can become an Order or go directly to Invoice. Orders can be delivered or invoiced. Delivery Notes can be invoiced. ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative.</p>
+						<p>A Quotation can become an Order or go directly to Invoice. Orders can be delivered or invoiced. Delivery Notes can be invoiced. Configured pricing, taxes, Shipping Rules, stock and accounting rules remain authoritative.</p>
 					</div>
 					<EdgeStatusBadge :status="shipping.available ? 'Active' : 'Warning'" />
 				</section>
@@ -66,7 +66,7 @@
 						<div class="selling-actions">
 							<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
 							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openRecords(document)">View records</button>
-							<button v-if="document.can_read && canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvancedNative(document)">Advanced: Open in ERPNext</button>
+							<button v-if="document.can_read && canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvancedNative(document)">Advanced: Open {{ document.label }}</button>
 						</div>
 					</section>
 				</div>
@@ -308,10 +308,10 @@ export default {
 		},
 		stageDescription(key) {
 			return ({
-				quotation: "Prepare a customer offer using ERPNext pricing, taxes and optional Shipping Rule before commitment.",
+				quotation: "Prepare a customer offer using configured pricing, taxes and an optional Shipping Rule before commitment.",
 				"sales-order": "Confirm an order when the business needs order tracking, fulfilment or a customer PO workflow.",
-				"delivery-note": "Record fulfilment from a submitted Sales Order using ERPNext remaining quantities and stock truth.",
-				"sales-invoice": "Invoice directly, from an accepted Quotation, from a Sales Order, or from a Delivery Note while preserving ERPNext accounting controls.",
+				"delivery-note": "Record fulfilment from a submitted Sales Order using remaining quantities and current stock records.",
+				"sales-invoice": "Invoice directly, from an accepted Quotation, from a Sales Order, or from a Delivery Note while preserving accounting controls.",
 			})[key] || "Continue the selling workflow.";
 		},
 		createLabel(document) {
@@ -448,7 +448,7 @@ export default {
 					const label = (result.doctype || "Document") + " " + (result.name || "");
 					if (result.requires_amend || Number(result.docstatus || 0) === 2) {
 						frappe.show_alert({
-							message: __(label + " already came from this transaction and is cancelled. Opening the existing document; use Advanced ERPNext Amend when a replacement is required."),
+							message: __(label + " already came from this transaction and is cancelled. Opening the existing document; use advanced review when a replacement is required."),
 							indicator: "orange",
 						});
 						this.openExistingLinkedDocument({
@@ -480,7 +480,7 @@ export default {
 				else if (result.doctype === "Delivery Note") this.openDeliveryCompletion(result);
 				else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result, result.is_return ? "sales_return" : "standard");
 			} catch (error) {
-				frappe.msgprint({ title: __("Unable to continue selling workflow"), message: errorMessage(error, "ERPNext could not create the requested downstream document."), indicator: "red" });
+				frappe.msgprint({ title: __("Unable to continue selling workflow"), message: errorMessage(error, "The requested downstream document could not be created."), indicator: "red" });
 			}
 		},
 		openCustomerPayment(document, row) {
