@@ -111,20 +111,20 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			self.assertIn("canUseNativeDesk", source)
 			self.assertIn('default: false', source)
 			self.assertIn('v-if="canUseNativeDesk"', source)
-			self.assertIn("Advanced: Open in ERPNext", source)
+			self.assertIn("$emit('open-native',", source)
 			self.assertNotIn("Open Full Form", source)
 		page = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		self.assertGreaterEqual(page.count(':canUseNativeDesk="canUseNativeDesk"'), 6)
 
-	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
+	def test_ui_preserves_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (
-			"ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative",
+			"Configured pricing, taxes, Shipping Rules, stock and accounting rules remain authoritative",
 			"Selling Price List",
 			"Shipping Rule",
 			"canUseNativeDesk",
 			"openAdvancedNative(document)",
-			"Advanced: Open in ERPNext",
+			"Advanced: Open {{ document.label }}",
 		):
 			self.assertIn(contract, component)
 		for forbidden in (
