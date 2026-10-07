@@ -22,13 +22,13 @@ def test_all_four_draft_selling_documents_support_safe_edit_and_item_additions()
 	for contract in (
 		'doc.append("items"',
 		"Existing item identity cannot be replaced here.",
+		"Source-linked item",
 		"doc.remove(row)",
 		"resolve_sales_item_pricing",
 		"_validate_warehouse_branch",
 		"MAX_DRAFT_ITEMS",
 	):
 		assert contract in helper
-	assert "Source-linked item" not in helper
 
 	assert "def update_standard_selling_draft(" in selling_service
 	assert "SUPPORTED_DOCTYPES = {\"Quotation\", \"Sales Order\"}" in selling_service
