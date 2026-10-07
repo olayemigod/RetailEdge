@@ -23,7 +23,7 @@
 					<div class="delivery-editor-heading">
 						<div>
 							<strong>Edit draft before completion</strong>
-							<p>Update the posting date, quantities, rates and Stock Locations, or add new items before submission.</p>
+							<p>Update the posting date, quantities, rates and Stock Locations, remove items you no longer need, or add new items before submission.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
 							{{ busy ? "Saving..." : "Save Draft Changes" }}
@@ -34,7 +34,7 @@
 						<EdgeInput v-model="draftRemarks" id="delivery-draft-remarks" label="Remarks" type="text" :disabled="busy" />
 					</div>
 					<div class="delivery-edit-items">
-						<div class="delivery-edit-item delivery-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span></div>
+						<div class="delivery-edit-item delivery-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Action</span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="delivery-edit-item">
 							<strong>{{ row.item_code || row.item_name || "Item" }}</strong>
 							<EdgeInput v-model="row.qty" :id="`delivery-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
@@ -47,6 +47,7 @@
 								@select="row.warehouse = $event.value || ''"
 								@clear="row.warehouse = ''"
 							/>
+							<button type="button" class="edge-button edge-button--secondary delivery-remove-item" :disabled="busy || draftItems.length <= 1" title="Remove item" @click="removeDraftItem(index)">Remove</button>
 						</div>
 					</div>
 					<EdgeChildTable
@@ -244,6 +245,7 @@ export default {
 			) return true;
 			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview?.editable_items || [];
+			if (this.draftItems.length !== original.length) return true;
 			return this.draftItems.some((row, index) => (
 				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
 				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
@@ -251,7 +253,7 @@ export default {
 			));
 		},
 		draftValid() {
-			if (!this.preview?.can_edit || !this.draftPostingDate) return false;
+			if (!this.preview?.can_edit || !this.draftPostingDate || !this.draftItems.length) return false;
 			return this.draftItems.every((row) => Number(row.qty) > 0 && Number(row.rate) >= 0 && row.warehouse)
 				&& this.newItems.filter((row) => row.item_code).every((row) => Number(row.qty || 0) > 0 && row.warehouse);
 		},
@@ -271,6 +273,10 @@ export default {
 		},
 	},
 	methods: {
+		removeDraftItem(index) {
+			if (this.busy || this.draftItems.length <= 1) return;
+			this.draftItems = this.draftItems.filter((_row, rowIndex) => rowIndex !== index);
+		},
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
 			this.loading = true;
@@ -470,8 +476,9 @@ export default {
 .delivery-editor-heading p { margin:.25rem 0 0; color:var(--text-muted); }
 .delivery-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .delivery-edit-items { display:grid; gap:.45rem; }
-.delivery-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) minmax(7rem,.6fr) minmax(7rem,.6fr) minmax(12rem,1fr); gap:.6rem; align-items:end; }
+.delivery-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) minmax(7rem,.6fr) minmax(7rem,.6fr) minmax(12rem,1fr) auto; gap:.6rem; align-items:end; }
 .delivery-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
+.delivery-remove-item { align-self:end; min-height:38px; }
 .delivery-stock-note { padding: .8rem; border-radius: .6rem; background: var(--blue-50,#eff6ff); border: 1px solid var(--blue-200,#bfdbfe); }
 .delivery-stock-note p { margin: .35rem 0 0; }
 .delivery-completion-items { display: grid; gap: .45rem; }
