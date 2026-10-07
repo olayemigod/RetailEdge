@@ -268,6 +268,7 @@ export default {
 			handler() {
 				if (this.open) this.loadPreview();
 			},
+		},
 	},
 	methods: {
 		async loadPreview() {
