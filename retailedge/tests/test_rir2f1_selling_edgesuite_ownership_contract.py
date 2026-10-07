@@ -67,7 +67,7 @@ class RIR2F1SellingEdgeSuiteOwnershipContractTests(unittest.TestCase):
 		self.assertNotIn("if (result?.route) window.open(result.route", source)
 		self.assertIn("canUseNativeDesk", source)
 		self.assertIn("navigation.access?.can_use_native_desk", source)
-		self.assertIn("Advanced: Open in ERPNext", source)
+		self.assertIn("Advanced: Open {{ document.label }}", source)
 		self.assertIn("openAdvancedNative(document)", source)
 		self.assertIn("openAdvancedRecord(document, row.name)", source)
 		self.assertIn("ProfessionalSellingRecords", source)
