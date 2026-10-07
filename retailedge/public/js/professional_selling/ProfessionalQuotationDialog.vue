@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="New Quotation"
-		subtitle="Prepare a customer quotation using ERPNext pricing, Shipping Rules and the current Operating Context."
+		subtitle="Prepare a customer quotation using governed pricing, Shipping Rules and the current Operating Context."
 		size="xl"
 		@close="requestClose"
 	>
@@ -70,7 +70,7 @@
 					:modelValue="values.shipping_rule"
 					label="Shipping Rule"
 					placeholder="Optional delivery charge rule"
-					description="Only enabled ERPNext Selling Shipping Rules for this Company are shown."
+					description="Only enabled Selling Shipping Rules for this Company are shown."
 					:searcher="searchShippingRule"
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
@@ -90,7 +90,7 @@
 			/>
 
 			<p class="selling-form-hint">
-				Rates are resolved again on the server. Delivery charges are calculated by ERPNext's Shipping Rule engine when the draft is saved.
+				Rates are resolved again on the server. Delivery charges are calculated from the selected Shipping Rule when the draft is saved.
 			</p>
 
 			<label class="selling-field selling-field--wide">
@@ -101,7 +101,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Quotation')">Advanced: Open in ERPNext</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Quotation')">Advanced: Open Quotation</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="saveDraft">{{ saving ? "Saving..." : "Save Draft" }}</button>
