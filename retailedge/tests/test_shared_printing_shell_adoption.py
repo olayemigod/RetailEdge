@@ -3,6 +3,8 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 SHELL_CONTEXT = APP_ROOT / "public" / "js" / "retailedge_shell_context.js"
+HOOKS = APP_ROOT / "hooks.py"
+NAVIGATION_CONSOLIDATION = APP_ROOT / "navigation_consolidation.py"
 
 
 def test_retailedge_registers_permission_aware_shared_shell_adapter():
@@ -50,3 +52,16 @@ def test_shell_adapter_keeps_retailedge_branch_identity_in_sync():
         "can_switch_branch: Boolean(context.can_switch_branch)",
     ):
         assert expected in source
+
+
+def test_current_navigation_consolidation_remains_final_hook_and_applies_printing_normalization():
+    hooks = HOOKS.read_text(encoding="utf-8")
+    navigation = NAVIGATION_CONSOLIDATION.read_text(encoding="utf-8")
+    target = "retailedge.navigation_consolidation.get_retailedge_business_hub_context"
+
+    assert f'"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "{target}"' in hooks
+    assert f'"retailedge.master_experience.get_retailedge_business_hub_context": "{target}"' in hooks
+    assert "get_retailedge_business_hub_context as _get_master_business_hub_context" in navigation
+    assert "from retailedge.printing_navigation import normalize_printing_navigation" in navigation
+    assert "_consolidate_shift_review_navigation(navigation_groups)" in navigation
+    assert "return normalize_printing_navigation(context)" in navigation
