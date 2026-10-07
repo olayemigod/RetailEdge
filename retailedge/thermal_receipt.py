@@ -47,6 +47,12 @@ def _quantity(value: Any) -> str:
 
 
 def _branch(doc) -> str:
+	# Use the stored RetailEdge transaction attribution first. This is the
+	# authoritative branch snapshot for profile resolution on submitted sales.
+	if doc.meta.has_field("retailedge_branch"):
+		value = _text(doc.get("retailedge_branch"))
+		if value:
+			return value
 	for fieldname in BRANCH_FIELD_CANDIDATES:
 		if doc.meta.has_field(fieldname):
 			value = _text(doc.get(fieldname))
