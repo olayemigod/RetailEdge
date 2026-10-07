@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Create Delivery"
-		subtitle="Create a draft Delivery Note from the remaining quantities on a submitted Sales Order using ERPNext's native mapping."
+		subtitle="Create a draft Delivery Note from the remaining quantities on a submitted Sales Order using the standard delivery mapping."
 		size="lg"
 		@close="requestClose"
 	>
@@ -25,14 +25,14 @@
 			/>
 
 			<section class="delivery-safety-note">
-				<strong>ERPNext keeps delivery truth.</strong>
-				<p>Remaining quantities, Sales Order item links, Stock Locations, packed items, taxes and stock validation are mapped by ERPNext. This workflow creates a draft only and never changes the submitted Sales Order.</p>
+				<strong>The submitted order remains the source for delivery.</strong>
+				<p>Remaining quantities, Sales Order item links, Stock Locations, packed items, taxes and stock validation are carried into the draft and revalidated when saved. This workflow creates a draft only and never changes the submitted Sales Order.</p>
 			</section>
 		</div>
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Delivery Note')">Advanced: Open in ERPNext</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Delivery Note')">Advanced: Open Delivery Note</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || !salesOrder" @click="createDraft">{{ saving ? "Creating..." : "Create Delivery Draft" }}</button>
