@@ -19,9 +19,15 @@
 		"/app/supplier-payables": "supplier-payables",
 		"/app/stock-position": "stock-position",
 	});
+	const RETAILEDGE_SMART_DATE_PLACEHOLDER =
+		"e.g. May to June 2026, last 2 months, previous 2 months, YTD";
+	const RETAILEDGE_SMART_DATE_STYLE_ID = "retailedge-smart-date-policy";
+	const RETAILEDGE_PERIOD_FILTER_KEYS = Object.freeze(["from_" + "date", "to_" + "date"]);
 	let shellGovernanceInstalled = false;
+	let smartDatePolicyInstalled = false;
 	let baseReportShell = null;
 	let baseExportMenu = null;
+	let baseSmartDateRange = null;
 
 	function callMethod(method, args = {}) {
 		return new Promise((resolve, reject) => {
@@ -109,7 +115,70 @@
 		popup.document.open(); popup.document.write(result.html); popup.document.close(); popup.document.title = result.title || "RetailEdge Report";
 		window.setTimeout(() => { popup.focus(); popup.print(); }, 120); return true;
 	}
+	function installSmartDateStylePolicy() {
+		if (typeof document === "undefined" || !document.head) return false;
+		if (document.getElementById(RETAILEDGE_SMART_DATE_STYLE_ID)) return true;
+		const style = document.createElement("style");
+		style.id = RETAILEDGE_SMART_DATE_STYLE_ID;
+		style.textContent = [
+			".edge-smart-date__preset-section{display:none!important}",
+			".edge-smart-date,.edge-smart-date__trigger{min-width:0;max-width:100%}",
+		].join("");
+		document.head.appendChild(style);
+		return true;
+	}
+	function hasResolvedSmartDateRange(value) {
+		return Boolean(value?.from_date && value?.to_date);
+	}
+	function clearParentPeriodFilters(component) {
+		const parent = component?.$parent;
+		const filters = parent?.filters;
+		if (!filters || typeof filters !== "object") return false;
+		const [fromKey, toKey] = RETAILEDGE_PERIOD_FILTER_KEYS;
+		if (!(fromKey in filters) || !(toKey in filters)) return false;
+		filters[fromKey] = "";
+		filters[toKey] = "";
+		if (typeof parent.page === "number") parent.page = 1;
+		if (typeof parent.currentPage === "number") parent.currentPage = 1;
+		if (parent.pagination && typeof parent.pagination === "object" && "page" in parent.pagination) parent.pagination.page = 1;
+		return true;
+	}
+	function installSmartDatePolicy(runtime = window.EdgeSuiteUI) {
+		installSmartDateStylePolicy();
+		if (smartDatePolicyInstalled) return true;
+		if (!runtime?.registerComponent || !runtime?.Vue?.defineComponent || !runtime?.Vue?.h) return false;
+		baseSmartDateRange = runtime.getComponent?.("EdgeSmartDateRange") || runtime.components?.EdgeSmartDateRange;
+		if (!baseSmartDateRange) return false;
+		const { defineComponent, h } = runtime.Vue;
+		const RetailEdgeSmartDateRange = defineComponent({
+			name: "RetailEdgeSmartDateRange",
+			inheritAttrs: false,
+			data() { return { hadResolvedPeriod: false }; },
+			mounted() {
+				this.hadResolvedPeriod = hasResolvedSmartDateRange(this.$attrs?.modelValue);
+			},
+			updated() {
+				const hasResolvedPeriod = hasResolvedSmartDateRange(this.$attrs?.modelValue);
+				if (this.hadResolvedPeriod && !hasResolvedPeriod) clearParentPeriodFilters(this);
+				this.hadResolvedPeriod = hasResolvedPeriod;
+			},
+			render() {
+				const attrs = this.$attrs || {};
+				return h(baseSmartDateRange, {
+					...attrs,
+					label: attrs.label || "Period",
+					placeholder: attrs.placeholder || RETAILEDGE_SMART_DATE_PLACEHOLDER,
+					showPresets: false,
+					presets: [],
+				}, this.$slots);
+			},
+		});
+		runtime.registerComponent("EdgeSmartDateRange", RetailEdgeSmartDateRange, { replace: true });
+		smartDatePolicyInstalled = true;
+		return true;
+	}
 	function installShellGovernance(runtime = window.EdgeSuiteUI) {
+		installSmartDatePolicy(runtime);
 		if (shellGovernanceInstalled || !runtime?.registerComponent || !runtime?.Vue?.defineComponent) return false;
 		baseReportShell = runtime.getComponent?.("EdgeReportShell") || runtime.components?.EdgeReportShell;
 		baseExportMenu = runtime.getComponent?.("EdgeExportMenu") || runtime.components?.EdgeExportMenu;
@@ -136,6 +205,8 @@
 		getCapabilities,
 		exportReport,
 		printReport,
+		installSmartDateStylePolicy,
+		installSmartDatePolicy,
 		installShellGovernance,
 		setReportRouteHandoff,
 		consumeReportRouteHandoff,
@@ -145,5 +216,11 @@
 	if (typeof window.retailedgeConsumeBusinessHubRouteOptions !== "function") {
 		window.retailedgeConsumeBusinessHubRouteOptions = consumeReportRouteHandoff;
 	}
-	installShellGovernance(window.EdgeSuiteUI); window.addEventListener("edgesuite:report-runtime-ready", () => installShellGovernance(window.EdgeSuiteUI));
+	installSmartDateStylePolicy();
+	installSmartDatePolicy(window.EdgeSuiteUI);
+	installShellGovernance(window.EdgeSuiteUI);
+	window.addEventListener("edgesuite:report-runtime-ready", () => {
+		installSmartDatePolicy(window.EdgeSuiteUI);
+		installShellGovernance(window.EdgeSuiteUI);
+	});
 })();

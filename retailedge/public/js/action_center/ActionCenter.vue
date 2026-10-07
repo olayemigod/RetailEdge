@@ -29,8 +29,15 @@
 		>
 			<template #filters>
 				<div class="action-center-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="action-center-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeDropdown v-model="filters.follow_up_status" :options="['All', 'Open', 'Acknowledged', 'Snoozed']" label="Follow-up Status" />
 					<EdgeDropdown v-model="filters.assignment_scope" :options="[{ value: 'all', label: 'All Actions' }, { value: 'mine', label: 'My Actions' }]" label="Assignment" />
 					<EdgeDropdown v-model="filters.due_scope" :options="[{ value: 'all', label: 'All Timing' }, { value: 'due', label: 'Due / Overdue' }]" label="Follow-up Timing" />
@@ -43,7 +50,7 @@
 					<div v-if="critical.length" class="action-list">
 						<div v-for="item in critical" :key="itemKey(item)" class="action-row action-row--danger">
 							<div class="action-row-main">
-								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
+								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ actionMetaLabel(item) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
@@ -56,7 +63,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -72,7 +79,7 @@
 					<div v-if="warnings.length" class="action-list">
 						<div v-for="item in warnings" :key="itemKey(item)" class="action-row action-row--warning">
 							<div class="action-row-main">
-								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
+								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ actionMetaLabel(item) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
@@ -85,7 +92,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -97,7 +104,7 @@
 					<div v-else class="action-empty">No attention items match the current Action Centre filters.</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Sources" description="These sources were excluded because your current permissions do not allow them.">
+				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Information" description="Some information is hidden because your current access does not allow it.">
 					<div class="source-list">
 						<div v-for="source in unavailableSources" :key="source.key" class="source-row"><strong>{{ sourceLabel(source.key) }}</strong><small>{{ source.reason }}</small></div>
 					</div>
@@ -106,7 +113,7 @@
 				<EdgeDashboardSection title="How resolution works" description="Follow-up tracking is separate from business resolution." span="2">
 					<div class="action-note">
 						<strong>Follow-up actions do not resolve accounting, stock or workflow exceptions.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze update only the follow-up record. Open workflow takes you to the authoritative page, document or report, where existing permissions, approvals, submission rules and accounting controls remain authoritative.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the follow-up record. Open workflow takes you to the page, document or report where the business issue is maintained; existing permissions, approvals, submission rules and accounting controls still apply.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -115,7 +122,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown", "EdgeSmartDateRange"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
@@ -127,6 +134,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "", mutatingFingerprint: "",
 			summary: [], items: [], sources: {}, metadata: {}, menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
@@ -143,10 +151,28 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.action_center.get_action_center_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
+				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Action Centre controls."); }
 			finally { this.metadataLoading = false; }
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
 		},
 		async fetchData() {
 			if (!this.filters.company) return; this.loading = true; this.error = "";
@@ -207,10 +233,28 @@ export default {
 			}
 			window.location.assign(route);
 		},
-		workflowTitle(item) { if (!this.canOpenWorkflow(item)) return "Advanced Native Desk access is required for this workflow"; return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open workflow"; },
+		workflowTitle(item) { if (!this.canOpenWorkflow(item)) return "You do not have access to open this workflow"; return item?.open_mode === "new_tab" ? "Open workflow in a new tab" : "Open workflow"; },
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
-		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
-		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
+		sourceLabel(source) {
+			const labels = {
+				r11_customer_opportunity: "Customer Opportunity",
+				r11_sales_quality: "Sales Quality",
+				r11_customer_sales: "Customer & Sales",
+				r12_planning: "Forecasting & Planning",
+				stock_position: "Stock Position",
+				stock: "Stock",
+				cash_shift: "Cash Control",
+				bank_controls: "Bank Controls",
+				receivables: "Customer Receivables",
+				payables: "Supplier Payables",
+				expenses: "Expenses",
+			};
+			const key = String(source || "management");
+			if (labels[key]) return labels[key];
+			return key.replace(/^r\d+[_\s-]+/i, "").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+		},
+		basisLabel(value) { return value === "current" ? "Current position" : value === "period" ? "Selected period" : value === "forecast" ? "Forecast" : ""; },
+		actionMetaLabel(item) { return [this.sourceLabel(item?.source), this.basisLabel(item?.time_basis)].filter(Boolean).join(" · "); },
 		formatDateTime(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(value); } catch (_error) { return value; } },
 		formatValue(value, datatype) {
 			if (value === null || value === undefined || value === "") return "—";
@@ -231,6 +275,7 @@ export default {
 
 <style scoped>
 .action-center-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.action-center-period-filter { min-width: 0; width: 100%; }
 .action-list, .source-list { display: grid; gap: 9px; }
 .action-row { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
 .action-row--danger { border-color: var(--red-300, var(--edge-border)); }

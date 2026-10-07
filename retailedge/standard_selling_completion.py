@@ -104,20 +104,20 @@ def _validate_standard_context(doc) -> tuple[str, str]:
 def _standard_shape_blockers(doc) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
-		blockers.append(_("Only draft documents can use standard EdgeSuite completion."))
+		blockers.append(_("Only draft documents can use standard completion."))
 	if doc.get("amended_from"):
-		blockers.append(_("Amended documents require Advanced ERPNext review."))
+		blockers.append(_("Amended documents require advanced review."))
 
 	status = _clean(doc.get("status"))
 	if status and status != "Draft":
 		blockers.append(
-			_("{0} status {1} requires Advanced ERPNext review.").format(doc.doctype, status)
+			_("{0} status {1} requires advanced review.").format(doc.doctype, status)
 		)
 
 	order_type = _clean(doc.get("order_type"))
 	if order_type not in {"", "Sales"}:
 		blockers.append(
-			_("{0} order type {1} requires Advanced ERPNext review.").format(
+			_("{0} order type {1} requires advanced review.").format(
 				doc.doctype, order_type
 			)
 		)
@@ -128,18 +128,18 @@ def _standard_shape_blockers(doc) -> list[str]:
 
 	if doc.doctype == "Quotation":
 		if _clean(doc.get("quotation_to")) != "Customer":
-			blockers.append(_("Non-Customer Quotation requires Advanced ERPNext review."))
+			blockers.append(_("Non-Customer Quotation requires advanced review."))
 		if not _clean(doc.get("party_name")):
 			blockers.append(_("Quotation Customer is required."))
 	elif doc.doctype == "Sales Order":
 		if not _clean(doc.get("customer")):
 			blockers.append(_("Sales Order Customer is required."))
 		if cint(doc.get("is_internal_customer")):
-			blockers.append(_("Internal-customer Sales Order requires Advanced ERPNext review."))
+			blockers.append(_("Internal-customer Sales Order requires advanced review."))
 		if _clean(doc.get("represents_company")):
-			blockers.append(_("Inter-company Sales Order requires Advanced ERPNext review."))
+			blockers.append(_("Inter-company Sales Order requires advanced review."))
 		if _clean(doc.get("inter_company_order_reference")):
-			blockers.append(_("Inter-company Sales Order requires Advanced ERPNext review."))
+			blockers.append(_("Inter-company Sales Order requires advanced review."))
 
 	return blockers
 
@@ -205,7 +205,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"workflow_readiness": workflow_readiness,
 		"workflow_eligible": bool(workflow_controlled and not standard_blockers and cint(doc.docstatus) == 0),
 		"persistence": "none",
-		"source_of_truth": "ERPNext",
+		"source_of_truth": "Sales document",
 		"route": f"/app/{frappe.scrub(doc.doctype).replace('_', '-')}/{doc.name}",
 	}
 
@@ -368,8 +368,8 @@ def submit_standard_selling_document(
 	if _clean(workflow_readiness.get("source")) == "frappe":
 		frappe.throw(
 			_(
-				"{0} is controlled by active Workflow {1}. Use the available workflow action in EdgeSuite."
-			).format(doctype, workflow_readiness.get("workflow") or _("Frappe Workflow")),
+				"{0} is controlled by active Workflow {1}. Use the available workflow action here."
+			).format(doctype, workflow_readiness.get("workflow") or _("configured workflow")),
 			frappe.ValidationError,
 		)
 
@@ -382,7 +382,7 @@ def submit_standard_selling_document(
 	# ERPNext remains authoritative for document submission and all native side effects.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit {0} {1}.").format(doctype, name))
+		frappe.throw(_("Submission did not complete for {0} {1}.").format(doctype, name))
 	doc.reload()
 	return {
 		"doctype": doc.doctype,
@@ -393,7 +393,7 @@ def submit_standard_selling_document(
 		"company": _clean(doc.get("company")),
 		"branch": _stored_branch(doc),
 		"party": _party_value(doc),
-		"source_of_truth": "ERPNext native submit",
+		"source_of_truth": "Submitted sales document",
 		"route": f"/app/{frappe.scrub(doc.doctype).replace('_', '-')}/{doc.name}",
 	}
 
@@ -424,7 +424,7 @@ def apply_standard_selling_workflow_action(
 	workflow_readiness = get_workflow_readiness(doctype=doctype, doc=doc)
 	if _clean(workflow_readiness.get("source")) != "frappe":
 		frappe.throw(
-			_("No active Frappe Workflow owns this {0}.").format(doctype),
+			_("No active workflow controls this {0}.").format(doctype),
 			frappe.ValidationError,
 		)
 

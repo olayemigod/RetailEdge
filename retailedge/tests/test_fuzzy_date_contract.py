@@ -1,0 +1,70 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+REPORTING_ACTIONS = ROOT / "retailedge" / "public" / "js" / "retailedge_reporting_actions.js"
+BUSINESS_HUB = (
+	ROOT
+	/ "retailedge"
+	/ "public"
+	/ "js"
+	/ "retailedge_business_hub"
+	/ "RetailEdgeBusinessHub.vue"
+)
+
+
+def test_retailedge_installs_one_global_smart_date_policy():
+	text = REPORTING_ACTIONS.read_text()
+	assert "installSmartDatePolicy" in text
+	assert 'runtime.registerComponent("EdgeSmartDateRange", RetailEdgeSmartDateRange, { replace: true })' in text
+	assert 'window.addEventListener("edgesuite:report-runtime-ready"' in text
+	assert "installSmartDatePolicy(window.EdgeSuiteUI)" in text
+
+
+def test_retailedge_smart_date_policy_removes_visual_quick_presets():
+	text = REPORTING_ACTIONS.read_text()
+	assert "showPresets: false" in text
+	assert "presets: []" in text
+	assert "installSmartDateStylePolicy" in text
+	assert "retailedge-smart-date-policy" in text
+	assert ".edge-smart-date__preset-section{display:none!important}" in text
+	assert "May to June 2026" in text
+	assert "last 2 months" in text
+	assert "previous 2 months" in text
+	assert "YTD" in text
+
+
+def test_nested_shared_dashboards_inherit_retailedge_no_preset_policy():
+	text = REPORTING_ACTIONS.read_text()
+	assert 'document.createElement("style")' in text
+	assert "document.head.appendChild(style)" in text
+	assert ".edge-smart-date,.edge-smart-date__trigger{min-width:0;max-width:100%}" in text
+	assert "installSmartDateStylePolicy();" in text
+
+
+def test_retailedge_policy_does_not_translate_periods_back_to_free_text_dates():
+	text = REPORTING_ACTIONS.read_text()
+	assert "baseSmartDateRange" in text
+	assert "...attrs" in text
+	policy = text[text.index("function installSmartDatePolicy"):text.index("function installShellGovernance")]
+	assert "from_date" not in policy
+	assert "to_date" not in policy
+
+
+def test_clearing_a_resolved_smart_date_clears_exact_backend_period_filters():
+	text = REPORTING_ACTIONS.read_text()
+	assert 'const RETAILEDGE_PERIOD_FILTER_KEYS = Object.freeze(["from_" + "date", "to_" + "date"])' in text
+	assert "function hasResolvedSmartDateRange(value)" in text
+	assert "function clearParentPeriodFilters(component)" in text
+	assert "filters[fromKey] = \"\"" in text
+	assert "filters[toKey] = \"\"" in text
+	assert "hadResolvedPeriod" in text
+	assert "if (this.hadResolvedPeriod && !hasResolvedPeriod) clearParentPeriodFilters(this)" in text
+	assert "parent.pagination.page = 1" in text
+
+
+def test_business_hub_uses_shared_smart_date_control_not_transaction_date_inputs():
+	text = BUSINESS_HUB.read_text()
+	assert "<EdgeSmartDateRange" in text
+	assert 'label="Period"' in text
+	assert '@resolved="handleHomeDateResolved"' in text

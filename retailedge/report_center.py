@@ -73,7 +73,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Sales Person Commissions",
-				"description": "Review ERPNext salesperson commission detail.",
+				"description": "Review salesperson commission detail.",
 				"target_type": "Report",
 				"target": "Sales Person Commission Summary",
 				"tags": ("sales", "salesperson", "commission"),
@@ -81,7 +81,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Sales Partner Commissions",
-				"description": "Review ERPNext sales partner commission detail.",
+				"description": "Review sales partner commission detail.",
 				"target_type": "Report",
 				"target": "Sales Partner Commission Summary",
 				"tags": ("sales", "partner", "commission"),
@@ -113,7 +113,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{
 				"label": "Purchase Operations",
-				"description": "Follow purchase requests, orders, receipts, invoices, returns and landed cost through the governed ERPNext purchasing workflow.",
+				"description": "Follow purchase requests, orders, receipts, invoices, returns and landed cost through the governed purchasing workflow.",
 				"target_type": "Page",
 				"target": "professional-purchasing",
 				"tags": ("buying", "purchase request", "rfq", "purchase order", "receipt", "control"),
@@ -170,7 +170,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Inventory Ageing",
-				"description": "Review ageing and slow-moving inventory using the existing stock truth.",
+				"description": "Review ageing and slow-moving inventory using current stock records.",
 				"target_type": "Page",
 				"target": "inventory-ageing",
 				"tags": ("stock", "inventory", "ageing", "slow moving"),
@@ -191,7 +191,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Stock Balance",
-				"description": "Open ERPNext Stock Balance for detailed warehouse and item quantities.",
+				"description": "Open detailed Stock Balance for warehouse and item quantities.",
 				"target_type": "Report",
 				"target": "Stock Balance",
 				"tags": ("stock", "balance", "warehouse", "item"),
@@ -199,7 +199,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Stock Ledger",
-				"description": "Open ERPNext Stock Ledger for voucher-level inventory movement detail.",
+				"description": "Open detailed Stock Ledger for voucher-level inventory movement detail.",
 				"target_type": "Report",
 				"target": "Stock Ledger",
 				"tags": ("stock", "ledger", "voucher", "movement"),
@@ -207,7 +207,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Projected Stock",
-				"description": "Review ERPNext projected stock quantities and future availability.",
+				"description": "Review projected stock quantities and future availability.",
 				"target_type": "Report",
 				"target": "Stock Projected Qty",
 				"tags": ("stock", "projected", "availability", "reorder"),
@@ -215,7 +215,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Stock Ageing (Detailed)",
-				"description": "Open ERPNext detailed stock ageing for inventory-age analysis.",
+				"description": "Open detailed stock ageing for inventory-age analysis.",
 				"target_type": "Report",
 				"target": "Stock Ageing",
 				"tags": ("stock", "ageing", "inventory"),
@@ -252,7 +252,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Cash Movement",
-				"description": "Review posted Cash and Bank movements from ERPNext General Ledger truth.",
+				"description": "Review posted Cash and Bank movements from accounting ledger records.",
 				"target_type": "Page",
 				"target": "cash-movement",
 				"tags": ("cash", "bank", "money in", "money out"),
@@ -266,7 +266,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Accounts Receivable (Detailed)",
-				"description": "Open ERPNext Accounts Receivable for detailed customer ageing and outstanding balances.",
+				"description": "Open detailed Accounts Receivable for customer ageing and outstanding balances.",
 				"target_type": "Report",
 				"target": "Accounts Receivable",
 				"tags": ("receivable", "customer", "ageing", "outstanding"),
@@ -274,7 +274,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Accounts Payable (Detailed)",
-				"description": "Open ERPNext Accounts Payable for detailed supplier ageing and outstanding balances.",
+				"description": "Open detailed Accounts Payable for supplier ageing and outstanding balances.",
 				"target_type": "Report",
 				"target": "Accounts Payable",
 				"tags": ("payable", "supplier", "ageing", "outstanding"),
@@ -320,7 +320,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{
 				"label": "Profitability Intelligence",
-				"description": "Review R8 transactional contribution while ERPNext remains accounting profit truth.",
+				"description": "Review transactional contribution while posted financial statements remain the accounting-profit reference.",
 				"target_type": "Page",
 				"target": "profitability-intelligence",
 				"tags": ("profit", "margin", "cost", "contribution"),
@@ -349,7 +349,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Sales Forecast",
-				"description": "Review the existing R12 sales forecast without treating it as a committed receivable schedule.",
+				"description": "Review the sales forecast without treating it as a committed receivable schedule.",
 				"target_type": "Page",
 				"target": "sales-forecast",
 				"tags": ("sales", "forecast", "trend", "planning"),
@@ -416,7 +416,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Stock & Accounting Integrity",
-				"description": "Review stock/accounting integrity exceptions without changing accounting truth.",
+				"description": "Review stock/accounting integrity exceptions without changing accounting records.",
 				"target_type": "Page",
 				"target": "stock-accounting-integrity",
 				"tags": ("stock", "accounting", "integrity", "audit"),
@@ -449,12 +449,12 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "financial",
 		"label": "Financial",
-		"description": "ERPNext accounting statements and ledgers for authorised Native Desk users.",
+		"description": "Accounting statements and ledgers for authorised advanced-access users.",
 		"icon": "book-open",
 		"items": (
 			{
 				"label": "Profit & Loss",
-				"description": "ERPNext Profit and Loss Statement — authoritative accounting profit.",
+				"description": "Review the accounting Profit and Loss Statement.",
 				"target_type": "Report",
 				"target": "Profit and Loss Statement",
 				"tags": ("profit", "loss", "income statement", "accounting"),
@@ -462,7 +462,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Balance Sheet",
-				"description": "ERPNext Balance Sheet — authoritative assets, liabilities and equity.",
+				"description": "Review accounting assets, liabilities and equity.",
 				"target_type": "Report",
 				"target": "Balance Sheet",
 				"tags": ("balance sheet", "assets", "liabilities", "equity"),
@@ -470,7 +470,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Cash Flow Statement",
-				"description": "ERPNext Cash Flow statement from accounting truth.",
+				"description": "Review the accounting Cash Flow statement.",
 				"target_type": "Report",
 				"target": "Cash Flow",
 				"tags": ("cash flow", "financial", "accounting"),
@@ -478,7 +478,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "General Ledger",
-				"description": "ERPNext General Ledger transaction detail.",
+				"description": "Review detailed General Ledger transactions.",
 				"target_type": "Report",
 				"target": "General Ledger",
 				"tags": ("ledger", "gl", "accounting", "journal"),
@@ -486,7 +486,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Trial Balance",
-				"description": "ERPNext Trial Balance for account-level debit and credit validation.",
+				"description": "Review account-level debit and credit balances.",
 				"target_type": "Report",
 				"target": "Trial Balance",
 				"tags": ("trial balance", "debit", "credit", "accounting"),
@@ -494,7 +494,7 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{
 				"label": "Budget Variance",
-				"description": "ERPNext Budget Variance report for authorised accounting users.",
+				"description": "Review budget variance for authorised accounting users.",
 				"target_type": "Report",
 				"target": "Budget Variance Report",
 				"tags": ("budget", "variance", "financial", "accounting"),

@@ -32,22 +32,39 @@ class BankingEdgeSuiteCompletionContractTests(unittest.TestCase):
 		)
 		self.assertEqual(completed.returncode, 0, completed.stderr)
 
-	def test_review_restores_planned_operational_context(self):
+	def test_review_restores_business_facing_operational_context(self):
 		asset = COMPLETION_JS.read_text()
 		for label in (
 			"Bank Narration",
 			"Branch",
 			"Mode of Payment",
-			"Payment Event Source",
+			"Payment Source",
 			"Business Category",
-			"Accounting / Hard Match Evidence",
-			"Fuzzy / Supplemental Evidence",
+			"Accounting Evidence",
+			"Supporting Match Evidence",
 			"Operational Guidance",
 		):
 			self.assertIn(label, asset)
-		self.assertIn("Supporting evidence only; it cannot override a bank/GL mismatch.", asset)
+		self.assertIn("Supporting evidence only; it cannot override a bank-account mismatch.", asset)
 		self.assertIn("Matching does not reconcile the Bank Transaction", asset)
 		self.assertIn("recommended_action", asset)
+		self.assertNotIn("Payment Event Source", asset)
+		self.assertNotIn("Accounting / Hard Match Evidence", asset)
+		self.assertNotIn("Fuzzy / Supplemental Evidence", asset)
+		self.assertNotIn("bank/GL mismatch", asset)
+
+	def test_completion_contains_runtime_production_copy_guard(self):
+		asset = COMPLETION_JS.read_text()
+		self.assertIn("PRODUCTION_COPY_REPLACEMENTS", asset)
+		self.assertIn("productionizeVisibleCopy", asset)
+		self.assertIn("productionizeText", asset)
+		for replacement in (
+			'"Reconcile Through ERPNext", "Reconcile Match"',
+			'"ERPNext remains the reconciliation authority.", "Reconciliation uses the current accounting records."',
+			'"Accounting / Hard Score", "Accounting Match Score"',
+			'"Supplemental Fuzzy Score", "Supporting Match Score"',
+		):
+			self.assertIn(replacement, asset)
 
 	def test_completion_is_read_only_and_page_scoped(self):
 		asset = COMPLETION_JS.read_text()
@@ -69,15 +86,18 @@ class BankingEdgeSuiteCompletionContractTests(unittest.TestCase):
 		self.assertIn("var(--edge-space-", css)
 		self.assertIn("@media (max-width: 760px)", css)
 
-	def test_readiness_adds_state_filter_and_gl_drill_through(self):
+	def test_readiness_adds_state_filter_and_business_facing_drill_through(self):
 		asset = READINESS_JS.read_text()
 		self.assertIn('getComponent("EdgeDropdown")', asset)
 		self.assertIn("Readiness State", asset)
 		self.assertIn("All States", asset)
 		self.assertIn("visibleRows", asset)
-		self.assertIn("Open GL Account", asset)
+		self.assertIn("Open Ledger Account", asset)
 		self.assertIn('frappe.set_route("Form", "Account", row.resolved_gl_account)', asset)
-		self.assertIn("Open ERPNext Bank Account", asset)
+		self.assertIn("Open Bank Account", asset)
+		self.assertIn("Verify bank account, ledger account, company", asset)
+		self.assertNotIn("Open ERPNext Bank Account", asset)
+		self.assertNotIn("Verify ERPNext Bank Account, GL", asset)
 
 
 if __name__ == "__main__":

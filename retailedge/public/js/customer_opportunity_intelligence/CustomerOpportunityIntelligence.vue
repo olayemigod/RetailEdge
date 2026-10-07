@@ -40,14 +40,15 @@
 				<div class="customer-opportunity-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field">
-						<span class="edge-field-label">Current From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Current To Date</span>
-						<input v-model="filters.to_date" class="edge-input" type="date" />
-					</label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="customer-opportunity-period-filter"
+						label="Current Period"
+						placeholder="e.g. last 2 months, May to June 2026, Q3 2026"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<label class="edge-field">
 						<span class="edge-field-label">Change Threshold (%)</span>
@@ -66,14 +67,14 @@
 				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ formatDate(scope.prior_from_date) }} to {{ formatDate(scope.prior_to_date) }}</span>
 				<span>Threshold: {{ scope.change_threshold_percent || filters.change_threshold_percent }}%</span>
 				<span>Signals describe observed comparable-period behaviour; these customers are not automatically labelled as churned.</span>
-				<span>Outstanding and overdue values are current ERPNext receivable exposure</span>
+				<span>Outstanding and overdue values show current receivable exposure</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -109,6 +110,8 @@ export default {
 			userName: "",
 			companyCurrency: "",
 			customerLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -154,10 +157,10 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" },
-				{ label: "Comparison", value: this.metadata.comparison_basis || "Current versus preceding equal-length period" },
-				{ label: "Receivables", value: this.metadata.receivable_truth || "Current ERPNext outstanding exposure" },
-				{ label: "Interpretation", value: this.metadata.signal_rule || "Observed behaviour only; no churn claim" },
+				{ label: "Sales Source", value: "Submitted sales invoices" },
+				{ label: "Comparison", value: "Current versus preceding equal-length period" },
+				{ label: "Receivables", value: "Current outstanding receivables" },
+				{ label: "Interpretation", value: "Observed behaviour only; no churn claim" },
 			];
 		},
 	},
@@ -181,6 +184,8 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}), change_threshold_percent: 25 };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -193,6 +198,22 @@ export default {
 			} finally {
 				this.metadataLoading = false;
 			}
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.clearCustomer();
 		},
 		mapNavigationGroups(groups) {
 			return (groups || []).map((group) => ({
@@ -289,6 +310,7 @@ export default {
 <style scoped>
 .customer-opportunity-fallback { display: grid; gap: 0.5rem; padding: 1.5rem; }
 .customer-opportunity-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; align-items: end; }
+.customer-opportunity-period-filter { min-width: 0; width: 100%; }
 .edge-field { display: grid; gap: 0.35rem; }
 .edge-field-label { font-size: 0.78rem; font-weight: 600; }
 .edge-input { width: 100%; min-height: 38px; border: 1px solid var(--border-color, #dfe3e8); border-radius: 8px; padding: 0.45rem 0.65rem; background: var(--control-bg, transparent); color: inherit; }

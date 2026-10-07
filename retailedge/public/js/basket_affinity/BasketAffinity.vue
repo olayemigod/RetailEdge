@@ -40,8 +40,15 @@
 				<div class="basket-affinity-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" class="edge-input" type="date" @change="onAffinityDateChange" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" class="edge-input" type="date" @change="onAffinityDateChange" /></label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="basket-affinity-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.salesperson" label="Salesperson" placeholder="All salespeople" :searcher="salespersonSearch" @select="onSalespersonSelected" @clear="clearSalesperson" />
 					<EdgeLinkField v-model="filters.item_group" label="Product Group Anchor" placeholder="Any group" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
@@ -68,7 +75,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown", "EdgeSmartDateRange"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -81,7 +88,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], pagination: {}, metadata: {}, menuItems: [], tenantName: "", branchName: "", userName: "", canUseNativeDesk: false,
-			page: 1, pageSize: 50,
+			page: 1, pageSize: 50, smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", customer: "", salesperson: "", item_group: "", item_code: "", minimum_pair_count: 1 },
 		};
 	},
@@ -89,7 +96,7 @@ export default {
 		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: this.canUseNativeDesk && ["item_a", "item_b"].includes(column.fieldname), sortable: false })); },
 		exportDataset() { return { title: "Basket & Product Affinity", filename: `ProcessEdge Retail Basket Affinity ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Product Group Anchor", item_code: "Product Anchor", minimum_pair_count: "Minimum Times Together" }; return Object.entries(labels).map(([key, label]) => ({ label, value: this.filters[key] })).filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined); },
-		exportMetadata() { return [ { label: "Sales Source", value: this.metadata.sales_truth || "Submitted non-return ERPNext Sales Invoice" }, { label: "Pair Definition", value: this.metadata.pair_definition || "Distinct products on the same sale invoice" }, { label: "Returns", value: this.metadata.returns || "Return invoices do not create pairs" }, { label: "Interpretation", value: "Explainable association only; no recommendation claim" } ]; },
+		exportMetadata() { return [ { label: "Sales Source", value: "Submitted non-return sales invoices" }, { label: "Pair Definition", value: this.metadata.pair_definition || "Distinct products on the same sale invoice" }, { label: "Returns", value: this.metadata.returns || "Return invoices do not create pairs" }, { label: "Interpretation", value: "Explainable association only; no recommendation claim" } ]; },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
@@ -100,12 +107,32 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.sales_reporting.get_sales_reporting_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}), item_code: "", item_group: "", salesperson: "", minimum_pair_count: 1 };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Basket & Product Affinity controls."); }
 			finally { this.metadataLoading = false; }
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.customer = "";
+			this.filters.salesperson = "";
+			this.page = 1;
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
@@ -114,7 +141,6 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); },
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.filters.customer = ""; this.filters.salesperson = ""; this.filters.item_group = ""; this.filters.item_code = ""; this.page = 1; },
 		onBranchSelected(option) { this.filters.branch = option?.value || ""; this.filters.customer = ""; this.filters.salesperson = ""; this.page = 1; }, clearBranch() { this.filters.branch = ""; this.page = 1; },
-		onAffinityDateChange() { this.filters.customer = ""; this.filters.salesperson = ""; this.page = 1; },
 		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.page = 1; }, clearCustomer() { this.filters.customer = ""; this.page = 1; },
 		onSalespersonSelected(option) { this.filters.salesperson = option?.value || ""; this.page = 1; }, clearSalesperson() { this.filters.salesperson = ""; this.page = 1; },
 		onItemGroupSelected(option) { this.filters.item_group = option?.value || ""; this.filters.item_code = ""; this.page = 1; }, clearItemGroup() { this.filters.item_group = ""; this.filters.item_code = ""; this.page = 1; },
@@ -131,6 +157,7 @@ export default {
 <style scoped>
 .basket-affinity-fallback { display: grid; gap: 6px; padding: 24px; }
 .basket-affinity-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.basket-affinity-period-filter { min-width: 0; width: 100%; }
 .filter-action { display: flex; align-items: end; }
 .basket-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 4px; color: var(--edge-text-muted); font-size: 13px; }
 .basket-pagination > div { display: flex; gap: 8px; }

@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Customer & Sales Intelligence"
 			eyebrow="Customer Performance"
-			subtitle="Understand who is buying, who is returning, customer value, receivable exposure and transactional profitability from ERPNext sales truth."
+			subtitle="Understand who is buying, who is returning, customer value, receivable exposure and transactional profitability from submitted sales and receivable records."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -48,14 +48,15 @@
 				<div class="customer-intelligence-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" class="edge-input" type="date" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" class="edge-input" type="date" />
-					</label>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						class="customer-period-filter"
+						label="Period"
+						placeholder="e.g. last 30 days, May to June 2026, YTD"
+						:referenceDate="smartDateReference || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeDropdown v-model="filters.segment" :options="segments" label="Customer Segment" />
 					<div class="filter-action">
@@ -70,16 +71,16 @@
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scope.from_date && scope.to_date">Sales period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span>New/returning uses first submitted sale in the same permitted company/branch scope</span>
-				<span>Outstanding values are current ERPNext receivable exposure, not historical period-end balances</span>
+				<span>Outstanding values are current receivable exposure, not historical period-end balances</span>
 				<span v-if="!showProfitability">Profitability hidden by cost-visibility settings</span>
-				<span v-else>Profitability uses the R8 transactional cost contract</span>
+				<span v-else>Profitability uses recorded transactional cost values</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -128,6 +129,8 @@ export default {
 			companyCurrency: "",
 			showProfitability: false,
 			customerLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -181,10 +184,10 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" },
-				{ label: "Customer Status", value: this.metadata.customer_status_truth || "Earliest submitted non-return sale in permitted scope" },
-				{ label: "Receivables", value: this.metadata.receivable_truth || "Current ERPNext outstanding balances" },
-				{ label: "Profitability", value: this.showProfitability ? (this.metadata.profitability_truth || "Transactional profitability") : "Hidden by cost-visibility settings" },
+				{ label: "Sales Source", value: "Submitted sales invoices" },
+				{ label: "Customer Status", value: "Earliest submitted non-return sale in permitted scope" },
+				{ label: "Receivables", value: "Current outstanding receivables" },
+				{ label: "Profitability", value: this.showProfitability ? "Recorded transactional profitability" : "Hidden by cost-visibility settings" },
 			];
 		},
 	},
@@ -212,6 +215,8 @@ export default {
 					...(context.default_filters || {}),
 					segment: "All",
 				};
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -224,6 +229,24 @@ export default {
 			} finally {
 				this.metadataLoading = false;
 			}
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.currentPage = 1;
 		},
 		mapNavigationGroups(groups) {
 			return (groups || []).map((group) => ({
@@ -354,6 +377,10 @@ export default {
 	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 	gap: 0.85rem;
 	align-items: end;
+}
+.customer-period-filter {
+	min-width: 0;
+	width: 100%;
 }
 .edge-field {
 	display: grid;
