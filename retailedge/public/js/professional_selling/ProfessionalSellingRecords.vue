@@ -4,7 +4,7 @@
 			<div>
 				<span class="selling-kicker">Selling records</span>
 				<h3>{{ activeDocument?.label || "Selling documents" }}</h3>
-				<p>Search, filter, review, output and complete permitted records without changing the table structure.</p>
+				<p>Search, filter, review, print or share, and complete permitted selling records.</p>
 			</div>
 			<button v-if="hasFilters" type="button" class="edge-button edge-button--secondary" @click="clearFilters">
 				Clear filters
