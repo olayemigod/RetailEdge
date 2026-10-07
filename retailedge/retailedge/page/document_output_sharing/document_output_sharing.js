@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const OUTPUT_ASSET = "document_output_sharing.bundle.js";
 const PAGE_ROUTE = "document-output-sharing";
 const PAGE_TITLE = "Document Output & Sharing";
