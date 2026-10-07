@@ -48,7 +48,7 @@
 							<td>{{ formatQty(row.total_qty) }}</td>
 							<td>{{ row.branch || '—' }}</td>
 							<td>{{ row.status || 'Submitted' }}</td>
-							<td><div class="receipt-history__actions"><button type="button" class="edge-small-button" @click="openDocumentOutput(row.name)">Print & Share</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? 'Preparing…' : 'Create Invoice' }}</button><button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open in ERPNext</button></div></td>
+							<td><div class="receipt-history__actions"><button type="button" class="edge-small-button" @click="openDocumentOutput(row.name)">Print & Share</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? 'Preparing…' : 'Create Invoice' }}</button><button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openAdvancedReceipt(row.name)">Advanced: Open Purchase Receipt</button></div></td>
 						</tr>
 					</tbody>
 				</table>
@@ -57,7 +57,7 @@
 
 		<template #footer>
 			<div class="receipt-history__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: Purchase Receipts in ERPNext</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvancedList">Advanced: Purchase Receipts</button>
 				<button type="button" class="edge-button edge-button--primary" @click="close">Close</button>
 			</div>
 		</template>
@@ -77,7 +77,24 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject }));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
+function customerFacingCopy(value, fallback = "") {
+	const text = String(value || "").trim();
+	if (!text) return fallback;
+	return text
+		.replace(/Advanced ERPNext/gi, "advanced review")
+		.replace(/Frappe Workflow/gi, "approval workflow")
+		.replace(/ERPNext/gi, "the accounting system")
+		.replace(/EdgeSuite/gi, "the workspace")
+		.replace(/Native Desk/gi, "advanced access");
+}
+function errorMessage(error, fallback) {
+	const message = window.retailedge?.userErrorMessage?.(error, fallback)
+		|| error?.message
+		|| error?.exc
+		|| error?._server_messages
+		|| fallback;
+	return customerFacingCopy(message, fallback);
+}
 function comparable(value) { if (value === null || value === undefined) return ""; if (typeof value === "number") return value; return String(value).toLowerCase(); }
 
 export default {
