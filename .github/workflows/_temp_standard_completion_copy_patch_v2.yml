@@ -1,0 +1,126 @@
+name: Temporary standard completion backend copy patch v2
+
+on:
+  push:
+    branches:
+      - fix/standard-completion-backend-copy-20261008
+    paths:
+      - .github/workflows/_temp_standard_completion_copy_patch_v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/standard-completion-backend-copy-20261008
+          fetch-depth: 0
+      - name: Apply user-facing copy replacements only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new, expected):
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f'{path}: expected {expected} x {old!r}, found {count}')
+              path.write_text(text.replace(old, new), encoding='utf-8')
+
+          delivery = Path('retailedge/standard_delivery_completion.py')
+          rep(delivery, 'standard EdgeSuite completion', 'guided completion', 1)
+          rep(delivery, 'Advanced ERPNext review', 'advanced review', 5)
+          rep(delivery, 'Use the available workflow action in EdgeSuite.', 'Use the available workflow action shown here.', 1)
+          rep(delivery, '_("Frappe Workflow")', '_("configured workflow")', 1)
+          rep(delivery, 'ERPNext did not submit Delivery Note {0}.', 'Delivery Note {0} was not submitted. Refresh and review the document before retrying.', 1)
+          rep(delivery, 'No active Frappe Workflow owns this Delivery Note.', 'No active workflow owns this Delivery Note.', 1)
+
+          stock = Path('retailedge/standard_stock_completion.py')
+          rep(stock, 'Use Advanced ERPNext after correcting Warehouse/Branch setup.', 'Use advanced review after correcting Warehouse/Branch setup.', 1)
+          rep(stock, 'standard EdgeSuite completion', 'guided completion', 1)
+          rep(stock, 'Advanced ERPNext review', 'advanced review', 2)
+          rep(stock, 'requires Advanced ERPNext.', 'requires advanced review.', 3)
+          rep(stock, 'Standard EdgeSuite completion is blocked:', 'Guided completion is blocked:', 2)
+          rep(stock, 'This {0} is controlled by an active Frappe Workflow. Use the available workflow action in EdgeSuite.', 'This {0} is controlled by an active workflow. Use the available workflow action shown here.', 1)
+          rep(stock, 'ERPNext did not submit {0} {1}.', '{0} {1} was not submitted. Refresh and review the document before retrying.', 1)
+          rep(stock, 'No active Frappe Workflow owns this {0}.', 'No active workflow owns this {0}.', 1)
+
+          sales = Path('retailedge/standard_sales_invoice_completion.py')
+          rep(sales, 'standard EdgeSuite completion', 'guided completion', 1)
+          rep(sales, 'Advanced ERPNext review', 'advanced review', 10)
+          rep(sales, 'Sales Return completion requires an ERPNext Return / Credit Note draft linked to its source Sales Invoice.', 'Sales Return completion requires a Return / Credit Note draft linked to its source Sales Invoice.', 1)
+          rep(sales, 'Sales Return completion requires a mapped ERPNext Return / Credit Note draft.', 'Sales Return completion requires a mapped Return / Credit Note draft.', 1)
+          rep(sales, 'ERPNext could not rebuild the canonical Sales Return mapping for validation.', 'The Sales Return mapping could not be rebuilt for validation.', 1)
+          rep(sales, 'ERPNext canonical Sales Return linkage no longer matches this draft.', 'The source Sales Return linkage no longer matches this draft.', 1)
+          rep(sales, "Return / Credit Note Update Stock no longer matches ERPNext's canonical mapping.", 'Return / Credit Note Update Stock no longer matches the source Sales Return mapping.', 1)
+          rep(sales, "This Return / Credit Note no longer matches ERPNext's canonical remaining return quantities. Use Advanced ERPNext for a partial or customised return.", 'This Return / Credit Note no longer matches the remaining return quantities from the source invoice. Use advanced review for a partial or customised return.', 1)
+          rep(sales, 'Sales Return quantities remain owned by ERPNext canonical return mapping.', 'Sales Return quantities must remain aligned with the source invoice return mapping.', 1)
+          rep(sales, 'Use Advanced ERPNext to change the payment schedule safely.', 'Use advanced review to change the payment schedule safely.', 1)
+          rep(sales, 'ERPNext did not persist the requested Posting Date. Refresh and try again.', 'The requested Posting Date was not saved. Refresh and try again.', 1)
+          rep(sales, 'ERPNext recalculated the Due Date from Payment Terms. ', 'The Due Date was recalculated from Payment Terms. ', 1)
+          rep(sales, 'Use Advanced ERPNext to review the payment schedule.', 'Use advanced review to review the payment schedule.', 1)
+          rep(sales, 'Use the available workflow action in EdgeSuite.', 'Use the available workflow action shown here.', 1)
+          rep(sales, '_("Frappe Workflow")', '_("configured workflow")', 1)
+          rep(sales, 'ERPNext did not submit Sales Invoice {0}.', 'Sales Invoice {0} was not submitted. Refresh and review the document before retrying.', 1)
+          rep(sales, 'No active Frappe Workflow owns this Sales Invoice.', 'No active workflow owns this Sales Invoice.', 1)
+
+          purchase = Path('retailedge/standard_purchase_invoice_completion.py')
+          rep(purchase, 'standard EdgeSuite completion', 'guided completion', 1)
+          rep(purchase, 'Advanced ERPNext review', 'advanced review', 10)
+          rep(purchase, 'Professional Purchasing completion requires an ERPNext Purchase Order or Purchase Receipt source link.', 'Professional Purchasing completion requires a Purchase Order or Purchase Receipt source link.', 1)
+          rep(purchase, 'Use Advanced ERPNext to change the payment schedule safely.', 'Use advanced review to change the payment schedule safely.', 1)
+          rep(purchase, 'Use the available workflow action in EdgeSuite.', 'Use the available workflow action shown here.', 1)
+          rep(purchase, '_("Frappe Workflow")', '_("configured workflow")', 1)
+          rep(purchase, 'ERPNext did not submit Purchase Invoice {0}.', 'Purchase Invoice {0} was not submitted. Refresh and review the document before retrying.', 1)
+          rep(purchase, 'No active Frappe Workflow owns this Purchase Invoice.', 'No active workflow owns this Purchase Invoice.', 1)
+
+          tests = [
+              Path('retailedge/tests/test_rir2g1c_standard_delivery_note_completion_contract.py'),
+              Path('retailedge/tests/test_mvp_standard_stock_completion_contract.py'),
+              Path('retailedge/tests/test_rir2g1d_standard_sales_invoice_completion_contract.py'),
+              Path('retailedge/tests/test_rir2g2b_guided_purchase_invoice_completion_continuity.py'),
+          ]
+          for path in tests:
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('Advanced ERPNext review', 'advanced review')
+              text = text.replace('Advanced ERPNext', 'advanced review')
+              path.write_text(text, encoding='utf-8')
+
+          sales_test = tests[2]
+          text = sales_test.read_text(encoding='utf-8')
+          text = text.replace('canonical remaining return quantities', 'remaining return quantities from the source invoice')
+          text = text.replace('Sales Return quantities remain owned by ERPNext canonical return mapping.', 'Sales Return quantities must remain aligned with the source invoice return mapping.')
+          sales_test.write_text(text, encoding='utf-8')
+
+          regression = Path('retailedge/tests/test_standard_completion_backend_production_copy.py')
+          regression.write_text('''from __future__ import annotations\n\nimport ast\nfrom pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\nSERVICES = (\n    ROOT / "standard_delivery_completion.py",\n    ROOT / "standard_stock_completion.py",\n    ROOT / "standard_sales_invoice_completion.py",\n    ROOT / "standard_purchase_invoice_completion.py",\n)\nFORBIDDEN = ("ERPNext", "EdgeSuite", "Frappe", "Native Desk")\n\n\ndef _translated_messages(source: str) -> list[str]:\n    tree = ast.parse(source)\n    messages = []\n    for node in ast.walk(tree):\n        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_" and node.args:\n            value = node.args[0]\n            if isinstance(value, ast.Constant) and isinstance(value.value, str):\n                messages.append(value.value)\n    return messages\n\n\ndef test_standard_completion_user_messages_hide_platform_implementation_names():\n    for path in SERVICES:\n        source = path.read_text(encoding="utf-8")\n        leaked = [message for message in _translated_messages(source) if any(term in message for term in FORBIDDEN)]\n        assert not leaked, f"{path.name} leaked platform wording: {leaked}"\n\n\ndef test_standard_completion_safety_and_native_authority_contracts_remain_intact():\n    delivery, stock, sales, purchase = [path.read_text(encoding="utf-8") for path in SERVICES]\n    for source in (delivery, stock, sales, purchase):\n        assert "get_workflow_readiness" in source\n        assert "apply_document_workflow_action(" in source\n        assert "doc.submit()" in source\n        assert "frappe.has_permission" in source\n    assert "_validate_source_and_stock_context" in delivery\n    assert "_validate_warehouse_access" in stock\n    assert "erpnext_make_sales_return" in sales\n    assert "_validate_stock_context" in sales\n    assert "_completion_source_context" in purchase\n    assert "_validate_stock_context" in purchase\n    assert '"source_of_truth": "ERPNext"' in delivery\n    assert '"source_of_truth": f"ERPNext {doc.doctype}"' in stock\n    assert '"source_of_truth": "ERPNext"' in sales\n    assert '"source_of_truth": "ERPNext Purchase Invoice"' in purchase\n''', encoding='utf-8')
+          PY
+      - name: Verify AST copy boundary and syntax
+        shell: bash
+        run: |
+          python -m py_compile retailedge/standard_delivery_completion.py retailedge/standard_stock_completion.py retailedge/standard_sales_invoice_completion.py retailedge/standard_purchase_invoice_completion.py retailedge/tests/test_standard_completion_backend_production_copy.py
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          forbidden = ('ERPNext', 'EdgeSuite', 'Frappe', 'Native Desk')
+          files = [Path('retailedge/standard_delivery_completion.py'), Path('retailedge/standard_stock_completion.py'), Path('retailedge/standard_sales_invoice_completion.py'), Path('retailedge/standard_purchase_invoice_completion.py')]
+          for path in files:
+              tree = ast.parse(path.read_text(encoding='utf-8'))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == '_' and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                      message = node.args[0].value
+                      if any(term in message for term in forbidden):
+                          raise SystemExit(f'{path}: leaked translated platform copy: {message}')
+          PY
+      - name: Commit bounded backend-copy fix
+        shell: bash
+        run: |
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add retailedge/standard_delivery_completion.py retailedge/standard_stock_completion.py retailedge/standard_sales_invoice_completion.py retailedge/standard_purchase_invoice_completion.py retailedge/tests/test_rir2g1c_standard_delivery_note_completion_contract.py retailedge/tests/test_mvp_standard_stock_completion_contract.py retailedge/tests/test_rir2g1d_standard_sales_invoice_completion_contract.py retailedge/tests/test_rir2g2b_guided_purchase_invoice_completion_continuity.py retailedge/tests/test_standard_completion_backend_production_copy.py
+          git commit -m "fix: productionize standard completion backend copy"
+          git push origin HEAD:fix/standard-completion-backend-copy-20261008
