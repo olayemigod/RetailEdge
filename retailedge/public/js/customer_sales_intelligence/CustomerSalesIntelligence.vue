@@ -377,6 +377,9 @@ export default {
 	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 	gap: 0.85rem;
 	align-items: end;
+	flex: 1 1 100%;
+	min-width: 0;
+	width: 100%;
 }
 .customer-period-filter {
 	min-width: 0;
