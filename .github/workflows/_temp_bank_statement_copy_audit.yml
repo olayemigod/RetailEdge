@@ -1,0 +1,45 @@
+name: Temporary bank statement copy audit
+
+on:
+  push:
+    branches:
+      - fix/bank-statement-import-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_bank_statement_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/bank-statement-import-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording and stale contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          component = Path('retailedge/public/js/bank_statement_imports/BankStatementImports.vue')
+          text = component.read_text(encoding='utf-8')
+          print(f'--- {component} ---')
+          for lineno, line in enumerate(text.splitlines(), 1):
+              if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
+                  print(f'{lineno}: {line}')
+          print('--- candidate stale tests ---')
+          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
+              source = path.read_text(encoding='utf-8')
+              if 'BankStatementImports.vue' not in source and 'bank-statement-imports' not in source:
+                  continue
+              hits = []
+              for lineno, line in enumerate(source.splitlines(), 1):
+                  if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
+                      hits.append(f'{lineno}: {line}')
+              if hits:
+                  print(f'### {path}')
+                  print('\n'.join(hits))
+          PY
+          exit 1
