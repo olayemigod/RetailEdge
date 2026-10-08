@@ -1,0 +1,60 @@
+name: Temporary bank matching copy audit
+
+on:
+  push:
+    branches:
+      - fix/bank-matching-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_bank_matching_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/bank-matching-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording and stale banking tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('retailedge/public/js/bank_matching_page_enhancements.js'),
+              Path('retailedge/public/js/bank_matching_reconciliation.js'),
+          ]
+          terms = ('ERPNext', 'EdgeSuite', 'Native Desk', 'Frappe', 'Advanced:')
+          for path in files:
+              print(f'--- {path} ---')
+              source = path.read_text(encoding='utf-8')
+              for lineno, line in enumerate(source.splitlines(), 1):
+                  if any(term in line for term in terms):
+                      print(f'{lineno}: {line}')
+
+          print('--- candidate stale tests ---')
+          needles = (
+              'bank_matching_page_enhancements.js',
+              'bank_matching_reconciliation.js',
+              'ERPNext validated the statement preview',
+              'Reconcile it through ERPNext',
+              'Match bank inflows and outflows to valid ERPNext accounting events',
+              'EdgeSuite Reporting Standard',
+          )
+          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
+              source = path.read_text(encoding='utf-8')
+              if not any(needle in source for needle in needles):
+                  continue
+              hits = []
+              for lineno, line in enumerate(source.splitlines(), 1):
+                  if any(term in line for term in terms) or any(needle in line for needle in needles[2:]):
+                      hits.append(f'{lineno}: {line}')
+              if hits:
+                  print(f'### {path}')
+                  print('\n'.join(hits))
+          PY
+          exit 1
