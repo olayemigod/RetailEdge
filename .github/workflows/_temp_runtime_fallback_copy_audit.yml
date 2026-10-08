@@ -1,4 +1,4 @@
-name: Temporary runtime fallback copy audit
+name: Temporary runtime fallback copy patch
 
 on:
   push:
@@ -8,36 +8,91 @@ on:
       - .github/workflows/_temp_runtime_fallback_copy_audit.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: fix/runtime-fallback-production-copy-20261008
           fetch-depth: 0
-      - name: Inventory runtime-start framework wording only
+      - name: Apply runtime fallback business copy
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           roots = [Path('retailedge/public/js'), Path('retailedge/retailedge/page')]
-          term = 'EdgeSuite UI runtime is unavailable'
-          found = 0
-          files = 0
+          old = 'EdgeSuite UI runtime is unavailable'
+          generic = 'This page could not start. Refresh the page or contact your administrator.'
+          changed = []
+          old_count = 0
+
           for root in roots:
               for path in sorted(root.rglob('*.js')):
-                  source = path.read_text(encoding='utf-8', errors='ignore')
-                  hits = [(lineno, line) for lineno, line in enumerate(source.splitlines(), 1) if term in line]
-                  if not hits:
+                  source = path.read_text(encoding='utf-8')
+                  count = source.count(old)
+                  if not count:
                       continue
-                  files += 1
-                  for lineno, line in hits:
-                      print(f'{path}:{lineno}: {line}')
-                      found += 1
-          print(f'FILES={files}')
-          print(f'TOTAL={found}')
+                  old_count += count
+                  updated = source
+                  updated = re.sub(r'EdgeSuite UI runtime is unavailable for [^"`\n]+\.', generic, updated)
+                  updated = updated.replace('EdgeSuite UI runtime is unavailable.', generic)
+                  if path.as_posix().endswith('retailedge/public/js/action_center.bundle.js'):
+                      updated = updated.replace(
+                          '<strong>Action Centre could not start.</strong><div>This page could not start. Refresh the page or contact your administrator.</div>',
+                          '<strong>Action Centre could not start.</strong><div>Refresh the page or contact your administrator.</div>',
+                      )
+                  if old in updated:
+                      raise SystemExit(f'Old runtime wording remains in {path}')
+                  if updated == source:
+                      raise SystemExit(f'No replacement applied in {path}')
+                  path.write_text(updated, encoding='utf-8')
+                  changed.append(path)
+
+          if old_count != 90:
+              raise SystemExit(f'Expected exactly 90 old runtime messages, found {old_count}')
+          if len(changed) != 90:
+              raise SystemExit(f'Expected exactly 90 changed JS files, found {len(changed)}')
+
+          test = Path('retailedge/tests/test_runtime_fallback_production_copy.py')
+          if test.exists():
+              raise SystemExit(f'{test} already exists')
+          test.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[1]\nRUNTIME_ROOTS = [ROOT / "public" / "js", ROOT / "retailedge" / "page"]\nFORBIDDEN = "EdgeSuite UI runtime is unavailable"\nBUSINESS_FALLBACK = "This page could not start. Refresh the page or contact your administrator."\n\n\ndef test_runtime_start_failures_use_business_copy_without_changing_runtime_guards():\n    sources = []\n    for root in RUNTIME_ROOTS:\n        for path in root.rglob("*.js"):\n            source = path.read_text(encoding="utf-8")\n            assert FORBIDDEN not in source, path\n            sources.append((path, source))\n\n    assert any(BUSINESS_FALLBACK in source for _, source in sources)\n\n    representative = {\n        "public/js/payment_history.bundle.js": "window.EdgeSuiteUI",\n        "retailedge/page/payment_history/payment_history.js": "window.EdgeSuiteUI",\n        "public/js/forecasting_planning.bundle.js": "window.EdgeSuiteUI",\n        "retailedge/page/forecasting_planning/forecasting_planning.js": "window.EdgeSuiteUI",\n        "public/js/rfq_history.bundle.js": "window.EdgeSuiteUI",\n    }\n    for relative, runtime_marker in representative.items():\n        source = (ROOT / relative).read_text(encoding="utf-8")\n        assert BUSINESS_FALLBACK in source\n        assert runtime_marker in source\n\n\ndef test_action_centre_runtime_failure_is_business_facing():\n    source = (ROOT / "public/js/action_center.bundle.js").read_text(encoding="utf-8")\n    assert "Action Centre could not start." in source\n    assert "Refresh the page or contact your administrator." in source\n    assert FORBIDDEN not in source\n''', encoding='utf-8')
+
+          print(f'PATCHED_FILES={len(changed)}')
+          print(f'OLD_MESSAGES={old_count}')
           PY
-          exit 1
+      - name: Verify runtime fallback patch
+        shell: bash
+        run: |
+          python -m py_compile retailedge/tests/test_runtime_fallback_production_copy.py
+          python - <<'PY'
+          from pathlib import Path
+          roots = [Path('retailedge/public/js'), Path('retailedge/retailedge/page')]
+          old = 'EdgeSuite UI runtime is unavailable'
+          remaining = []
+          for root in roots:
+              for path in root.rglob('*.js'):
+                  if old in path.read_text(encoding='utf-8', errors='ignore'):
+                      remaining.append(str(path))
+          if remaining:
+              raise SystemExit('Old runtime wording remains: ' + ', '.join(remaining))
+          PY
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            node --check "$path"
+          done < <(git diff --name-only -- 'retailedge/public/js/**/*.js' 'retailedge/public/js/*.js' 'retailedge/retailedge/page/**/*.js')
+          test "$(git diff --name-only -- 'retailedge/public/js/**/*.js' 'retailedge/public/js/*.js' 'retailedge/retailedge/page/**/*.js' | wc -l | tr -d ' ')" = "90"
+          test -f retailedge/tests/test_runtime_fallback_production_copy.py
+      - name: Commit runtime fallback copy fix
+        shell: bash
+        run: |
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add retailedge/public/js retailedge/retailedge/page retailedge/tests/test_runtime_fallback_production_copy.py
+          git commit -m "fix: productionize runtime fallback copy"
+          git push origin HEAD:fix/runtime-fallback-production-copy-20261008
