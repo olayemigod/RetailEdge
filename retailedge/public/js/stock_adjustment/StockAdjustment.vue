@@ -26,7 +26,7 @@
 				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Adjustment</strong><p>{{ handoffNotice }}</p></section>
 
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
-					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Stock Reconciliation and owns the posted stock correction." : "The ERPNext Stock Reconciliation draft now owns this stock count." }}</p></div>
+					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "The Stock Reconciliation has been submitted and the stock correction is posted." : "The Stock Reconciliation draft now owns this stock count." }}</p></div>
 					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Count</button></div>
 				</section>
 
@@ -46,11 +46,11 @@
 
 					<div class="items-heading"><div><span class="page-kicker">Physical count</span><h3>Counted items</h3><p>Enter the quantity physically counted. Zero is valid; negative physical quantities are not.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
 					<EdgeChildTable :field="itemTableField" :rows="values.items" :columns="itemColumns" :addLabel="'Add Item'" :linkSearcher="searchLineLink" :newRowsFirst="true" @update:rows="updateItems" />
-					<p class="hint">Valuation fields remain hidden. Serial-numbered or batch-managed items may require Advanced ERPNext review so stock truth is preserved.</p>
+					<p class="hint">Valuation fields remain hidden. Serial-numbered or batch-managed items may require advanced Stock Reconciliation review so stock truth is preserved.</p>
 
 					<div class="sticky-actions">
-						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the count, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
+						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the Stock Reconciliation draft is saved." : "Complete the count, then save the draft." }}</small></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: Open Stock Reconciliation</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -231,7 +231,7 @@ export default {
 			this.completionOpen = false;
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Reconciliation", this.savedDocument.name) : frappe.new_doc("Stock Reconciliation"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Reconciliation in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Stock Reconciliation form? Save this page first if you want the current count recorded."; frappe.confirm(message, go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Reconciliation", this.savedDocument.name) : frappe.new_doc("Stock Reconciliation"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Reconciliation in the advanced form? Unsaved page edits are not carried until you update the draft." : "Open the advanced Stock Reconciliation form? Save this page first if you want the current count recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
