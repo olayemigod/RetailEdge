@@ -1,0 +1,167 @@
+name: Temporary Bank Stale Review Recovery
+
+on:
+  push:
+    branches:
+      - fix/bank-to-match-stale-review-recovery-20261008
+
+permissions:
+  contents: write
+
+jobs:
+  apply-recovery:
+    if: ${{ !contains(github.event.head_commit.message, '[bank-recovery-applied]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch validated historical candidate
+        run: git fetch origin 13436564763f3d930fea4d493b52473ce5a9ba0b --depth=1
+
+      - name: Recover bounded bank files
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLD=13436564763f3d930fea4d493b52473ce5a9ba0b
+
+          # These two production files had no later semantic changes on version-16
+          # beyond the copy hardening explicitly reapplied below.
+          git show "$OLD:retailedge/public/js/bank_matching_edgesuite_workspace.js" > retailedge/public/js/bank_matching_edgesuite_workspace.js
+          git show "$OLD:retailedge/reconciliation_approval.py" > retailedge/reconciliation_approval.py
+          git show "$OLD:retailedge/public/js/bank_matching_edgesuite_completion_adapter.js" > retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          git show "$OLD:retailedge/tests/test_bank_historical_review_hydration.py" > retailedge/tests/test_bank_historical_review_hydration.py
+          git show "$OLD:retailedge/tests/test_bank_to_match_stale_review_recovery.py" > retailedge/tests/test_bank_to_match_stale_review_recovery.py
+          git show "$OLD:retailedge/tests/test_bank_matching_completion_modal_contract.py" > retailedge/tests/test_bank_matching_completion_modal_contract.py
+
+          python - <<'PY'
+          from pathlib import Path
+
+          workspace = Path('retailedge/public/js/bank_matching_edgesuite_workspace.js')
+          text = workspace.read_text(encoding='utf-8')
+          replacements = {
+              'ERPNext reconciliation could not be completed.': 'Reconciliation could not be completed.',
+              'Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.': 'Confirmed match — reconciliation remains governed by approval and fresh accounting safety checks.',
+              'ERPNext remains the reconciliation authority.': 'Reconciliation uses the current accounting records.',
+              'RetailEdge will run a fresh safety check against current accounting data before ERPNext Banking reconciliation. Submitted accounting documents will not be mutated.': 'RetailEdge will run a fresh safety check against current accounting data before reconciliation. Submitted accounting documents will not be mutated.',
+              'Reconcile Through ERPNext': 'Reconcile Match',
+              'Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking.': 'Match bank inflows and outflows to valid accounting events, then complete reconciliation.',
+              'EdgeSuite UI runtime is required for Bank Matching & Reconciliation.': 'The Bank Matching & Reconciliation interface is unavailable. Refresh the page or contact your administrator.',
+              'EdgeSuite UI is missing required banking components: {0}': 'Bank Matching & Reconciliation cannot start because required interface components are unavailable. Refresh the page or contact your administrator.',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'workspace replacement expected once, found {count}: {old}')
+              text = text.replace(old, new)
+          workspace.write_text(text, encoding='utf-8')
+
+          adapter = Path('retailedge/public/js/bank_matching_edgesuite_completion_adapter.js')
+          text = adapter.read_text(encoding='utf-8')
+
+          anchor = '\tconst payloads = new Map();\n'
+          addition = '''\tconst PRODUCTION_COPY_REPLACEMENTS = [
+          \t\t["ERPNext reconciliation could not be completed.", "Reconciliation could not be completed."],
+          \t\t["Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.", "Confirmed match — reconciliation remains governed by approval and fresh accounting safety checks."],
+          \t\t["ERPNext remains the reconciliation authority.", "Reconciliation uses the current accounting records."],
+          \t\t["RetailEdge will run a fresh safety check against current accounting data before ERPNext Banking reconciliation. Submitted accounting documents will not be mutated.", "RetailEdge will run a fresh safety check against current accounting data before reconciliation. Submitted accounting documents will not be changed."],
+          \t\t["Reconcile Through ERPNext", "Reconcile Match"],
+          \t\t["Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking.", "Match bank inflows and outflows to valid accounting records, then reconcile after review."],
+          \t\t["Accounting / Hard Score", "Accounting Match Score"],
+          \t\t["Supplemental Fuzzy Score", "Supporting Match Score"],
+          \t\t["Fuzzy evidence is supplemental only", "Supporting evidence only"],
+          \t];
+          '''
+          if text.count(anchor) != 1:
+              raise SystemExit('completion adapter payload anchor mismatch')
+          text = text.replace(anchor, anchor + addition, 1)
+
+          humanize = '''\tfunction humanize(value) {
+          \t\treturn clean(value)
+          \t\t\t.replace(/[_-]+/g, " ")
+          \t\t\t.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+          \t\t\t.replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+          \t}
+          '''
+          production = '''
+          \tfunction productionizeText(value) {
+          \t\tlet result = String(value ?? "");
+          \t\tfor (const [from, to] of PRODUCTION_COPY_REPLACEMENTS) {
+          \t\t\tif (result.includes(from)) result = result.split(from).join(t(to));
+          \t\t}
+          \t\treturn result;
+          \t}
+
+          \tfunction productionizeVisibleCopy(root = document.body) {
+          \t\tif (!root || !global.NodeFilter) return;
+          \t\tconst walker = document.createTreeWalker(root, global.NodeFilter.SHOW_TEXT);
+          \t\tconst nodes = [];
+          \t\twhile (walker.nextNode()) nodes.push(walker.currentNode);
+          \t\tfor (const textNode of nodes) {
+          \t\t\tconst parentTag = textNode.parentElement?.tagName;
+          \t\t\tif (parentTag === "SCRIPT" || parentTag === "STYLE") continue;
+          \t\t\tconst current = textNode.nodeValue || "";
+          \t\t\tconst next = productionizeText(current);
+          \t\t\tif (next !== current) textNode.nodeValue = next;
+          \t\t}
+          \t}
+          '''
+          if text.count(humanize) != 1:
+              raise SystemExit('completion adapter humanize anchor mismatch')
+          text = text.replace(humanize, humanize + production, 1)
+
+          marker = '\t\tif (!isBankingPage()) return;\n'
+          if text.count(marker) != 1:
+              raise SystemExit('completion adapter page guard mismatch')
+          text = text.replace(marker, marker + '\t\tproductionizeVisibleCopy();\n', 1)
+
+          old = '\t\tif (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", action));\n'
+          new = '\t\tif (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", productionizeText(action)));\n'
+          if text.count(old) != 1:
+              raise SystemExit('completion adapter action copy mismatch')
+          text = text.replace(old, new, 1)
+
+          old = 'Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.'
+          new = 'Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. Final reconciliation runs only after confirmation and a fresh accounting safety check.'
+          if text.count(old) != 1:
+              raise SystemExit('completion adapter guidance copy mismatch')
+          text = text.replace(old, new, 1)
+
+          marker = '\t\tmodal.dataset.retailedgeCompletion = "1";\n'
+          if text.count(marker) != 1:
+              raise SystemExit('completion adapter completion marker mismatch')
+          text = text.replace(marker, marker + '\t\tproductionizeVisibleCopy(modal);\n', 1)
+          adapter.write_text(text, encoding='utf-8')
+          PY
+
+          node --check retailedge/public/js/bank_matching_edgesuite_workspace.js
+          node --check retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          python -m compileall -q retailedge/reconciliation_approval.py retailedge/tests/test_bank_historical_review_hydration.py retailedge/tests/test_bank_to_match_stale_review_recovery.py retailedge/tests/test_bank_matching_completion_modal_contract.py
+
+          # Guard against accidental scope expansion.
+          git diff --name-only | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'EOF'
+          retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          retailedge/public/js/bank_matching_edgesuite_workspace.js
+          retailedge/reconciliation_approval.py
+          retailedge/tests/test_bank_historical_review_hydration.py
+          retailedge/tests/test_bank_matching_completion_modal_contract.py
+          retailedge/tests/test_bank_to_match_stale_review_recovery.py
+          EOF
+          diff -u /tmp/expected.txt /tmp/changed.txt
+
+      - name: Commit recovered slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "RetailEdge Recovery"
+          git config user.email "actions@users.noreply.github.com"
+          git add retailedge/public/js/bank_matching_edgesuite_workspace.js \
+                  retailedge/public/js/bank_matching_edgesuite_completion_adapter.js \
+                  retailedge/reconciliation_approval.py \
+                  retailedge/tests/test_bank_historical_review_hydration.py \
+                  retailedge/tests/test_bank_matching_completion_modal_contract.py \
+                  retailedge/tests/test_bank_to_match_stale_review_recovery.py
+          git commit -m "fix: recover stale bank-match candidate workflow [bank-recovery-applied]"
+          git push origin HEAD:fix/bank-to-match-stale-review-recovery-20261008
