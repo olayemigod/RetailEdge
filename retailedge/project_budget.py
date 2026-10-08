@@ -92,7 +92,7 @@ def get_project_budget_context(project: str, limit: int = 100) -> dict[str, Any]
 		"controlled_budget_count": sum(1 for row in budgets if row["docstatus"] == 1 and row["controls"]),
 		"can_create_budget": bool(frappe.has_permission("Budget", "create")),
 		"scope": "Whole Project",
-		"scope_note": "ERPNext Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.",
+		"scope_note": "Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.",
 		"source_of_truth": "ERPNext Budget",
-		"policy": "Budget enforcement remains ERPNext-native; RetailEdge does not bypass Stop/Warn/Ignore controls.",
+		"policy": "Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.",
 	}

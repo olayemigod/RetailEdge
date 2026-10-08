@@ -80,7 +80,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="material-request",
 				label=_("Plan / Request Materials"),
-				description=_("Create a native Material Request for project procurement or material planning. Assign the Project on the native document or item rows where required by ERPNext."),
+				description=_("Create a Material Request for project procurement or material planning. Assign the Project on the document or item rows where required."),
 				doctype="Material Request",
 				project=project,
 				company=doc.company,
@@ -95,7 +95,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="purchase-order",
 				label=_("Order Project Goods / Services"),
-				description=_("Create a native Purchase Order for approved project goods or services. ERPNext Budget controls remain authoritative."),
+				description=_("Create a Purchase Order for approved project goods or services. Budget controls remain in force."),
 				doctype="Purchase Order",
 				project=project,
 				company=doc.company,
@@ -110,7 +110,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="purchase-receipt",
 				label=_("Receive Project Materials"),
-				description=_("Use native Purchase Receipt when project materials or goods are physically received against purchasing documents."),
+				description=_("Use Purchase Receipt when project materials or goods are physically received against purchasing documents."),
 				doctype="Purchase Receipt",
 				project=project,
 				company=doc.company,
@@ -125,7 +125,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="purchase-invoice",
 				label=_("Book Supplier / Service Cost"),
-				description=_("Create a native Purchase Invoice for supplier bills, services, materials or other project costs."),
+				description=_("Create a Purchase Invoice for supplier bills, services, materials or other project costs."),
 				doctype="Purchase Invoice",
 				project=project,
 				company=doc.company,
@@ -140,7 +140,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="stock-entry",
 				label=_("Consume / Transfer Project Materials"),
-				description=_("Use native Stock Entry for project material issue, consumption, transfer or other stock movement."),
+				description=_("Use Stock Entry for project material issue, consumption, transfer or other stock movement."),
 				doctype="Stock Entry",
 				project=project,
 				company=doc.company,
@@ -155,7 +155,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 			_route_option(
 				key="expense-claim",
 				label=_("Employee Reimbursement"),
-				description=_("Open the native Expense Claim workflow. Assign the Project on the applicable expense rows where supported by the installed HRMS version."),
+				description=_("Open the Expense Claim workflow. Assign the Project on applicable expense rows where supported."),
 				doctype="Expense Claim",
 				project=project,
 				company=doc.company,
@@ -185,5 +185,5 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 		"company": doc.company,
 		"cost_center": cost_center,
 		"routes": routes,
-		"policy": "Choose the native ERPNext/HRMS document that matches the business event. Purchasing, stock, Budget and accounting controls remain authoritative; no generic project expense or procurement ledger is maintained.",
+		"policy": "Choose the business document that matches the event. Purchasing, stock, Budget and accounting controls remain in force; no generic project expense or procurement ledger is maintained.",
 	}
