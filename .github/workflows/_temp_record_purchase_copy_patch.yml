@@ -1,0 +1,41 @@
+name: Temporary Record Purchase copy audit
+
+on:
+  push:
+    branches:
+      - fix/record-purchase-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_record_purchase_copy_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/record-purchase-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording and stale contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          targets = [
+              Path('retailedge/public/js/record_purchase/RecordPurchase.vue'),
+              Path('retailedge/tests/test_purchase_workflow_alignment.py'),
+              Path('retailedge/tests/test_quick_entry_transaction_hardening.py'),
+              Path('retailedge/tests/test_rir2g2b_guided_purchase_invoice_completion_continuity.py'),
+          ]
+          needles = ('ERPNext', 'Frappe Workflow', 'Advanced: Open in ERPNext', 'Stock mode is fixed')
+          for path in targets:
+              print(f'--- {path} ---')
+              text = path.read_text(encoding='utf-8')
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  if any(needle in line for needle in needles):
+                      print(f'{lineno}: {line}')
+          PY
+          exit 1
