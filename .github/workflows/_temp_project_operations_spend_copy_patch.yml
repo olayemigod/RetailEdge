@@ -1,0 +1,100 @@
+name: Temporary Project Operations spend copy patch
+
+on:
+  push:
+    branches:
+      - fix/project-operations-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_project_operations_spend_copy_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/project-operations-production-copy-20261008
+          fetch-depth: 0
+      - name: Patch reachable Spend and Materials copy
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          component_path = Path('retailedge/public/js/project_operations/ProjectOperations.vue')
+          routing_path = Path('retailedge/project_expense_routing.py')
+          regression_path = Path('retailedge/tests/test_project_operations_production_copy.py')
+
+          def replace_exact(source, old, new, count=1):
+              actual = source.count(old)
+              if actual != count:
+                  raise SystemExit(f'Expected {count} occurrence(s) of {old!r}, found {actual}')
+              return source.replace(old, new)
+
+          component = component_path.read_text(encoding='utf-8')
+          component = replace_exact(component, 'primary_action_label: __("Open Native Entry")', 'primary_action_label: __("Open Selected Entry")')
+          component_path.write_text(component, encoding='utf-8')
+
+          routing = routing_path.read_text(encoding='utf-8')
+          replacements = [
+              ('Create a native Material Request for project procurement or material planning. Assign the Project on the native document or item rows where required by ERPNext.', 'Create a Material Request for project procurement or material planning. Assign the Project on the document or item rows where required.'),
+              ('Create a native Purchase Order for approved project goods or services. ERPNext Budget controls remain authoritative.', 'Create a Purchase Order for approved project goods or services. Budget controls remain in force.'),
+              ('Use native Purchase Receipt when project materials or goods are physically received against purchasing documents.', 'Use Purchase Receipt when project materials or goods are physically received against purchasing documents.'),
+              ('Create a native Purchase Invoice for supplier bills, services, materials or other project costs.', 'Create a Purchase Invoice for supplier bills, services, materials or other project costs.'),
+              ('Use native Stock Entry for project material issue, consumption, transfer or other stock movement.', 'Use Stock Entry for project material issue, consumption, transfer or other stock movement.'),
+              ('Open the native Expense Claim workflow. Assign the Project on the applicable expense rows where supported by the installed HRMS version.', 'Open the Expense Claim workflow. Assign the Project on applicable expense rows where supported.'),
+              ('Choose the native ERPNext/HRMS document that matches the business event. Purchasing, stock, Budget and accounting controls remain authoritative; no generic project expense or procurement ledger is maintained.', 'Choose the business document that matches the event. Purchasing, stock, Budget and accounting controls remain in force; no generic project expense or procurement ledger is maintained.'),
+          ]
+          for old, new in replacements:
+              routing = replace_exact(routing, old, new)
+          routing_path.write_text(routing, encoding='utf-8')
+
+          regression = regression_path.read_text(encoding='utf-8')
+          regression = replace_exact(
+              regression,
+              'BUDGET = APP_ROOT / "project_budget.py"\n',
+              'BUDGET = APP_ROOT / "project_budget.py"\nROUTING = APP_ROOT / "project_expense_routing.py"\n',
+          )
+          regression = replace_exact(
+              regression,
+              '\t\tbudget = BUDGET.read_text(encoding="utf-8")\n',
+              '\t\tbudget = BUDGET.read_text(encoding="utf-8")\n\t\trouting = ROUTING.read_text(encoding="utf-8")\n',
+          )
+          regression = replace_exact(
+              regression,
+              '\t\tself.assertIn("Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.", budget)\n',
+              '\t\tself.assertIn("Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.", budget)\n\t\tself.assertIn("Open Selected Entry", component)\n\t\tself.assertNotIn("Open Native Entry", component)\n\t\tfor marker in (\n\t\t\t"Create a Material Request for project procurement or material planning.",\n\t\t\t"Create a Purchase Order for approved project goods or services. Budget controls remain in force.",\n\t\t\t"Use Purchase Receipt when project materials or goods are physically received against purchasing documents.",\n\t\t\t"Create a Purchase Invoice for supplier bills, services, materials or other project costs.",\n\t\t\t"Use Stock Entry for project material issue, consumption, transfer or other stock movement.",\n\t\t\t"Open the Expense Claim workflow. Assign the Project on applicable expense rows where supported.",\n\t\t\t"Choose the business document that matches the event.",\n\t\t):\n\t\t\tself.assertIn(marker, routing)\n\t\tfor forbidden in (\n\t\t\t"Create a native Material Request",\n\t\t\t"Create a native Purchase Order",\n\t\t\t"Use native Purchase Receipt",\n\t\t\t"Create a native Purchase Invoice",\n\t\t\t"Use native Stock Entry",\n\t\t\t"Open the native Expense Claim workflow",\n\t\t\t"Choose the native ERPNext/HRMS document",\n\t\t):\n\t\t\tself.assertNotIn(forbidden, routing)\n',
+          )
+          regression_path.write_text(regression, encoding='utf-8')
+          PY
+      - name: Verify bounded spend copy patch
+        shell: bash
+        run: |
+          python -m py_compile retailedge/project_expense_routing.py retailedge/tests/test_project_operations_production_copy.py
+          python retailedge/tests/test_project_operations_ui_contract.py
+          python retailedge/tests/test_project_operations_production_copy.py
+          python - <<'PY'
+          from pathlib import Path
+          component = Path('retailedge/public/js/project_operations/ProjectOperations.vue').read_text(encoding='utf-8')
+          routing = Path('retailedge/project_expense_routing.py').read_text(encoding='utf-8')
+          for marker in ('frappe.new_doc(route.doctype, route.defaults || {})', 'retailedge.project_expense_routing.get_project_expense_routes', 'canUseNativeDesk'):
+              if marker not in component:
+                  raise SystemExit(f'Project Operations safety marker missing: {marker}')
+          for marker in ('"doctype": doctype', '"defaults": defaults', '"project_link_scope": "parent" if defaults.get("project") else "native-document"'):
+              if marker not in routing:
+                  raise SystemExit(f'Expense routing safety marker missing: {marker}')
+          PY
+          tracked="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' retailedge/project_expense_routing.py retailedge/public/js/project_operations/ProjectOperations.vue retailedge/tests/test_project_operations_production_copy.py | sort)"
+          test "$tracked" = "$expected"
+      - name: Commit spend workflow copy fix
+        shell: bash
+        run: |
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add retailedge/project_expense_routing.py retailedge/public/js/project_operations/ProjectOperations.vue retailedge/tests/test_project_operations_production_copy.py
+          git commit -m "fix: productionize Project Operations spend copy"
+          git push origin HEAD:fix/project-operations-production-copy-20261008
