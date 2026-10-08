@@ -389,7 +389,7 @@ export default {
 			const name = this.detail?.document?.name;
 			if (!name || !this.detail?.can_write || this.actionBusy) return;
 			if (!frappe.ui?.FileUploader) {
-				this.actionError = "Frappe File Uploader is unavailable."; return;
+				this.actionError = "Statement file upload is unavailable."; return;
 			}
 			new frappe.ui.FileUploader({
 				doctype: "RetailEdge Payment Statement Import",

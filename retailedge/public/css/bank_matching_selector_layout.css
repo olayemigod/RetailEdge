@@ -1,0 +1,98 @@
+/* Bank Matching selector bars only.
+   Keep EdgeSuite's shared EdgeActionBar intact while making Direction and
+   Workflow Status compact, readable and actionable on this workspace. */
+.retailedge-bank-layout .edge-action-bar {
+	display: inline-flex !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+	width: auto !important;
+	max-width: 100%;
+	min-width: 0;
+	vertical-align: top;
+	column-gap: .28rem !important;
+	row-gap: .24rem !important;
+	margin-right: .32rem;
+	margin-bottom: .38rem;
+	padding: .32rem .4rem !important;
+}
+
+/* Some EdgeActionBar versions position the label independently from the action
+   slot. In this workspace the label must participate in normal flow so the
+   first button can never render underneath it. */
+.retailedge-bank-layout .edge-action-bar > * {
+	position: static !important;
+	inset: auto !important;
+	transform: none !important;
+	min-width: 0;
+	margin-top: 0 !important;
+	margin-bottom: 0 !important;
+}
+
+.retailedge-bank-layout .edge-action-bar > :first-child {
+	flex: 0 0 auto;
+	width: auto !important;
+	white-space: nowrap;
+	margin-right: 0 !important;
+	font-size: .76rem !important;
+	line-height: 1.15 !important;
+	font-weight: 600 !important;
+}
+
+.retailedge-bank-layout .edge-action-bar [class*="action"] {
+	min-width: 0;
+}
+
+.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+	display: flex !important;
+	align-items: center !important;
+	flex: 0 1 auto !important;
+	flex-wrap: nowrap !important;
+	width: auto !important;
+	min-width: 0;
+	gap: .22rem !important;
+}
+
+.retailedge-bank-layout .edge-action-bar .edge-button {
+	flex: 0 1 auto;
+	min-width: 0;
+	min-height: 1.8rem !important;
+	height: auto !important;
+	margin: 0 !important;
+	padding: .3rem .46rem !important;
+	font-size: .76rem !important;
+	line-height: 1.1 !important;
+	white-space: nowrap;
+}
+
+/* Keep both selector groups on the same row for ordinary desktop/laptop widths,
+   including when the ProcessEdge side menu is expanded. The groups only stack
+   when the viewport is genuinely narrow enough that one-line controls would
+   stop being readable/actionable. */
+@media (max-width: 900px) {
+	.retailedge-bank-layout .edge-action-bar {
+		flex-wrap: wrap !important;
+	}
+
+	.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+		flex-wrap: wrap !important;
+	}
+}
+
+@media (max-width: 700px) {
+	.retailedge-bank-layout .edge-action-bar {
+		display: flex !important;
+		width: 100% !important;
+		align-items: flex-start !important;
+		margin-right: 0;
+	}
+
+	.retailedge-bank-layout .edge-action-bar > :first-child {
+		flex-basis: 100%;
+		width: 100% !important;
+		margin-right: 0 !important;
+	}
+
+	.retailedge-bank-layout .edge-action-bar [class*="actions"] {
+		width: 100% !important;
+	}
+}
