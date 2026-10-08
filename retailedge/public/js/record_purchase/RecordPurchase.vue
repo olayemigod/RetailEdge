@@ -13,7 +13,7 @@
 		<EdgePageLayout class="retailedge-record-purchase-page">
 			<EdgePageHeader
 				title="Purchase Entry"
-				description="Choose the ERPNext purchase path first. Standard procurement follows Purchase Order → Purchase Receipt → Purchase Invoice → Payment; direct supplier invoices remain available for genuine direct purchases."
+				description="Choose the purchase path first. Standard procurement follows Purchase Order → Purchase Receipt → Purchase Invoice → Payment; direct supplier invoices remain available for genuine direct purchases."
 			/>
 			<EdgeLoadingState v-if="loading && !loaded" message="Preparing purchase entry..." :skeleton="true" />
 			<EdgeErrorState v-else-if="loadError" title="Purchase Entry unavailable" :message="loadError" @retry="loadPage" />
@@ -29,7 +29,7 @@
 					<div class="purchase-intent-heading">
 						<span class="page-kicker">Choose purchase path</span>
 						<h3>How is this purchase being processed?</h3>
-						<p>RetailEdge follows ERPNext purchasing documents rather than treating every purchase as a Purchase Invoice.</p>
+						<p>RetailEdge follows the standard purchasing documents rather than treating every purchase as a Purchase Invoice.</p>
 					</div>
 					<div class="purchase-intent-grid">
 						<article class="purchase-intent-card purchase-intent-card--primary">
@@ -37,7 +37,7 @@
 							<div class="page-actions"><button class="edge-button edge-button--primary" type="button" @click="startStandardPurchase">Start Purchase Order</button><button class="edge-button" type="button" @click="openPurchaseOperations">Purchase Operations</button></div>
 						</article>
 						<article class="purchase-intent-card">
-							<div><strong>Receive &amp; Bill Now</strong><small>For a genuine direct purchase where goods are physically received now. ERPNext Purchase Invoice will post stock when submitted.</small></div>
+							<div><strong>Receive &amp; Bill Now</strong><small>For a genuine direct purchase where goods are physically received now. Submitting the Purchase Invoice records the received stock.</small></div>
 							<button class="edge-button" type="button" @click="startDirectPurchase(true)">Record Direct Purchase</button>
 						</article>
 						<article class="purchase-intent-card">
@@ -48,7 +48,7 @@
 				</section>
 
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
-					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
+					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "The Purchase Invoice has been submitted. Continue to supplier settlement, payables review or document output." : "The Purchase Invoice draft now owns the transaction." }}</p></div>
 					<div class="page-actions">
 						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" class="edge-button" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button><button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-supplier-debit-note')" class="edge-button" type="button" @click="runSavedNextAction('create-supplier-debit-note')">Supplier Debit Note</button>
@@ -67,7 +67,7 @@
 						<div>
 							<span class="page-kicker">Workflow & submission</span>
 							<h3>Complete {{ savedDocument.name }}</h3>
-							<p>Approval and submission stay on this persistent page. Quick Purchase only creates the ERPNext draft.</p>
+							<p>Approval and submission stay on this persistent page. Quick Purchase only creates the Purchase Invoice draft.</p>
 						</div>
 						<span class="item-count">{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow" : "Ready to submit" }}</span>
 					</div>
@@ -75,7 +75,7 @@
 					<div v-if="workflowError" class="form-error" role="alert">{{ workflowError }}</div>
 
 					<div v-if="savedDocument.workflow_readiness?.source === 'frappe'" class="form-warning" role="status">
-						<strong>{{ savedDocument.workflow_readiness.workflow || "Frappe Workflow" }}</strong>
+						<strong>{{ savedDocument.workflow_readiness.workflow || "Approval Workflow" }}</strong>
 						<div v-if="savedDocument.workflow_readiness.current_state">
 							Current state: <strong>{{ savedDocument.workflow_readiness.current_state }}</strong>
 						</div>
@@ -91,9 +91,9 @@
 
 					<div class="sticky-actions">
 						<div>
-							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "ERPNext submission" }}</strong>
-							<small v-if="savedDocument.workflow_readiness?.source === 'frappe'">Only actions currently permitted by Frappe Workflow are shown.</small>
-							<small v-else>Submit uses ERPNext's normal Purchase Invoice validation, payable and stock posting rules.</small>
+							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "Submission controls" }}</strong>
+							<small v-if="savedDocument.workflow_readiness?.source === 'frappe'">Only actions currently permitted by the active approval workflow are shown.</small>
+							<small v-else>Submit uses the normal Purchase Invoice validation, payable and stock posting rules.</small>
 						</div>
 						<div class="page-actions">
 							<button class="edge-button" type="button" :disabled="workflowBusy" @click="refreshSavedDocumentPreview">{{ workflowBusy ? "Refreshing..." : "Refresh Status" }}</button>
@@ -116,7 +116,7 @@
 							>
 								{{ workflowBusy ? "Submitting..." : "Submit Purchase Invoice" }}
 							</button>
-							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="workflowBusy" @click="openAdvancedNative">Advanced: ERPNext</button>
+							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="workflowBusy" @click="openAdvancedNative">Advanced: Open Purchase Invoice</button>
 						</div>
 					</div>
 				</section>
@@ -152,7 +152,7 @@
 						<div>
 							<span>Direct purchase type</span>
 							<strong>{{ values.update_stock ? "Receive & Bill Now" : "Bill Only" }}</strong>
-							<small>{{ values.update_stock ? "ERPNext will post the received stock when this Purchase Invoice is submitted. A Receiving Stock Location is required." : "This Purchase Invoice records the supplier payable only and does not move stock." }}</small>
+							<small>{{ values.update_stock ? "Submitting this Purchase Invoice records the received stock. A Receiving Stock Location is required." : "This Purchase Invoice records the supplier payable only and does not move stock." }}</small>
 						</div>
 						<button v-if="!editingSavedDraft" class="edge-button" type="button" @click="choosePurchaseType">Change Purchase Type</button>
 					</div>
@@ -163,8 +163,8 @@
 					<label class="field"><span>Remarks</span><textarea v-model="values.remarks" class="form-control" rows="4" placeholder="Optional purchase note"></textarea></label>
 
 					<div class="sticky-actions">
-						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transactionContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
+						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the Purchase Invoice draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: Open Purchase Invoice</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transactionContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -197,7 +197,7 @@ function emptyValues() {
 	return { company: "", branch: "", posting_date: "", bill_no: "", bill_date: "", warehouse: "", supplier: "", price_list: "", update_stock: 0, remarks: "", items: [{ item_code: "", qty: 1, rate: "" }] };
 }
 function sourceLabel(source) {
-	return { branch_default: "Branch default", user_selected: "Selected Price List", branch_assignment: "Branch-assigned Price List", user_default: "User default", user_permission: "User-assigned Price List", party_default: "Supplier default", erpnext_default: "ERPNext default", standard_price_list: "Standard Buying", item_fallback: "Item fallback" }[source] || "ERPNext pricing";
+	return { branch_default: "Branch default", user_selected: "Selected Price List", branch_assignment: "Branch-assigned Price List", user_default: "User default", user_permission: "User-assigned Price List", party_default: "Supplier default", erpnext_default: "Default Buying Price List", standard_price_list: "Standard Buying", item_fallback: "Item fallback" }[source] || "Standard pricing";
 }
 function clone(value) { return JSON.parse(JSON.stringify(value || {})); }
 function stored(raw, maxAge) {
@@ -562,7 +562,7 @@ export default {
 			}
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Purchase Invoice", this.savedDocument.name) : frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Purchase Invoice in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Purchase Invoice form? Save this page first if you want the current entries recorded."; frappe.confirm(message, go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Purchase Invoice", this.savedDocument.name) : frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Purchase Invoice in the advanced form? Unsaved page edits are not carried until you update the draft." : "Open the advanced Purchase Invoice form? Save this page first if you want the current entries recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
