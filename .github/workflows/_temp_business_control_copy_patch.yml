@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           python -m py_compile retailedge/business_control_center.py retailedge/tests/test_business_control_center_ui.py
-          python -m unittest retailedge.tests.test_business_control_center_ui
+          python retailedge/tests/test_business_control_center_ui.py
           python - <<'PY'
           from pathlib import Path
           page = Path('retailedge/public/js/business_control_center/BusinessControlCenter.vue').read_text(encoding='utf-8')
