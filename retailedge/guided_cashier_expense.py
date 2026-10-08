@@ -114,6 +114,57 @@ def search_guided_expense_categories(
 def create_guided_cashier_expense_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_expense()
 	values = _coerce_values(values)
+	category, amount = _validated_business_values(values)
+
+	doc = frappe.new_doc(EXPENSE_DOCTYPE)
+	_apply_business_values(doc, values, category=category, amount=amount)
+
+	# The existing RetailEdge Cashier Expense controller resolves cashier/company/
+	# branch/POS/accounting context, refreshes shift cash, validates the selected
+	# category against the resolved company, validates available cash, derives the
+	# expense account and posting readiness, and remains authoritative.
+	doc.insert()
+	return _draft_payload(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_guided_cashier_expense_draft(
+	expense_name: str,
+	values: dict | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Update only user-editable business inputs on an existing draft.
+
+	The Cashier Expense controller remains authoritative for company/branch/POS,
+	cash availability, accounting context and posting readiness. Submitted records
+	are never edited through this guided endpoint.
+	"""
+	expense_name = str(expense_name or "").strip()
+	if not expense_name:
+		frappe.throw(_("Cashier Expense is required."), frappe.ValidationError)
+
+	doc = frappe.get_doc(EXPENSE_DOCTYPE, expense_name)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only a draft Cashier Expense can be edited."), frappe.ValidationError)
+	if not frappe.has_permission(EXPENSE_DOCTYPE, "write", doc=doc):
+		frappe.throw(
+			_("You do not have permission to edit Cashier Expense {0}.").format(expense_name),
+			frappe.PermissionError,
+		)
+	if expected_modified and str(getattr(doc, "modified", "") or "") != str(expected_modified):
+		frappe.throw(
+			_("This Cashier Expense changed after you saved it. Refresh before saving again."),
+			frappe.ValidationError,
+		)
+
+	values = _coerce_values(values)
+	category, amount = _validated_business_values(values)
+	_apply_business_values(doc, values, category=category, amount=amount)
+	doc.save()
+	return _draft_payload(doc)
+
+
+def _validated_business_values(values: dict[str, Any]) -> tuple[str, float]:
 	category = str(values.get("expense_category") or "").strip()
 	if not category:
 		frappe.throw(_("Expense Category is required."))
@@ -122,20 +173,18 @@ def create_guided_cashier_expense_draft(values: dict | str | None = None) -> dic
 	amount = flt(values.get("amount"))
 	if amount <= 0:
 		frappe.throw(_("Amount must be greater than zero."))
+	return category, amount
 
-	doc = frappe.new_doc(EXPENSE_DOCTYPE)
+
+def _apply_business_values(doc, values: dict[str, Any], *, category: str, amount: float) -> None:
 	doc.expense_category = category
 	doc.amount = amount
-	if values.get("description"):
-		doc.description = str(values.get("description")).strip()
+	doc.description = str(values.get("description") or "").strip()
 	if values.get("expense_date"):
 		doc.expense_date = getdate(values.get("expense_date"))
 
-	# The existing RetailEdge Cashier Expense controller resolves cashier/company/
-	# branch/POS/accounting context, refreshes shift cash, validates the selected
-	# category against the resolved company, validates available cash, derives the
-	# expense account and posting readiness, and remains authoritative.
-	doc.insert()
+
+def _draft_payload(doc) -> dict[str, Any]:
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
@@ -146,6 +195,7 @@ def create_guided_cashier_expense_draft(values: dict | str | None = None) -> dic
 		"cashier": doc.cashier,
 		"expense_category": doc.expense_category,
 		"amount": doc.amount,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"available_cash_after": flt(doc.available_shift_cash_after_expense),
 		"completion": {
 			"mode": "edgesuite_workflow",

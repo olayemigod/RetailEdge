@@ -6,7 +6,7 @@ const EXPORT_METHOD = "retailedge.planning_intelligence.get_planning_intelligenc
 function mountForecastingPlanning(target) {
 	if (typeof window === "undefined") return null;
 	const edgeUI = window.EdgeSuiteUI;
-	if (!edgeUI || typeof edgeUI.createEdgeApp !== "function") throw new Error("EdgeSuite UI runtime is unavailable for Forecasting & Planning.");
+	if (!edgeUI || typeof edgeUI.createEdgeApp !== "function") throw new Error("This page could not start. Refresh the page or contact your administrator.");
 	if (!target) throw new Error("Forecasting & Planning mount target is required.");
 	const app = edgeUI.createEdgeApp(ForecastingPlanning, { pageMethod: PAGE_METHOD, exportMethod: EXPORT_METHOD });
 	app.mount(target);

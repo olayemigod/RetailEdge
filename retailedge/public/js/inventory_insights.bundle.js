@@ -6,7 +6,7 @@ function mountInventoryInsightView(target, options = {}) {
 	if (typeof window === "undefined") return null;
 	const edgeUI = window.EdgeSuiteUI;
 	if (!edgeUI || typeof edgeUI.createEdgeApp !== "function") {
-		throw new Error("EdgeSuite UI runtime is unavailable for Inventory Intelligence insights.");
+		throw new Error("This page could not start. Refresh the page or contact your administrator.");
 	}
 	if (!target) throw new Error("Inventory insight mount target is required.");
 	if (!options.view) throw new Error("Inventory insight view is required.");
