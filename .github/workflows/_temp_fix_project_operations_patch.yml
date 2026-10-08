@@ -1,0 +1,39 @@
+name: Temporary fix Project Operations patch definition
+
+on:
+  push:
+    branches:
+      - fix/project-operations-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_fix_project_operations_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/project-operations-production-copy-20261008
+          fetch-depth: 0
+      - name: Preserve no-project-wallet safety wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/_temp_project_operations_copy_audit.yml')
+          source = path.read_text(encoding='utf-8')
+          old = "Project Funds is a derived management view built from Project, Task, Budget and linked accounting documents. It does not maintain a separate project wallet, task ledger, budget ledger or accounting ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure."
+          new = "Project Funds is a derived management view built from Project, Task, Budget and linked accounting documents. There is no project wallet, task ledger, budget ledger or separate accounting ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure."
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected exactly one patch-definition sentence, found {source.count(old)}')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add .github/workflows/_temp_project_operations_copy_audit.yml
+          git rm .github/workflows/_temp_fix_project_operations_patch.yml
+          git commit -m "chore: preserve Project Funds safety copy"
+          git push origin HEAD:fix/project-operations-production-copy-20261008
