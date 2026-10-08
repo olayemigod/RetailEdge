@@ -41,6 +41,7 @@
 			<template #actions>
 				<button v-if="config.analysis" type="button" class="secondary-action" @click="openExpenseRegister">Expense Register</button>
 				<template v-else>
+					<button v-if="config.cashierOnly && hasPageTarget('expense-register')" type="button" class="secondary-action" @click="openExpenseRegister">Expense Register</button>
 					<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
 					<button type="button" class="primary-action" @click="recordExpense">{{ config.cashierOnly ? "Record Cashier Expense" : (consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense") }}</button>
 				</template>
