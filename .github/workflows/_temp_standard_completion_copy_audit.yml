@@ -1,0 +1,40 @@
+name: Temporary standard completion backend copy audit
+
+on:
+  push:
+    branches:
+      - fix/standard-completion-backend-copy-20261008
+    paths:
+      - .github/workflows/_temp_standard_completion_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/standard-completion-backend-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording in standard completion services
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          files = [
+              Path('retailedge/standard_delivery_completion.py'),
+              Path('retailedge/standard_stock_completion.py'),
+              Path('retailedge/standard_sales_invoice_completion.py'),
+              Path('retailedge/standard_purchase_invoice_completion.py'),
+          ]
+          terms = ('ERPNext', 'EdgeSuite', 'Frappe', 'Native Desk')
+          for path in files:
+              print(f'## {path}')
+              source = path.read_text(encoding='utf-8')
+              for lineno, line in enumerate(source.splitlines(), 1):
+                  if any(term in line for term in terms):
+                      print(f'{lineno}: {line}')
+          PY
+          exit 1
