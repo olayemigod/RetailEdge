@@ -21,7 +21,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 	def test_sales_invoice_recent_list_and_source_search_are_context_scoped(self):
 		source = self.read("professional_sales_invoice.py")
 		self.assertIn("_operating_document_filters", source)
-		self.assertIn('filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)', source)
+		self.assertIn('_operating_document_filters("Sales Invoice", company=company, branch=branch)', source)
 		self.assertIn("company, branch, _warehouse = _validate_context(values)", source)
 		self.assertIn('filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))', source)
 		self.assertIn("_validate_source_context(source, source_label=source_doctype)", source)
@@ -88,6 +88,30 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("retailedge.patches.ensure_stock_manager_company_read", patches)
 		self.assertIn("retailedge.patches.ensure_stock_manager_company_read.execute", hooks)
 		self.assertIn('_assert_read_permission("Company", company)', adjustment)
+
+	def test_cashier_company_visibility_is_minimum_read_only_permission(self):
+		patch_source = self.read("patches/ensure_retailedge_cashier_company_read.py")
+		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
+		fixture = self.read("tests/browser_persona_fixture.py")
+
+		self.assertIn('"RetailEdgeCashier"', patch_source)
+		self.assertIn('"RetailEdge Cashier"', patch_source)
+		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "read", 1)', patch_source)
+		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "select", 1)', patch_source)
+		for forbidden in (
+			'"write", 1',
+			'"create", 1',
+			'"delete", 1',
+			'"submit", 1',
+			'"cancel", 1',
+		):
+			self.assertNotIn(forbidden, patch_source)
+		self.assertNotIn('"Journal Entry"', patch_source)
+		self.assertIn("retailedge.patches.ensure_retailedge_cashier_company_read", patches)
+		self.assertIn(
+			'"browser-cashier@example.com": ("Browser Cashier", ("RetailEdgeCashier",)),',
+			fixture,
+		)
 
 	def test_guided_accounting_paths_do_not_directly_write_submitted_accounting_truth(self):
 		for relative in (
