@@ -1,0 +1,75 @@
+name: Temporary Bank Statement review fix
+
+on:
+  push:
+    branches:
+      - fix/bank-statement-import-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_bank_statement_review_fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/bank-statement-import-production-copy-20261008
+          fetch-depth: 0
+      - name: Fix remaining framework-branded upload error
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          component = Path('retailedge/public/js/bank_statement_imports/BankStatementImports.vue')
+          text = component.read_text(encoding='utf-8')
+          old = 'Frappe File Uploader is unavailable.'
+          new = 'Statement file upload is unavailable.'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one upload error phrase, found {text.count(old)}')
+          text = text.replace(old, new)
+          if old in text:
+              raise SystemExit('Old upload error phrase remains')
+          for contract in (
+              'if (!frappe.ui?.FileUploader)',
+              'new frappe.ui.FileUploader({',
+              'doctype: "RetailEdge Payment Statement Import"',
+              'allow_multiple: false',
+          ):
+              if contract not in text:
+                  raise SystemExit(f'Upload safety contract missing: {contract}')
+          component.write_text(text, encoding='utf-8')
+
+          test_path = Path('retailedge/tests/test_bank_statement_import_production_copy.py')
+          test = test_path.read_text(encoding='utf-8')
+          positive_anchor = '\t\t"Advanced: Open Full Record",\n'
+          positive_insert = '\t\t"Statement file upload is unavailable.",\n'
+          if positive_insert not in test:
+              if test.count(positive_anchor) != 1:
+                  raise SystemExit('Unexpected positive copy anchor count')
+              test = test.replace(positive_anchor, positive_anchor + positive_insert)
+          forbidden_anchor = '\t\t"Create or link ERPNext Bank Transactions",\n'
+          forbidden_insert = '\t\t"Frappe File Uploader is unavailable.",\n'
+          if forbidden_insert not in test:
+              if test.count(forbidden_anchor) != 1:
+                  raise SystemExit('Unexpected forbidden copy anchor count')
+              test = test.replace(forbidden_anchor, forbidden_anchor + forbidden_insert)
+          test_path.write_text(test, encoding='utf-8')
+          PY
+      - name: Verify bounded diff
+        shell: bash
+        run: |
+          git diff --check
+          test "$(git diff --name-only)" = "retailedge/public/js/bank_statement_imports/BankStatementImports.vue
+          retailedge/tests/test_bank_statement_import_production_copy.py"
+      - name: Commit review fix
+        shell: bash
+        run: |
+          git config user.name "RetailEdge Copy Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add retailedge/public/js/bank_statement_imports/BankStatementImports.vue retailedge/tests/test_bank_statement_import_production_copy.py
+          git commit -m "fix: remove Frappe branding from statement upload error"
+          git push origin HEAD:fix/bank-statement-import-production-copy-20261008
