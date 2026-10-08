@@ -309,7 +309,7 @@ export default {
 
 <style scoped>
 .customer-opportunity-fallback { display: grid; gap: 0.5rem; padding: 1.5rem; }
-.customer-opportunity-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; align-items: end; }
+.customer-opportunity-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; align-items: end; flex: 1 1 100%; min-width: 0; width: 100%; }
 .customer-opportunity-period-filter { min-width: 0; width: 100%; }
 .edge-field { display: grid; gap: 0.35rem; }
 .edge-field-label { font-size: 0.78rem; font-weight: 600; }
