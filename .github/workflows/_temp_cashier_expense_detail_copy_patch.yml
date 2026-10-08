@@ -1,0 +1,103 @@
+name: Temporary Cashier Expense detail production-copy patch
+
+on:
+  push:
+    branches:
+      - fix/cashier-expense-detail-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_cashier_expense_detail_copy_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/cashier-expense-detail-production-copy-20261008
+          fetch-depth: 0
+      - name: Apply bounded Cashier Expense detail copy replacements
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui = Path('retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue')
+          backend = Path('retailedge/cashier_expense_detail.py')
+          test = Path('retailedge/tests/test_cashier_expense_detail_and_modal_stacking_contract.py')
+
+          source = ui.read_text(encoding='utf-8')
+          replacements = [
+              ('Use the merchant-configured Frappe Workflow actions below.', 'Use the configured approval workflow actions below.'),
+              ('Submit this draft expense. RetailEdge will attempt accounting posting immediately when your permissions allow it.', 'Submit this draft expense. Accounting posting will be attempted immediately when your permissions allow it.'),
+              ('This expense is ready for ERPNext Journal Entry posting.', 'This expense is ready for Journal Entry posting.'),
+              ('Review status and posting readiness remain governed by RetailEdge and ERPNext permissions.', 'Review status and posting readiness remain governed by your configured permissions.'),
+              ('Accounting posting is disabled in RetailEdge Settings.', 'Accounting posting is disabled in Settings.'),
+          ]
+          for old, new in replacements:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'UI expected exactly one occurrence of {old!r}, found {count}')
+              source = source.replace(old, new)
+          ui.write_text(source, encoding='utf-8')
+
+          b = backend.read_text(encoding='utf-8')
+          old = 'Cashier Expense is not controlled by an active Frappe Workflow.'
+          new = 'Cashier Expense is not controlled by an active configured workflow.'
+          if b.count(old) != 1:
+              raise SystemExit(f'backend expected one occurrence of {old!r}, found {b.count(old)}')
+          b = b.replace(old, new)
+          backend.write_text(b, encoding='utf-8')
+
+          t = test.read_text(encoding='utf-8')
+          addition = '''\n\ndef test_cashier_expense_detail_uses_business_facing_workflow_copy():\n\tdetail = _read(DETAIL_COMPONENT)\n\tbackend = _read(CASHIER_DETAIL)\n\tfor expected in (\n\t\t"Use the configured approval workflow actions below.",\n\t\t"Accounting posting will be attempted immediately when your permissions allow it.",\n\t\t"This expense is ready for Journal Entry posting.",\n\t\t"Review status and posting readiness remain governed by your configured permissions.",\n\t\t"Accounting posting is disabled in Settings.",\n\t):\n\t\tassert expected in detail\n\tfor forbidden in (\n\t\t"Frappe Workflow actions below",\n\t\t"RetailEdge will attempt accounting posting",\n\t\t"ERPNext Journal Entry posting",\n\t\t"RetailEdge and ERPNext permissions",\n\t\t"RetailEdge Settings",\n\t):\n\t\tassert forbidden not in detail\n\tassert "Cashier Expense is not controlled by an active configured workflow." in backend\n\tassert "Cashier Expense is not controlled by an active Frappe Workflow." not in backend\n\tassert 'str(workflow.get("source") or "") != "frappe"' in backend\n'''
+          if addition.strip() in t:
+              raise SystemExit('copy regression test already present')
+          t += addition
+          test.write_text(t, encoding='utf-8')
+          PY
+      - name: Verify Cashier Expense workflow safety boundary
+        shell: bash
+        run: |
+          python -m py_compile retailedge/cashier_expense_detail.py retailedge/tests/test_cashier_expense_detail_and_modal_stacking_contract.py
+          python retailedge/tests/test_cashier_expense_detail_and_modal_stacking_contract.py
+          python - <<'PY'
+          from pathlib import Path
+          ui = Path('retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue').read_text(encoding='utf-8')
+          backend = Path('retailedge/cashier_expense_detail.py').read_text(encoding='utf-8')
+          for marker in (
+              'retailedge.cashier_expense_detail.submit_cashier_expense_for_review',
+              'retailedge.api.approve_cashier_expense',
+              'retailedge.api.reject_cashier_expense',
+              'retailedge.api.reopen_cashier_expense',
+              'retailedge.api.refresh_cashier_expense_posting_readiness',
+              'retailedge.cashier_expense_accounting.post_cashier_expense_to_accounts',
+              'expected_modified: this.detail.modified',
+          ):
+              assert marker in ui
+          for marker in (
+              'str(workflow.get("source") or "") != "frappe"',
+              'apply_document_workflow_action',
+              'frappe.has_permission("Journal Entry", "read")',
+              'frappe.has_permission("Journal Entry", "create")',
+              'frappe.has_permission("Journal Entry", "submit")',
+          ):
+              assert marker in backend
+          PY
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            "retailedge/cashier_expense_detail.py"
+            "retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue"
+            "retailedge/tests/test_cashier_expense_detail_and_modal_stacking_contract.py"
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          diff <(printf '%s\n' "${changed[@]}") <(printf '%s\n' "${expected[@]}" | sort)
+      - name: Commit Cashier Expense detail copy fix
+        shell: bash
+        run: |
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add retailedge/cashier_expense_detail.py retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue retailedge/tests/test_cashier_expense_detail_and_modal_stacking_contract.py
+          git commit -m "fix: productionize Cashier Expense detail copy"
+          git push origin HEAD:fix/cashier-expense-detail-production-copy-20261008
