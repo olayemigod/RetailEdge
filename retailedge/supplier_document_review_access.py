@@ -177,12 +177,13 @@ def get_supplier_document_review_context(
 		handoff_by_extraction = review._latest_by([dict(row) for row in handoff_rows], "extraction")
 
 	rows: list[dict[str, Any]] = []
-	po_cache: dict[str, frappe._dict | None] = {}
+	po_cache: dict[tuple[str, str, str], frappe._dict | None] = {}
 	for intake in intakes:
 		po_name = str(intake.purchase_order or "")
-		if po_name not in po_cache:
-			po_cache[po_name] = _controlled_purchase_order_snapshot(intake, user=user)
-		po = po_cache[po_name]
+		po_cache_key = (po_name, str(intake.company or ""), str(intake.supplier or ""))
+		if po_cache_key not in po_cache:
+			po_cache[po_cache_key] = _controlled_purchase_order_snapshot(intake, user=user)
+		po = po_cache[po_cache_key]
 		if not po:
 			continue
 		po_branch_field = review._purchase_order_branch_field()
