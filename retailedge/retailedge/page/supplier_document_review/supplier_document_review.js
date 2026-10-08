@@ -33,7 +33,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	try {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true }); wrapper.page = page; hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.components || typeof window.EdgeSuiteUI?.createEdgeApp !== "function") throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.components || typeof window.EdgeSuiteUI?.createEdgeApp !== "function") throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(REVIEW_ASSET);
 		if (typeof window.mountSupplierDocumentReviewPage !== "function") throw new Error("Supplier Document Review EdgeSuite bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-supplier-document-review-root"; page.body.append(root); await window.mountSupplierDocumentReviewPage(root);
