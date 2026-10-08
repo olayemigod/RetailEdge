@@ -77,7 +77,7 @@
 						<div><span>Expense Account</span><strong>{{ value(detail.expense_account || detail.resolved_debit_account) }}</strong></div>
 						<div><span>Payment / Credit Account</span><strong>{{ value(detail.payment_account || detail.resolved_credit_account) }}</strong></div>
 						<div><span>Cost Center</span><strong>{{ value(detail.cost_center || detail.resolved_posting_cost_center) }}</strong></div>
-						<div><span>Posting Mode</span><strong>{{ value(detail.posting_mode_applied) }}</strong></div>
+						<div><span>Posting Mode</span><strong>{{ value(effectivePostingMode) }}</strong></div>
 						<div><span>Posting Reference</span><strong>{{ postingReference }}</strong></div>
 						<div><span>Cash Movement</span><strong>{{ value(detail.cash_movement_status) }}</strong></div>
 					</div>
@@ -111,7 +111,7 @@
 							<h4>Workflow Actions</h4>
 							<small>{{ workflowHelper }}</small>
 						</div>
-						<span v-if="actions.posting_mode" class="workflow-mode">{{ actions.posting_mode }}</span>
+						<span v-if="effectivePostingMode" class="workflow-mode">{{ effectivePostingMode }}</span>
 					</div>
 
 					<div v-if="actionError" class="workflow-error" role="alert">{{ actionError }}</div>
@@ -155,7 +155,7 @@
 							{{ workflowAction.action }}
 						</button>
 						<button v-if="actions.can_submit_for_review" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="submitForReview">
-							{{ actionBusy ? "Working..." : "Submit for Review" }}
+							{{ actionBusy ? "Working..." : submitActionLabel }}
 						</button>
 						<button v-if="actions.can_approve" type="button" class="edge-button edge-button--primary" :disabled="actionBusy" @click="beginReviewAction('approve')">Approve</button>
 						<button v-if="actions.can_reject" type="button" class="edge-button" :disabled="actionBusy" @click="beginReviewAction('reject')">Reject</button>
@@ -257,6 +257,14 @@ export default {
 			if (Number(this.detail.docstatus) === 1 && (!this.detail.expense_status || this.detail.expense_status === "Draft")) return "Submitted";
 			return this.detail.expense_status || "Draft";
 		},
+		effectivePostingMode() {
+			if (!this.detail) return this.actions.posting_mode || "";
+			if (Number(this.detail.docstatus || 0) === 0) return this.actions.posting_mode || this.detail.posting_mode_applied || "";
+			return this.detail.posting_mode_applied || this.actions.posting_mode || "";
+		},
+		submitActionLabel() {
+			return this.effectivePostingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review";
+		},
 		postingReference() {
 			if (!this.detail) return "—";
 			return [this.detail.posting_reference_type, this.detail.posting_reference].filter(Boolean).join(" · ") || "—";
@@ -287,6 +295,7 @@ export default {
 		},
 		workflowHelper() {
 			if (this.actions.workflow_controlled) return this.workflowReadiness?.message || "Use the merchant-configured Frappe Workflow actions below.";
+			if (this.actions.can_submit_for_review && this.effectivePostingMode === "Direct Posting") return "Submit this draft expense. RetailEdge will attempt accounting posting immediately when your permissions allow it.";
 			if (this.actions.can_submit_for_review) return "Submit this draft into the governed Cashier Expense review workflow.";
 			if (this.actions.can_post_to_accounts) return "This expense is ready for ERPNext Journal Entry posting.";
 			if (this.actions.posting_enabled && this.detail?.posting_block_reason) return this.detail.posting_block_reason;
