@@ -26,7 +26,7 @@
 				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Transfer</strong><p>{{ handoffNotice }}</p></section>
 
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
-					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Stock Entry and owns the posted stock movement." : "The ERPNext Stock Entry draft now owns the transfer." }}</p></div>
+					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "The Stock Entry has been submitted and the stock movement is posted." : "The Stock Entry draft now owns the transfer." }}</p></div>
 					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Transfer</button></div>
 				</section>
 
@@ -48,12 +48,12 @@
 
 					<div class="items-heading"><div><span class="page-kicker">Transfer items</span><h3>Products to move</h3><p>Use this page when the transfer contains many stock lines instead of keeping the transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
 					<EdgeChildTable :field="itemTableField" :rows="values.items" :columns="itemColumns" :addLabel="'Add Item'" :linkSearcher="searchLineLink" :linkCanCreate="canCreateItemLink" :linkCreator="createItemLink" :linkCreateLabel="itemCreateLabel" :newRowsFirst="true" @update:rows="updateItems" />
-					<p class="hint">Serial-numbered or batch-managed items may require Advanced ERPNext review so exact serial/batch allocations remain authoritative.</p>
+					<p class="hint">Serial-numbered or batch-managed items may require advanced Stock Entry review so exact serial/batch allocations remain authoritative.</p>
 					<label class="field"><span>Remarks</span><textarea v-model="values.remarks" class="form-control" rows="4" placeholder="Optional transfer note"></textarea></label>
 
 					<div class="sticky-actions">
-						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transferContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
+						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the Stock Entry draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: Open Stock Entry</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transferContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -259,7 +259,7 @@ export default {
 			this.completionOpen = false;
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Entry", this.savedDocument.name) : frappe.new_doc("Stock Entry", { purpose: "Material Transfer" }); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Entry in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Stock Entry form? Save this page first if you want the current transfer recorded."; frappe.confirm(message, go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Entry", this.savedDocument.name) : frappe.new_doc("Stock Entry", { purpose: "Material Transfer" }); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Entry in the advanced form? Unsaved page edits are not carried until you update the draft." : "Open the advanced Stock Entry form? Save this page first if you want the current transfer recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
