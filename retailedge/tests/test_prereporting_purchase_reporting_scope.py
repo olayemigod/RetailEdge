@@ -189,10 +189,17 @@ class TestPrereportingPurchaseReportingScope(unittest.TestCase):
 		for endpoint in (
 			purchase_reporting.get_supplier_payables,
 			purchase_reporting.get_supplier_payables_export,
+		):
+			self.assertIn("_build_supplier_payables_dataset", inspect.getsource(endpoint))
+		for endpoint in (
 			supplier_payables.get_supplier_payables,
 			supplier_payables.get_supplier_payables_export,
 		):
-			self.assertIn("_build_supplier_payables_dataset", inspect.getsource(endpoint))
+			self.assertIn("_build_current_dataset", inspect.getsource(endpoint))
+		self.assertIn(
+			"purchase_reporting._build_supplier_payables_dataset",
+			inspect.getsource(supplier_payables._build_current_dataset),
+		)
 
 	def test_governed_wrappers_keep_filter_constraint_before_base_dispatch(self):
 		for endpoint, base_name, kwargs in (
