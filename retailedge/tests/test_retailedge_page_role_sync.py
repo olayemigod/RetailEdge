@@ -19,9 +19,18 @@ class TestRetailEdgePageRoleSync(unittest.TestCase):
 		self.assertIn('"retailedge.setup_roles.ensure_retailedge_roles"', hooks)
 		self.assertIn("_ensure_retailedge_page_role_variants()", source)
 		self.assertIn('filters={"module": "RetailEdge"}', source)
-		self.assertIn('page.append("roles", {"role": role_name})', source)
-		self.assertIn("page.flags.do_not_update_json = True", source)
-		self.assertIn("page.save(ignore_permissions=True)", source)
+		self.assertIn('"parenttype": "Page"', source)
+		self.assertIn('"parentfield": "roles"', source)
+		self.assertIn('not frappe.db.exists("Role", variant)', source)
+		self.assertIn(").db_insert()", source)
+		self.assertIn('frappe.get_doc("Page", page_name).clear_cache()', source)
+
+	def test_page_role_reconciliation_does_not_resave_entire_page(self):
+		source = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
+		function_source = source.split("def _ensure_retailedge_page_role_variants()", 1)[1]
+
+		self.assertNotIn('page.save(ignore_permissions=True)', function_source)
+		self.assertNotIn('page.append("roles"', function_source)
 
 	def test_business_hub_declares_both_cashier_role_variants(self):
 		source = (
