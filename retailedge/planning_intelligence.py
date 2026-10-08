@@ -277,7 +277,7 @@ def _cash_commitment_schedule(filters: frappe._dict, future_periods: list[str]) 
 
 def _expense_domain(filters: frappe._dict) -> dict[str, Any]:
 	if filters.branch:
-		frappe.throw(_("Accounting expense forecast is company-level until Branch is mapped to a valid ERPNext accounting dimension or Cost Center."))
+		frappe.throw(_("Branch-level expense forecasting is unavailable until this Branch has valid accounting attribution. Use Company-wide scope or complete Branch accounting setup."))
 	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
 	actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Expense")
 	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end, floor=0.0)
@@ -298,7 +298,7 @@ def _expense_domain(filters: frappe._dict) -> dict[str, Any]:
 
 def _profitability_domain(filters: frappe._dict) -> dict[str, Any]:
 	if filters.branch:
-		frappe.throw(_("Accounting profitability forecast is company-level until Branch is mapped to a valid ERPNext accounting dimension or Cost Center."))
+		frappe.throw(_("Branch-level profitability forecasting is unavailable until this Branch has valid accounting attribution. Use Company-wide scope or complete Branch accounting setup."))
 	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
 	income_actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Income")
 	expense_actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Expense")
@@ -453,7 +453,7 @@ def _budget_reference(filters: frappe._dict) -> dict[str, Any]:
 		"to_date": filters.as_of_date,
 	})
 	if not control.get("available"):
-		frappe.throw(control.get("reason") or _("ERPNext Budget reference is not available for this scope."))
+		frappe.throw(control.get("reason") or _("Budget comparison is not available for this scope."))
 	return {
 		"key": "budget",
 		"title": _("Budget & Spend Governance"),
