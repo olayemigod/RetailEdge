@@ -1,0 +1,46 @@
+name: Temporary runtime fallback copy audit
+
+on:
+  push:
+    branches:
+      - fix/runtime-fallback-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_runtime_fallback_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/runtime-fallback-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered framework runtime fallbacks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          roots = [Path('retailedge/public/js'), Path('retailedge/retailedge/page')]
+          terms = (
+              'EdgeSuite UI runtime is unavailable',
+              'EdgeSuite UI runtime is required',
+              'EdgeSuite UI is missing required',
+              'Frappe Workflow',
+              'Native Desk',
+          )
+          found = 0
+          for root in roots:
+              for path in sorted(root.rglob('*')):
+                  if path.suffix not in {'.js', '.vue'} or not path.is_file():
+                      continue
+                  source = path.read_text(encoding='utf-8', errors='ignore')
+                  for lineno, line in enumerate(source.splitlines(), 1):
+                      if any(term in line for term in terms):
+                          print(f'{path}:{lineno}: {line}')
+                          found += 1
+          print(f'TOTAL={found}')
+          PY
+          exit 1
