@@ -64,7 +64,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn('if cost_center and not _can_read("Cost Center", cost_center):', source)
 		self.assertIn('cost_center = ""', source)
 		self.assertIn("frappe.has_permission(doctype, \"create\")", source)
-		self.assertIn("Purchasing, stock, Budget and accounting controls remain authoritative", source)
+		self.assertIn("Purchasing, stock, Budget and accounting controls remain in force", source)
 		self.assertNotIn("RetailEdge does not maintain a generic project expense", source)
 
 	def test_stock_manager_company_visibility_is_minimum_read_only_permission(self):

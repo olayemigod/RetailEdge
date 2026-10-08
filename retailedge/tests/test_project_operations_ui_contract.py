@@ -27,7 +27,7 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("retailedge.project_budget.get_project_budget_context", component)
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
 		self.assertIn("retailedge.project_expense_routing.get_project_expense_routes", component)
-		self.assertIn("Open ERPNext Project", component)
+		self.assertIn("Open Project", component)
 		self.assertIn("Spend & Materials", component)
 		self.assertIn("Financial Control", component)
 		self.assertIn('"RetailEdge Project Financial Control"', component)
