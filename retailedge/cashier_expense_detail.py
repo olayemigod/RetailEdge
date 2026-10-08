@@ -13,6 +13,7 @@ from retailedge.cashier_expense_accounting import (
 from retailedge.cashier_expense_posting import (
 	POSTING_REFRESH_ROLES,
 	get_cashier_expense_posting_settings,
+	get_effective_cashier_expense_posting_settings,
 	refresh_cashier_expense_posting_readiness,
 )
 from retailedge.workflow_actions import apply_document_workflow_action
@@ -138,6 +139,14 @@ def _workflow_actions(
 	workflow_actions = list(workflow_readiness.get("available_actions") or []) if workflow_controlled else []
 	self_cashier = str(expense.get("cashier") or "").strip() == str(user or "").strip()
 	is_system_manager = "System Manager" in roles
+	doc = doc or frappe.get_doc(EXPENSE_DOCTYPE, expense["name"])
+
+	posting = get_effective_cashier_expense_posting_settings(
+		doc,
+		settings=get_cashier_expense_posting_settings(),
+	)
+	posting_enabled = bool(posting.get("enabled"))
+	controlled_posting = posting.get("posting_mode") == "Controlled Posting"
 
 	can_write_expense = bool(
 		frappe.has_permission(EXPENSE_DOCTYPE, "write", doc=str(expense.get("name") or ""))
@@ -148,13 +157,25 @@ def _workflow_actions(
 		and can_write_expense
 		and frappe.has_permission(EXPENSE_DOCTYPE, "submit", doc=str(expense.get("name") or ""))
 	)
-	can_review_submitted = (not workflow_controlled) and reviewer and can_write_expense and docstatus == 1 and status == "Submitted"
-	can_reopen = (not workflow_controlled) and reviewer and can_write_expense and docstatus == 1 and status in {"Rejected", "Pending Ledger"}
+	can_review_submitted = bool(
+		not workflow_controlled
+		and controlled_posting
+		and reviewer
+		and can_write_expense
+		and docstatus == 1
+		and status == "Submitted"
+	)
+	can_reopen = bool(
+		not workflow_controlled
+		and controlled_posting
+		and reviewer
+		and can_write_expense
+		and docstatus == 1
+		and status in {"Rejected", "Pending Ledger"}
+	)
 
-	posting = get_cashier_expense_posting_settings()
-	posting_enabled = bool(posting.get("enabled"))
 	posting_permissions = get_cashier_expense_posting_permissions(
-		doc or frappe.get_doc(EXPENSE_DOCTYPE, expense["name"]),
+		doc,
 		settings=posting,
 		automatic=False,
 	)
@@ -184,9 +205,14 @@ def _workflow_actions(
 				or _("No Cashier Expense workflow action is currently available to this user.")
 			)
 	elif docstatus == 0 and not can_submit_for_review:
-		reasons.append(_("This draft requires submit permission before it can enter review."))
-	elif docstatus == 1 and status == "Submitted" and not reviewer:
+		reasons.append(_("This draft requires submit permission before it can be submitted."))
+	elif controlled_posting and docstatus == 1 and status == "Submitted" and not reviewer:
 		reasons.append(_("This submitted expense requires a RetailEdge reviewer role before approval or rejection."))
+	elif (not controlled_posting) and docstatus == 1 and ledger_status == "Pending Ledger" and not can_post:
+		reasons.append(
+			expense.get("posting_block_reason")
+			or _("Accounting posting is pending an authorised poster with the required Journal Entry permissions.")
+		)
 	elif docstatus == 1 and status == "Pending Ledger" and not can_post:
 		reasons.append(expense.get("posting_block_reason") or _("Posting requirements are not yet satisfied."))
 
@@ -204,7 +230,6 @@ def _workflow_actions(
 		"posting_document_type": posting.get("posting_document_type") or "Journal Entry",
 		"reasons": reasons,
 	}
-
 
 
 @frappe.whitelist(methods=["POST"])
@@ -258,7 +283,7 @@ def submit_cashier_expense_for_review(
 	scoped = get_cashier_expense_detail(expense_name)
 	expense = scoped.get("expense") or {}
 	if int(expense.get("docstatus") or 0) != 0:
-		frappe.throw(_("Only a draft Cashier Expense can be submitted for review."), frappe.ValidationError)
+		frappe.throw(_("Only a draft Cashier Expense can be submitted."), frappe.ValidationError)
 	if expected_modified and str(expense.get("modified") or "") != str(expected_modified):
 		frappe.throw(
 			_("This Cashier Expense changed after you opened it. Refresh before submitting."),
