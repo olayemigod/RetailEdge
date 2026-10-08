@@ -135,7 +135,7 @@ def _get_first_purchase_dates(filters: frappe._dict, customer_codes: list[str]) 
 	rows = frappe.get_list(
 		"Sales Invoice",
 		filters=query_filters,
-		fields=["customer", "min(posting_date) as first_purchase_date"],
+		fields=["customer", {"MIN": "posting_date", "as": "first_purchase_date"}],
 		group_by="customer",
 		order_by="customer asc",
 		limit=min(len(customer_codes), MAX_INVOICE_SCAN_ROWS) + 1,
