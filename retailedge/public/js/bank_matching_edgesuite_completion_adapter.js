@@ -119,7 +119,7 @@
 			});
 			payload.operational = response?.message || {};
 		} catch (_error) {
-			// The primary EdgeSuite review remains usable even if guidance hydration fails.
+			// The primary review remains usable even if guidance hydration fails.
 		}
 	}
 
@@ -233,19 +233,19 @@
 		const grid = node("div", "retailedge-bank-completion-grid");
 		[
 			contextItem(t("Bank Narration"), doc.bank_narration || statement.description || details.bank_context?.description),
-			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank/GL mismatch.")),
-			contextItem(t("Payment Event Source"), doc.payment_event_source || candidate.payment_event_source),
+			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank-account mismatch.")),
+			contextItem(t("Payment Source"), doc.payment_event_source || candidate.payment_event_source),
 			contextItem(t("Business Category"), humanize(evidence.transaction_category || evidence.candidate_category || candidate.transaction_category || candidate.candidate_category)),
 		].filter(Boolean).forEach((item) => grid.appendChild(item));
 		context.appendChild(grid);
 
 		const hardEvidence = doc.match_reason_summary || doc.match_reason || candidate.accounting_evidence;
-		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supplemental fuzzy evidence recorded.");
+		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supporting match evidence recorded.");
 		const evidenceGrid = node("section", "retailedge-bank-review-section retailedge-bank-completion-evidence-grid");
 		evidenceGrid.appendChild(node("h3", "retailedge-bank-completion-evidence-title", t("Matching Evidence")));
 		const panels = node("div", "retailedge-bank-completion-evidence-panels");
-		panels.appendChild(evidencePanel(t("Accounting / Hard Match Evidence"), hardEvidence, "accounting"));
-		panels.appendChild(evidencePanel(t("Fuzzy / Supplemental Evidence"), fuzzyEvidence, "fuzzy"));
+		panels.appendChild(evidencePanel(t("Accounting Evidence"), hardEvidence, "accounting"));
+		panels.appendChild(evidencePanel(t("Supporting Match Evidence"), fuzzyEvidence, "fuzzy"));
 		evidenceGrid.appendChild(panels);
 
 		const guidance = node("section", "retailedge-bank-review-section retailedge-bank-completion-guidance");
