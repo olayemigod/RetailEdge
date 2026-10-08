@@ -56,7 +56,13 @@ def get_cashier_expense_posting_settings():
 
 
 def get_effective_cashier_expense_posting_settings(doc=None, settings=None):
-	"""Resolve posting policy for a document without rewriting its captured mode.
+	"""Resolve the posting policy at the correct document lifecycle boundary.
+
+	Draft Cashier Expenses always follow the merchant's current posting mode. A
+	draft may be saved for later, so any earlier value in posting_mode_applied is
+	not authoritative yet. During native submit this resolver refreshes the draft
+	value in memory, allowing before_submit to persist the merchant policy that is
+	actually active at submission time.
 
 	Submitted Cashier Expenses keep the posting mode captured in
 	posting_mode_applied. This prevents a later merchant settings change from
@@ -65,6 +71,13 @@ def get_effective_cashier_expense_posting_settings(doc=None, settings=None):
 	compatibility.
 	"""
 	settings = dict(settings or get_cashier_expense_posting_settings())
+	if doc is not None and cint(getattr(doc, "docstatus", 0)) == 0:
+		try:
+			doc.posting_mode_applied = settings["posting_mode"]
+		except Exception:
+			pass
+		return settings
+
 	applied_mode = str(getattr(doc, "posting_mode_applied", None) or "").strip()
 	if applied_mode in {"Controlled Posting", "Direct Posting"}:
 		settings["posting_mode"] = applied_mode

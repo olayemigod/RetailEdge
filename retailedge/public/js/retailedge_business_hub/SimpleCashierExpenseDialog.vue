@@ -18,6 +18,27 @@
 			/>
 		</div>
 
+		<div v-else-if="draftSaved" class="guided-expense-saved">
+			<div class="guided-expense-saved-heading">
+				<div>
+					<span>Draft saved</span>
+					<strong>{{ draftResult.name }}</strong>
+				</div>
+				<span class="guided-expense-policy">{{ postingMode }}</span>
+			</div>
+			<p>
+				The expense is saved as a draft. Submit it now to record the till movement and continue under the merchant posting policy,
+				or close this window to leave it as a draft.
+			</p>
+			<div class="guided-expense-saved-summary">
+				<div><span>Expense Category</span><strong>{{ values.expense_category || '—' }}</strong></div>
+				<div><span>Amount</span><strong>{{ formatAmount(values.amount) }}</strong></div>
+				<div><span>Company</span><strong>{{ draftResult.company || businessContext.company || '—' }}</strong></div>
+				<div><span>Branch</span><strong>{{ draftResult.branch || businessContext.branch || '—' }}</strong></div>
+			</div>
+			<div v-if="saveError" class="guided-expense-error" role="alert">{{ saveError }}</div>
+		</div>
+
 		<form v-else class="guided-expense-form" @submit.prevent="saveDraft">
 			<div class="guided-expense-context">
 				<div>
@@ -123,17 +144,27 @@
 
 		<template #footer>
 			<div class="guided-expense-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="busy" @click="openFullForm">
+					{{ draftSaved ? 'Advanced: Open Full Record' : 'Open Full Form' }}
 				</button>
 				<div class="guided-expense-footer-actions">
-					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
-						Cancel
+					<button type="button" class="edge-button" :disabled="busy" @click="requestClose">
+						{{ draftSaved ? 'Close' : 'Cancel' }}
 					</button>
 					<button
+						v-if="draftSaved"
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || !ready || projectedCash < 0"
+						:disabled="busy"
+						@click="submitDraft"
+					>
+						{{ submitting ? 'Submitting...' : submitActionLabel }}
+					</button>
+					<button
+						v-else
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="busy || loading || !ready || projectedCash < 0"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -149,6 +180,7 @@ import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.guided_cashier_expense.get_guided_cashier_expense_context";
 const SEARCH_METHOD = "retailedge.guided_cashier_expense.search_guided_expense_categories";
 const CREATE_METHOD = "retailedge.guided_cashier_expense.create_guided_cashier_expense_draft";
+const SUBMIT_METHOD = "retailedge.cashier_expense_detail.submit_cashier_expense_for_review";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -197,12 +229,14 @@ export default {
 		return {
 			loading: false,
 			saving: false,
+			submitting: false,
 			loadError: "",
 			saveError: "",
 			formContext: {},
 			businessContext: {},
 			values: emptyValues(),
 			initialValuesSnapshot: "",
+			draftResult: null,
 		};
 	},
 	computed: {
@@ -222,23 +256,50 @@ export default {
 			if (!this.businessContext.opening_shift) return 0;
 			return (Number(this.businessContext.available_cash) || 0) - (Number(this.values.amount) || 0);
 		},
+		draftSaved() {
+			return Boolean(this.draftResult?.name);
+		},
+		postingMode() {
+			return this.formContext.capabilities?.posting_mode || "Controlled Posting";
+		},
+		submitActionLabel() {
+			return this.postingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review";
+		},
+		busy() {
+			return this.saving || this.submitting;
+		},
 		hasUnsavedChanges() {
+			if (this.draftSaved) return false;
 			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
 		},
 	},
 	watch: {
 		open(next) {
 			if (next) this.loadContext();
+			else this.resetState();
 		},
 	},
 	mounted() {
 		if (this.open) this.loadContext();
 	},
 	methods: {
+		resetState() {
+			this.loading = false;
+			this.saving = false;
+			this.submitting = false;
+			this.loadError = "";
+			this.saveError = "";
+			this.formContext = {};
+			this.businessContext = {};
+			this.values = emptyValues();
+			this.initialValuesSnapshot = "";
+			this.draftResult = null;
+		},
 		async loadContext() {
 			this.loading = true;
 			this.loadError = "";
 			this.saveError = "";
+			this.draftResult = null;
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -252,7 +313,7 @@ export default {
 			}
 		},
 		requestClose() {
-			if (this.saving) return;
+			if (this.busy) return;
 			if (!this.hasUnsavedChanges) {
 				this.$emit("close");
 				return;
@@ -260,7 +321,12 @@ export default {
 			confirmAboveEdgeModal("Discard the unsaved Cashier Expense changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
-			if (this.saving || !this.nativeFallbackEnabled) return;
+			if (this.busy || !this.nativeFallbackEnabled) return;
+			if (this.draftSaved) {
+				frappe.set_route("Form", "RetailEdge Cashier Expense", this.draftResult.name);
+				this.$emit("close");
+				return;
+			}
 			const openNative = () => this.$emit("open-native", "RetailEdge Cashier Expense");
 			if (!this.hasUnsavedChanges) {
 				openNative();
@@ -279,16 +345,41 @@ export default {
 			this.values.expense_category = next || "";
 		},
 		async saveDraft() {
-			if (this.saving || this.loading || !this.ready || this.projectedCash < 0) return;
+			if (this.busy || this.loading || !this.ready || this.projectedCash < 0) return;
 			this.saveError = "";
 			this.saving = true;
 			try {
 				const result = await callMethod(CREATE_METHOD, { values: this.values });
-				this.$emit("saved", result);
+				this.draftResult = result || null;
+				this.initialValuesSnapshot = JSON.stringify(this.values);
+				if (!this.draftResult?.name) this.saveError = "Cashier Expense draft was saved without a document reference.";
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to save the Cashier Expense draft.");
 			} finally {
 				this.saving = false;
+			}
+		},
+		async submitDraft() {
+			if (this.busy || !this.draftResult?.name) return;
+			this.saveError = "";
+			this.submitting = true;
+			try {
+				const submission = await callMethod(SUBMIT_METHOD, {
+					expense_name: this.draftResult.name,
+				});
+				this.$emit("saved", {
+					...this.draftResult,
+					submission,
+					completion: this.draftResult.completion || {
+						mode: "edgesuite_workflow",
+						doctype: "RetailEdge Cashier Expense",
+						name: this.draftResult.name,
+					},
+				});
+			} catch (error) {
+				this.saveError = errorMessage(error, `Unable to ${this.submitActionLabel.toLowerCase()}.`);
+			} finally {
+				this.submitting = false;
 			}
 		},
 		formatAmount(value) {
@@ -304,18 +395,21 @@ export default {
 	min-height: 220px;
 	padding: 18px 0;
 }
-.guided-expense-form {
+.guided-expense-form,
+.guided-expense-saved {
 	display: grid;
 	gap: 18px;
 }
 .guided-expense-context,
-.guided-cash-summary {
+.guided-cash-summary,
+.guided-expense-saved-summary {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: 10px;
 }
 .guided-expense-context > div,
-.guided-cash-summary > div {
+.guided-cash-summary > div,
+.guided-expense-saved-summary > div {
 	display: grid;
 	gap: 3px;
 	padding: 9px 12px;
@@ -325,8 +419,30 @@ export default {
 }
 .guided-expense-context span,
 .guided-cash-summary span,
-.guided-field > span {
+.guided-field > span,
+.guided-expense-saved-summary span,
+.guided-expense-saved-heading span {
 	font-size: 0.78rem;
+	color: var(--edge-text-muted, #667085);
+}
+.guided-expense-saved-heading {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+.guided-expense-saved-heading > div {
+	display: grid;
+	gap: 4px;
+}
+.guided-expense-policy {
+	padding: 5px 9px;
+	border: 1px solid var(--edge-border, #e5e7eb);
+	border-radius: 999px;
+	white-space: nowrap;
+}
+.guided-expense-saved p {
+	margin: 0;
 	color: var(--edge-text-muted, #667085);
 }
 .guided-expense-grid {
@@ -389,15 +505,21 @@ export default {
 }
 @media (max-width: 900px) {
 	.guided-expense-context,
-	.guided-cash-summary {
+	.guided-cash-summary,
+	.guided-expense-saved-summary {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 @media (max-width: 720px) {
 	.guided-expense-grid,
 	.guided-expense-context,
-	.guided-cash-summary {
+	.guided-cash-summary,
+	.guided-expense-saved-summary {
 		grid-template-columns: 1fr;
+	}
+	.guided-expense-saved-heading {
+		align-items: stretch;
+		flex-direction: column;
 	}
 	.guided-expense-footer {
 		align-items: stretch;
