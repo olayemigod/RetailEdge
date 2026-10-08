@@ -32,7 +32,7 @@
 					<div>
 						<p class="reports-centre-eyebrow">Business reporting</p>
 						<h2>One place for trusted reports</h2>
-						<p>Open operational and management views already governed by RetailEdge and ERPNext permissions. Reports Centre does not create a second reporting truth.</p>
+						<p>Open operational and management views already governed by your access permissions. Reports Centre does not create a second reporting truth.</p>
 					</div>
 					<div class="reports-centre-count">
 						<strong>{{ totalReports }}</strong>
@@ -79,7 +79,7 @@
 								<span class="reports-centre-card-copy">
 									<strong>{{ item.label }}</strong>
 									<small>{{ item.description }}</small>
-									<em v-if="item.native_desk">ERPNext financial report</em>
+									<em v-if="item.native_desk">Detailed financial report</em>
 								</span>
 								<span class="reports-centre-card-open">Open</span>
 							</button>
