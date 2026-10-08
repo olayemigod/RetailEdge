@@ -112,27 +112,27 @@ def _reference_names(doc, fieldname: str) -> set[str]:
 def _standard_invoice_blockers(doc) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
-		blockers.append(_("Only draft Purchase Invoices can use standard EdgeSuite completion."))
+		blockers.append(_("Only draft Purchase Invoices can use guided completion."))
 	if doc.get("amended_from"):
-		blockers.append(_("Amended Purchase Invoices require Advanced ERPNext review."))
+		blockers.append(_("Amended Purchase Invoices require advanced review."))
 	if cint(doc.get("is_return")) or _clean(doc.get("return_against")):
-		blockers.append(_("Return / Supplier Debit Note completion requires Advanced ERPNext review."))
+		blockers.append(_("Return / Supplier Debit Note completion requires advanced review."))
 	if (
 		cint(doc.get("is_internal_supplier"))
 		or _clean(doc.get("represents_company"))
 		or _clean(doc.get("inter_company_invoice_reference"))
 	):
-		blockers.append(_("Internal or inter-company Purchase Invoice requires Advanced ERPNext review."))
+		blockers.append(_("Internal or inter-company Purchase Invoice requires advanced review."))
 	if cint(doc.get("is_paid")):
-		blockers.append(_("Paid-at-source Purchase Invoice requires Advanced ERPNext review."))
+		blockers.append(_("Paid-at-source Purchase Invoice requires advanced review."))
 	if _clean(doc.get("is_opening")).lower() in {"yes", "1", "true"}:
-		blockers.append(_("Opening Purchase Invoice requires Advanced ERPNext review."))
+		blockers.append(_("Opening Purchase Invoice requires advanced review."))
 	if list(doc.get("advances") or []):
-		blockers.append(_("Pre-allocated advances require Advanced ERPNext review."))
+		blockers.append(_("Pre-allocated advances require advanced review."))
 	if cint(doc.get("allocate_advances_automatically")):
-		blockers.append(_("Automatic advance allocation requires Advanced ERPNext review."))
+		blockers.append(_("Automatic advance allocation requires advanced review."))
 	if cint(doc.get("is_subcontracted")) or list(doc.get("supplied_items") or []):
-		blockers.append(_("Subcontracting Purchase Invoice requires Advanced ERPNext review."))
+		blockers.append(_("Subcontracting Purchase Invoice requires advanced review."))
 	if not _clean(doc.get("supplier")):
 		blockers.append(_("Purchase Invoice Supplier is required."))
 	if not list(doc.get("items") or []):
@@ -190,7 +190,7 @@ def _validate_professional_purchasing_source_context(doc) -> dict[str, Any]:
 		else:
 			blockers.append(_("Standard Professional Purchasing completion supports one source Purchase Order at a time."))
 	else:
-		blockers.append(_("Professional Purchasing completion requires an ERPNext Purchase Order or Purchase Receipt source link."))
+		blockers.append(_("Professional Purchasing completion requires a Purchase Order or Purchase Receipt source link."))
 
 	source_branch = ""
 	if source_name:
@@ -284,7 +284,7 @@ def _validate_stock_context(
 			or _clean(row.get("serial_and_batch_bundle"))
 		):
 			blockers.append(
-				_("Serial/Batch controlled stock-updating Purchase Invoice requires Advanced ERPNext review.")
+				_("Serial/Batch controlled stock-updating Purchase Invoice requires advanced review.")
 			)
 
 		_assert_read("Warehouse", warehouse)
@@ -299,7 +299,7 @@ def _validate_stock_context(
 		warehouse_branch = _clean(resolved.get("branch"))
 		if not warehouse_branch:
 			blockers.append(
-				_("Warehouse {0} is not mapped to an operational Branch; use Advanced ERPNext review.").format(
+				_("Warehouse {0} is not mapped to an operational Branch; use advanced review.").format(
 					warehouse
 				)
 			)
@@ -645,7 +645,7 @@ def _sync_purchase_due_date_with_payment_schedule(doc, due_value) -> None:
 	if current_due_date == due_value:
 		return
 	frappe.throw(
-		_("Due Date is controlled by this invoice's Payment Terms schedule. Use Advanced ERPNext to change the payment schedule safely."),
+		_("Due Date is controlled by this invoice's Payment Terms schedule. Use advanced review to change the payment schedule safely."),
 		frappe.ValidationError,
 	)
 
@@ -940,8 +940,8 @@ def submit_standard_purchase_invoice(
 	if _clean(workflow_readiness.get("source")) == "frappe":
 		frappe.throw(
 			_(
-				"Purchase Invoice is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
-			).format(workflow_readiness.get("workflow") or _("Frappe Workflow")),
+				"Purchase Invoice is controlled by active Workflow {0}. Use the available workflow action shown here."
+			).format(workflow_readiness.get("workflow") or _("configured workflow")),
 			frappe.ValidationError,
 		)
 
@@ -955,7 +955,7 @@ def submit_standard_purchase_invoice(
 	# outstanding and Stock Ledger / valuation when update_stock is enabled.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit Purchase Invoice {0}.").format(name))
+		frappe.throw(_("Purchase Invoice {0} was not submitted. Refresh and review the document before retrying.").format(name))
 	doc.reload()
 	return {
 		"doctype": PURCHASE_INVOICE_DOCTYPE,
@@ -1016,7 +1016,7 @@ def apply_standard_purchase_invoice_workflow_action(
 	)
 	if _clean(workflow_readiness.get("source")) != "frappe":
 		frappe.throw(
-			_("No active Frappe Workflow owns this Purchase Invoice."),
+			_("No active workflow owns this Purchase Invoice."),
 			frappe.ValidationError,
 		)
 

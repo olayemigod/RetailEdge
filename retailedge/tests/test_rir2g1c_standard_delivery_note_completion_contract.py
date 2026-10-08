@@ -62,7 +62,7 @@ def test_standard_delivery_shape_fails_closed_for_advanced_stock_cases():
 		"represents_company",
 		"against_sales_order",
 		"warehouse",
-		"Advanced ERPNext",
+		"advanced review",
 	):
 		assert contract in source
 
