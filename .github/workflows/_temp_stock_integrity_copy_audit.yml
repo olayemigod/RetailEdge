@@ -1,4 +1,4 @@
-name: Temporary stock integrity copy audit
+name: Temporary stock integrity copy patch
 
 on:
   push:
@@ -8,38 +8,124 @@ on:
       - .github/workflows/_temp_stock_integrity_copy_audit.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: fix/stock-accounting-integrity-production-copy-20261008
           fetch-depth: 0
-      - name: Inventory rendered platform wording and stale contracts
+      - name: Apply exact Stock & Accounting Integrity copy replacements
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+
           component = Path('retailedge/public/js/stock_accounting_integrity/StockAccountingIntegrityReport.vue')
           text = component.read_text(encoding='utf-8')
-          print(f'--- {component} ---')
-          for lineno, line in enumerate(text.splitlines(), 1):
-              if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
-                  print(f'{lineno}: {line}')
-          print('--- candidate stale tests ---')
-          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
-              source = path.read_text(encoding='utf-8')
-              if 'StockAccountingIntegrityReport.vue' not in source:
-                  continue
-              hits = []
-              for lineno, line in enumerate(source.splitlines(), 1):
-                  if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
-                      hits.append(f'{lineno}: {line}')
-              if hits:
-                  print(f'### {path}')
-                  print('\n'.join(hits))
+          replacements = [
+              (
+                  'Read-only ERPNext stock-versus-accounting exceptions. Values and mismatch logic come from the native Stock and Account Value Comparison report.',
+                  'Read-only stock-versus-accounting exceptions. Values and mismatch logic come from the Stock and Account Value Comparison report.',
+                  1,
+              ),
+              (
+                  'ERPNext returned no stock-versus-accounting exceptions for this Company, Stock Account, and date range.',
+                  'No stock-versus-accounting exceptions were returned for this Company, Stock Account, and date range.',
+                  1,
+              ),
+              ('Checking ERPNext stock and accounting integrity…', 'Checking stock and accounting integrity…', 1),
+              (
+                  "canUseNativeDesk ? 'Open ERPNext Stock and Account Value Comparison' : 'Advanced workflow: Native Desk access is required'",
+                  "canUseNativeDesk ? 'Open Stock and Account Value Comparison' : 'Advanced report access is required'",
+                  1,
+              ),
+              (
+                  'canUseNativeDesk ? "Open ERPNext Advanced Report" : "Advanced: ERPNext Report"',
+                  'canUseNativeDesk ? "Open Advanced Report" : "Advanced Report Unavailable"',
+                  1,
+              ),
+              ('ERPNext exception row', 'exception row', 1),
+              (
+                  'Read-only review: corrections and reposting remain in authorised ERPNext workflows.',
+                  'Read-only review: corrections and reposting remain in authorised accounting workflows.',
+                  1,
+              ),
+              ('{ label: "Source", value: "ERPNext Stock and Account Value Comparison" }', '{ label: "Source", value: "Stock and Account Value Comparison" }', 2),
+          ]
+          for old, new, expected in replacements:
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(f'Expected {expected} occurrence(s) of {old!r}, found {actual}')
+              text = text.replace(old, new)
+
+          for forbidden in ('ERPNext', 'Native Desk'):
+              if forbidden in text:
+                  hits = [f'{i}: {line}' for i, line in enumerate(text.splitlines(), 1) if forbidden in line]
+                  raise SystemExit(f'Unexpected rendered/internal spaced term {forbidden!r} remains:\n' + '\n'.join(hits))
+
+          for contract in (
+              'window.EdgeSuiteUI?.components || {}',
+              'window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)',
+              'window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)',
+              'nativeReportName: "Stock and Account Value Comparison"',
+              'canOpenNativeReport: false',
+              'canUseNativeDesk: false',
+              'clickable: this.canUseNativeDesk && ["name", "voucher_no"].includes(column.fieldname)',
+              'v-if="canOpenNativeReport"',
+              ':disabled="!canUseNativeDesk"',
+              'if (!this.canUseNativeDesk || !this.canOpenNativeReport || !this.nativeReportName) return;',
+              'frappe.set_route("query-report", this.nativeReportName);',
+              'frappe.set_route("Form", payload.row.voucher_type, payload.value);',
+              'frappe.set_route("Form", payload.row.ledger_type, payload.value);',
+              'Correction Mode", value: "Read-only here"',
+          ):
+              if contract not in text:
+                  raise SystemExit(f'Safety contract missing after copy patch: {contract}')
+          component.write_text(text, encoding='utf-8')
+
+          c22_path = Path('retailedge/tests/test_c22_stock_accounting_integrity.py')
+          c22 = c22_path.read_text(encoding='utf-8')
+          old_c22 = 'self.assertIn("Open ERPNext Advanced Report", component)'
+          new_c22 = 'self.assertIn("Open Advanced Report", component)'
+          if c22.count(old_c22) != 1:
+              raise SystemExit('Unexpected C22 advanced-report assertion count')
+          c22_path.write_text(c22.replace(old_c22, new_c22), encoding='utf-8')
+
+          containment_path = Path('retailedge/tests/test_rir2g2g17_stock_accounting_integrity_native_detail_containment.py')
+          containment = containment_path.read_text(encoding='utf-8')
+          old_containment = 'assert "Advanced: ERPNext Report" in source'
+          new_containment = 'assert "Advanced Report Unavailable" in source'
+          if containment.count(old_containment) != 1:
+              raise SystemExit('Unexpected native-detail advanced-report assertion count')
+          containment_path.write_text(containment.replace(old_containment, new_containment), encoding='utf-8')
+
+          regression = Path('retailedge/tests/test_stock_accounting_integrity_production_copy.py')
+          regression.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[1]\nCOMPONENT = ROOT / "public/js/stock_accounting_integrity/StockAccountingIntegrityReport.vue"\n\n\ndef test_stock_accounting_integrity_uses_business_copy_and_preserves_native_report_authority():\n\ttext = COMPONENT.read_text(encoding="utf-8")\n\n\tfor marker in (\n\t\t"Read-only stock-versus-accounting exceptions.",\n\t\t"Stock and Account Value Comparison report",\n\t\t"No stock-versus-accounting exceptions were returned",\n\t\t"Checking stock and accounting integrity…",\n\t\t"Open Stock and Account Value Comparison",\n\t\t"Advanced report access is required",\n\t\t"Open Advanced Report",\n\t\t"Advanced Report Unavailable",\n\t\t"exception row",\n\t\t"authorised accounting workflows",\n\t\t'{ label: "Source", value: "Stock and Account Value Comparison" }',\n\t):\n\t\tassert marker in text\n\n\tfor forbidden in (\n\t\t"Read-only ERPNext stock-versus-accounting exceptions",\n\t\t"ERPNext returned no stock-versus-accounting exceptions",\n\t\t"Checking ERPNext stock and accounting integrity",\n\t\t"Open ERPNext Stock and Account Value Comparison",\n\t\t"Native Desk access is required",\n\t\t"Open ERPNext Advanced Report",\n\t\t"Advanced: ERPNext Report",\n\t\t"ERPNext exception row",\n\t\t"authorised ERPNext workflows",\n\t\t"ERPNext Stock and Account Value Comparison",\n\t):\n\t\tassert forbidden not in text\n\n\tfor marker in (\n\t\t'window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)',\n\t\t'window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)',\n\t\t'nativeReportName: "Stock and Account Value Comparison"',\n\t\t"canUseNativeDesk: false",\n\t\t"canOpenNativeReport: false",\n\t\t'clickable: this.canUseNativeDesk && ["name", "voucher_no"].includes(column.fieldname)',\n\t\t'v-if="canOpenNativeReport"',\n\t\t':disabled="!canUseNativeDesk"',\n\t\t"if (!this.canUseNativeDesk || !this.canOpenNativeReport || !this.nativeReportName) return;",\n\t\t'frappe.set_route("query-report", this.nativeReportName);',\n\t\t'frappe.set_route("Form", payload.row.voucher_type, payload.value);',\n\t\t'frappe.set_route("Form", payload.row.ledger_type, payload.value);',\n\t):\n\t\tassert marker in text\n''', encoding='utf-8')
           PY
-          exit 1
+      - name: Verify bounded diff
+        shell: bash
+        run: |
+          git diff --check
+          tracked="$(git diff --name-only)"
+          untracked="$(git ls-files --others --exclude-standard)"
+          printf 'tracked:\n%s\nuntracked:\n%s\n' "$tracked" "$untracked"
+          test "$tracked" = "retailedge/public/js/stock_accounting_integrity/StockAccountingIntegrityReport.vue
+          retailedge/tests/test_c22_stock_accounting_integrity.py
+          retailedge/tests/test_rir2g2g17_stock_accounting_integrity_native_detail_containment.py"
+          test "$untracked" = "retailedge/tests/test_stock_accounting_integrity_production_copy.py"
+      - name: Commit bounded Stock & Accounting Integrity copy slice
+        shell: bash
+        run: |
+          git config user.name "RetailEdge Copy Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            retailedge/public/js/stock_accounting_integrity/StockAccountingIntegrityReport.vue \
+            retailedge/tests/test_c22_stock_accounting_integrity.py \
+            retailedge/tests/test_rir2g2g17_stock_accounting_integrity_native_detail_containment.py \
+            retailedge/tests/test_stock_accounting_integrity_production_copy.py
+          git commit -m "fix: productionize Stock & Accounting Integrity copy"
+          git push origin HEAD:fix/stock-accounting-integrity-production-copy-20261008
