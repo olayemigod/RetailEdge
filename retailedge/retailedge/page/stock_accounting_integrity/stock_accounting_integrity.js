@@ -2,26 +2,48 @@ const EDGEUI_ASSET = "edgeui.bundle.js";
 const INTEGRITY_ASSET = "stock_accounting_integrity.bundle.js";
 const PAGE_ROUTE = "stock-accounting-integrity";
 const PAGE_TITLE = "Stock & Accounting Integrity";
+const LOAD_TIMEOUT_MS = 15000;
+const FRAPPE_REQUIRE_POLL_MS = 50;
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
 		let completed = false;
+		let pollTimer = null;
+		const deadlineTimer = window.setTimeout(
+			() => fail(new Error(__("Timed out waiting for the Frappe asset loader while loading {0}", [assetName]))),
+			LOAD_TIMEOUT_MS
+		);
+		const clearTimers = () => {
+			window.clearTimeout(deadlineTimer);
+			if (pollTimer) window.clearTimeout(pollTimer);
+		};
 		const finish = () => {
 			if (completed) return;
 			completed = true;
+			clearTimers();
 			resolve();
 		};
 		const fail = (error) => {
 			if (completed) return;
 			completed = true;
+			clearTimers();
 			reject(error instanceof Error ? error : new Error(String(error || assetName)));
 		};
-		try {
-			const pending = frappe.require(assetName, finish);
-			if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
-		} catch (error) {
-			fail(error);
-		}
+		const attemptRequire = () => {
+			if (completed) return;
+			if (!window.frappe || typeof window.frappe.require !== "function") {
+				pollTimer = window.setTimeout(attemptRequire, FRAPPE_REQUIRE_POLL_MS);
+				return;
+			}
+			try {
+				const pending = window.frappe.require(assetName, finish);
+				if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
+			} catch (error) {
+				fail(error);
+			}
+		};
+
+		attemptRequire();
 	});
 }
 
