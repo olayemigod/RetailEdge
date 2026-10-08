@@ -1,0 +1,53 @@
+name: Temporary residual production copy audit
+
+on:
+  push:
+    branches:
+      - audit/production-copy-residual-20261008
+    paths:
+      - .github/workflows/_temp_residual_production_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: audit/production-copy-residual-20261008
+          fetch-depth: 0
+      - name: Inventory likely rendered internal wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path('retailedge/public/js'),
+              Path('retailedge/retailedge/page'),
+          ]
+          extensions = {'.js', '.vue', '.html'}
+          terms = ('ERPNext', 'EdgeSuite', 'CoreEdge', 'Native Desk', 'Frappe', 'Advanced:', 'R8 ', 'R9 ', 'R10 ', 'R11 ', 'R12 ', 'MVP', 'QA ')
+          stringish = re.compile(r'''["'`](?:[^"'`\\]|\\.)*(?:ERPNext|EdgeSuite|CoreEdge|Native Desk|Frappe|Advanced:|R8 |R9 |R10 |R11 |R12 |MVP|QA )(?:[^"'`\\]|\\.)*["'`]''')
+          hits = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file() or path.suffix.lower() not in extensions:
+                      continue
+                  source = path.read_text(encoding='utf-8', errors='replace')
+                  for lineno, line in enumerate(source.splitlines(), 1):
+                      if not any(term in line for term in terms):
+                          continue
+                      # Prefer literal/rendered candidates and runtime error/message calls; skip imports and obvious identifiers.
+                      if stringish.search(line) or any(token in line for token in ('t(', '__(', 'msgprint', 'throw(', 'subtitle:', 'title:', 'label:', 'description:', 'placeholder:', 'textContent', 'statusDetail', '.error =', 'show_alert')):
+                          hits.append((str(path), lineno, line.strip()))
+          for path, lineno, line in hits:
+              print(f'{path}:{lineno}: {line}')
+          print(f'RENDERED_CANDIDATE_COUNT={len(hits)}')
+          PY
+          exit 1
