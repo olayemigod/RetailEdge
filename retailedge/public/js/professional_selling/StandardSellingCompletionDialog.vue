@@ -23,7 +23,7 @@
 					<div class="selling-editor-heading">
 						<div>
 							<strong>Edit draft before completion</strong>
-							<p>Update draft dates, notes and quantities, or add new items. Existing source-linked item identity remains protected.</p>
+							<p>Update draft dates, notes and quantities, remove items you no longer need, or add new items. Existing item identity remains protected on rows you keep.</p>
 						</div>
 					</div>
 					<div class="selling-editor-grid">
@@ -34,7 +34,7 @@
 					</div>
 
 					<div class="selling-edit-items">
-						<div class="selling-edit-item selling-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span></div>
+						<div class="selling-edit-item selling-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Action</span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="selling-edit-item">
 							<strong>{{ row.item_code || row.item_name || "Item" }}</strong>
 							<EdgeInput v-model="row.qty" :id="`selling-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
@@ -47,6 +47,7 @@
 								@select="row.warehouse = $event.value || ''"
 								@clear="row.warehouse = ''"
 							/>
+							<button type="button" class="edge-button edge-button--secondary selling-remove-item" :disabled="busy || draftItems.length <= 1" title="Remove item" @click="removeDraftItem(index)">Remove</button>
 						</div>
 					</div>
 
@@ -83,7 +84,7 @@
 				</div>
 
 				<div v-if="preview.blockers?.length && Number(preview.docstatus || 0) === 0" class="selling-completion-blockers">
-					<strong>Completion needs attention</strong>
+					<strong>Standard completion is blocked</strong>
 					<ul>
 						<li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li>
 					</ul>
@@ -91,8 +92,8 @@
 
 				<div v-if="preview.workflow_readiness?.source === 'frappe'" class="selling-completion-workflow">
 					<div>
-						<span>Approval workflow</span>
-						<strong>{{ preview.workflow_readiness.workflow || "Active approval workflow" }}</strong>
+						<span>Frappe Workflow</span>
+						<strong>{{ preview.workflow_readiness.workflow || "Active Workflow" }}</strong>
 					</div>
 					<p>{{ preview.workflow_readiness.message }}</p>
 					<p v-if="preview.workflow_readiness.current_state">
@@ -245,8 +246,8 @@ export default {
 		},
 		dialogSubtitle() {
 			return Number(this.preview?.docstatus || 0) === 0
-				? "Review the saved draft and submit it, or continue through the active approval workflow."
-				: "Review the saved document and continue with any permitted next step.";
+				? "Review the saved ERPNext draft and complete it through native submission or the active Frappe Workflow."
+				: "Review the saved ERPNext document and continue with any permitted next workflow.";
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
@@ -265,6 +266,7 @@ export default {
 			) return true;
 			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview?.editable_items || [];
+			if (this.draftItems.length !== original.length) return true;
 			return this.draftItems.some((row, index) => (
 				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
 				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
@@ -272,7 +274,7 @@ export default {
 			));
 		},
 		draftValid() {
-			if (!this.preview?.can_edit || !this.draftTransactionDate) return false;
+			if (!this.preview?.can_edit || !this.draftTransactionDate || !this.draftItems.length) return false;
 			if (this.preview.doctype === "Sales Order" && !this.draftSecondaryDate) return false;
 			return this.draftItems.every((row) => Number(row.qty) > 0 && Number(row.rate) >= 0)
 				&& this.newItems.filter((row) => row.item_code).every((row) => Number(row.qty || 0) > 0);
@@ -293,6 +295,10 @@ export default {
 		},
 	},
 	methods: {
+		removeDraftItem(index) {
+			if (this.busy || this.draftItems.length <= 1) return;
+			this.draftItems = this.draftItems.filter((_row, rowIndex) => rowIndex !== index);
+		},
 		async loadPreview() {
 			if (!this.document?.doctype || !this.document?.name || this.loading) return;
 			this.loading = true;
@@ -550,8 +556,9 @@ export default {
 .selling-editor-heading p { margin:.25rem 0 0; color:var(--text-muted); }
 .selling-editor-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
 .selling-edit-items { display:grid; gap:.45rem; }
-.selling-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) minmax(7rem,.6fr) minmax(7rem,.6fr) minmax(12rem,1fr); gap:.6rem; align-items:end; }
+.selling-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) minmax(7rem,.6fr) minmax(7rem,.6fr) minmax(12rem,1fr) auto; gap:.6rem; align-items:end; }
 .selling-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
+.selling-remove-item { align-self:end; min-height:38px; }
 .selling-edit-textarea { display:grid; gap:.35rem; }
 .selling-edit-textarea > span { font-size:.78rem; color:var(--text-muted); }
 .selling-completion-items { display: grid; gap: .45rem; }

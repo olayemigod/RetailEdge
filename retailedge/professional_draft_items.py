@@ -119,15 +119,10 @@ def update_draft_items(
 			selected_price_list=selected_price_list,
 		)
 
+	# Source-linked item identity stays immutable on rows that remain, but an omitted row may be removed from an editable draft.
 	for row_name, row in list(current_rows.items()):
 		if row_name in requested_existing:
 			continue
-		if _source_linked(row):
-			frappe.throw(
-				_("Source-linked item {0} cannot be removed here. Adjust its quantity or use the full form.").format(
-					clean(row.get("item_code")) or row_name
-				)
-			)
 		doc.remove(row)
 
 	if hasattr(doc, "set_missing_values"):
