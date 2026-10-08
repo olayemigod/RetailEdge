@@ -66,7 +66,7 @@ def test_advanced_accounting_shapes_fail_closed():
 		"write_off_outstanding_amount_automatically",
 		"advances",
 		"allocate_advances_automatically",
-		"Advanced ERPNext",
+		"advanced review",
 	):
 		assert contract in source
 
@@ -290,9 +290,9 @@ def test_sales_return_completion_is_explicit_canonical_and_review_only():
 		"def _validate_sales_return_context(",
 		"erpnext_make_sales_return(source.name)",
 		"Standard Sales Return completion requires negative return quantities",
-		"canonical remaining return quantities",
+		"remaining return quantities from the source invoice",
 		'if source_mode == SOURCE_MODE_SALES_RETURN:',
-		'Sales Return quantities remain owned by ERPNext canonical return mapping.',
+		'Sales Return quantities must remain aligned with the source invoice return mapping.',
 		'"is_return": bool(cint(doc.get("is_return")))',
 		'"return_against": _clean(doc.get("return_against"))',
 	):

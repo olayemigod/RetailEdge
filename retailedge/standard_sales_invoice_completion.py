@@ -100,25 +100,25 @@ def _standard_invoice_blockers(
 ) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
-		blockers.append(_("Only draft Sales Invoices can use standard EdgeSuite completion."))
+		blockers.append(_("Only draft Sales Invoices can use guided completion."))
 	if doc.get("amended_from"):
-		blockers.append(_("Amended Sales Invoices require Advanced ERPNext review."))
+		blockers.append(_("Amended Sales Invoices require advanced review."))
 	is_return = bool(cint(doc.get("is_return")) or _clean(doc.get("return_against")))
 	if source_mode == SOURCE_MODE_SALES_RETURN:
 		if not cint(doc.get("is_return")) or not _clean(doc.get("return_against")):
-			blockers.append(_("Sales Return completion requires an ERPNext Return / Credit Note draft linked to its source Sales Invoice."))
+			blockers.append(_("Sales Return completion requires a Return / Credit Note draft linked to its source Sales Invoice."))
 	elif is_return:
 		blockers.append(_("Return / Credit Note completion requires the governed Sales Return workflow."))
 	if cint(doc.get("is_pos")):
-		blockers.append(_("POS Sales Invoice completion requires Advanced ERPNext review."))
+		blockers.append(_("POS Sales Invoice completion requires advanced review."))
 	if cint(doc.get("is_consolidated")):
-		blockers.append(_("Consolidated Sales Invoice completion requires Advanced ERPNext review."))
+		blockers.append(_("Consolidated Sales Invoice completion requires advanced review."))
 	if (
 		cint(doc.get("is_internal_customer"))
 		or _clean(doc.get("represents_company"))
 		or _clean(doc.get("inter_company_invoice_reference"))
 	):
-		blockers.append(_("Internal or inter-company Sales Invoice requires Advanced ERPNext review."))
+		blockers.append(_("Internal or inter-company Sales Invoice requires advanced review."))
 	if not _clean(doc.get("customer")):
 		blockers.append(_("Sales Invoice Customer is required."))
 	if not list(doc.get("items") or []):
@@ -134,13 +134,13 @@ def _standard_invoice_blockers(
 			blockers.append(_("Sales Invoice Posting Date or Due Date is invalid."))
 
 	if flt(doc.get("write_off_amount")) or flt(doc.get("base_write_off_amount")):
-		blockers.append(_("Sales Invoice write-off requires Advanced ERPNext review."))
+		blockers.append(_("Sales Invoice write-off requires advanced review."))
 	if cint(doc.get("write_off_outstanding_amount_automatically")):
-		blockers.append(_("Automatic outstanding write-off requires Advanced ERPNext review."))
+		blockers.append(_("Automatic outstanding write-off requires advanced review."))
 	if list(doc.get("advances") or []):
-		blockers.append(_("Pre-allocated advances require Advanced ERPNext review."))
+		blockers.append(_("Pre-allocated advances require advanced review."))
 	if cint(doc.get("allocate_advances_automatically")):
-		blockers.append(_("Automatic advance allocation requires Advanced ERPNext review."))
+		blockers.append(_("Automatic advance allocation requires advanced review."))
 
 	return list(dict.fromkeys(blockers))
 
@@ -249,7 +249,7 @@ def _validate_sales_return_context(doc, *, company: str, invoice_branch: str) ->
 			"source_type": SALES_INVOICE_DOCTYPE,
 			"source_name": source_name,
 			"source_branch": "",
-			"blockers": [_("Sales Return completion requires a mapped ERPNext Return / Credit Note draft.")],
+			"blockers": [_("Sales Return completion requires a mapped Return / Credit Note draft.")],
 		}
 	if not frappe.db.exists(SALES_INVOICE_DOCTYPE, source_name):
 		blockers.append(_("Source Sales Invoice {0} no longer exists.").format(source_name))
@@ -294,15 +294,15 @@ def _validate_sales_return_context(doc, *, company: str, invoice_branch: str) ->
 			canonical = erpnext_make_sales_return(source.name)
 		except Exception:
 			canonical = None
-			blockers.append(_("ERPNext could not rebuild the canonical Sales Return mapping for validation."))
+			blockers.append(_("The Sales Return mapping could not be rebuilt for validation."))
 		if canonical:
 			if not cint(canonical.get("is_return")) or _clean(canonical.get("return_against")) != source.name:
-				blockers.append(_("ERPNext canonical Sales Return linkage no longer matches this draft."))
+				blockers.append(_("The source Sales Return linkage no longer matches this draft."))
 			if bool(cint(canonical.get("update_stock"))) != bool(cint(doc.get("update_stock"))):
-				blockers.append(_("Return / Credit Note Update Stock no longer matches ERPNext's canonical mapping."))
+				blockers.append(_("Return / Credit Note Update Stock no longer matches the source Sales Return mapping."))
 			if _return_item_signature(rows) != _return_item_signature(list(canonical.get("items") or [])):
 				blockers.append(
-					_("This Return / Credit Note no longer matches ERPNext's canonical remaining return quantities. Use Advanced ERPNext for a partial or customised return.")
+					_("This Return / Credit Note no longer matches the remaining return quantities from the source invoice. Use advanced review for a partial or customised return.")
 				)
 
 	return {
@@ -349,7 +349,7 @@ def _validate_stock_context(
 
 	if list(doc.get("packed_items") or []):
 		blockers.append(
-			_("Product Bundle / packed-item stock posting requires Advanced ERPNext review.")
+			_("Product Bundle / packed-item stock posting requires advanced review.")
 		)
 
 	resolved_branches: set[str] = set()
@@ -365,7 +365,7 @@ def _validate_stock_context(
 			or _clean(row.get("serial_and_batch_bundle"))
 		):
 			blockers.append(
-				_("Serial/Batch controlled stock-updating Sales Invoice requires Advanced ERPNext review.")
+				_("Serial/Batch controlled stock-updating Sales Invoice requires advanced review.")
 			)
 
 		_assert_read("Warehouse", warehouse)
@@ -474,7 +474,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False, source_mode=source_mode)
 	edit_blockers.extend(source_context["blockers"])
 	if source_mode == SOURCE_MODE_SALES_RETURN:
-		edit_blockers.append(_("Sales Return quantities remain owned by ERPNext canonical return mapping."))
+		edit_blockers.append(_("Sales Return quantities must remain aligned with the source invoice return mapping."))
 	edit_blockers.extend(stock_context["blockers"])
 	edit_blockers = list(dict.fromkeys(edit_blockers))
 
@@ -623,7 +623,7 @@ def _sync_manual_due_date_with_payment_schedule(doc, due_value) -> None:
 	frappe.throw(
 		_(
 			"Due Date is controlled by this invoice's Payment Terms schedule. "
-			"Use Advanced ERPNext to change the payment schedule safely."
+			"Use advanced review to change the payment schedule safely."
 		),
 		frappe.ValidationError,
 	)
@@ -632,14 +632,14 @@ def _sync_manual_due_date_with_payment_schedule(doc, due_value) -> None:
 def _assert_saved_invoice_dates(doc, posting_value, due_value) -> None:
 	if getdate(doc.get("posting_date")) != posting_value:
 		frappe.throw(
-			_("ERPNext did not persist the requested Posting Date. Refresh and try again."),
+			_("The requested Posting Date was not saved. Refresh and try again."),
 			frappe.ValidationError,
 		)
 	if due_value and getdate(doc.get("due_date")) != due_value:
 		frappe.throw(
 			_(
-				"ERPNext recalculated the Due Date from Payment Terms. "
-				"Use Advanced ERPNext to review the payment schedule."
+				"The Due Date was recalculated from Payment Terms. "
+				"Use advanced review to review the payment schedule."
 			),
 			frappe.ValidationError,
 		)
@@ -873,8 +873,8 @@ def submit_standard_sales_invoice(
 	if _clean(workflow_readiness.get("source")) == "frappe":
 		frappe.throw(
 			_(
-				"Sales Invoice is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
-			).format(workflow_readiness.get("workflow") or _("Frappe Workflow")),
+				"Sales Invoice is controlled by active Workflow {0}. Use the available workflow action shown here."
+			).format(workflow_readiness.get("workflow") or _("configured workflow")),
 			frappe.ValidationError,
 		)
 
@@ -893,7 +893,7 @@ def submit_standard_sales_invoice(
 	# source billing status and Stock Ledger/valuation when update_stock is enabled.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit Sales Invoice {0}.").format(name))
+		frappe.throw(_("Sales Invoice {0} was not submitted. Refresh and review the document before retrying.").format(name))
 	doc.reload()
 	return {
 		"doctype": SALES_INVOICE_DOCTYPE,
@@ -963,7 +963,7 @@ def apply_standard_sales_invoice_workflow_action(
 	)
 	if _clean(workflow_readiness.get("source")) != "frappe":
 		frappe.throw(
-			_("No active Frappe Workflow owns this Sales Invoice."),
+			_("No active workflow owns this Sales Invoice."),
 			frappe.ValidationError,
 		)
 
