@@ -1,4 +1,4 @@
-name: Temporary bank statement copy audit
+name: Temporary bank statement copy patch
 
 on:
   push:
@@ -8,38 +8,108 @@ on:
       - .github/workflows/_temp_bank_statement_copy_audit.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: fix/bank-statement-import-production-copy-20261008
           fetch-depth: 0
-      - name: Inventory rendered platform wording and stale contracts
+      - name: Apply exact Bank Statement Imports copy replacements
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+
           component = Path('retailedge/public/js/bank_statement_imports/BankStatementImports.vue')
           text = component.read_text(encoding='utf-8')
-          print(f'--- {component} ---')
-          for lineno, line in enumerate(text.splitlines(), 1):
-              if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
-                  print(f'{lineno}: {line}')
-          print('--- candidate stale tests ---')
-          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
-              source = path.read_text(encoding='utf-8')
-              if 'BankStatementImports.vue' not in source and 'bank-statement-imports' not in source:
-                  continue
-              hits = []
-              for lineno, line in enumerate(source.splitlines(), 1):
-                  if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
-                      hits.append(f'{lineno}: {line}')
-              if hits:
-                  print(f'### {path}')
-                  print('\n'.join(hits))
+          replacements = [
+              (
+                  'Required EdgeSuite components are unavailable. Refresh the page or contact your administrator.',
+                  'Required interface components are unavailable. Refresh the page or contact your administrator.',
+                  1,
+              ),
+              (
+                  'Upload, review and convert statement rows into governed ERPNext Bank Transactions without leaving EdgeSuite.',
+                  'Upload, review and convert statement rows into governed Bank Transactions without leaving this workspace.',
+                  1,
+              ),
+              ('Advanced: ERPNext List', 'Advanced: Open Statement Imports', 1),
+              (
+                  'The import document remains the audit record; accounting is created only through ERPNext Bank Transactions.',
+                  'The import document remains the audit record; accounting is created only through Bank Transactions.',
+                  1,
+              ),
+              (
+                  'Create or link ERPNext Bank Transactions for valid statement rows?',
+                  'Create or link Bank Transactions for valid statement rows?',
+                  1,
+              ),
+          ]
+          for old, new, expected in replacements:
+              actual = text.count(old)
+              if actual != expected:
+                  raise SystemExit(f'Expected {expected} occurrence(s) of {old!r}, found {actual}')
+              text = text.replace(old, new)
+
+          for forbidden in (
+              'Required EdgeSuite components are unavailable',
+              'governed ERPNext Bank Transactions without leaving EdgeSuite',
+              'Advanced: ERPNext List',
+              'through ERPNext Bank Transactions',
+              'Create or link ERPNext Bank Transactions',
+          ):
+              if forbidden in text:
+                  raise SystemExit(f'Rendered platform wording remains: {forbidden}')
+
+          for contract in (
+              'const runtime = typeof window !== "undefined" ? (window.EdgeSuiteUI?.components || {}) : {};',
+              'v-if="canUseNativeDesk"',
+              '@click="openNativeList"',
+              '@click="openNativeRecord"',
+              'Advanced: Open Full Record',
+              'frappe.set_route("List", "RetailEdge Payment Statement Import")',
+              'frappe.set_route("Form", "RetailEdge Payment Statement Import"',
+              'retailedge.payment_statement_import_workspace',
+              'confirmAboveEdgeModal',
+              'Create Bank Transactions',
+          ):
+              if contract not in text:
+                  raise SystemExit(f'Safety contract missing after copy patch: {contract}')
+          component.write_text(text, encoding='utf-8')
+
+          contract_path = Path('retailedge/tests/test_bank_statement_import_edgesuite_workspace.py')
+          contract = contract_path.read_text(encoding='utf-8')
+          old = 'assert "Advanced: ERPNext List" in source'
+          new = 'assert "Advanced: Open Statement Imports" in source'
+          if contract.count(old) != 1:
+              raise SystemExit('Unexpected Bank Statement Imports stale assertion count')
+          contract_path.write_text(contract.replace(old, new), encoding='utf-8')
+
+          test_path = Path('retailedge/tests/test_bank_statement_import_production_copy.py')
+          test_path.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[1]\nCOMPONENT = ROOT / "public/js/bank_statement_imports/BankStatementImports.vue"\n\n\ndef test_bank_statement_imports_uses_business_copy_and_preserves_governed_bank_transaction_flow():\n\ttext = COMPONENT.read_text(encoding="utf-8")\n\n\tfor marker in (\n\t\t"Required interface components are unavailable",\n\t\t"governed Bank Transactions without leaving this workspace",\n\t\t"Advanced: Open Statement Imports",\n\t\t"accounting is created only through Bank Transactions",\n\t\t"Create or link Bank Transactions for valid statement rows?",\n\t\t"Advanced: Open Full Record",\n\t):\n\t\tassert marker in text\n\n\tfor forbidden in (\n\t\t"Required EdgeSuite components are unavailable",\n\t\t"governed ERPNext Bank Transactions without leaving EdgeSuite",\n\t\t"Advanced: ERPNext List",\n\t\t"through ERPNext Bank Transactions",\n\t\t"Create or link ERPNext Bank Transactions",\n\t):\n\t\tassert forbidden not in text\n\n\tfor marker in (\n\t\t'window.EdgeSuiteUI?.components',\n\t\t'v-if="canUseNativeDesk"',\n\t\t'@click="openNativeList"',\n\t\t'@click="openNativeRecord"',\n\t\t'frappe.set_route("List", "RetailEdge Payment Statement Import")',\n\t\t'frappe.set_route("Form", "RetailEdge Payment Statement Import"',\n\t\t"retailedge.payment_statement_import_workspace",\n\t\t"confirmAboveEdgeModal",\n\t\t"Create Bank Transactions",\n\t):\n\t\tassert marker in text\n''', encoding='utf-8')
           PY
-          exit 1
+      - name: Verify bounded diff
+        shell: bash
+        run: |
+          git diff --check
+          tracked="$(git diff --name-only)"
+          untracked="$(git ls-files --others --exclude-standard)"
+          printf 'tracked:\n%s\nuntracked:\n%s\n' "$tracked" "$untracked"
+          test "$tracked" = "retailedge/public/js/bank_statement_imports/BankStatementImports.vue
+          retailedge/tests/test_bank_statement_import_edgesuite_workspace.py"
+          test "$untracked" = "retailedge/tests/test_bank_statement_import_production_copy.py"
+      - name: Commit bounded Bank Statement Imports copy slice
+        shell: bash
+        run: |
+          git config user.name "RetailEdge Copy Patch"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            retailedge/public/js/bank_statement_imports/BankStatementImports.vue \
+            retailedge/tests/test_bank_statement_import_edgesuite_workspace.py \
+            retailedge/tests/test_bank_statement_import_production_copy.py
+          git commit -m "fix: productionize Bank Statement Imports copy"
+          git push origin HEAD:fix/bank-statement-import-production-copy-20261008
