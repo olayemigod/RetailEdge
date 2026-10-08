@@ -597,8 +597,10 @@ def get_shift_cash_sales(
 		elif window["pos_profile"] and pos_profile_field:
 			filters[pos_profile_field] = window["pos_profile"]
 
+		invoice_query_succeeded = False
 		try:
 			invoice_rows = frappe.get_all("Sales Invoice", filters=filters, fields=["name"], limit_page_length=0, order_by="creation asc")
+			invoice_query_succeeded = True
 		except Exception:
 			invoice_rows = []
 
@@ -606,9 +608,11 @@ def get_shift_cash_sales(
 		matched_invoices = 0
 		matched_payments = 0
 		matched_invoice_names = set()
+		invoice_processing_failed = False
 		for row in invoice_rows:
 			invoice = _coerce_doc("Sales Invoice", row.name)
 			if not invoice:
+				invoice_processing_failed = True
 				continue
 			if not opening_shift_field and not _within_window(_get_invoice_datetime(invoice), window["shift_start"], window["shift_end"]):
 				continue
@@ -650,6 +654,21 @@ def get_shift_cash_sales(
 					"cash_sales": cash_sales,
 					"source": " + ".join(source_parts) or "sales_invoice.payments",
 					"matched_invoice_count": matched_invoices,
+					"matched_payment_count": matched_payments,
+					"message": payment_entry_result.get("message"),
+				}
+			)
+			return result
+
+		# A successful query through an explicit POS opening-shift link is authoritative
+		# even when it returns no invoices or only non-cash sales. In that case the
+		# correct cash-sales value is a resolved zero, not an unsupported-schema warning.
+		if opening_shift_field and invoice_query_succeeded and not invoice_processing_failed:
+			result.update(
+				{
+					"cash_sales": cash_sales,
+					"source": f"sales_invoice.{opening_shift_field}",
+					"matched_invoice_count": len(invoice_rows),
 					"matched_payment_count": matched_payments,
 					"message": payment_entry_result.get("message"),
 				}
