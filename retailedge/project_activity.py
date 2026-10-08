@@ -87,6 +87,6 @@ def get_project_activity_context(project: str, limit: int = 200) -> dict[str, An
 		"overdue_count": sum(1 for row in tasks if row["status"] == "Overdue"),
 		"can_create_task": bool(frappe.has_permission("Task", "create")),
 		"scope": "Whole Project",
-		"scope_note": "ERPNext Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.",
+		"scope_note": "Project Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.",
 		"source_of_truth": "ERPNext Task",
 	}
