@@ -1,0 +1,45 @@
+name: Temporary stock integrity copy audit
+
+on:
+  push:
+    branches:
+      - fix/stock-accounting-integrity-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_stock_integrity_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/stock-accounting-integrity-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording and stale contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          component = Path('retailedge/public/js/stock_accounting_integrity/StockAccountingIntegrityReport.vue')
+          text = component.read_text(encoding='utf-8')
+          print(f'--- {component} ---')
+          for lineno, line in enumerate(text.splitlines(), 1):
+              if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
+                  print(f'{lineno}: {line}')
+          print('--- candidate stale tests ---')
+          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
+              source = path.read_text(encoding='utf-8')
+              if 'StockAccountingIntegrityReport.vue' not in source:
+                  continue
+              hits = []
+              for lineno, line in enumerate(source.splitlines(), 1):
+                  if any(term in line for term in ('ERPNext', 'EdgeSuite', 'Native Desk', 'Advanced:')):
+                      hits.append(f'{lineno}: {line}')
+              if hits:
+                  print(f'### {path}')
+                  print('\n'.join(hits))
+          PY
+          exit 1
