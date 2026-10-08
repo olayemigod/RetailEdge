@@ -91,23 +91,36 @@ def _ensure_retailedge_page_role_variants() -> None:
 		return
 
 	for page_name in frappe.get_all("Page", filters={"module": "RetailEdge"}, pluck="name"):
-		page = frappe.get_doc("Page", page_name)
-		existing_roles = {row.role for row in page.get("roles") or []}
-		missing_roles: list[str] = []
+		rows = frappe.get_all(
+			"Has Role",
+			filters={"parenttype": "Page", "parent": page_name},
+			fields=["role", "idx"],
+			order_by="idx asc",
+		)
+		existing_roles = {row.role for row in rows}
+		next_idx = max((int(row.idx or 0) for row in rows), default=0) + 1
+		inserted = False
 
 		for canonical, aliases in RETAILEDGE_ROLE_ALIASES.items():
 			variants = (canonical, *aliases)
 			if not existing_roles.intersection(variants):
 				continue
 			for variant in variants:
-				if variant not in existing_roles and frappe.db.exists("Role", variant):
-					missing_roles.append(variant)
+				if variant in existing_roles or not frappe.db.exists("Role", variant):
+					continue
+				frappe.get_doc(
+					{
+						"doctype": "Has Role",
+						"parent": page_name,
+						"parenttype": "Page",
+						"parentfield": "roles",
+						"role": variant,
+						"idx": next_idx,
+					}
+				).db_insert()
+				next_idx += 1
 				existing_roles.add(variant)
+				inserted = True
 
-		if not missing_roles:
-			continue
-
-		for role_name in missing_roles:
-			page.append("roles", {"role": role_name})
-		page.flags.do_not_update_json = True
-		page.save(ignore_permissions=True)
+		if inserted:
+			frappe.get_doc("Page", page_name).clear_cache()
