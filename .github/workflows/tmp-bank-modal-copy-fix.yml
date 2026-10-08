@@ -45,7 +45,7 @@ jobs:
           node --check retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
           git rm .github/workflows/tmp-bank-modal-copy-fix.yml
 
-          { git diff --name-only; } | sort > /tmp/changed.txt
+          git diff --name-only HEAD | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
           .github/workflows/tmp-bank-modal-copy-fix.yml
           retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
