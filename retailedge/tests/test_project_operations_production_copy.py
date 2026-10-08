@@ -7,6 +7,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue"
 ACTIVITY = APP_ROOT / "project_activity.py"
 BUDGET = APP_ROOT / "project_budget.py"
+ROUTING = APP_ROOT / "project_expense_routing.py"
 
 
 class TestProjectOperationsProductionCopy(TestCase):
@@ -14,6 +15,7 @@ class TestProjectOperationsProductionCopy(TestCase):
 		component = COMPONENT.read_text(encoding="utf-8")
 		activity = ACTIVITY.read_text(encoding="utf-8")
 		budget = BUDGET.read_text(encoding="utf-8")
+		routing = ROUTING.read_text(encoding="utf-8")
 
 		for marker in (
 			"Operational and financial visibility across Projects, Tasks, Budgets, Payment Entries and project accounting dimensions.",
@@ -43,6 +45,28 @@ class TestProjectOperationsProductionCopy(TestCase):
 		self.assertIn("Project Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.", activity)
 		self.assertIn("Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.", budget)
 		self.assertIn("Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.", budget)
+		self.assertIn("Open Selected Entry", component)
+		self.assertNotIn("Open Native Entry", component)
+		for marker in (
+			"Create a Material Request for project procurement or material planning.",
+			"Create a Purchase Order for approved project goods or services. Budget controls remain in force.",
+			"Use Purchase Receipt when project materials or goods are physically received against purchasing documents.",
+			"Create a Purchase Invoice for supplier bills, services, materials or other project costs.",
+			"Use Stock Entry for project material issue, consumption, transfer or other stock movement.",
+			"Open the Expense Claim workflow. Assign the Project on applicable expense rows where supported.",
+			"Choose the business document that matches the event.",
+		):
+			self.assertIn(marker, routing)
+		for forbidden in (
+			"Create a native Material Request",
+			"Create a native Purchase Order",
+			"Use native Purchase Receipt",
+			"Create a native Purchase Invoice",
+			"Use native Stock Entry",
+			"Open the native Expense Claim workflow",
+			"Choose the native ERPNext/HRMS document",
+		):
+			self.assertNotIn(forbidden, routing)
 
 		for marker in (
 			"canUseNativeDesk",
