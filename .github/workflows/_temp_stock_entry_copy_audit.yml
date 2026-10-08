@@ -1,0 +1,53 @@
+name: Temporary stock entry copy audit
+
+on:
+  push:
+    branches:
+      - fix/stock-entry-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_stock_entry_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/stock-entry-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory stock-entry platform wording and stale contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          targets = [
+              Path('retailedge/public/js/transfer_stock/TransferStock.vue'),
+              Path('retailedge/public/js/stock_adjustment/StockAdjustment.vue'),
+          ]
+          needles = ('ERPNext', 'Frappe Workflow', 'Advanced:')
+          for path in targets:
+              print(f'--- {path} ---')
+              text = path.read_text(encoding='utf-8')
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  if any(needle in line for needle in needles):
+                      print(f'{lineno}: {line}')
+
+          print('--- candidate stale tests ---')
+          for path in sorted(Path('retailedge/tests').glob('test_*.py')):
+              text = path.read_text(encoding='utf-8')
+              relevant = ('TransferStock.vue' in text or 'StockAdjustment.vue' in text or 'transfer-stock' in text or 'stock-adjustment' in text)
+              if not relevant:
+                  continue
+              hits = []
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  if any(needle in line for needle in needles):
+                      hits.append(f'{lineno}: {line}')
+              if hits:
+                  print(f'### {path}')
+                  print('\n'.join(hits))
+          PY
+          exit 1
