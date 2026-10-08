@@ -38,7 +38,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true });
 		wrapper.page = page; hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.components) throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(DASHBOARD_ASSET);
 		if (typeof window.mountMoneyOverview !== "function") throw new Error("Money Overview bundle is unavailable.");
 		bootLoading.remove();

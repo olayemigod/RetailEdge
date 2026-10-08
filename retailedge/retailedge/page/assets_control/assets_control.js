@@ -39,7 +39,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		wrapper.page = page;
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.createEdgeApp) throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(WORKSPACE_ASSET);
 		if (typeof window.mountNativeERPNextWorkspace !== "function") throw new Error("RetailEdge control workspace bundle is unavailable.");
 		loading.remove();

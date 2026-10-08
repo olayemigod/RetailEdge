@@ -70,7 +70,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) {
-			throw new Error("EdgeSuite UI runtime is unavailable.");
+			throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		}
 		await requireAsync(STOCK_MOVEMENT_ASSET);
 		if (typeof window.mountStockMovementHistory !== "function") {

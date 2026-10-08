@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import getdate, nowdate
 
 from retailedge import purchase_reporting
+from retailedge.supplier_payables_branch_fallback import merge_legacy_branch_payables
 
 
 def _current_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
@@ -35,6 +36,11 @@ def _with_current_balance_metadata(dataset: dict[str, Any]) -> dict[str, Any]:
 	}
 
 
+def _build_current_dataset(filters: frappe._dict) -> dict[str, Any]:
+	dataset = purchase_reporting._build_supplier_payables_dataset(filters)
+	return merge_legacy_branch_payables(dataset, filters)
+
+
 @frappe.whitelist()
 def get_supplier_payables(
 	filters: dict[str, Any] | str | None = None,
@@ -45,7 +51,7 @@ def get_supplier_payables(
 	from retailedge.report_sorting import apply_materialized_report_sort
 
 	resolved = _current_filters(filters)
-	dataset = purchase_reporting._build_supplier_payables_dataset(resolved)
+	dataset = _build_current_dataset(resolved)
 	apply_materialized_report_sort(dataset, sort, "supplier-payables")
 	return _with_current_balance_metadata(
 		purchase_reporting._page_response(dataset, page=page, page_size=page_size)
@@ -57,5 +63,5 @@ def get_supplier_payables_export(
 	filters: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
 	resolved = _current_filters(filters)
-	dataset = purchase_reporting._build_supplier_payables_dataset(resolved)
+	dataset = _build_current_dataset(resolved)
 	return _with_current_balance_metadata(purchase_reporting._export_response(dataset))
