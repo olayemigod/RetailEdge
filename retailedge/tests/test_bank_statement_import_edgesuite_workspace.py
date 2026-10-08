@@ -143,7 +143,7 @@ def test_statement_form_cascades_company_branch_and_bank_account():
 
 def test_native_doctype_is_advanced_fallback_only_from_edgesuite_workspace():
     source = COMPONENT.read_text(encoding="utf-8")
-    assert "Advanced: ERPNext List" in source
+    assert "Advanced: Open Statement Imports" in source
     assert "Advanced: Open Full Record" in source
     assert 'frappe.set_route("List", "RetailEdge Payment Statement Import")' in source
     assert 'frappe.set_route("Form", "RetailEdge Payment Statement Import"' in source

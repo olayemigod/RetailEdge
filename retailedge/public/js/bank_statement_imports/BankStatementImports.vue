@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="statement-fallback">
 		<strong>Bank Statement Imports could not start.</strong>
-		<span>Required EdgeSuite components are unavailable. Refresh the page or contact your administrator.</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -20,10 +20,10 @@
 				<div>
 					<p class="eyebrow">Money & Banking</p>
 					<h2>Bank Statement Imports</h2>
-					<p>Upload, review and convert statement rows into governed ERPNext Bank Transactions without leaving EdgeSuite.</p>
+					<p>Upload, review and convert statement rows into governed Bank Transactions without leaving this workspace.</p>
 				</div>
 				<div class="statement-header-actions">
-					<button v-if="canUseNativeDesk" type="button" class="edge-button" @click="openNativeList">Advanced: ERPNext List</button>
+					<button v-if="canUseNativeDesk" type="button" class="edge-button" @click="openNativeList">Advanced: Open Statement Imports</button>
 					<button v-if="canCreate" type="button" class="edge-button edge-button--primary" @click="openNew">New Statement Import</button>
 				</div>
 			</header>
@@ -51,7 +51,7 @@
 					<div class="section-heading">
 						<div>
 							<h3>Statement import queue</h3>
-							<p>The import document remains the audit record; accounting is created only through ERPNext Bank Transactions.</p>
+							<p>The import document remains the audit record; accounting is created only through Bank Transactions.</p>
 						</div>
 						<span>{{ rows.length }} shown</span>
 					</div>
@@ -430,7 +430,7 @@ export default {
 			finally { this.actionBusy = false; }
 		},
 		confirmImportRows() { confirmAboveEdgeModal("Import statement rows from the attached file?", () => this.runAction("import-rows")); },
-		confirmCreateBankTransactions() { confirmAboveEdgeModal("Create or link ERPNext Bank Transactions for valid statement rows?", () => this.runAction("create-bank")); },
+		confirmCreateBankTransactions() { confirmAboveEdgeModal("Create or link Bank Transactions for valid statement rows?", () => this.runAction("create-bank")); },
 		closeResult() { this.resultOpen = false; this.actionResult = null; },
 		async loadDuplicates() {
 			const name = this.detail?.document?.name; if (!name) return;
