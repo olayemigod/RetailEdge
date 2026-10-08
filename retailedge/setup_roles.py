@@ -5,8 +5,6 @@ from collections.abc import Iterable
 import frappe
 
 
-# These compact names are the long-standing internal RetailEdge role IDs used by
-# existing DocType permissions and installed sites. Keep them stable.
 RETAILEDGE_ROLE_NAMES = (
 	"RetailEdgeCashier",
 	"RetailEdgeManager",
@@ -14,10 +12,8 @@ RETAILEDGE_ROLE_NAMES = (
 	"RetailEdgeAuditor",
 )
 
-# Only aliases already present in the product contract are preserved here. Do
-# not invent additional spellings: every extra Role becomes another permission
-# identity that must be governed and migrated later.
 RETAILEDGE_ROLE_ALIASES = {
+	"RetailEdgeCashier": ("RetailEdge Cashier",),
 	"RetailEdgeManager": ("RetailEdge Manager",),
 	"RetailEdgeBranchManager": ("RetailEdge Branch Manager",),
 	"RetailEdgeAuditor": ("RetailEdge Auditor",),
@@ -57,12 +53,6 @@ def user_has_retailedge_role(role_name: str, *, user: str | None = None) -> bool
 
 
 def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
-	"""Ensure stable RetailEdge roles and preserve known alias compatibility.
-
-	Existing Role records are never renamed, deleted, or have ``desk_access``
-	changed here. New missing canonical/compatibility Role records are created as
-	Desk-enabled roles so RetailEdge operational users remain valid System Users.
-	"""
 	for role_name in ALL_RETAILEDGE_ROLE_NAMES:
 		if frappe.db.exists("Role", role_name):
 			continue
@@ -77,9 +67,10 @@ def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
 	if migrate_alias_assignments:
 		_add_canonical_roles_for_alias_assignments()
 
+	_ensure_retailedge_page_role_variants()
+
 
 def _add_canonical_roles_for_alias_assignments():
-	"""Add canonical roles to alias-only users without removing any assignment."""
 	for canonical, aliases in RETAILEDGE_ROLE_ALIASES.items():
 		users = frappe.get_all(
 			"Has Role",
@@ -93,3 +84,30 @@ def _add_canonical_roles_for_alias_assignments():
 				continue
 			user_doc.append("roles", {"role": canonical})
 			user_doc.save(ignore_permissions=True)
+
+
+def _ensure_retailedge_page_role_variants() -> None:
+	if not frappe.db.exists("DocType", "Page"):
+		return
+
+	for page_name in frappe.get_all("Page", filters={"module": "RetailEdge"}, pluck="name"):
+		page = frappe.get_doc("Page", page_name)
+		existing_roles = {row.role for row in page.get("roles") or []}
+		missing_roles: list[str] = []
+
+		for canonical, aliases in RETAILEDGE_ROLE_ALIASES.items():
+			variants = (canonical, *aliases)
+			if not existing_roles.intersection(variants):
+				continue
+			for variant in variants:
+				if variant not in existing_roles and frappe.db.exists("Role", variant):
+					missing_roles.append(variant)
+				existing_roles.add(variant)
+
+		if not missing_roles:
+			continue
+
+		for role_name in missing_roles:
+			page.append("roles", {"role": role_name})
+		page.flags.do_not_update_json = True
+		page.save(ignore_permissions=True)

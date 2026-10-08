@@ -26,29 +26,37 @@ class TestPrereportingRoleContract(unittest.TestCase):
 				"RetailEdgeAuditor",
 			),
 		)
+		self.assertEqual(canonical_retailedge_role("RetailEdge Cashier"), "RetailEdgeCashier")
 		self.assertEqual(canonical_retailedge_role("RetailEdge Manager"), "RetailEdgeManager")
 		self.assertEqual(canonical_retailedge_role("RetailEdge Branch Manager"), "RetailEdgeBranchManager")
 		self.assertEqual(canonical_retailedge_role("RetailEdge Auditor"), "RetailEdgeAuditor")
 		self.assertEqual(canonical_retailedge_role("RetailEdgeCashier"), "RetailEdgeCashier")
 
 	def test_only_observed_spaced_names_are_compatibility_aliases(self):
+		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeCashier"], ("RetailEdge Cashier",))
 		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeManager"], ("RetailEdge Manager",))
 		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeBranchManager"], ("RetailEdge Branch Manager",))
 		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeAuditor"], ("RetailEdge Auditor",))
-		self.assertNotIn("RetailEdgeCashier", RETAILEDGE_ROLE_ALIASES)
+		self.assertEqual(
+			set(retailedge_role_variants("RetailEdge Cashier")),
+			{"RetailEdgeCashier", "RetailEdge Cashier"},
+		)
 		self.assertEqual(
 			set(retailedge_role_variants("RetailEdge Manager")),
 			{"RetailEdgeManager", "RetailEdge Manager"},
 		)
-		self.assertEqual(retailedge_role_variants("RetailEdgeCashier"), ("RetailEdgeCashier",))
-		self.assertEqual(len(ALL_RETAILEDGE_ROLE_NAMES), 7)
+		self.assertEqual(
+			set(retailedge_role_variants("RetailEdgeCashier")),
+			{"RetailEdgeCashier", "RetailEdge Cashier"},
+		)
+		self.assertEqual(len(ALL_RETAILEDGE_ROLE_NAMES), 8)
 
 	def test_role_sets_can_be_compared_without_alias_drift(self):
 		self.assertEqual(
 			canonicalize_retailedge_roles(
-				{"RetailEdge Manager", "RetailEdgeBranchManager", "Accounts Manager"}
+				{"RetailEdge Cashier", "RetailEdge Manager", "RetailEdgeBranchManager", "Accounts Manager"}
 			),
-			{"RetailEdgeManager", "RetailEdgeBranchManager", "Accounts Manager"},
+			{"RetailEdgeCashier", "RetailEdgeManager", "RetailEdgeBranchManager", "Accounts Manager"},
 		)
 
 	def test_migration_is_additive_and_does_not_rename_or_remove_roles(self):
