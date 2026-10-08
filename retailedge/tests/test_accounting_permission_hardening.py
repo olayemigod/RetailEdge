@@ -21,7 +21,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 	def test_sales_invoice_recent_list_and_source_search_are_context_scoped(self):
 		source = self.read("professional_sales_invoice.py")
 		self.assertIn("_operating_document_filters", source)
-		self.assertIn('_operating_document_filters("Sales Invoice", company=company, branch=branch)', source)
+		self.assertIn('filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)', source)
 		self.assertIn("company, branch, _warehouse = _validate_context(values)", source)
 		self.assertIn('filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))', source)
 		self.assertIn("_validate_source_context(source, source_label=source_doctype)", source)
