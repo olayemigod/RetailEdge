@@ -77,7 +77,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	const bootLoading = document.createElement("div"); bootLoading.className = "edge-boot-loading p-6 text-center text-muted"; bootLoading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(bootLoading);
 	try {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true }); wrapper.page = page; hideNativePageSidebar(wrapper);
-		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(RECEIVABLES_ASSET); if (typeof window.mountCustomerReceivablesPage !== "function") throw new Error("Customer Receivables bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-customer-receivables-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountCustomerReceivablesPage(root);
 		wrapper._retailedgeVueComponent = wrapper._retailedgeVueApp?.__retailedgeRootComponent || root.__vue_app__?._instance?.proxy || wrapper._retailedgeVueApp?._instance?.proxy || null;

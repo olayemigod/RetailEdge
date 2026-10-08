@@ -28,7 +28,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	const loading = document.createElement("div"); loading.className = "edge-boot-loading p-6 text-center text-muted"; loading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(loading);
 	try {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true }); wrapper.page = page; hideNativePageSidebar(wrapper);
-		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(REPORTING_ASSET); if (typeof window.mountDailySalesAuditPage !== "function") throw new Error("Daily Sales Audit bundle is unavailable.");
 		loading.remove(); const root = document.createElement("div"); root.className = "retailedge-daily-sales-audit-root"; page.body.append(root); await window.mountDailySalesAuditPage(root);
 	} catch (error) { loading.remove(); renderLoadError(wrapper, error); }
