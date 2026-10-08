@@ -51,7 +51,7 @@ def test_direct_stock_mode_is_explicit_and_not_a_generic_update_stock_checkbox()
     assert 'values.update_stock = updateStock ? 1 : 0' in source
     assert '"Receive & Bill Now"' in source
     assert '"Bill Only"' in source
-    assert "ERPNext will post the received stock when this Purchase Invoice is submitted." in source
+    assert "Submitting this Purchase Invoice records the received stock." in source
     assert '<input v-model="values.update_stock" type="checkbox"' not in source
 
 
