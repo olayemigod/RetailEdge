@@ -642,7 +642,7 @@
 						setNotice(result.message || result.status || t("Reconciliation processed."), result.status === "Executed" ? "success" : "warning");
 						await refresh();
 					} catch (error) {
-						state.reconcile.error = error?.message || t("ERPNext reconciliation could not be completed.");
+						state.reconcile.error = error?.message || t("Reconciliation could not be completed.");
 					} finally {
 						state.reconcile.busy = false;
 					}
@@ -933,7 +933,7 @@
 						subtitle: reviewReadOnly
 							? t("Historical review snapshot — displayed read-only.")
 							: confirmed
-								? t("Confirmed match — reconciliation remains governed by approval and fresh ERPNext safety checks.")
+								? t("Confirmed match — reconciliation remains governed by approval and fresh accounting safety checks.")
 								: t("Review accounting identity before confirming this match."),
 						size: "xl",
 						busy: state.review.busy,
@@ -1035,8 +1035,8 @@
 					}, {
 						default: () => [
 							h("div", { class: "retailedge-bank-final-warning" }, [
-								h("strong", t("ERPNext remains the reconciliation authority.")),
-								h("p", t("RetailEdge will run a fresh safety check against current accounting data before ERPNext Banking reconciliation. Submitted accounting documents will not be mutated.")),
+								h("strong", t("Reconciliation uses the current accounting records.")),
+								h("p", t("RetailEdge will run a fresh safety check against current accounting data before reconciliation. Submitted accounting documents will not be mutated.")),
 							]),
 							h("label", { class: "edge-checkbox retailedge-bank-confirm-check" }, [
 								h("input", {
@@ -1051,7 +1051,7 @@
 						],
 						footer: () => [
 							actionButton(t("Cancel"), "secondary", () => { state.reconcile.open = false; }, { disabled: state.reconcile.busy }),
-							actionButton(t("Reconcile Through ERPNext"), "primary", executeReconciliation, { disabled: state.reconcile.busy || !state.reconcile.confirmed }),
+							actionButton(t("Reconcile Match"), "primary", executeReconciliation, { disabled: state.reconcile.busy || !state.reconcile.confirmed }),
 						],
 					});
 				}
@@ -1077,7 +1077,7 @@
 						header: () => h(EdgePageHeader, {
 							eyebrow: t("RetailEdge Banking"),
 							title: t("Bank Matching & Reconciliation"),
-							subtitle: t("Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking."),
+							subtitle: t("Match bank inflows and outflows to valid accounting events, then complete reconciliation."),
 						}, {
 							actions: () => [
 								actionButton(t("Banking Setup & Readiness"), "secondary", () => global.frappe.set_route("banking-readiness")),
@@ -1122,11 +1122,11 @@
 	function boot(wrapper) {
 		const runtime = edgeRuntime();
 		if (!runtime?.createEdgeApp || !runtime?.Vue) {
-			global.frappe.throw(t("EdgeSuite UI runtime is required for Bank Matching & Reconciliation."));
+			global.frappe.throw(t("The Bank Matching & Reconciliation interface is unavailable. Refresh the page or contact your administrator."));
 		}
 		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeInput", "EdgeDropdown", "EdgeStatCard", "EdgeStatusBadge", "EdgeModal", "EdgeTextarea"];
 		const missing = required.filter((name) => !runtime.getComponent(name));
-		if (missing.length) global.frappe.throw(t("EdgeSuite UI is missing required banking components: {0}", [missing.join(", ")]));
+		if (missing.length) global.frappe.throw(t("Bank Matching & Reconciliation cannot start because required interface components are unavailable. Refresh the page or contact your administrator.", [missing.join(", ")]));
 
 		const page = global.frappe.ui.make_app_page({
 			parent: wrapper,
