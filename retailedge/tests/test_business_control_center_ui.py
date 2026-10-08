@@ -100,8 +100,21 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 	def test_ui_does_not_claim_follow_up_resolves_business_truth(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn("Follow-up is tracking, not resolution", source)
-		self.assertIn("authoritative ERPNext record/report", source)
+		self.assertIn("authoritative business record/report", source)
 		self.assertIn("separate Action Follow Up record", source)
+
+	def test_business_control_copy_hides_internal_release_and_platform_wording(self):
+		page = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
+		backend = (APP_ROOT / "business_control_center.py").read_text()
+		self.assertIn("Liquidity, profitability, budget and spend-governance signals", page)
+		self.assertIn("No separate financial signals are visible for the current scope", page)
+		self.assertIn("authoritative business record/report", page)
+		self.assertNotIn("Net-new R9", page)
+		self.assertNotIn("No separate R9", page)
+		self.assertNotIn("authoritative ERPNext record/report", page)
+		self.assertNotIn("ERPNext/Frappe drill-through", page)
+		self.assertIn("Financial intelligence is temporarily unavailable for this scope.", backend)
+		self.assertNotIn("R9 financial intelligence is temporarily unavailable for this scope.", backend)
 
 
 if __name__ == "__main__":

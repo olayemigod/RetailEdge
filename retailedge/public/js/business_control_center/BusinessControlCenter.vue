@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Business Control Centre"
 			eyebrow="Business Control & Financial Intelligence"
-			subtitle="One prioritised view of operational exceptions and management financial signals. ERPNext remains authoritative for accounting balances and submitted transactions."
+			subtitle="One prioritised view of operational exceptions and management financial signals. Accounting balances and submitted transactions remain governed by the underlying business records."
 			:summary="summaryCards"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -97,14 +97,14 @@
 					<div v-else class="control-empty">No warning controls match the current scope and follow-up filters.</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Financial Signals" description="Net-new R9 liquidity, profitability, budget and spend-governance signals. Receivables and payables remain owned by their existing Action Centre controls.">
+				<EdgeDashboardSection title="Financial Signals" description="Liquidity, profitability, budget and spend-governance signals. Receivables and payables remain owned by their existing Action Centre controls.">
 					<div v-if="financialSignals.length" class="control-list">
 						<div v-for="item in financialSignals" :key="itemKey(item)" class="signal-row">
 							<span><strong>{{ item.label }}</strong><small>{{ item.family || sourceLabel(item.source) }}</small></span>
 							<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 						</div>
 					</div>
-					<div v-else class="control-empty">No separate R9 financial signals are visible for the current scope.</div>
+					<div v-else class="control-empty">No separate financial signals are visible for the current scope.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Operational Sources" description="These existing Action Centre sources were excluded by permission or scope rules.">
@@ -116,7 +116,7 @@
 				<EdgeDashboardSection title="Control rules" description="Management follow-up never changes the accounting or operational truth." span="2">
 					<div class="control-note">
 						<strong>Follow-up is tracking, not resolution.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze update only the separate Action Follow Up record. Resolve the underlying condition in its owning workflow or authoritative ERPNext record/report. Authorised advanced users can open retained ERPNext/Frappe drill-through in a new tab.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the separate Action Follow Up record. Resolve the underlying condition in its owning workflow or authoritative business record/report. Authorised advanced users can open permitted full-record or report drill-through in a new tab.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>

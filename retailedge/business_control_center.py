@@ -37,7 +37,7 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 		"Writes must re-resolve the fingerprint against the same permission-aware scope before persistence."
 	)
 	payload["metadata"]["scope_contract"] = (
-		"R9 warnings reuse the Branch scope resolved by Action Centre; a blank client Branch cannot widen a branch-restricted user's scope."
+		"Financial warnings reuse the Branch scope resolved by Action Centre; a blank client Branch cannot widen a branch-restricted user's scope."
 	)
 	return payload
 
@@ -100,7 +100,7 @@ def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
 		# Bounded scans, unavailable accounting attribution, or a misconfigured
 		# financial-intelligence source must not take down the canonical operational
 		# Action Centre. Keep the source failure visible instead of fabricating data.
-		return _unavailable_early_warning(str(exc) or _("R9 financial intelligence is temporarily unavailable for this scope."))
+		return _unavailable_early_warning(str(exc) or _("Financial intelligence is temporarily unavailable for this scope."))
 
 
 def _unavailable_early_warning(reason: str, *, permission_isolated: bool = False) -> dict[str, Any]:
@@ -159,10 +159,10 @@ def _build_business_control_center(
 		},
 		"metadata": {
 			"composition": "existing_action_center_plus_r9_early_warning",
-			"duplicate_domains": "Collections and Supplier Obligations remain owned by the existing Action Centre receivables/payables sources and are not duplicated from R9 early warning.",
-			"follow_up_contract": "R9-only warnings are read-only in the pure composition helper; the runtime endpoint decorates all visible items through the existing Action Follow Up store after permission-aware resolution.",
-			"accounting_truth": "Business Control Centre composes existing ERPNext/RetailEdge reporting and control engines; it does not create a ledger or mutate accounting documents.",
-			"financial_payload_contract": "Liquidity and budget/spend payloads already computed by R9 early warning are exposed for presentation without triggering duplicate financial queries.",
+			"duplicate_domains": "Collections and Supplier Obligations remain owned by the existing Action Centre receivables/payables sources and are not duplicated from financial early warning.",
+			"follow_up_contract": "Financial-only warnings are read-only in the pure composition helper; the runtime endpoint decorates all visible items through the existing Action Follow Up store after permission-aware resolution.",
+			"accounting_truth": "Business Control Centre composes existing reporting and control engines; it does not create a ledger or mutate accounting documents.",
+			"financial_payload_contract": "Liquidity and budget/spend payloads already computed by the financial warning engine are exposed for presentation without triggering duplicate financial queries.",
 		},
 	}
 
