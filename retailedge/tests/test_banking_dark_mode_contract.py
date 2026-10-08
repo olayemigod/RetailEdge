@@ -16,7 +16,7 @@ class BankingDarkModeContractTests(unittest.TestCase):
 
 		self.assertIn("/assets/retailedge/css/bank_matching_dark_contrast.css", loader)
 		self.assertIn('loadVersionedStylesheet(DARK_CONTRAST_CSS, "dark-contrast")', loader)
-		self.assertIn('STYLE_VERSION = "20260827-5"', loader)
+		self.assertIn('STYLE_VERSION = "20261005-4"', loader)
 		self.assertIn(':root[data-edge-appearance="dark"] .retailedge-bank-layout', css)
 		self.assertIn(":has(.retailedge-bank-layout)", css)
 		self.assertIn(".layout-main-section", css)
