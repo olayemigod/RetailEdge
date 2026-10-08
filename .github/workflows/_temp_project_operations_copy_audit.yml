@@ -1,4 +1,4 @@
-name: Temporary Project Operations copy audit
+name: Temporary Project Operations copy patch
 
 on:
   push:
@@ -8,26 +8,140 @@ on:
       - .github/workflows/_temp_project_operations_copy_audit.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: fix/project-operations-production-copy-20261008
           fetch-depth: 0
-      - name: Inventory rendered platform wording
+      - name: Apply Project Operations production-copy replacements
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('retailedge/public/js/project_operations/ProjectOperations.vue')
-          source = path.read_text(encoding='utf-8')
-          terms = ('ERPNext', 'Native Desk', 'EdgeSuite create navigation')
-          for lineno, line in enumerate(source.splitlines(), 1):
-              if any(term in line for term in terms):
-                  print(f'{lineno}: {line}')
+
+          component_path = Path('retailedge/public/js/project_operations/ProjectOperations.vue')
+          activity_path = Path('retailedge/project_activity.py')
+          budget_path = Path('retailedge/project_budget.py')
+          contract_path = Path('retailedge/tests/test_project_operations_ui_contract.py')
+          regression_path = Path('retailedge/tests/test_project_operations_production_copy.py')
+
+          def replace_exact(source, old, new, count):
+              actual = source.count(old)
+              if actual != count:
+                  raise SystemExit(f'Expected {count} occurrence(s) of {old!r}, found {actual}')
+              return source.replace(old, new)
+
+          component = component_path.read_text(encoding='utf-8')
+          replacements = [
+              ('Operational and financial visibility over ERPNext Project, Task, Budget, Payment Entry and native project accounting dimensions.', 'Operational and financial visibility across Projects, Tasks, Budgets, Payment Entries and project accounting dimensions.', 1),
+              ('Open ERPNext Project', 'Open Project', 2),
+              ('Advanced workflow: Native Desk access is required', 'Advanced project access is required', 8),
+              ('Create an ERPNext Task', 'Create a Task', 1),
+              ('Open ERPNext Budgets', 'Open Budgets', 1),
+              ('Create an ERPNext Budget', 'Create a Budget', 1),
+              ('Open native project spend and material entry', 'Open project spend and material entry', 1),
+              ('Create a project receipt draft for native review', 'Create a project receipt draft for review', 1),
+              ('ERPNext Project remains authoritative for project identity, costing, billing and margin.', 'Project identity, costing, billing and margin follow the project accounting records.', 1),
+              ('Tracked Cost is the transparent sum of these ERPNext Project cost components.', 'Tracked Cost is the transparent sum of the project cost components shown above.', 1),
+              ('ERPNext Task remains the operational source of truth.', 'Project Tasks drive this operational view.', 1),
+              ('No ERPNext Tasks are linked to this Project.', 'No Tasks are linked to this Project.', 1),
+              ('ERPNext Budget remains the governance authority.', 'Project Budget controls govern this spending view.', 1),
+              ('You do not have permission to read ERPNext Budgets for this Project.', 'You do not have permission to read Project Budgets.', 1),
+              ('No ERPNext Project Budgets found.', 'No Project Budgets found.', 1),
+              ('ERPNext Budget Stop/Warn/Ignore controls remain authoritative for project purchasing and expense governance; this workflow does not bypass them.', 'Budget Stop/Warn/Ignore controls remain in force for project purchasing and expense governance; this workflow does not bypass them.', 1),
+              ('Read-only view of permitted ERPNext Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project. Cancelled documents are excluded.', 'Read-only view of permitted Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project. Cancelled documents are excluded.', 1),
+              ('Submitted incoming ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not revenue recognition.', 'Submitted incoming Payment Entries explicitly linked to this Project. This is cash movement, not revenue recognition.', 1),
+              ('Submitted outgoing ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not an expense/P&amp;L measure.', 'Submitted outgoing Payment Entries explicitly linked to this Project. This is cash movement, not an expense/P&amp;L measure.', 1),
+              ('Project Funds is a derived management view. ERPNext Project, Task, Budget and project-linked native documents remain the source of truth; no project wallet, task ledger, budget ledger or separate accounting ledger is maintained here. Project Cash In/Out is not a bank balance, revenue, expense or profit measure.', 'Project Funds is a derived management view built from Project, Task, Budget and linked accounting documents. It does not maintain a separate project wallet, task ledger, budget ledger or accounting ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure.', 1),
+              ('EdgeSuite create navigation is unavailable.', 'Create navigation is unavailable. Refresh the page or contact your administrator.', 1),
+          ]
+          for old, new, count in replacements:
+              component = replace_exact(component, old, new, count)
+          component_path.write_text(component, encoding='utf-8')
+
+          activity = activity_path.read_text(encoding='utf-8')
+          activity = replace_exact(
+              activity,
+              '"scope_note": "ERPNext Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.",',
+              '"scope_note": "Project Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.",',
+              1,
+          )
+          activity_path.write_text(activity, encoding='utf-8')
+
+          budget = budget_path.read_text(encoding='utf-8')
+          budget = replace_exact(
+              budget,
+              '"scope_note": "ERPNext Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.",',
+              '"scope_note": "Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.",',
+              1,
+          )
+          budget = replace_exact(
+              budget,
+              '"policy": "Budget enforcement remains ERPNext-native; RetailEdge does not bypass Stop/Warn/Ignore controls.",',
+              '"policy": "Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.",',
+              1,
+          )
+          budget_path.write_text(budget, encoding='utf-8')
+
+          contract = contract_path.read_text(encoding='utf-8')
+          contract = replace_exact(contract, 'self.assertIn("Open ERPNext Project", component)', 'self.assertIn("Open Project", component)', 1)
+          contract_path.write_text(contract, encoding='utf-8')
+
+          regression_path.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\nfrom unittest import TestCase\n\nAPP_ROOT = Path(__file__).resolve().parents[1]\nCOMPONENT = APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue"\nACTIVITY = APP_ROOT / "project_activity.py"\nBUDGET = APP_ROOT / "project_budget.py"\n\n\nclass TestProjectOperationsProductionCopy(TestCase):\n\tdef test_project_operations_uses_business_copy_and_preserves_workflow_contracts(self):\n\t\tcomponent = COMPONENT.read_text(encoding="utf-8")\n\t\tactivity = ACTIVITY.read_text(encoding="utf-8")\n\t\tbudget = BUDGET.read_text(encoding="utf-8")\n\n\t\tfor marker in (\n\t\t\t"Operational and financial visibility across Projects, Tasks, Budgets, Payment Entries and project accounting dimensions.",\n\t\t\t"Project identity, costing, billing and margin follow the project accounting records.",\n\t\t\t"Project Tasks drive this operational view.",\n\t\t\t"Project Budget controls govern this spending view.",\n\t\t\t"Read-only view of permitted Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project.",\n\t\t\t"Submitted incoming Payment Entries explicitly linked to this Project.",\n\t\t\t"Submitted outgoing Payment Entries explicitly linked to this Project.",\n\t\t\t"Create navigation is unavailable. Refresh the page or contact your administrator.",\n\t\t):\n\t\t\tself.assertIn(marker, component)\n\n\t\tfor forbidden in (\n\t\t\t"Open ERPNext Project",\n\t\t\t"Advanced workflow: Native Desk access is required",\n\t\t\t"ERPNext Project remains authoritative",\n\t\t\t"ERPNext Task remains the operational source of truth",\n\t\t\t"ERPNext Budget remains the governance authority",\n\t\t\t"ERPNext Project Budgets",\n\t\t\t"ERPNext Payment Entries",\n\t\t\t"EdgeSuite create navigation is unavailable",\n\t\t):\n\t\t\tself.assertNotIn(forbidden, component)\n\n\t\tself.assertIn("Project Tasks and Milestones are whole-project operational records; Branch filtering does not narrow them.", activity)\n\t\tself.assertNotIn("ERPNext Tasks and Milestones are whole-project operational records", activity)\n\t\tself.assertIn("Project Budgets are whole-project controls. Branch filtering does not alter Budget scope.", budget)\n\t\tself.assertIn("Budget enforcement uses the configured Stop/Warn/Ignore controls; this workflow does not bypass them.", budget)\n\t\tself.assertNotIn("ERPNext Project Budgets are whole-project controls", budget)\n\t\tself.assertNotIn("Budget enforcement remains ERPNext-native", budget)\n\n\t\tfor marker in (\n\t\t\t"canUseNativeDesk",\n\t\t\t"window.EdgeSuiteUI?.openCreateSurface",\n\t\t\t"retailedge.project_search.search_projects",\n\t\t\t"retailedge.project_operations.get_project_funds_context",\n\t\t\t"retailedge.project_activity.get_project_activity_context",\n\t\t\t"retailedge.project_budget.get_project_budget_context",\n\t\t\t"retailedge.project_receipts.create_project_receipt_draft",\n\t\t\t"retailedge.project_expense_routing.get_project_expense_routes",\n\t\t\t'frappe.set_route("query-report", "RetailEdge Project Financial Control"',\n\t\t):\n\t\t\tself.assertIn(marker, component)\n\n\nif __name__ == "__main__":\n\timport unittest\n\n\tunittest.main()\n''', encoding='utf-8')
           PY
-          exit 1
+      - name: Verify bounded Project Operations patch
+        shell: bash
+        run: |
+          python -m py_compile retailedge/project_activity.py retailedge/project_budget.py retailedge/tests/test_project_operations_production_copy.py
+          python retailedge/tests/test_project_operations_ui_contract.py
+          python retailedge/tests/test_project_operations_production_copy.py
+          python - <<'PY'
+          from pathlib import Path
+          component = Path('retailedge/public/js/project_operations/ProjectOperations.vue').read_text(encoding='utf-8')
+          forbidden = (
+              'Operational and financial visibility over ERPNext',
+              'Open ERPNext Project',
+              'Create an ERPNext Task',
+              'Open ERPNext Budgets',
+              'Create an ERPNext Budget',
+              'Advanced workflow: Native Desk access is required',
+              'ERPNext Project remains authoritative',
+              'ERPNext Task remains the operational source of truth',
+              'ERPNext Budget remains the governance authority',
+              'EdgeSuite create navigation is unavailable',
+          )
+          leftovers = [item for item in forbidden if item in component]
+          if leftovers:
+              raise SystemExit(f'Forbidden rendered copy remains: {leftovers}')
+          for marker in (
+              'canUseNativeDesk',
+              'window.EdgeSuiteUI?.openCreateSurface',
+              'retailedge.project_receipts.create_project_receipt_draft',
+              'retailedge.project_expense_routing.get_project_expense_routes',
+          ):
+              if marker not in component:
+                  raise SystemExit(f'Safety marker missing: {marker}')
+          PY
+          tracked="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            retailedge/project_activity.py \
+            retailedge/project_budget.py \
+            retailedge/public/js/project_operations/ProjectOperations.vue \
+            retailedge/tests/test_project_operations_ui_contract.py | sort)"
+          test "$tracked" = "$expected"
+          test -f retailedge/tests/test_project_operations_production_copy.py
+          untracked="$(git ls-files --others --exclude-standard)"
+          test "$untracked" = "retailedge/tests/test_project_operations_production_copy.py"
+      - name: Commit Project Operations production-copy fix
+        shell: bash
+        run: |
+          git config user.name "olayemigod"
+          git config user.email "olayemigod@gmail.com"
+          git add retailedge/public/js/project_operations/ProjectOperations.vue retailedge/project_activity.py retailedge/project_budget.py retailedge/tests/test_project_operations_ui_contract.py retailedge/tests/test_project_operations_production_copy.py
+          git commit -m "fix: productionize Project Operations copy"
+          git push origin HEAD:fix/project-operations-production-copy-20261008
