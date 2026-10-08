@@ -69,7 +69,6 @@ jobs:
                   1,
               ),
               ('erpnext_default: "ERPNext default"', 'erpnext_default: "Default Selling Price List"', 1),
-              ('] [source] || "ERPNext pricing"', '] [source] || "Standard pricing"', 0),
               ('}[source] || "ERPNext pricing"', '}[source] || "Standard pricing"', 1),
               (
                   'Leave Make Sale? Unsaved changes are kept temporarily in this browser session, but no ERPNext draft has been created yet.',
@@ -92,8 +91,7 @@ jobs:
               actual = text.count(old)
               if actual != expected:
                   raise SystemExit(f"Expected {expected} occurrence(s) of {old!r}, found {actual}")
-              if expected:
-                  text = text.replace(old, new)
+              text = text.replace(old, new)
 
           if "ERPNext" in text:
               raise SystemExit("Unexpected visible ERPNext wording remains in MakeSale.vue")
@@ -122,10 +120,11 @@ jobs:
         shell: bash
         run: |
           git diff --check
-          changed="$(git diff --name-only)"
-          printf '%s\n' "$changed"
-          test "$changed" = "retailedge/public/js/make_sale/MakeSale.vue
-          retailedge/tests/test_make_sale_production_copy.py"
+          tracked="$(git diff --name-only)"
+          untracked="$(git ls-files --others --exclude-standard)"
+          printf 'tracked:\n%s\nuntracked:\n%s\n' "$tracked" "$untracked"
+          test "$tracked" = "retailedge/public/js/make_sale/MakeSale.vue"
+          test "$untracked" = "retailedge/tests/test_make_sale_production_copy.py"
 
       - name: Commit feature changes
         shell: bash
