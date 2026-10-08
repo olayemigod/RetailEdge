@@ -41,7 +41,7 @@
 					<div>
 						<span class="make-sale-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span>
 						<h3>{{ savedDocument.name }}</h3>
-						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Sales Invoice. Continue with the next valid customer workflow or start another sale." : "The ERPNext Sales Invoice draft now owns the saved work. You can complete it or start another sale." }}</p>
+						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "The Sales Invoice has been submitted. Continue with the next valid customer workflow or start another sale." : "The Sales Invoice draft now owns the saved work. You can complete it or start another sale." }}</p>
 					</div>
 					<div class="make-sale-inline-actions">
 						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" type="button" class="edge-button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
@@ -71,7 +71,7 @@
 						<div>
 							<span class="make-sale-kicker">Workflow & submission</span>
 							<h3>Complete {{ savedDocument.name }}</h3>
-							<p>Approval and submission stay on this persistent page. Quick Sale only creates the ERPNext draft.</p>
+							<p>Approval and submission stay on this persistent page. Quick Sale only creates the Sales Invoice draft.</p>
 						</div>
 						<span class="item-count">{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow" : "Ready to submit" }}</span>
 					</div>
@@ -79,7 +79,7 @@
 					<div v-if="workflowError" class="guided-invoice-error" role="alert">{{ workflowError }}</div>
 
 					<div v-if="savedDocument.workflow_readiness?.source === 'frappe'" class="guided-invoice-warning" role="status">
-						<strong>{{ savedDocument.workflow_readiness.workflow || "Frappe Workflow" }}</strong>
+						<strong>{{ savedDocument.workflow_readiness.workflow || "Approval Workflow" }}</strong>
 						<div v-if="savedDocument.workflow_readiness.current_state">
 							Current state: <strong>{{ savedDocument.workflow_readiness.current_state }}</strong>
 						</div>
@@ -95,12 +95,12 @@
 
 					<div class="make-sale-actions">
 						<div>
-							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "ERPNext submission" }}</strong>
+							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "Submission controls" }}</strong>
 							<small v-if="savedDocument.workflow_readiness?.source === 'frappe'">
-								Only actions currently permitted by Frappe Workflow are shown.
+								Only actions currently permitted by the active approval workflow are shown.
 							</small>
 							<small v-else>
-								Submit uses ERPNext's normal Sales Invoice validation, accounting and stock posting rules.
+								Submit uses the normal Sales Invoice validation, accounting and stock posting rules.
 							</small>
 						</div>
 						<div class="make-sale-inline-actions">
@@ -127,7 +127,7 @@
 								{{ workflowBusy ? "Submitting..." : "Submit Sales Invoice" }}
 							</button>
 							<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="workflowBusy" @click="openAdvancedNative">
-								Advanced: ERPNext
+								Advanced: Open Sales Invoice
 							</button>
 						</div>
 					</div>
@@ -267,11 +267,11 @@
 					<div class="make-sale-actions">
 						<div>
 							<strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong>
-							<small v-if="hasUnsavedChanges">This browser session keeps a temporary recovery copy until the ERPNext draft is saved.</small>
-							<small v-else>Complete the required fields, then save the ERPNext draft.</small>
+							<small v-if="hasUnsavedChanges">This browser session keeps a temporary recovery copy until the Sales Invoice draft is saved.</small>
+							<small v-else>Complete the required fields, then save the Sales Invoice draft.</small>
 						</div>
 						<div class="make-sale-inline-actions">
-							<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button>
+							<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="openAdvancedNative">Advanced: Open Sales Invoice</button>
 							<button v-if="editingSavedDraft" type="button" class="edge-button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button>
 							<button v-else type="button" class="edge-button" :disabled="saving" @click="resetForm">Reset</button>
 							<button
@@ -365,10 +365,10 @@ function sourceLabel(source) {
 		user_permission: "User-assigned Price List",
 		pos_profile: "Assigned POS Profile",
 		party_default: "Customer default",
-		erpnext_default: "ERPNext default",
+		erpnext_default: "Default Selling Price List",
 		standard_price_list: "Standard Selling",
 		item_fallback: "Item fallback",
-	}[source] || "ERPNext pricing";
+	}[source] || "Standard pricing";
 }
 
 function cloneValues(values) {
@@ -628,7 +628,7 @@ export default {
 				return;
 			}
 			frappe.confirm(
-				"Leave Make Sale? Unsaved changes are kept temporarily in this browser session, but no ERPNext draft has been created yet.",
+				"Leave Make Sale? Unsaved changes are kept temporarily in this browser session, but no Sales Invoice draft has been created yet.",
 				navigate
 			);
 		},
@@ -1347,8 +1347,8 @@ export default {
 				return;
 			}
 			const message = this.savedDocument?.name
-				? "Open the saved Sales Invoice in Advanced ERPNext? Unsaved page edits are not carried until you update the draft."
-				: "Open the advanced ERPNext Sales Invoice form? Save this Make Sale draft first if you want the current page entries recorded in ERPNext.";
+				? "Open the saved Sales Invoice in the advanced form? Unsaved page edits are not carried until you update the draft."
+				: "Open the advanced Sales Invoice form? Save this Make Sale draft first if you want the current page entries recorded.";
 			frappe.confirm(message, navigate);
 		},
 	},
