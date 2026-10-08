@@ -116,7 +116,7 @@ class TestC22StockAccountingIntegrity(unittest.TestCase):
 		self.assertIn("EdgeAppShell", component)
 		self.assertIn("EdgeReportShell", component)
 		self.assertIn("EdgeExportMenu", component)
-		self.assertIn("Open ERPNext Advanced Report", component)
+		self.assertIn("Open Advanced Report", component)
 		self.assertIn("Company-wide accounting control", component)
 		self.assertIn("stock-accounting-integrity", bundle)
 		self.assertIn('if key == "stock-accounting-integrity":', actions)
