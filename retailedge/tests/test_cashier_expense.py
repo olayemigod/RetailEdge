@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import retailedge.tests._cashier_expense_regression_suite as _legacy
@@ -23,6 +25,89 @@ def _set_up_cashier_expense_service_read_permission(self):
 
 
 _legacy.CashierExpenseServiceTests.setUp = _set_up_cashier_expense_service_read_permission
+
+
+class CashierContextTests(_legacy.CashierContextTests):
+	@patch("retailedge.cashier_context.resolve_cash_payment_account")
+	@patch("retailedge.cashier_context._get_shift_window")
+	@patch("retailedge.cashier_context._coerce_doc")
+	@patch("retailedge.cashier_context.frappe.get_meta")
+	@patch("retailedge.cashier_context.frappe.get_all")
+	@patch(
+		"retailedge.cashier_context._has_doctype",
+		side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"},
+	)
+	def test_get_shift_cash_sales_ignores_non_cash_and_cancelled_invoices(
+		self,
+		_mock_has_doctype,
+		mock_get_all,
+		mock_get_meta,
+		mock_coerce_doc,
+		mock_shift_window,
+		mock_payment_account,
+	):
+		opening_shift = SimpleNamespace(
+			doctype="POS Opening Shift",
+			name="OPEN-1",
+			company="Demo Company",
+			pos_profile="PROFILE-1",
+			user="cashier@example.com",
+			period_start_date=datetime(2026, 5, 11, 9, 0, 0),
+		)
+		invoice = SimpleNamespace(
+			doctype="Sales Invoice",
+			name="SINV-1",
+			posting_date=datetime(2026, 5, 11, 10, 0, 0),
+			posting_time=None,
+			payments=[
+				_legacy._Row(mode_of_payment="Card", account="Bank - DEMO", amount=200, base_amount=200),
+			],
+		)
+		mock_shift_window.return_value = {
+			"opening_shift": opening_shift,
+			"closing_shift": None,
+			"company": "Demo Company",
+			"pos_profile": "PROFILE-1",
+			"user": "cashier@example.com",
+			"shift_start": datetime(2026, 5, 11, 9, 0, 0),
+			"shift_end": datetime(2026, 5, 11, 11, 0, 0),
+		}
+
+		def _meta_for(doctype):
+			if doctype == "Sales Invoice":
+				return SimpleNamespace(
+					has_field=lambda field: field
+					in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"}
+				)
+			if doctype == "Sales Invoice Payment":
+				return SimpleNamespace(
+					has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"}
+				)
+			return SimpleNamespace(has_field=lambda field: False)
+
+		mock_get_meta.side_effect = _meta_for
+
+		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "Sales Invoice":
+				return [SimpleNamespace(name="SINV-1")]
+			if doctype == "Payment Entry":
+				return []
+			return []
+
+		mock_get_all.side_effect = _fake_get_all
+		mock_coerce_doc.return_value = invoice
+		mock_payment_account.return_value = {
+			"payment_account": "Cash - DEMO",
+			"mode_of_payment": "Cash",
+			"source": "mode_of_payment_account",
+			"message": None,
+		}
+		result = get_shift_cash_sales(opening_shift="OPEN-1", company="Demo Company", pos_profile="PROFILE-1")
+		self.assertEqual(result["cash_sales"], 0)
+		self.assertEqual(result["matched_invoice_count"], 1)
+		self.assertEqual(result["matched_payment_count"], 0)
+		self.assertEqual(result["source"], "sales_invoice.posa_pos_opening_shift")
+		self.assertIsNone(result["message"])
 
 
 R2_NATIVE_SECTIONS = [
