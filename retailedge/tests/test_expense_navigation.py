@@ -52,7 +52,6 @@ class TestExpenseNavigation(unittest.TestCase):
 		self.assertIn("cashierOnly: true", component)
 		self.assertIn('this.filters.view_mode = "cashier"', component)
 
-
 	def test_cashier_expenses_shows_permission_aware_expense_register_button(self):
 		from pathlib import Path
 
@@ -64,20 +63,18 @@ class TestExpenseNavigation(unittest.TestCase):
 			/ "cashier_expenses"
 			/ "cashier_expenses.js"
 		).read_text(encoding="utf-8")
-		page_py = (
+		component = (
 			app_root
-			/ "retailedge"
-			/ "page"
-			/ "cashier_expenses"
-			/ "cashier_expenses.py"
+			/ "public"
+			/ "js"
+			/ "expense_register"
+			/ "ExpenseRegisterReport.vue"
 		).read_text(encoding="utf-8")
 
-		self.assertIn("can_open_expense_register", page_js)
-		self.assertIn('add_inner_button(__("Expense Register")', page_js)
-		self.assertIn('frappe.set_route("expense-register")', page_js)
-		self.assertIn("def can_open_expense_register()", page_py)
-		self.assertIn("is_permitted()", page_py)
-
+		self.assertNotIn("page.add_inner_button", page_js)
+		self.assertIn('v-if="config.cashierOnly && hasPageTarget(\'expense-register\')"', component)
+		self.assertIn('@click="openExpenseRegister">Expense Register</button>', component)
+		self.assertIn('frappe.set_route("expense-register")', component)
 
 	def test_expense_categories_are_not_duplicated_in_setup(self):
 		groups = {group["key"]: group for group in NAVIGATION_GROUPS}
