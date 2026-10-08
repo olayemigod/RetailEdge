@@ -166,6 +166,7 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 	posting_reference = getattr(doc, "posting_reference", None)
 	expense_status = getattr(doc, "expense_status", None)
 	ledger_status = getattr(doc, "ledger_status", None)
+	posting_complete = ledger_status == "Posted" and bool(posting_reference)
 	company = getattr(doc, "company", None)
 	amount = flt(getattr(doc, "amount", 0))
 	posting_date = getattr(doc, "expense_date", None)
@@ -173,33 +174,34 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 	credit_account = getattr(doc, "payment_account", None) or settings.get("default_payable_account")
 	cost_center = getattr(doc, "cost_center", None)
 
-	if settings["posting_document_type"] != "Journal Entry":
-		reasons.append("Cashier Expenses can currently post only through Journal Entry.")
-	if doc.docstatus == 2 or expense_status == "Cancelled":
-		reasons.append("Cancelled expenses are not eligible for ledger posting.")
-	if ledger_status == "Posted":
-		reasons.append("This cashier expense is already marked as Posted.")
-	if amount <= 0:
-		reasons.append("Amount must be greater than zero before posting can be prepared.")
-	if not company:
-		reasons.append("Company is required for posting readiness.")
-	if not posting_date:
-		reasons.append("Expense Date is required for posting readiness.")
-	if not debit_account:
-		reasons.append("Expense Account is required for posting readiness.")
-	if not credit_account:
-		reasons.append("Payment Account is required for posting readiness.")
+	if not posting_complete:
+		if settings["posting_document_type"] != "Journal Entry":
+			reasons.append("Cashier Expenses can currently post only through Journal Entry.")
+		if doc.docstatus == 2 or expense_status == "Cancelled":
+			reasons.append("Cancelled expenses are not eligible for ledger posting.")
+		if ledger_status == "Posted":
+			reasons.append("This cashier expense is already marked as Posted.")
+		if amount <= 0:
+			reasons.append("Amount must be greater than zero before posting can be prepared.")
+		if not company:
+			reasons.append("Company is required for posting readiness.")
+		if not posting_date:
+			reasons.append("Expense Date is required for posting readiness.")
+		if not debit_account:
+			reasons.append("Expense Account is required for posting readiness.")
+		if not credit_account:
+			reasons.append("Payment Account is required for posting readiness.")
 
-	if debit_account:
-		reasons.extend(_validate_debit_account(debit_account, company))
-	if credit_account:
-		reasons.extend(_validate_credit_account(credit_account, company))
+		if debit_account:
+			reasons.extend(_validate_debit_account(debit_account, company))
+		if credit_account:
+			reasons.extend(_validate_credit_account(credit_account, company))
 
-	reasons.extend(cashier_expense_workflow_posting_reasons(doc, settings=settings))
-	if expense_status == "Rejected" and not settings["allow_rejected_posting"]:
-		reasons.append("Rejected cashier expenses are blocked from posting by RetailEdge Settings.")
-	if posting_reference:
-		reasons.append("This cashier expense already has a posting reference linked.")
+		reasons.extend(cashier_expense_workflow_posting_reasons(doc, settings=settings))
+		if expense_status == "Rejected" and not settings["allow_rejected_posting"]:
+			reasons.append("Rejected cashier expenses are blocked from posting by RetailEdge Settings.")
+		if posting_reference:
+			reasons.append("This cashier expense already has a posting reference linked.")
 
 	remarks = _render_remarks(
 		settings["remark_template"],
@@ -228,10 +230,11 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 			}
 		)
 
-	posting_ready = not reasons
+	posting_ready = False if posting_complete else not reasons
 	preview = {
 		"expense_name": doc.name,
 		"posting_ready": posting_ready,
+		"posting_complete": posting_complete,
 		"posting_block_reason": "\n".join(reasons) if reasons else None,
 		"accounting_posting_enabled": settings["enabled"],
 		"posting_mode": settings["posting_mode"],
@@ -257,19 +260,22 @@ def get_cashier_expense_posting_preview(expense_name):
 
 def refresh_cashier_expense_posting_readiness(expense_name, *, log_action=True):
 	preview = get_cashier_expense_posting_preview(expense_name)
+	values = {
+		"posting_ready": 1 if preview["posting_ready"] else 0,
+		"posting_block_reason": preview.get("posting_block_reason"),
+		"resolved_debit_account": preview.get("debit_account"),
+		"resolved_credit_account": preview.get("credit_account"),
+		"resolved_posting_cost_center": preview.get("cost_center"),
+		"posting_preview": preview.get("posting_preview"),
+		"last_readiness_refresh_on": now_datetime(),
+		"last_readiness_refresh_by": frappe.session.user,
+	}
+	if preview.get("posting_complete"):
+		values["user_message"] = None
 	frappe.db.set_value(
 		"RetailEdge Cashier Expense",
 		expense_name,
-		{
-			"posting_ready": 1 if preview["posting_ready"] else 0,
-			"posting_block_reason": preview.get("posting_block_reason"),
-			"resolved_debit_account": preview.get("debit_account"),
-			"resolved_credit_account": preview.get("credit_account"),
-			"resolved_posting_cost_center": preview.get("cost_center"),
-			"posting_preview": preview.get("posting_preview"),
-			"last_readiness_refresh_on": now_datetime(),
-			"last_readiness_refresh_by": frappe.session.user,
-		},
+		values,
 		update_modified=False,
 	)
 	if log_action:
@@ -282,6 +288,7 @@ def refresh_cashier_expense_posting_readiness(expense_name, *, log_action=True):
 			context={
 				"posting_ready": preview.get("posting_ready"),
 				"posting_document_type": preview.get("posting_document_type"),
+				"posting_complete": preview.get("posting_complete", False),
 			},
 		)
 	return preview
@@ -300,6 +307,8 @@ def refresh_pending_cashier_expense_posting_readiness(filters=None):
 	blocked = 0
 	for row in rows:
 		preview = refresh_cashier_expense_posting_readiness(row.name)
+		if preview.get("posting_complete"):
+			continue
 		if preview.get("posting_ready"):
 			updated += 1
 		else:
