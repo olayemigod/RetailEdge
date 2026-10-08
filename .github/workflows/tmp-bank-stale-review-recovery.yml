@@ -26,8 +26,6 @@ jobs:
           set -euo pipefail
           OLD=13436564763f3d930fea4d493b52473ce5a9ba0b
 
-          # These two production files had no later semantic changes on version-16
-          # beyond the copy hardening explicitly reapplied below.
           git show "$OLD:retailedge/public/js/bank_matching_edgesuite_workspace.js" > retailedge/public/js/bank_matching_edgesuite_workspace.js
           git show "$OLD:retailedge/reconciliation_approval.py" > retailedge/reconciliation_approval.py
           git show "$OLD:retailedge/public/js/bank_matching_edgesuite_completion_adapter.js" > retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
@@ -139,8 +137,7 @@ jobs:
           node --check retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
           python -m compileall -q retailedge/reconciliation_approval.py retailedge/tests/test_bank_historical_review_hydration.py retailedge/tests/test_bank_to_match_stale_review_recovery.py retailedge/tests/test_bank_matching_completion_modal_contract.py
 
-          # Guard against accidental scope expansion.
-          git diff --name-only | sort > /tmp/changed.txt
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort > /tmp/changed.txt
           cat > /tmp/expected.txt <<'EOF'
           retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
           retailedge/public/js/bank_matching_edgesuite_workspace.js
