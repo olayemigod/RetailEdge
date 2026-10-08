@@ -160,18 +160,12 @@ def merge_legacy_branch_payables(dataset: dict[str, Any], filters: frappe._dict)
 
 	rows = list(dataset.get("rows") or [])
 	existing_invoices = {str(row.get("invoice") or "") for row in rows}
-	resolved_count = 0
-	unresolved_count = 0
 	in_scope_headers = 0
 	added_count = 0
 
 	for candidate in candidates:
 		resolved_branch = _resolve_legacy_branch(candidate.name)
-		if not resolved_branch:
-			unresolved_count += 1
-			continue
-		resolved_count += 1
-		if resolved_branch not in allowed:
+		if not resolved_branch or resolved_branch not in allowed:
 			continue
 		in_scope_headers += 1
 		if candidate.name in existing_invoices:
@@ -189,15 +183,7 @@ def merge_legacy_branch_payables(dataset: dict[str, Any], filters: frappe._dict)
 	)
 	scan = dict(dataset.get("scan") or {})
 	scan["invoices"] = int(scan.get("invoices") or 0) + in_scope_headers
-	scan.update(
-		{
-			"legacy_branch_candidates": len(candidates),
-			"legacy_branch_resolved": resolved_count,
-			"legacy_branch_unresolved": unresolved_count,
-			"legacy_branch_in_scope": in_scope_headers,
-			"legacy_branch_rows_added": added_count,
-		}
-	)
+	scan["legacy_branch_rows_added"] = added_count
 	return {
 		**dataset,
 		"rows": rows,
