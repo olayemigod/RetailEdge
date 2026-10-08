@@ -71,8 +71,17 @@
 				</section>
 
 				<section v-if="domainWarnings.length" class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Availability</p><h3>Planning information unavailable</h3></div></div>
-					<div class="warning-grid"><div v-for="item in domainWarnings" :key="item.key" class="warning-card"><strong>{{ item.title }}</strong><span>{{ item.reason }}</span></div></div>
+					<div class="panel-heading">
+						<div><p class="eyebrow">Availability</p><h3>Planning setup & availability</h3></div>
+						<span class="muted">Unavailable areas stay separate so the rest of the plan can still be used safely.</span>
+					</div>
+					<div class="warning-grid">
+						<div v-for="item in domainWarnings" :key="item.key" class="warning-card">
+							<strong>{{ item.title }}</strong>
+							<span>{{ item.reason }}</span>
+							<small v-if="item.guidance">{{ item.guidance }}</small>
+						</div>
+					</div>
 				</section>
 
 				<section class="panel">
@@ -83,8 +92,15 @@
 				</section>
 
 				<section class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Budget Governance</p><h3>Budget reference</h3></div><span class="muted">Planning uses your existing submitted budgets; it does not create a second budget ledger.</span></div>
-					<div v-if="budgetReason" class="empty">{{ budgetReason }}</div>
+					<div class="panel-heading"><div><p class="eyebrow">Budget Governance</p><h3>Budget reference</h3></div><span class="muted">Planning uses existing submitted budgets; missing budget comparison does not block the rest of the forecast.</span></div>
+					<div v-if="budgetReason" class="setup-message">
+						<strong>Budget comparison unavailable</strong>
+						<span>{{ budgetReason }}</span>
+						<small>{{ budgetGuidance }}</small>
+						<div v-if="budgetAction" class="setup-actions">
+							<button class="edge-button" type="button" @click="handleBudgetAction">{{ budgetAction.label }}</button>
+						</div>
+					</div>
 					<div v-else class="metric-grid compact"><div v-for="card in budgetSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div>
 				</section>
 
@@ -154,13 +170,41 @@ export default {
 	}; },
 	computed: {
 		scopeLabel() { return this.scope.branch ? `Branch: ${this.scope.branch}` : (this.scope.company ? `Company: ${this.scope.company}` : "Permitted planning scope"); },
-		domainWarnings() { return Object.entries(this.domains || {}).filter(([, d]) => d && d.available === false).map(([key, d]) => ({ key, title: d.title || key.replace(/_/g, " "), reason: customerFacingCopy(d.reason, "Not available for this selection.") })); },
+		domainWarnings() {
+			return Object.entries(this.domains || {})
+				.filter(([key, d]) => key !== "budget" && d && d.available === false)
+				.map(([key, d]) => {
+					const item = { key, title: d.title || key.replace(/_/g, " "), reason: customerFacingCopy(d.reason, "Not available for this selection."), guidance: "" };
+					if (this.filters.branch && ["expenses", "profitability"].includes(key)) {
+						item.reason = "Branch-level accounting forecasts are not available in the current planning model because posted accounting entries do not yet have a verified Branch accounting basis.";
+						item.guidance = "Branch sales, cash and inventory planning can still be used. If your role permits Company-wide access, clear Branch above and Apply Plan to include accounting expense and profitability forecasts.";
+					}
+					return item;
+				});
+		},
 		inventoryRows() { return this.domains?.inventory?.available ? (this.domains.inventory.rows || []) : []; },
 		inventoryReason() { const d = this.domains?.inventory; return d && d.available === false ? customerFacingCopy(d.reason) : ""; },
 		cashCommitments() { return this.domains?.cash?.available ? (this.domains.cash.commitment_rows || []) : []; },
 		cashCommitmentReason() { const d = this.domains?.cash; if (!d) return ""; if (d.available === false) return customerFacingCopy(d.reason, "Cash planning is unavailable."); const meta = d.metadata?.known_due_schedule || {}; return meta.available === false ? customerFacingCopy(meta.reason, "Known due commitments are unavailable.") : ""; },
 		budgetSummary() { return this.domains?.budget?.available ? (this.domains.budget.summary || []) : []; },
 		budgetReason() { const d = this.domains?.budget; return d && d.available === false ? customerFacingCopy(d.reason) : ""; },
+		budgetGuidance() {
+			if (!this.budgetReason) return "";
+			const reason = String(this.domains?.budget?.reason || "").toLowerCase();
+			if (reason.includes("permission")) return "Budget comparison is optional. The rest of the forecast remains available; ask an administrator or authorised finance user if budget visibility is required.";
+			if (reason.includes("expense categories")) return "The rest of the forecast remains available. Budget comparison needs active Expense Categories mapped to valid Expense Accounts and Cost Centers.";
+			if (reason.includes("submitted budget") || reason.includes("budget matches")) return "The rest of the forecast remains available. Budget comparison needs a submitted Budget matching the mapped Expense Accounts, Cost Centers and selected period.";
+			if (reason.includes("unavailable on this site")) return "Budget comparison is optional and is not enabled on this site. Sales, cash, expense and inventory planning can continue without it.";
+			return "Budget comparison is optional and does not block the rest of Forecasting & Planning. Review the availability reason before changing any accounting setup.";
+		},
+		canOpenBusinessSetup() { return this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === "retailedge-setup"); },
+		budgetAction() {
+			if (!this.budgetReason) return null;
+			const reason = String(this.domains?.budget?.reason || "").toLowerCase();
+			if (reason.includes("expense categories") && this.canOpenBusinessSetup) return { type: "page", target: "retailedge-setup", label: "Open Business Setup" };
+			if ((reason.includes("submitted budget") || reason.includes("budget matches")) && this.canUseNativeDesk) return { type: "doctype", target: "Budget", label: "Review Budgets" };
+			return null;
+		},
 		exportDataset() { return { title: "Forecasting & Planning", filename: `ProcessEdge Retail Forecasting Planning ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { return Object.entries({ company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", sales_adjustment_percent: "Sales Adjustment (%)", expense_adjustment_percent: "Expense Adjustment (%)", cash_adjustment_percent: "Cash Adjustment (%)", inventory_safety_percent: "Inventory Safety (%)" }).map(([key, label]) => ({ label, value: this.filters[key] })).filter((x) => x.value !== "" && x.value !== null && x.value !== undefined); },
 		exportMetadata() { return [{ label: "Accounting Source", value: "Posted accounting records" }, { label: "Budget Source", value: "Submitted budgets" }, { label: "Scenario Model", value: "Planning assumptions only" }]; },
@@ -210,6 +254,11 @@ export default {
 			});
 		},
 		openScenario() { if (this.canUseNativeDesk && this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
+		handleBudgetAction() {
+			if (!this.budgetAction) return;
+			if (this.budgetAction.type === "page") { frappe.set_route(this.budgetAction.target); return; }
+			if (this.budgetAction.type === "doctype" && this.canUseNativeDesk) window.open("/app/budget", "_blank", "noopener,noreferrer");
+		},
 		loadExportDataset() { return call(this.exportMethod, { filters: { ...this.filters } }); },
 		money(value) { return value === null || value === undefined || value === "" ? "—" : format_currency(Number(value || 0), this.companyCurrency || undefined); },
 		percent(value) { return value === null || value === undefined || value === "" ? "—" : `${Number(value).toFixed(1)}%`; },
@@ -238,7 +287,11 @@ export default {
 .metric-card { border:1px solid var(--border-color,#dfe3e8); border-radius:10px; padding:.8rem; display:grid; gap:.3rem; }
 .metric-card span { font-size:.76rem; opacity:.7; } .metric-card strong { font-size:1.05rem; }
 .table-wrap { overflow:auto; margin-top:.75rem; } table { width:100%; border-collapse:collapse; min-width:760px; } th,td { padding:.65rem; border-bottom:1px solid var(--border-color,#e8ebee); text-align:left; vertical-align:top; } th { font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; } .num { text-align:right; font-variant-numeric:tabular-nums; } td small { display:block; opacity:.65; margin-top:.1rem; }
-.warning-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:.75rem; margin-top:.75rem; } .warning-card { border:1px solid var(--border-color,#dfe3e8); border-radius:10px; padding:.8rem; display:grid; gap:.3rem; }
+.warning-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; margin-top:.75rem; }
+.warning-card,.setup-message { border:1px solid var(--border-color,#dfe3e8); border-radius:10px; padding:.8rem; display:grid; gap:.4rem; }
+.warning-card small,.setup-message small { opacity:.72; line-height:1.45; }
+.setup-message { margin-top:.75rem; }
+.setup-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.25rem; }
 .pill { display:inline-block; border-radius:999px; padding:.2rem .55rem; font-size:.74rem; font-weight:700; } .pill.risk { background:rgba(220,38,38,.12); } .pill.ok { background:rgba(22,163,74,.12); }
 .empty { padding:.8rem 0; opacity:.72; } .alert.error,.planning-fallback { border:1px solid rgba(220,38,38,.35); border-radius:10px; padding:1rem; } .planning-fallback { display:grid; gap:.35rem; }
 @media (max-width:720px) { .planning-header,.panel-heading { flex-direction:column; } .header-actions { width:100%; flex-wrap:wrap; } }
