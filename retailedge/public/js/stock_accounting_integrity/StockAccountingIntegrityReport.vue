@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Stock & Accounting Integrity"
 			eyebrow="Accounting Control"
-			subtitle="Read-only ERPNext stock-versus-accounting exceptions. Values and mismatch logic come from the native Stock and Account Value Comparison report."
+			subtitle="Read-only stock-versus-accounting exceptions. Values and mismatch logic come from the Stock and Account Value Comparison report."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -30,8 +30,8 @@
 			:formatter="formatCell"
 			:pageSizes="[25, 50, 100]"
 			emptyTitle="No stock/accounting mismatches"
-			emptyDescription="ERPNext returned no stock-versus-accounting exceptions for this Company, Stock Account, and date range."
-			loadingMessage="Checking ERPNext stock and accounting integrity…"
+			emptyDescription="No stock-versus-accounting exceptions were returned for this Company, Stock Account, and date range."
+			loadingMessage="Checking stock and accounting integrity…"
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
@@ -45,10 +45,10 @@
 						class="edge-secondary-button"
 						type="button"
 						:disabled="!canUseNativeDesk"
-						:title="canUseNativeDesk ? 'Open ERPNext Stock and Account Value Comparison' : 'Advanced workflow: Native Desk access is required'"
+						:title="canUseNativeDesk ? 'Open Stock and Account Value Comparison' : 'Advanced report access is required'"
 						@click="openNativeReport"
 					>
-						{{ canUseNativeDesk ? "Open ERPNext Advanced Report" : "Advanced: ERPNext Report" }}
+						{{ canUseNativeDesk ? "Open Advanced Report" : "Advanced Report Unavailable" }}
 					</button>
 					<EdgeExportMenu
 						v-if="rows.length"
@@ -104,9 +104,9 @@
 				<span>Company-wide accounting control · no Branch allocation</span>
 				<span v-if="scope.account">Stock Account: {{ scope.account }}</span>
 				<span v-if="scope.from_date && scope.as_on_date">{{ formatDate(scope.from_date) }} to {{ formatDate(scope.as_on_date) }}</span>
-				<span v-if="scan.mismatch_rows !== undefined">{{ scan.mismatch_rows }} ERPNext exception row{{ scan.mismatch_rows === 1 ? "" : "s" }}</span>
+				<span v-if="scan.mismatch_rows !== undefined">{{ scan.mismatch_rows }} exception row{{ scan.mismatch_rows === 1 ? "" : "s" }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
-				<span>Read-only review: corrections and reposting remain in authorised ERPNext workflows.</span>
+				<span>Read-only review: corrections and reposting remain in authorised accounting workflows.</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -206,7 +206,7 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: "ERPNext Stock and Account Value Comparison" },
+				{ label: "Source", value: "Stock and Account Value Comparison" },
 				{ label: "Scope", value: "Company-wide accounting control" },
 				{ label: "Correction Mode", value: "Read-only here" },
 			].concat(this.companyCurrency ? [{ label: "Company Currency", value: this.companyCurrency }] : []);
@@ -390,7 +390,7 @@ export default {
 				rows: result.rows || [],
 				summary: result.summary || this.summary,
 				metadata: [
-					{ label: "Source", value: "ERPNext Stock and Account Value Comparison" },
+					{ label: "Source", value: "Stock and Account Value Comparison" },
 					{ label: "Scope", value: "Company-wide accounting control" },
 					{ label: "Correction Mode", value: "Read-only here" },
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),

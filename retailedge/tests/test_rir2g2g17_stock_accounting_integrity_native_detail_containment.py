@@ -29,5 +29,5 @@ def test_advanced_native_report_respects_backend_permission_and_native_desk_capa
 	source = SOURCE.read_text(encoding="utf-8")
 	assert 'v-if="canOpenNativeReport"' in source
 	assert ':disabled="!canUseNativeDesk"' in source
-	assert "Advanced: ERPNext Report" in source
+	assert "Advanced Report Unavailable" in source
 	assert "if (!this.canUseNativeDesk || !this.canOpenNativeReport || !this.nativeReportName) return;" in source
