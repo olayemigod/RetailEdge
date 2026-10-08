@@ -17,6 +17,7 @@ def test_bank_statement_imports_uses_business_copy_and_preserves_governed_bank_t
 		"accounting is created only through Bank Transactions",
 		"Create or link Bank Transactions for valid statement rows?",
 		"Advanced: Open Full Record",
+		"Statement file upload is unavailable.",
 	):
 		assert marker in text
 
@@ -26,6 +27,7 @@ def test_bank_statement_imports_uses_business_copy_and_preserves_governed_bank_t
 		"Advanced: ERPNext List",
 		"through ERPNext Bank Transactions",
 		"Create or link ERPNext Bank Transactions",
+		"Frappe File Uploader is unavailable.",
 	):
 		assert forbidden not in text
 
