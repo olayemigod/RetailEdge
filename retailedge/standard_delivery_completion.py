@@ -85,13 +85,13 @@ def _validate_delivery_context(doc) -> tuple[str, str]:
 def _standard_delivery_blockers(doc) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
-		blockers.append(_("Only draft Delivery Notes can use standard EdgeSuite completion."))
+		blockers.append(_("Only draft Delivery Notes can use guided completion."))
 	if doc.get("amended_from"):
-		blockers.append(_("Amended Delivery Notes require Advanced ERPNext review."))
+		blockers.append(_("Amended Delivery Notes require advanced review."))
 	if cint(doc.get("is_return")) or _clean(doc.get("return_against")):
-		blockers.append(_("Delivery returns require Advanced ERPNext review."))
+		blockers.append(_("Delivery returns require advanced review."))
 	if cint(doc.get("is_internal_customer")) or _clean(doc.get("represents_company")):
-		blockers.append(_("Internal or inter-company delivery requires Advanced ERPNext review."))
+		blockers.append(_("Internal or inter-company delivery requires advanced review."))
 	if not _clean(doc.get("customer")):
 		blockers.append(_("Delivery Note Customer is required."))
 
@@ -100,7 +100,7 @@ def _standard_delivery_blockers(doc) -> list[str]:
 		blockers.append(_("Delivery Note must contain at least one item."))
 
 	if list(doc.get("packed_items") or []):
-		blockers.append(_("Product Bundle / packed-item delivery requires Advanced ERPNext review."))
+		blockers.append(_("Product Bundle / packed-item delivery requires advanced review."))
 
 	source_orders: set[str] = set()
 	source_invoices: set[str] = set()
@@ -123,7 +123,7 @@ def _standard_delivery_blockers(doc) -> list[str]:
 			or _clean(row.get("serial_and_batch_bundle"))
 		):
 			blockers.append(
-				_("Serial/Batch controlled delivery requires Advanced ERPNext review.")
+				_("Serial/Batch controlled delivery requires advanced review.")
 			)
 
 	if len(source_orders) > 1:
@@ -477,8 +477,8 @@ def submit_standard_delivery_note(
 	if _clean(workflow_readiness.get("source")) == "frappe":
 		frappe.throw(
 			_(
-				"Delivery Note is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
-			).format(workflow_readiness.get("workflow") or _("Frappe Workflow")),
+				"Delivery Note is controlled by active Workflow {0}. Use the available workflow action shown here."
+			).format(workflow_readiness.get("workflow") or _("configured workflow")),
 			frappe.ValidationError,
 		)
 
@@ -492,7 +492,7 @@ def submit_standard_delivery_note(
 	# quantities/status and all Delivery Note submit-side effects.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit Delivery Note {0}.").format(name))
+		frappe.throw(_("Delivery Note {0} was not submitted. Refresh and review the document before retrying.").format(name))
 	doc.reload()
 	return {
 		"doctype": DELIVERY_NOTE_DOCTYPE,
@@ -544,7 +544,7 @@ def apply_standard_delivery_workflow_action(
 	)
 	if _clean(workflow_readiness.get("source")) != "frappe":
 		frappe.throw(
-			_("No active Frappe Workflow owns this Delivery Note."),
+			_("No active workflow owns this Delivery Note."),
 			frappe.ValidationError,
 		)
 

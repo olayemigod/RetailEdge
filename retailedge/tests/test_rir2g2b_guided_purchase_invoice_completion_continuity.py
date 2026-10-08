@@ -68,7 +68,7 @@ def test_advanced_purchase_invoice_shapes_fail_closed():
 		"allocate_advances_automatically",
 		"is_subcontracted",
 		"supplied_items",
-		"Advanced ERPNext",
+		"advanced review",
 	):
 		assert marker in source
 
@@ -102,7 +102,7 @@ def test_update_stock_is_branch_safe_and_advanced_stock_complexity_fails_closed(
 		"serial_no",
 		"batch_no",
 		"serial_and_batch_bundle",
-		"Serial/Batch controlled stock-updating Purchase Invoice requires Advanced ERPNext review",
+		"Serial/Batch controlled stock-updating Purchase Invoice requires advanced review",
 	):
 		assert marker in source
 

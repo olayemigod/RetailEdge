@@ -21,8 +21,8 @@ def test_completion_is_bounded_to_standard_stock_documents():
 	assert 'MATERIAL_TRANSFER' in source
 	assert 'STOCK_RECONCILIATION_PURPOSE' in source
 	assert 'MAX_STANDARD_ITEMS = 100' in source
-	assert 'Amended stock documents require Advanced ERPNext review.' in source
-	assert 'Serial No or Batch tracking and requires Advanced ERPNext' in source
+	assert 'Amended stock documents require advanced review.' in source
+	assert 'Serial No or Batch tracking and requires advanced review' in source
 
 
 def test_completion_revalidates_company_branch_and_warehouse_scope():
@@ -223,7 +223,7 @@ def test_stock_draft_editor_keeps_scope_and_tracking_complexity_out_of_editable_
 		'"t_warehouse": _clean(preview.get("target_warehouse"))',
 		'"warehouse": _clean(preview.get("warehouse"))',
 		"_item_tracking(item_code)",
-		"uses Serial No or Batch tracking and requires Advanced ERPNext",
+		"uses Serial No or Batch tracking and requires advanced review",
 	):
 		assert contract in source
 	for forbidden in (

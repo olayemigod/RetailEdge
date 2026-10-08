@@ -133,7 +133,7 @@ def _validate_warehouse_access(
 		frappe.throw(
 			_(
 				"RetailEdge cannot prove the Branch scope for Warehouse {0}. "
-				"Use Advanced ERPNext after correcting Warehouse/Branch setup."
+				"Use advanced review after correcting Warehouse/Branch setup."
 			).format(warehouse),
 			frappe.PermissionError,
 		)
@@ -143,15 +143,15 @@ def _validate_warehouse_access(
 def _base_blockers(doc) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
-		blockers.append(_("Only draft stock documents can use standard EdgeSuite completion."))
+		blockers.append(_("Only draft stock documents can use guided completion."))
 	if _clean(doc.get("amended_from")):
-		blockers.append(_("Amended stock documents require Advanced ERPNext review."))
+		blockers.append(_("Amended stock documents require advanced review."))
 	items = list(doc.get("items") or [])
 	if not items:
 		blockers.append(_("At least one stock item is required."))
 	if len(items) > MAX_STANDARD_ITEMS:
 		blockers.append(
-			_("Stock documents with more than {0} rows require Advanced ERPNext review.").format(MAX_STANDARD_ITEMS)
+			_("Stock documents with more than {0} rows require advanced review.").format(MAX_STANDARD_ITEMS)
 		)
 	return blockers
 
@@ -211,7 +211,7 @@ def _transfer_preview(doc, company: str, scope: dict[str, Any]) -> dict[str, Any
 			tracking = _item_tracking(item_code)
 			if tracking["has_serial_no"] or tracking["has_batch_no"]:
 				blockers.append(
-					_("Item {0} uses Serial No or Batch tracking and requires Advanced ERPNext.").format(item_code)
+					_("Item {0} uses Serial No or Batch tracking and requires advanced review.").format(item_code)
 				)
 		if qty <= 0:
 			blockers.append(_("Quantity on row {0} must be greater than zero.").format(index))
@@ -280,7 +280,7 @@ def _adjustment_preview(doc, company: str, scope: dict[str, Any]) -> dict[str, A
 			tracking = _item_tracking(item_code)
 			if tracking["has_serial_no"] or tracking["has_batch_no"]:
 				blockers.append(
-					_("Item {0} uses Serial No or Batch tracking and requires Advanced ERPNext.").format(item_code)
+					_("Item {0} uses Serial No or Batch tracking and requires advanced review.").format(item_code)
 				)
 		if qty < 0:
 			blockers.append(_("Physical quantity on row {0} cannot be negative.").format(index))
@@ -364,7 +364,7 @@ def _update_stock_draft_items(doc, requested_items: Any, *, preview: dict[str, A
 		if not row_name:
 			tracking = _item_tracking(item_code)
 			if tracking["has_serial_no"] or tracking["has_batch_no"]:
-				frappe.throw(_("Item {0} uses Serial No or Batch tracking and requires Advanced ERPNext.").format(item_code))
+				frappe.throw(_("Item {0} uses Serial No or Batch tracking and requires advanced review.").format(item_code))
 			if kind == "transfer":
 				row = doc.append(
 					"items",
@@ -515,12 +515,12 @@ def submit_standard_stock_document(
 	preview = _build_preview(doc)
 	if preview.get("blockers"):
 		frappe.throw(
-			_("Standard EdgeSuite completion is blocked:\n- {0}").format("\n- ".join(preview["blockers"])),
+			_("Guided completion is blocked:\n- {0}").format("\n- ".join(preview["blockers"])),
 			frappe.ValidationError,
 		)
 	if _clean(preview.get("workflow_readiness", {}).get("source")) == "frappe":
 		frappe.throw(
-			_("This {0} is controlled by an active Frappe Workflow. Use the available workflow action in EdgeSuite.").format(doctype),
+			_("This {0} is controlled by an active workflow. Use the available workflow action shown here.").format(doctype),
 			frappe.ValidationError,
 		)
 	if not frappe.has_permission(doctype, "submit", doc=doc):
@@ -529,7 +529,7 @@ def submit_standard_stock_document(
 	# ERPNext owns Stock Ledger, valuation and all stock validation.
 	doc.submit()
 	if cint(doc.docstatus) != 1:
-		frappe.throw(_("ERPNext did not submit {0} {1}.").format(doctype, name))
+		frappe.throw(_("{0} {1} was not submitted. Refresh and review the document before retrying.").format(doctype, name))
 	doc.reload()
 	return {
 		"doctype": doc.doctype,
@@ -564,11 +564,11 @@ def apply_standard_stock_workflow_action(
 	preview = _build_preview(doc)
 	if preview.get("blockers"):
 		frappe.throw(
-			_("Standard EdgeSuite completion is blocked:\n- {0}").format("\n- ".join(preview["blockers"])),
+			_("Guided completion is blocked:\n- {0}").format("\n- ".join(preview["blockers"])),
 			frappe.ValidationError,
 		)
 	if _clean(preview.get("workflow_readiness", {}).get("source")) != "frappe":
-		frappe.throw(_("No active Frappe Workflow owns this {0}.").format(doctype), frappe.ValidationError)
+		frappe.throw(_("No active workflow owns this {0}.").format(doctype), frappe.ValidationError)
 
 	return apply_document_workflow_action(
 		doctype=doctype,
