@@ -17,6 +17,14 @@ SNAPSHOT_REFRESH_ROLES = {
 	"RetailEdgeAuditor",
 }
 
+MONETARY_SNAPSHOT_FIELDS = (
+	"shift_opening_cash_amount",
+	"shift_cash_sales_amount",
+	"prior_shift_expense_amount",
+	"available_shift_cash_before_expense",
+	"available_shift_cash_after_expense",
+)
+
 
 def _can_refresh_cash_snapshot(doc, user: str | None = None) -> bool:
 	user = user or frappe.session.user
@@ -31,11 +39,13 @@ def _can_refresh_cash_snapshot(doc, user: str | None = None) -> bool:
 
 
 def refresh_cashier_expense_cash_snapshot(expense_name: str) -> dict[str, object]:
-	"""Recompute only the derived shift-cash snapshot stored on a Cashier Expense.
+	"""Refresh derived Cashier Expense cash context without rewriting history.
 
-	This deliberately avoids ``doc.save()`` so a submitted/posted expense and its
-	accounting truth are not mutated through the normal document lifecycle. Only
-	operational snapshot fields are updated.
+	Draft expenses may recompute their full cash snapshot because they are still
+	editable. Submitted/cancelled expenses preserve the monetary snapshot captured
+	at the time of entry; only diagnostic source/warning metadata may be refreshed.
+	This avoids making historical cash availability drift as later shift sales or
+	expenses are recorded, and never touches accounting/posting/status fields.
 	"""
 	if not expense_name:
 		frappe.throw("Cashier Expense is required.")
@@ -54,25 +64,39 @@ def refresh_cashier_expense_cash_snapshot(expense_name: str) -> dict[str, object
 		user=getattr(doc, "cashier", None),
 		expense_name=doc.name,
 	)
-	available_before = flt(snapshot.get("available_before", 0))
+
 	values = {
-		"shift_opening_cash_amount": flt(snapshot.get("opening_cash", 0)),
-		"shift_cash_sales_amount": flt(snapshot.get("cash_sales", 0)),
-		"prior_shift_expense_amount": flt(snapshot.get("prior_expenses", 0)),
-		"available_shift_cash_before_expense": available_before,
-		"available_shift_cash_after_expense": available_before - flt(getattr(doc, "amount", 0)),
 		"cash_balance_source": snapshot.get("source"),
-		# Write this unconditionally so a previously stored warning is cleared when
-		# the resolver now proves the cash position safely.
+		# Write this unconditionally so a stale warning can clear when the resolver
+		# now proves the cash context safely.
 		"cash_control_message": snapshot.get("message"),
 	}
+	monetary_snapshot_preserved = int(getattr(doc, "docstatus", 0) or 0) != 0
+	if not monetary_snapshot_preserved:
+		available_before = flt(snapshot.get("available_before", 0))
+		values.update(
+			{
+				"shift_opening_cash_amount": flt(snapshot.get("opening_cash", 0)),
+				"shift_cash_sales_amount": flt(snapshot.get("cash_sales", 0)),
+				"prior_shift_expense_amount": flt(snapshot.get("prior_expenses", 0)),
+				"available_shift_cash_before_expense": available_before,
+				"available_shift_cash_after_expense": available_before - flt(getattr(doc, "amount", 0)),
+			}
+		)
+
 	frappe.db.set_value(
 		"RetailEdge Cashier Expense",
 		doc.name,
 		values,
 		update_modified=False,
 	)
-	return {
+
+	result = {
 		"expense_name": doc.name,
+		"monetary_snapshot_preserved": monetary_snapshot_preserved,
 		**values,
 	}
+	if monetary_snapshot_preserved:
+		for fieldname in MONETARY_SNAPSHOT_FIELDS:
+			result[fieldname] = flt(getattr(doc, fieldname, 0))
+	return result
