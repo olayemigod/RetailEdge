@@ -108,6 +108,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLoadingState",
 	"EdgeErrorState",
 ];
+const NEW_TAB_PAGE_TARGETS = new Set(["sales-forecast"]);
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -235,7 +236,12 @@ export default {
 		openReport(item) {
 			if (!item?.target) return;
 			if (item.target_type === "Page") {
-				window.retailedgeSetReportRouteHandoff?.(`/app/${item.target}`, {
+				const route = `/app/${item.target}`;
+				if (NEW_TAB_PAGE_TARGETS.has(item.target)) {
+					window.open(route, "_blank", "noopener,noreferrer");
+					return;
+				}
+				window.retailedgeSetReportRouteHandoff?.(route, {
 					company: this.context.company || "",
 					branch: this.context.branch || "",
 				});

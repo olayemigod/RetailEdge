@@ -41,7 +41,7 @@
 				<button v-if="action.route" type="button" class="edge-button edge-button--secondary" @click="openAction">
 					{{ action.label }}
 				</button>
-				<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="applyFilters">
+				<button v-if="!showInlineApplyFilters" type="button" class="edge-button edge-button--primary" :disabled="loading" @click="applyFilters">
 					{{ loading ? "Refreshing…" : "Refresh" }}
 				</button>
 			</template>
@@ -92,6 +92,11 @@
 							/>
 						</label>
 					</template>
+					<div v-if="showInlineApplyFilters" class="managed-filter-action">
+						<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="applyFilters">
+							{{ loading ? "Applying…" : "Apply Filters" }}
+						</button>
+					</div>
 				</div>
 				<details v-if="advancedFilterFields.length" class="managed-advanced-filters">
 					<summary>More filters</summary>
@@ -158,6 +163,7 @@
 
 <script>
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
+const INLINE_APPLY_FILTER_SURFACES = new Set(["unmatched-bank-payments", "unmatched-bank-transactions"]);
 const DAILY_AUDIT_STATUSES = new Set([
 	"Draft",
 	"Ready for Review",
@@ -246,6 +252,7 @@ export default {
 		},
 		primaryFilterFields() { return this.managedFilterFields.slice(0, 6); },
 		advancedFilterFields() { return this.managedFilterFields.slice(6); },
+		showInlineApplyFilters() { return INLINE_APPLY_FILTER_SURFACES.has(this.surfaceKey); },
 		reportColumns() {
 			const shiftLinks = this.surfaceKey === "pos-closing-variance"
 				? new Set(["closing_shift", "included_cashier_expenses", "review_status", "next_action"])
@@ -627,6 +634,8 @@ export default {
 <style scoped>
 .managed-filter-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; align-items:end; width:100%; }
 .managed-filter-grid--advanced { margin-top:12px; }
+.managed-filter-action { display:flex; align-items:end; min-height:38px; }
+.managed-filter-action .edge-button { width:100%; min-height:38px; }
 .managed-advanced-filters { width:100%; margin-top:12px; border-top:1px solid var(--edge-border, var(--border-color)); padding-top:10px; }
 .managed-advanced-filters summary { cursor:pointer; font-weight:600; color:var(--edge-text, var(--text-color)); }
 .managed-input-field { display:grid; gap:6px; min-width:0; }
