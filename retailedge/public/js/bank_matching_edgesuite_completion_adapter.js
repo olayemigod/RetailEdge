@@ -119,7 +119,7 @@
 			});
 			payload.operational = response?.message || {};
 		} catch (_error) {
-			// The primary review remains usable even if guidance hydration fails.
+			// The primary EdgeSuite review remains usable even if guidance hydration fails.
 		}
 	}
 
@@ -166,6 +166,35 @@
 			.find((modal) => clean(modal.textContent).includes(t("Review Match:"))) || null;
 	}
 
+	function placeCompletionSections(body, context, evidenceGrid, guidance) {
+		const compareGrid = body.querySelector(".retailedge-bank-compare-grid");
+		const recordLinks = body.querySelector(".retailedge-bank-record-links");
+		const anchor = compareGrid?.nextSibling || recordLinks || null;
+
+		// Keep one deterministic review hierarchy on every open:
+		// comparison first, then operational context/evidence/guidance, then the
+		// remaining review controls rendered by the EdgeSuite workspace.
+		body.insertBefore(context, anchor);
+		body.insertBefore(evidenceGrid, anchor);
+		body.insertBefore(guidance, anchor);
+	}
+
+	function resetReviewViewportAfterEnhancement(modal) {
+		const body = modal?.querySelector?.(".edge-modal__body");
+		if (!body) return;
+
+		const reset = () => {
+			body.scrollTop = 0;
+			body.scrollLeft = 0;
+		};
+		const raf = global.requestAnimationFrame?.bind(global);
+		if (raf) {
+			raf(() => raf(reset));
+			return;
+		}
+		global.setTimeout?.(reset, 0);
+	}
+
 	async function enhanceReviewModal() {
 		scheduled = false;
 		if (!isBankingPage()) return;
@@ -177,6 +206,17 @@
 		const payload = ensurePayload(matchName);
 		if (!payload?.doc?.name || !payload?.evidence?.match_name) return;
 
+		const body = modal.querySelector(".edge-modal__body") || modal;
+		const compareGrid = body.querySelector(".retailedge-bank-compare-grid");
+		const recordLinks = body.querySelector(".retailedge-bank-record-links");
+		if (!compareGrid || !recordLinks) {
+			// Warm payloads exist on reopen before Vue replaces its loading state.
+			// Never inject completion sections into the temporary loading body.
+			// The MutationObserver will schedule another pass when the real review
+			// content (comparison grid + record links) has been rendered.
+			return;
+		}
+
 		await hydrateOperational(matchName);
 		const doc = payload.doc || {};
 		const evidence = payload.evidence || {};
@@ -185,9 +225,6 @@
 		const accounting = evidence.accounting || {};
 		const details = parseDetails(doc);
 		const candidate = details.candidate_context || {};
-		const body = modal.querySelector(".edge-modal__body") || modal;
-		const recordLinks = body.querySelector(".retailedge-bank-record-links");
-		const insertBefore = recordLinks || null;
 
 		appendComparisonContext(modal, statement, accounting, doc);
 
@@ -196,19 +233,19 @@
 		const grid = node("div", "retailedge-bank-completion-grid");
 		[
 			contextItem(t("Bank Narration"), doc.bank_narration || statement.description || details.bank_context?.description),
-			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank-account mismatch.")),
-			contextItem(t("Payment Source"), doc.payment_event_source || candidate.payment_event_source),
+			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank/GL mismatch.")),
+			contextItem(t("Payment Event Source"), doc.payment_event_source || candidate.payment_event_source),
 			contextItem(t("Business Category"), humanize(evidence.transaction_category || evidence.candidate_category || candidate.transaction_category || candidate.candidate_category)),
 		].filter(Boolean).forEach((item) => grid.appendChild(item));
 		context.appendChild(grid);
 
 		const hardEvidence = doc.match_reason_summary || doc.match_reason || candidate.accounting_evidence;
-		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supporting match evidence recorded.");
+		const fuzzyEvidence = candidate.fuzzy_note || candidate.fuzzy_review_evidence || candidate.fuzzy_evidence?.reason || t("No supplemental fuzzy evidence recorded.");
 		const evidenceGrid = node("section", "retailedge-bank-review-section retailedge-bank-completion-evidence-grid");
 		evidenceGrid.appendChild(node("h3", "retailedge-bank-completion-evidence-title", t("Matching Evidence")));
 		const panels = node("div", "retailedge-bank-completion-evidence-panels");
-		panels.appendChild(evidencePanel(t("Accounting Evidence"), hardEvidence, "accounting"));
-		panels.appendChild(evidencePanel(t("Supporting Match Evidence"), fuzzyEvidence, "fuzzy"));
+		panels.appendChild(evidencePanel(t("Accounting / Hard Match Evidence"), hardEvidence, "accounting"));
+		panels.appendChild(evidencePanel(t("Fuzzy / Supplemental Evidence"), fuzzyEvidence, "fuzzy"));
 		evidenceGrid.appendChild(panels);
 
 		const guidance = node("section", "retailedge-bank-review-section retailedge-bank-completion-guidance");
@@ -217,11 +254,14 @@
 		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", productionizeText(action)));
 		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. Final reconciliation runs only after confirmation and a fresh accounting safety check.")));
 
-		body.insertBefore(guidance, insertBefore);
-		body.insertBefore(evidenceGrid, guidance);
-		body.insertBefore(context, evidenceGrid);
+		placeCompletionSections(body, context, evidenceGrid, guidance);
 		modal.dataset.retailedgeCompletion = "1";
 		productionizeVisibleCopy(modal);
+
+		// EdgeModal opens while the review is still hydrating. Reset only after
+		// the asynchronous completion pass has finished so browser scroll
+		// anchoring cannot reopen the modal at Operational Context/Evidence.
+		resetReviewViewportAfterEnhancement(modal);
 	}
 
 	function scheduleEnhancement() {
@@ -242,6 +282,6 @@
 	};
 
 	const observer = new MutationObserver(scheduleEnhancement);
-	observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+	observer.observe(document.documentElement, { childList: true, subtree: true });
 	global.retailedgeBankingEdgeSuiteCompletionInstalled = true;
 })(window);
