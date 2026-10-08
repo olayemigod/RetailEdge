@@ -32,6 +32,7 @@ const PURCHASE_REPORT_PROVIDERS = Object.freeze({
 		maxDatasetRows: 2000,
 	},
 });
+const INVOICE_LEVEL_REPORT_KEYS = new Set(["purchase-register", "supplier-payables"]);
 
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => {
@@ -42,6 +43,17 @@ function callMethod(method, args = {}) {
 			error: (error) => reject(error),
 		});
 	});
+}
+
+function withInvoiceRowIdentity(result = {}, reportKey = "") {
+	if (!INVOICE_LEVEL_REPORT_KEYS.has(reportKey)) return result;
+	return {
+		...result,
+		rows: (Array.isArray(result.rows) ? result.rows : []).map((row) => ({
+			...row,
+			group_key: row.group_key || row.invoice || "",
+		})),
+	};
 }
 
 async function enrichPurchaseRegister(result = {}) {
@@ -88,7 +100,8 @@ function registerPurchaseReportingProviders(target = window) {
 					page_size: safeLength,
 					sort,
 				});
-				const result = config.key === "purchase-register" ? await enrichPurchaseRegister(rawResult) : rawResult;
+				const identifiedResult = withInvoiceRowIdentity(rawResult, config.key);
+				const result = config.key === "purchase-register" ? await enrichPurchaseRegister(identifiedResult) : identifiedResult;
 				const pagination = result.pagination || {};
 				return {
 					...result,
