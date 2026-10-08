@@ -317,6 +317,8 @@ override_whitelisted_methods = {
 	"retailedge.stock_position.search_stock_position_options": "retailedge.operating_report_defaults.search_stock_position_options",
 	"retailedge.stock_position.get_stock_position": "retailedge.operating_report_defaults.get_stock_position",
 	"retailedge.stock_position.get_stock_position_export": "retailedge.operating_report_defaults.get_stock_position_export",
+	"retailedge.supplier_document_review.get_supplier_document_review_context": "retailedge.supplier_document_review_access.get_supplier_document_review_context",
+	"retailedge.supplier_document_review.search_supplier_document_review_options": "retailedge.supplier_document_review_access.search_supplier_document_review_options",
 }
 
 # Request Events
