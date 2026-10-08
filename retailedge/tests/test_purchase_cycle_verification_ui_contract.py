@@ -31,7 +31,12 @@ class TestPurchaseCycleVerificationUIContract(TestCase):
 		bundle = (APP_ROOT / "public" / "js" / "purchase_reporting.bundle.js").read_text()
 
 		self.assertIn('key: "supplier-payables"', bundle)
-		self.assertIn('config.key === "purchase-register" ? await enrichPurchaseRegister(rawResult) : rawResult', bundle)
+		self.assertIn('const identifiedResult = withInvoiceRowIdentity(rawResult, config.key);', bundle)
+		self.assertIn(
+			'config.key === "purchase-register" ? await enrichPurchaseRegister(identifiedResult) : identifiedResult',
+			bundle,
+		)
+		self.assertNotIn('config.key === "supplier-payables" ? await enrichPurchaseRegister', bundle)
 
 	def test_purchase_verification_stays_advisory(self):
 		source = (APP_ROOT / "purchase_cycle_verification.py").read_text()
