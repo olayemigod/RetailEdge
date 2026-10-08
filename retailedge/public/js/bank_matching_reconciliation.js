@@ -466,13 +466,13 @@
 
 				function reconcile(matchName) {
 					frappe.confirm(
-						__("This match is confirmed and approved. Reconcile it through ERPNext after a fresh safety check?"),
+						__("This match is confirmed and approved. Reconcile it after a fresh safety check?"),
 						async () => {
 							const response = await frappe.call({
 								method: "retailedge.banking_operations.match_and_reconcile",
 								args: { match_name: matchName, confirm_match: 0, confirm_reconciliation: 1 },
 								freeze: true,
-								freeze_message: __("Reconciling through ERPNext..."),
+								freeze_message: __("Reconciling..."),
 							});
 							const result = response?.message || {};
 							frappe.show_alert({
@@ -589,7 +589,7 @@
 								eyebrow: __("RetailEdge Banking"),
 								title: __("Bank Matching & Reconciliation"),
 								subtitle: __(
-									"Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking.",
+									"Match bank inflows and outflows to valid accounting events, then complete reconciliation.",
 								),
 							}),
 						default: () => [
@@ -639,7 +639,7 @@
 	function boot(wrapper) {
 		const runtime = edgeRuntime();
 		if (!runtime?.createEdgeApp || !runtime?.Vue) {
-			frappe.throw(__("EdgeSuite UI runtime is required for Bank Matching & Reconciliation."));
+			frappe.throw(__("The Bank Matching & Reconciliation interface is unavailable. Refresh the page or contact your administrator."));
 		}
 		const page = frappe.ui.make_app_page({
 			parent: wrapper,

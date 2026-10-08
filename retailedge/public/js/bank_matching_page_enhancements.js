@@ -112,7 +112,7 @@
 
 		if (!EdgeSmartDateRange || !runtime?.Vue?.createApp) {
 			host.classList.add("is-unavailable");
-			host.textContent = t("Smart date requires the EdgeSuite Reporting Standard component.");
+			host.textContent = t("Smart Date is unavailable. Refresh the page or contact your administrator.");
 			return;
 		}
 
@@ -164,7 +164,7 @@
 
 	function downloadTemplate() {
 		if (typeof global.open_url_post !== "function") {
-			global.frappe?.msgprint?.(t("The ERPNext template download service is unavailable."));
+			global.frappe?.msgprint?.(t("The bank statement template download service is unavailable."));
 			return;
 		}
 		global.open_url_post("/api/method/frappe.core.doctype.data_import.data_import.download_template", {
@@ -476,7 +476,7 @@
 					});
 					state.importName = response?.message?.name || "";
 					state.importContextKey = contextKey;
-					if (!state.importName) throw new Error(t("ERPNext did not create a Bank Statement Import draft."));
+					if (!state.importName) throw new Error(t("The Bank Statement Import draft could not be created."));
 					return state.importName;
 				}
 
@@ -511,7 +511,7 @@
 						});
 						state.preview = previewResponse?.message || {};
 						state.status = t("Ready to import");
-						state.statusDetail = t("ERPNext validated the statement preview. Review it before starting import.");
+						state.statusDetail = t("The statement preview was validated. Review it before starting import.");
 					} catch (error) {
 						state.error = error?.message || t("Unable to prepare the bank statement preview.");
 					} finally {
@@ -533,14 +533,14 @@
 						const total = Number(result.total_records || 0);
 						state.statusDetail = total
 							? t("{0} of {1} imported; {2} failed.", [success, total, failed])
-							: t("ERPNext is processing the statement import.");
+							: t("The statement import is being processed.");
 						if (["Success", "Partial Success", "Error"].includes(result.status)) {
 							findButton(root, ["Refresh"])?.click();
 							return;
 						}
 						setTimeout(checkImportStatus, 2000);
 					} catch (_error) {
-						state.statusDetail = t("Import started. Use Check Status to refresh the ERPNext import result.");
+						state.statusDetail = t("Import started. Use Check Status to refresh the import result.");
 					}
 				}
 
@@ -552,10 +552,10 @@
 						await global.frappe.call({ method: START_IMPORT_METHOD, args: { data_import: state.importName } });
 						state.importStarted = true;
 						state.status = t("Import queued");
-						state.statusDetail = t("ERPNext is importing Bank Transactions. Matching and reconciliation remain separate actions.");
+						state.statusDetail = t("Bank Transactions are being imported. Matching and reconciliation remain separate actions.");
 						setTimeout(checkImportStatus, 700);
 					} catch (error) {
-						state.error = error?.message || t("Unable to start the ERPNext bank statement import.");
+						state.error = error?.message || t("Unable to start the bank statement import.");
 					} finally {
 						state.busy = false;
 					}
@@ -581,14 +581,14 @@
 								h("thead", [h("tr", columns.map((column) => h("th", column)))]),
 								h("tbody", rows.map((row) => h("tr", row.map((value) => h("td", value))))),
 							]),
-						]) : h("p", { class: "text-muted" }, t("ERPNext validated the file. No preview rows were returned for display.")),
+						]) : h("p", { class: "text-muted" }, t("The file was validated. No preview rows were returned for display.")),
 					]);
 				}
 
 				return () => h(EdgeModal, {
 					open: state.open,
 					title: t("Upload Bank Statement"),
-					subtitle: t("Preview and import through ERPNext Banking without leaving Bank Matching."),
+					subtitle: t("Preview and import Bank Transactions without leaving Bank Matching."),
 					size: "xl",
 					busy: state.busy,
 					closeOnBackdrop: false,
@@ -654,7 +654,7 @@
 								disabled: !state.company || !state.bankAccount || state.importStarted,
 								description: !state.bankAccount
 									? t("Select a Bank Account first.")
-									: t("Optional reusable column mapping. Leave blank to use the Bank's current ERPNext mapping."),
+									: t("Optional reusable column mapping. Leave blank to use the Bank Account's current mapping."),
 								searcher: searchTemplates,
 								"onUpdate:modelValue": (value) => {
 									state.templateName = value || "";
@@ -748,7 +748,7 @@
 		const filterBar = root.querySelector(".edge-filter-bar");
 		const modalHost = mountStatementImportModal(root);
 		if (!modalHost?.__retailedgeOpenStatementImport) {
-			global.frappe?.throw?.(t("EdgeSuite modal components are unavailable. Rebuild EdgeSuite UI assets before importing a bank statement."));
+			global.frappe?.throw?.(t("Bank statement import controls are unavailable. Refresh the page or contact your administrator."));
 			return;
 		}
 		modalHost.__retailedgeOpenStatementImport({
@@ -766,7 +766,7 @@
 		button.type = "button";
 		button.className = "edge-button edge-button--secondary retailedge-bank-upload-statement";
 		button.textContent = t("Upload Statement");
-		button.title = t("Upload, preview, and import a statement through ERPNext Banking in an EdgeSuite modal.");
+		button.title = t("Upload, preview, and import a statement without leaving Bank Matching.");
 		button.addEventListener("click", () => openStatementImport(root));
 		refresh.parentElement.insertBefore(button, refresh);
 	}
