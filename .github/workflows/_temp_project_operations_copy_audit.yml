@@ -1,0 +1,33 @@
+name: Temporary Project Operations copy audit
+
+on:
+  push:
+    branches:
+      - fix/project-operations-production-copy-20261008
+    paths:
+      - .github/workflows/_temp_project_operations_copy_audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/project-operations-production-copy-20261008
+          fetch-depth: 0
+      - name: Inventory rendered platform wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('retailedge/public/js/project_operations/ProjectOperations.vue')
+          source = path.read_text(encoding='utf-8')
+          terms = ('ERPNext', 'Native Desk', 'EdgeSuite create navigation')
+          for lineno, line in enumerate(source.splitlines(), 1):
+              if any(term in line for term in terms):
+                  print(f'{lineno}: {line}')
+          PY
+          exit 1
