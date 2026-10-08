@@ -218,12 +218,14 @@ def test_reports_centre_frontend_supports_search_context_and_safe_navigation():
 		"company: this.context.company",
 		"branch: this.context.branch",
 		"canUseNativeDesk",
-		"ERPNext financial report",
+		"Detailed financial report",
 		"reports-centre-grid",
 		"data-edge-appearance",
 	):
 		assert token in source
 
+	assert "RetailEdge and ERPNext permissions" not in source
+	assert "ERPNext financial report" not in source
 	assert "fetch(" not in source
 	assert "innerHTML" not in source
 
