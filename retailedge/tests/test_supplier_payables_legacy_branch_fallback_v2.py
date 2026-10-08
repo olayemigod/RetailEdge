@@ -70,9 +70,6 @@ def test_branch_scoped_payables_recovers_blank_historical_invoice_read_only():
 	assert result["rows"][0]["outstanding"] == 1250.0
 	assert result["summary"][0]["value"] == 1250.0
 	assert result["summary"][1]["value"] == 1
-	assert result["scan"]["legacy_branch_candidates"] == 1
-	assert result["scan"]["legacy_branch_resolved"] == 1
-	assert result["scan"]["legacy_branch_in_scope"] == 1
 	assert result["scan"]["legacy_branch_rows_added"] == 1
 	assert result["scan"]["invoices"] == 1
 	resolve.assert_called_once_with("PINV-LEGACY")
@@ -87,7 +84,7 @@ def test_branch_scoped_payables_recovers_blank_historical_invoice_read_only():
 	assert ["retailedge_branch", "=", ""] in call.kwargs["or_filters"]
 
 
-def test_resolved_legacy_invoice_outside_authorized_branch_fails_closed():
+def test_resolved_legacy_invoice_outside_authorized_branch_fails_closed_without_scope_counts():
 	with (
 		patch.object(
 			fallback.purchase_reporting,
@@ -100,9 +97,15 @@ def test_resolved_legacy_invoice_outside_authorized_branch_fails_closed():
 		result = fallback.merge_legacy_branch_payables(_empty_dataset(), _filters())
 
 	assert result["rows"] == []
-	assert result["scan"]["legacy_branch_resolved"] == 1
-	assert result["scan"]["legacy_branch_in_scope"] == 0
 	assert result["scan"]["legacy_branch_rows_added"] == 0
+	assert result["scan"]["invoices"] == 0
+	for forbidden_key in (
+		"legacy_branch_candidates",
+		"legacy_branch_resolved",
+		"legacy_branch_unresolved",
+		"legacy_branch_in_scope",
+	):
+		assert forbidden_key not in result["scan"]
 
 
 def test_ambiguous_legacy_invoice_is_not_exposed():
@@ -118,8 +121,8 @@ def test_ambiguous_legacy_invoice_is_not_exposed():
 		result = fallback.merge_legacy_branch_payables(_empty_dataset(), _filters(branch=""))
 
 	assert result["rows"] == []
-	assert result["scan"]["legacy_branch_unresolved"] == 1
 	assert result["scan"]["legacy_branch_rows_added"] == 0
+	assert result["scan"]["invoices"] == 0
 
 
 def test_unscoped_company_view_keeps_standard_dataset_without_extra_scan():
@@ -147,7 +150,7 @@ def test_supplier_payables_wrapper_preserves_existing_engine_and_current_balance
 	assert '"historical_balance_supported": False' in source
 
 
-def test_legacy_branch_fallback_never_mutates_purchase_invoices():
+def test_legacy_branch_fallback_never_mutates_purchase_invoices_or_exposes_cross_scope_counts():
 	source = inspect.getsource(fallback)
 	for forbidden in (
 		".save(",
@@ -156,6 +159,10 @@ def test_legacy_branch_fallback_never_mutates_purchase_invoices():
 		"frappe.db.set_value(",
 		"frappe.db.commit(",
 		"ignore_permissions=True",
+		'"legacy_branch_candidates"',
+		'"legacy_branch_resolved"',
+		'"legacy_branch_unresolved"',
+		'"legacy_branch_in_scope"',
 	):
 		assert forbidden not in source
 	assert "resolve_transaction_branch(doc)" in source
