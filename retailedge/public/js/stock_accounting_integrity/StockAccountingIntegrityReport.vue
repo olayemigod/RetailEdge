@@ -29,8 +29,8 @@
 			:rowKey="rowKey"
 			:formatter="formatCell"
 			:pageSizes="[25, 50, 100]"
-			emptyTitle="No stock/accounting mismatches"
-			emptyDescription="No stock-versus-accounting exceptions were returned for this Company, Stock Account, and date range."
+			:emptyTitle="hasRun ? 'No stock/accounting mismatches' : 'Choose a review scope'"
+			:emptyDescription="hasRun ? 'No stock-versus-accounting exceptions were returned for this Company, Stock Account, and date range.' : 'Review the Company, optional Stock Account, and period, then choose Apply / Refresh. This control does not run automatically.'"
 			loadingMessage="Checking stock and accounting integrity…"
 			@retry="fetchData"
 			@page-change="goToPage"
@@ -145,6 +145,8 @@ export default {
 			missingComponents: [],
 			metadataLoading: true,
 			loading: false,
+			loadToken: 0,
+			hasRun: false,
 			error: "",
 			rows: [],
 			columns: [],
@@ -236,7 +238,7 @@ export default {
 			if (value?.from_date && value?.to_date) return;
 			this.filters.from_date = "";
 			this.filters.as_on_date = "";
-			this.currentPage = 1;
+			this.resetReviewResults();
 		},
 		onSmartDateResolved(value) {
 			if (!value?.from_date || !value?.to_date) {
@@ -246,7 +248,7 @@ export default {
 			this.smartDate = { ...value };
 			this.filters.from_date = value.from_date;
 			this.filters.as_on_date = value.to_date;
-			this.currentPage = 1;
+			this.resetReviewResults();
 		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
@@ -269,7 +271,6 @@ export default {
 				this.canOpenNativeReport = Boolean(Number(context.can_open_native_report));
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
-				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Stock & Accounting Integrity controls.");
 			} finally {
@@ -317,16 +318,29 @@ export default {
 			this.filters.account = "";
 			this.accountLabel = "";
 			this.tenantName = option.label || option.value;
-			this.currentPage = 1;
+			this.resetReviewResults();
 		},
 		onAccountSelected(option) {
 			this.filters.account = option.value;
 			this.accountLabel = option.label || option.value;
-			this.currentPage = 1;
+			this.resetReviewResults();
 		},
 		clearAccount() {
 			this.filters.account = "";
 			this.accountLabel = "";
+			this.resetReviewResults();
+		},
+		resetReviewResults() {
+			this.loadToken += 1;
+			this.loading = false;
+			this.hasRun = false;
+			this.rows = [];
+			this.columns = [];
+			this.summary = [];
+			this.reportSort = null;
+			this.pagination = {};
+			this.scan = {};
+			this.scope = {};
 			this.currentPage = 1;
 		},
 		applyFilters() {
@@ -343,6 +357,8 @@ export default {
 				this.error = "The Stock & Accounting Integrity reporting service is unavailable.";
 				return;
 			}
+			const requestToken = ++this.loadToken;
+			this.hasRun = true;
 			this.loading = true;
 			this.error = "";
 			try {
@@ -353,6 +369,7 @@ export default {
 					start,
 					page_length: pageSize, sort: this.reportSort,
 				});
+				if (requestToken !== this.loadToken) return;
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
 				this.summary = result.summary || []; this.reportSort = result.sort || null;
@@ -372,13 +389,14 @@ export default {
 					has_next: this.currentPage < totalPages,
 				};
 			} catch (error) {
+				if (requestToken !== this.loadToken) return;
 				this.rows = [];
 				this.columns = [];
 				this.summary = [];
 				this.pagination = {};
 				this.error = errorMessage(error, "Stock & Accounting Integrity failed to load.");
 			} finally {
-				this.loading = false;
+				if (requestToken === this.loadToken) this.loading = false;
 			}
 		},
 		async loadExportDataset() {
