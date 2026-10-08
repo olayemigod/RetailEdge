@@ -31,9 +31,9 @@ def build_expense_budget_insight(
 	if not company or not from_date or not to_date:
 		return _unavailable("A Company and date range are required for budget comparison.")
 	if not frappe.db.exists("DocType", BUDGET_DOCTYPE):
-		return _unavailable("ERPNext Budget is unavailable on this site.")
+		return _unavailable("Budget comparison is unavailable on this site.")
 	if not frappe.has_permission(BUDGET_DOCTYPE, "read"):
-		return _unavailable("Your current permissions do not allow ERPNext Budget insight.")
+		return _unavailable("Your current permissions do not allow budget comparison.")
 
 	start = getdate(from_date)
 	end = getdate(to_date)
@@ -42,7 +42,7 @@ def build_expense_budget_insight(
 
 	categories = _category_mappings(company=company, branch=branch)
 	if not categories:
-		return _unavailable("No RetailEdge Expense Categories have a usable Expense Account and Cost Center mapping.")
+		return _unavailable("No active Expense Categories have both an Expense Account and Cost Center ready for budget comparison.")
 
 	pairs = sorted({(row["expense_account"], row["cost_center"]) for row in categories})
 	budgets = _matching_budgets(company=company, pairs=pairs, start=start, end=end)
@@ -98,7 +98,7 @@ def build_expense_budget_insight(
 
 	return {
 		"available": bool(total_target > 0),
-		"reason": "" if total_target > 0 else _("No submitted ERPNext Budget matched the mapped expense accounts/cost centres for this period."),
+		"reason": "" if total_target > 0 else _("No submitted budget matches the mapped expense accounts and cost centres for this period."),
 		"source": "ERPNext Budget",
 		"target_amount": total_target,
 		"actual_amount": total_actual,
@@ -115,7 +115,7 @@ def build_expense_budget_insight(
 		"category_targets": sorted(category_targets, key=lambda row: (-flt(row["actual"]), row["category"])),
 		"ambiguous_category_count": sum(1 for row in category_targets if row["ambiguous"]),
 		"branch_cost_center": _branch_expense_cost_center(company=company, branch=branch) if branch else "",
-		"enforcement_note": _("RetailEdge displays native ERPNext Budget insight here but does not change ERPNext Budget enforcement or workflow settings."),
+		"enforcement_note": _("Budget comparison is read-only here and does not change budget controls or approval settings."),
 	}
 
 
@@ -201,7 +201,7 @@ def _matching_budgets(
 		limit_page_length=MAX_BUDGET_ROWS + 1,
 	)
 	if len(rows) > MAX_BUDGET_ROWS:
-		frappe.throw(_("More than {0} ERPNext Budgets match this expense scope. Narrow the business scope before loading budget insight.").format(MAX_BUDGET_ROWS))
+		frappe.throw(_("More than {0} submitted budgets match this expense scope. Narrow the business scope before loading budget comparison.").format(MAX_BUDGET_ROWS))
 	result: list[dict[str, Any]] = []
 	for row in rows:
 		budget = dict(row)
