@@ -68,7 +68,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		hideNativePageSidebar(wrapper);
 		await addExpenseRegisterButton(page);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.components) throw new Error("This page could not start. Refresh the page or contact your administrator.");
 		await requireAsync(EXPENSE_REGISTER_ASSET);
 		if (typeof window.mountExpenseRegister !== "function") throw new Error("Expense Register bundle is unavailable.");
 		bootLoading.remove();
