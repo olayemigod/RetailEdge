@@ -1,0 +1,63 @@
+name: Temporary Bank Modal Copy Fix
+
+on:
+  push:
+    branches:
+      - fix/bank-to-match-stale-review-recovery-20261008
+
+permissions:
+  contents: write
+
+jobs:
+  apply-copy-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[modal-copy-fix-applied]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore current production copy on recovered modal mechanics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('retailedge/public/js/bank_matching_edgesuite_completion_adapter.js')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'The primary EdgeSuite review remains usable even if guidance hydration fails.': 'The primary review remains usable even if guidance hydration fails.',
+              'Supporting evidence only; it cannot override a bank/GL mismatch.': 'Supporting evidence only; it cannot override a bank-account mismatch.',
+              'Payment Event Source': 'Payment Source',
+              'No supplemental fuzzy evidence recorded.': 'No supporting match evidence recorded.',
+              'Accounting / Hard Match Evidence': 'Accounting Evidence',
+              'Fuzzy / Supplemental Evidence': 'Supporting Match Evidence',
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one occurrence, found {count}: {old}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          node --check retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          git rm .github/workflows/tmp-bank-modal-copy-fix.yml
+
+          { git diff --name-only; } | sort > /tmp/changed.txt
+          cat > /tmp/expected.txt <<'EOF'
+          .github/workflows/tmp-bank-modal-copy-fix.yml
+          retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          EOF
+          diff -u /tmp/expected.txt /tmp/changed.txt
+
+      - name: Commit corrected candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "RetailEdge Recovery"
+          git config user.email "actions@users.noreply.github.com"
+          git add retailedge/public/js/bank_matching_edgesuite_completion_adapter.js
+          git commit -am "fix: preserve bank modal production copy [modal-copy-fix-applied]"
+          git push origin HEAD:fix/bank-to-match-stale-review-recovery-20261008
