@@ -1,12 +1,51 @@
 # -*- coding: utf-8 -*-
 import frappe
 from frappe import _
-from edgepayv1.edgepay.sdk import (
-	get_pending_payment_handoffs,
-	mark_payment_handoff_delivered,
-	mark_payment_handoff_failed
-)
-from edgepayv1.edgepay.services.security import redact_secrets
+
+
+def _edgepay_unavailable_response():
+	return {"ok": False, "message": "EdgePay is not installed on this site."}
+
+
+def get_pending_payment_handoffs(*args, **kwargs):
+	try:
+		from edgepayv1.edgepay.sdk import get_pending_payment_handoffs as _get_pending_payment_handoffs
+	except ModuleNotFoundError as exc:
+		if not str(exc.name or "").startswith("edgepayv1"):
+			raise
+		return _edgepay_unavailable_response()
+	return _get_pending_payment_handoffs(*args, **kwargs)
+
+
+def mark_payment_handoff_delivered(*args, **kwargs):
+	try:
+		from edgepayv1.edgepay.sdk import mark_payment_handoff_delivered as _mark_payment_handoff_delivered
+	except ModuleNotFoundError as exc:
+		if not str(exc.name or "").startswith("edgepayv1"):
+			raise
+		return _edgepay_unavailable_response()
+	return _mark_payment_handoff_delivered(*args, **kwargs)
+
+
+def mark_payment_handoff_failed(*args, **kwargs):
+	try:
+		from edgepayv1.edgepay.sdk import mark_payment_handoff_failed as _mark_payment_handoff_failed
+	except ModuleNotFoundError as exc:
+		if not str(exc.name or "").startswith("edgepayv1"):
+			raise
+		return _edgepay_unavailable_response()
+	return _mark_payment_handoff_failed(*args, **kwargs)
+
+
+def redact_secrets(value):
+	try:
+		from edgepayv1.edgepay.services.security import redact_secrets as _redact_secrets
+	except ModuleNotFoundError as exc:
+		if not str(exc.name or "").startswith("edgepayv1"):
+			raise
+		return str(value)
+	return _redact_secrets(value)
+
 
 def fetch_pending_edgepay_handoffs(limit=50):
 	"""
