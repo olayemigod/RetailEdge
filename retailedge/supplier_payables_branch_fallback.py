@@ -11,6 +11,14 @@ from retailedge import purchase_reporting
 from retailedge.transaction_branch_attribution import resolve_transaction_branch
 
 
+BRANCH_PROFILE_WAREHOUSE_FIELDS = (
+	"default_warehouse",
+	"default_source_warehouse",
+	"default_target_warehouse",
+	"default_returns_warehouse",
+)
+
+
 def _allowed_branches(condition: Any) -> set[str] | None:
 	"""Return the Branches permitted by purchase_reporting scope.
 
@@ -54,12 +62,59 @@ def _legacy_candidate_filters(filters: frappe._dict) -> dict[str, Any]:
 	return query_filters
 
 
+def _branch_profile_branches_for_warehouse(company: str, warehouse: str) -> set[str]:
+	company = str(company or "").strip()
+	warehouse = str(warehouse or "").strip()
+	if not company or not warehouse or not frappe.db.exists("DocType", "RetailEdge Branch Profile"):
+		return set()
+
+	rows = frappe.get_all(
+		"RetailEdge Branch Profile",
+		filters={"company": company, "enabled": 1},
+		fields=["branch", *BRANCH_PROFILE_WAREHOUSE_FIELDS],
+		limit_page_length=0,
+		order_by="branch asc",
+	)
+	branches = set()
+	for row in rows:
+		mapped_warehouses = {
+			str(row.get(fieldname) or "").strip() for fieldname in BRANCH_PROFILE_WAREHOUSE_FIELDS
+		}
+		if warehouse in mapped_warehouses and row.get("branch"):
+			branches.add(str(row.get("branch") or "").strip())
+	return {branch for branch in branches if branch}
+
+
+def _resolve_branch_profile_from_invoice_warehouses(doc) -> str:
+	warehouses = []
+	set_warehouse = str(getattr(doc, "set_warehouse", None) or "").strip()
+	if set_warehouse:
+		warehouses.append(set_warehouse)
+	for row in getattr(doc, "items", []) or []:
+		warehouse = str(getattr(row, "warehouse", None) or "").strip()
+		if warehouse and warehouse not in warehouses:
+			warehouses.append(warehouse)
+	if not warehouses:
+		return ""
+
+	resolved_branches = set()
+	for warehouse in warehouses:
+		branches = _branch_profile_branches_for_warehouse(getattr(doc, "company", None), warehouse)
+		if len(branches) != 1:
+			return ""
+		resolved_branches.update(branches)
+	return next(iter(resolved_branches)) if len(resolved_branches) == 1 else ""
+
+
 def _resolve_legacy_branch(invoice_name: str) -> str:
 	doc = frappe.get_doc("Purchase Invoice", invoice_name)
 	if not frappe.has_permission("Purchase Invoice", "read", doc=doc):
 		return ""
 	resolution = resolve_transaction_branch(doc)
-	return str(resolution.get("branch") or "").strip()
+	resolved_branch = str(resolution.get("branch") or "").strip()
+	if resolved_branch:
+		return resolved_branch
+	return _resolve_branch_profile_from_invoice_warehouses(doc)
 
 
 def _payable_row(candidate: frappe._dict, *, branch: str, filters: frappe._dict) -> dict[str, Any] | None:
