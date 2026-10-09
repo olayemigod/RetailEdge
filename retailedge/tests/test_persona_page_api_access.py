@@ -39,6 +39,14 @@ BRANCH_SCOPED_PERSONAS = {
 }
 
 
+def _reset_branch_scoped_company_context(user: str) -> None:
+	"""Keep dedicated QA users deterministic without widening Company authority."""
+	frappe.db.delete("DefaultValue", {"parent": user, "defkey": "Company"})
+	frappe.db.delete("User Permission", {"user": user, "allow": "Company"})
+	frappe.defaults.set_user_default("Company", COMPANY, user=user)
+	frappe.clear_cache(user=user)
+
+
 class PersonaPageApiAccessTests(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
@@ -65,6 +73,7 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 		warehouse = _ensure_warehouse(branch)
 		_ensure_branch_profile(branch, default_warehouse=warehouse, is_default=False)
 		for email, branch_role in BRANCH_SCOPED_PERSONAS.items():
+			_reset_branch_scoped_company_context(email)
 			_ensure_assignment(
 				email,
 				branch,
@@ -72,11 +81,6 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				is_primary=True,
 				active=True,
 			)
-			# The RC3 assignment fixture is intentionally owned by its deterministic
-			# upgrade-validation Company. Keep the test user's default Company aligned
-			# with that assignment so operating-context resolution tests the intended
-			# branch-scoped path instead of an unrelated pre-existing site default.
-			frappe.defaults.set_user_default("Company", COMPANY, user=email)
 
 		frappe.clear_cache()
 
@@ -106,6 +110,9 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 			with self.subTest(user=user):
 				self.assertFalse(bool(frappe.has_permission("Company", ptype="read", user=user)))
 				self.assertEqual(frappe.defaults.get_user_default("Company", user=user), COMPANY)
+				self.assertFalse(
+					bool(frappe.db.exists("User Permission", {"user": user, "allow": "Company"}))
+				)
 
 	def test_business_hub_context_loads_without_requiring_write_authority(self):
 		for user in BUSINESS_HUB_USERS:
