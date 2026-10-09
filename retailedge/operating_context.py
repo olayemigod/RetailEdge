@@ -357,8 +357,24 @@ def validate_operating_branch(
 
 
 def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
-	fallback_company = _clean(company) or _clean(frappe.defaults.get_user_default("Company"))
+	requested_company = _clean(company)
+	fallback_company = requested_company or _clean(frappe.defaults.get_user_default("Company"))
 	has_assignments = has_branch_assignments(user=user)
+	global_access = user_has_global_branch_access(user=user)
+
+	# For restricted users, Branch Assignment history is authoritative. A passive
+	# user default may point at a Company from an old assignment and must not strand
+	# the user there. Explicit Company arguments are different: they remain
+	# authoritative requests and still fail closed if the user lacks current access.
+	if has_assignments and not global_access and not requested_company:
+		active_companies = {
+			_clean(row.get("company"))
+			for row in get_active_branch_assignments(user=user)
+			if _clean(row.get("company"))
+		}
+		if fallback_company not in active_companies:
+			fallback_company = ""
+
 	assignment_anchor = (
 		_resolve_assignment_fallback(user=user, company=fallback_company)
 		if has_assignments
@@ -375,7 +391,7 @@ def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 
 	if _clean(assignment_anchor.get("branch")):
 		resolved = assignment_anchor
-	elif not user_has_global_branch_access(user=user) and has_assignments:
+	elif not global_access and has_assignments:
 		# Assignment history remains authoritative for restricted users, including
 		# the explicit restricted-zero case when no assignment is currently active.
 		resolved = assignment_anchor
