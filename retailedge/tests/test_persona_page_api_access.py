@@ -41,9 +41,12 @@ BRANCH_SCOPED_PERSONAS = {
 
 def _reset_branch_scoped_company_context(user: str) -> None:
 	"""Keep dedicated QA users deterministic without widening Company authority."""
-	frappe.db.delete("DefaultValue", {"parent": user, "defkey": "Company"})
 	frappe.db.delete("User Permission", {"user": user, "allow": "Company"})
-	frappe.defaults.set_user_default("Company", COMPANY, user=user)
+	frappe.defaults.clear_user_default("Company", user=user)
+	frappe.defaults.clear_user_default("company", user=user)
+	# Company is a Frappe permission-key. get_user_default("Company") resolves
+	# the scrubbed `company` default before falling back to User Permission data.
+	frappe.defaults.set_user_default("company", COMPANY, user=user)
 	frappe.clear_cache(user=user)
 
 
