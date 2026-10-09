@@ -49,8 +49,12 @@ app_include_js = "/assets/retailedge/js/retailedge.js"
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "retailedge/public/scss/website"
 
+# include js, css files in header of web form
+# webform_include_js = {"doctype": "public/js/doctype.js"}
+# webform_include_css = {"doctype": "public/css/doctype.css"}
+
 # include js in page
-# page_js = {"page" : "public/js/file.js"}
+# Report summary cards are styled via native Frappe DOM selectors in CSS.
 
 # include js in doctype views
 doctype_js = {
@@ -276,15 +280,15 @@ boot_session = "retailedge.boot.boot_session"
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 # override_doctype_dashboards = {
-# 	"Task": "retailedge.custom.task.get_dashboard_data"
+# 	"Task": "retailedge.task.get_dashboard_data"
 # }
 
 # exempt linked doctypes from being automatically cancelled
 #
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
-# Ignore links on delete
-# ----------------------
+# Ignore links to specified DocTypes when deleting documents
+# -----------------------------------------------------------
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
 
