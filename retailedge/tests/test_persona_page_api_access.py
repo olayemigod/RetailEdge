@@ -72,6 +72,11 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				is_primary=True,
 				active=True,
 			)
+			# The RC3 assignment fixture is intentionally owned by its deterministic
+			# upgrade-validation Company. Keep the test user's default Company aligned
+			# with that assignment so operating-context resolution tests the intended
+			# branch-scoped path instead of an unrelated pre-existing site default.
+			frappe.defaults.set_user_default("Company", COMPANY, user=email)
 
 		frappe.clear_cache()
 
@@ -100,6 +105,7 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 		for user in BRANCH_SCOPED_PERSONAS:
 			with self.subTest(user=user):
 				self.assertFalse(bool(frappe.has_permission("Company", ptype="read", user=user)))
+				self.assertEqual(frappe.defaults.get_user_default("Company", user=user), COMPANY)
 
 	def test_business_hub_context_loads_without_requiring_write_authority(self):
 		for user in BUSINESS_HUB_USERS:
@@ -108,6 +114,9 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				context = get_retailedge_business_hub_context()
 				self.assertIsInstance(context, dict)
 				self.assertIsInstance(context.get("navigation_groups"), list)
+				if user in BRANCH_SCOPED_PERSONAS:
+					self.assertEqual(context.get("context", {}).get("company"), COMPANY)
+					self.assertTrue(context.get("context", {}).get("branch"))
 
 	def test_reports_centre_context_loads_without_requiring_write_authority(self):
 		for user in REPORTS_CENTRE_USERS:
@@ -116,3 +125,6 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				context = get_reports_centre_context()
 				self.assertIsInstance(context, dict)
 				self.assertIsInstance(context.get("groups"), list)
+				if user in BRANCH_SCOPED_PERSONAS:
+					self.assertEqual(context.get("context", {}).get("company"), COMPANY)
+					self.assertTrue(context.get("context", {}).get("branch"))
