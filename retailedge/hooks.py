@@ -54,7 +54,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_order_list.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
