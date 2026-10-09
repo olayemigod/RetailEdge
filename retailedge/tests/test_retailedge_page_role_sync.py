@@ -43,6 +43,28 @@ class TestRetailEdgePageRoleSync(unittest.TestCase):
 		self.assertIn('"role": "RetailEdge Cashier"', source)
 		self.assertIn('"role": "RetailEdgeCashier"', source)
 
+	def test_stale_accounts_reviewer_is_not_declared_on_pages(self):
+		for relative_path in (
+			"retailedge/page/retailedge_business_hub/retailedge_business_hub.json",
+			"retailedge/page/reports_centre/reports_centre.json",
+		):
+			source = (APP_ROOT / relative_path).read_text(encoding="utf-8")
+			self.assertNotIn("RetailEdge Accounts Reviewer", source)
+
+	def test_stale_accounts_reviewer_cleanup_is_bounded_and_registered(self):
+		patch_source = (
+			APP_ROOT / "patches" / "remove_stale_accounts_reviewer_page_roles.py"
+		).read_text(encoding="utf-8")
+		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
+
+		self.assertIn("retailedge.patches.remove_stale_accounts_reviewer_page_roles", patches)
+		self.assertIn('STALE_ROLE = "RetailEdge Accounts Reviewer"', patch_source)
+		self.assertIn('"retailedge-business-hub"', patch_source)
+		self.assertIn('"reports-centre"', patch_source)
+		self.assertIn('"parenttype": "Page"', patch_source)
+		self.assertIn('"parentfield": "roles"', patch_source)
+		self.assertNotIn('frappe.db.delete("Role"', patch_source)
+
 
 if __name__ == "__main__":
 	unittest.main()
