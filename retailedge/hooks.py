@@ -144,7 +144,7 @@ doctype_list_js = {
 # Integration Setup
 # ------------------
 # To set up dependencies/integrations with other apps
-# Name of app being installed is passed as an argument
+# Name of the app being installed is passed as an argument
 
 # before_app_install = "retailedge.utils.before_app_install"
 # after_app_install = "retailedge.utils.after_app_install"
@@ -152,7 +152,7 @@ doctype_list_js = {
 # Integration Cleanup
 # -------------------
 # To clean up dependencies/integrations with other apps
-# Name of app being uninstalled is passed as an argument
+# Name of the app being uninstalled is passed as an argument
 
 # before_app_uninstall = "retailedge.utils.before_app_uninstall"
 # after_app_uninstall = "retailedge.utils.after_app_uninstall"
@@ -308,7 +308,7 @@ boot_session = "retailedge.boot.boot_session"
 # 	{
 # 		"doctype": "{doctype_1}",
 # 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["redact_1", "redact_2"],
+# 		"redact_fields": ["{field_1}", "{field_2}"],
 # 		"partial": 1,
 # 	},
 # 	{
