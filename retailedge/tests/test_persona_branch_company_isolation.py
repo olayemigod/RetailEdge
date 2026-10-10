@@ -202,19 +202,20 @@ class PersonaBranchCompanyIsolationTests(IntegrationTestCase):
 				self.assertEqual(set(context.get("branch_options") or []), branch_options)
 				self.assertEqual(bool(context.get("can_switch_branch")), can_switch)
 
-	def test_reports_centre_context_preserves_business_hub_scope(self):
+	def test_reports_centre_context_preserves_resolved_identity_without_scope_expansion(self):
 		expected = {
-			ONE_BRANCH_USER: (COMPANY, LAGOS, {LAGOS}),
-			MULTI_BRANCH_USER: (COMPANY, LAGOS, {LAGOS, IKEJA}),
-			ZERO_BRANCH_USER: ("", "", set()),
+			ONE_BRANCH_USER: (COMPANY, LAGOS),
+			MULTI_BRANCH_USER: (COMPANY, LAGOS),
+			ZERO_BRANCH_USER: ("", ""),
 		}
-		for email, (company, branch, branch_options) in expected.items():
+		for email, (company, branch) in expected.items():
 			with self.subTest(user=email):
 				_activate_user(email)
 				context = get_reports_centre_context().get("context") or {}
 				self.assertEqual(context.get("company") or "", company)
 				self.assertEqual(context.get("branch") or "", branch)
-				self.assertEqual(set(context.get("branch_options") or []), branch_options)
+				self.assertNotIn("branch_options", context)
+				self.assertNotIn("company_options", context)
 
 	def test_passive_fallback_context_uses_primary_only_when_active(self):
 		_activate_user(ONE_BRANCH_USER)
