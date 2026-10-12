@@ -164,6 +164,8 @@ def _set_branch(doc, branch: str) -> None:
 def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> dict[str, Any]:
 	item_rows = [_serialize_item(row) for row in list(doc.get("items") or [])]
 	item_savings = sum(_item_savings(row) for row in list(doc.get("items") or []))
+	tax_rows = [_serialize_tax(row) for row in list(doc.get("taxes") or [])]
+	items_total = flt(doc.get("total") or 0)
 	rounded_total = flt(doc.get("rounded_total") or 0)
 	grand_total = flt(doc.get("grand_total") or 0)
 	invoice_total = rounded_total or grand_total
@@ -179,21 +181,23 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"tax_category": doc.get("tax_category") or "",
 		"taxes_and_charges": doc.get("taxes_and_charges") or "",
 		"items": item_rows,
-		"items_total": flt(doc.get("total") or 0),
-		"subtotal": net_total,
+		"list_value": flt(items_total + item_savings),
+		"items_total": items_total,
+		"subtotal": items_total,
 		"net_total": net_total,
 		"item_discount_total": flt(item_savings),
 		"additional_discount_percentage": flt(doc.get("additional_discount_percentage") or 0),
 		"additional_discount": flt(doc.get("discount_amount") or 0),
 		"apply_discount_on": doc.get("apply_discount_on") or "",
-		"taxes": [_serialize_tax(row) for row in list(doc.get("taxes") or [])],
+		"taxes": tax_rows,
 		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0),
+		"all_taxes_included": bool(tax_rows and all(row["included_in_print_rate"] for row in tax_rows)),
 		"rounding_adjustment": flt(doc.get("rounding_adjustment") or 0),
 		"grand_total": grand_total,
 		"rounded_total": rounded_total,
 		"invoice_total": invoice_total,
 		"has_discount": bool(item_savings or flt(doc.get("discount_amount") or 0)),
-		"has_tax": bool(flt(doc.get("total_taxes_and_charges") or 0) or list(doc.get("taxes") or [])),
+		"has_tax": bool(flt(doc.get("total_taxes_and_charges") or 0) or tax_rows),
 		"is_preview": True,
 	}
 
