@@ -18,7 +18,10 @@ from retailedge.guided_sales_invoice import (
 	_validate_transaction_context,
 )
 from retailedge.professional_draft_items import update_draft_items
-from retailedge.standard_sales_invoice_completion import _validate_invoice_context
+from retailedge.standard_sales_invoice_completion import (
+	_build_preview as _build_completion_preview,
+	_validate_invoice_context,
+)
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -93,29 +96,25 @@ def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 
 def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[str, Any]:
 	stored = _get_editable_sales_invoice(document_name)
-	company, branch = _validate_invoice_context(stored)
+	company, invoice_branch = _validate_invoice_context(stored)
+	completion = _build_completion_preview(stored)
+	if not completion.get("can_edit"):
+		message = next(iter(completion.get("blockers") or []), _("This Sales Invoice draft is not editable here."))
+		frappe.throw(message, frappe.PermissionError)
+
+	effective_branch = str(completion.get("branch") or invoice_branch or "").strip()
+	default_warehouse = str(completion.get("default_warehouse") or "").strip()
+	display_price_list = str(completion.get("selling_price_list") or stored.get("selling_price_list") or "").strip()
 	customer = str(stored.get("customer") or "").strip()
 	_assert_read_permission("Customer", customer)
-
-	default_warehouse = str(stored.get("set_warehouse") or "").strip()
-	if not default_warehouse:
-		default_warehouse = next(
-			(
-				str(row.get("warehouse") or "").strip()
-				for row in list(stored.get("items") or [])
-				if str(row.get("warehouse") or "").strip()
-			),
-			"",
-		)
 	_validate_saved_preview_identity(
 		stored,
 		values,
-		branch=branch,
+		branch=effective_branch,
 		default_warehouse=default_warehouse,
+		display_price_list=display_price_list,
 	)
 
-	# Construct a detached in-memory document from the authoritative draft. The
-	# original document is never mutated and this clone is never persisted.
 	doc = frappe.get_doc(stored.as_dict())
 	posting_date = getdate(values.get("posting_date") or stored.get("posting_date") or nowdate())
 	doc.set("posting_date", posting_date)
@@ -126,7 +125,7 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 			doc,
 			requested_items,
 			company=company,
-			branch=branch,
+			branch=invoice_branch,
 			customer=customer,
 			posting_date=str(posting_date),
 			default_warehouse=default_warehouse,
@@ -136,9 +135,9 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 	_prepare_preview_document(doc)
 	return _serialize_preview(
 		doc,
-		branch=branch,
+		branch=effective_branch,
 		pricing_context={
-			"price_list": str(stored.get("selling_price_list") or "").strip(),
+			"price_list": display_price_list,
 			"currency": str(stored.get("currency") or "").strip(),
 		},
 	)
@@ -171,13 +170,16 @@ def _validate_saved_preview_identity(
 	*,
 	branch: str,
 	default_warehouse: str,
+	display_price_list: str | None = None,
 ) -> None:
 	protected = {
 		"company": str(doc.get("company") or "").strip(),
 		"customer": str(doc.get("customer") or "").strip(),
-		"branch": branch,
-		"price_list": str(doc.get("selling_price_list") or "").strip(),
-		"warehouse": default_warehouse,
+		"branch": str(branch or "").strip(),
+		"price_list": str(
+			display_price_list if display_price_list is not None else doc.get("selling_price_list") or ""
+		).strip(),
+		"warehouse": str(default_warehouse or "").strip(),
 	}
 	for fieldname, authoritative in protected.items():
 		requested = str(values.get(fieldname) or "").strip()
