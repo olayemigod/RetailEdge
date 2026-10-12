@@ -116,9 +116,7 @@ def _build_preview_document(
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
 		if resolved_rate is None and manual_rate is None:
-			frappe.throw(
-				_("No selling price could be resolved for Item {0}.").format(item["item_code"])
-			)
+			frappe.throw(_("No selling price could be resolved for Item {0}.").format(item["item_code"]))
 		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
 			effective_rate = resolved_rate
 		else:
@@ -141,6 +139,7 @@ def _build_preview_document(
 def _prepare_preview_document(doc) -> None:
 	"""Use ERPNext's own document methods without persistence side effects."""
 	doc.run_method("set_missing_values")
+	doc.run_method("set_taxes_and_charges")
 	doc.run_method("calculate_taxes_and_totals")
 
 
@@ -149,8 +148,6 @@ def _set_branch(doc, branch: str) -> None:
 		if doc.meta.has_field(fieldname):
 			doc.set(fieldname, branch)
 			return
-	# Keep compatibility with the current guided draft path where Branch is a
-	# runtime field supplied by the installed ERPNext/RetailEdge composition.
 	doc.branch = branch
 
 
@@ -160,6 +157,7 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 	rounded_total = flt(doc.get("rounded_total") or 0)
 	grand_total = flt(doc.get("grand_total") or 0)
 	invoice_total = rounded_total or grand_total
+	net_total = flt(doc.get("net_total") or 0)
 
 	return {
 		"doctype": SALES_INVOICE_DOCTYPE,
@@ -171,8 +169,9 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"tax_category": doc.get("tax_category") or "",
 		"taxes_and_charges": doc.get("taxes_and_charges") or "",
 		"items": item_rows,
-		"subtotal": flt(doc.get("total") or 0),
-		"net_total": flt(doc.get("net_total") or 0),
+		"items_total": flt(doc.get("total") or 0),
+		"subtotal": net_total,
+		"net_total": net_total,
 		"item_discount_total": flt(item_savings),
 		"additional_discount_percentage": flt(doc.get("additional_discount_percentage") or 0),
 		"additional_discount": flt(doc.get("discount_amount") or 0),
