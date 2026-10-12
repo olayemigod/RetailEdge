@@ -15,20 +15,24 @@
 
 		<template v-else-if="preview">
 			<div class="sales-commercial-summary__rows">
-				<div>
-					<span>Subtotal</span>
-					<strong>{{ formatMoney(preview.subtotal) }}</strong>
+				<div v-if="Number(preview.item_discount_total || 0)">
+					<span>List value</span>
+					<strong>{{ formatMoney(preview.list_value) }}</strong>
 				</div>
 				<div v-if="Number(preview.item_discount_total || 0)" class="sales-commercial-summary__muted-row">
 					<span>Item savings</span>
 					<strong>−{{ formatMoney(preview.item_discount_total) }}</strong>
+				</div>
+				<div>
+					<span>Subtotal</span>
+					<strong>{{ formatMoney(preview.subtotal) }}</strong>
 				</div>
 				<div v-if="Number(preview.additional_discount || 0)">
 					<span>Additional discount</span>
 					<strong>−{{ formatMoney(preview.additional_discount) }}</strong>
 				</div>
 				<div v-if="preview.has_tax || Number(preview.total_taxes_and_charges || 0)">
-					<span>Tax</span>
+					<span>{{ preview.all_taxes_included ? "Tax (included)" : "Tax" }}</span>
 					<strong>{{ formatMoney(preview.total_taxes_and_charges) }}</strong>
 				</div>
 				<div v-if="Number(preview.rounding_adjustment || 0)">
@@ -49,7 +53,11 @@
 			<details v-if="preview.taxes?.length" class="sales-commercial-summary__taxes">
 				<summary>View tax breakdown</summary>
 				<div v-for="(tax, index) in preview.taxes" :key="`${tax.description || 'tax'}-${index}`">
-					<span>{{ tax.description || "Tax" }}<small v-if="Number(tax.rate || 0)"> {{ tax.rate }}%</small></span>
+					<span>
+						{{ tax.description || "Tax" }}
+						<small v-if="Number(tax.rate || 0)"> {{ tax.rate }}%</small>
+						<small v-if="tax.included_in_print_rate"> · included</small>
+					</span>
 					<strong>{{ formatMoney(tax.tax_amount) }}</strong>
 				</div>
 			</details>
