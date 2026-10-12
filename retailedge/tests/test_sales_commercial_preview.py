@@ -246,6 +246,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			/ "SimpleSalesInvoiceDialog.vue"
 		).read_text()
 		make_sale = (APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue").read_text()
+		make_sale_bundle = (APP_ROOT / "public" / "js" / "make_sale.bundle.js").read_text()
 		summary = (APP_ROOT / "public" / "js" / "selling" / "SalesCommercialSummary.vue").read_text()
 
 		for source in (quick, make_sale):
@@ -259,8 +260,9 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			self.assertIn("token !== this.previewToken", source)
 			self.assertIn("signature !== this.commercialPreviewSignature", source)
 
-		self.assertIn("document_name", make_sale)
-		self.assertIn("this.editingSavedDraft", make_sale)
+		self.assertIn("document_name", make_sale_bundle)
+		self.assertIn("this.editingSavedDraft", make_sale_bundle)
+		self.assertIn("this.savedDocument?.name", make_sale_bundle)
 		self.assertIn("Promotion applied", summary)
 		self.assertIn("List value", summary)
 		self.assertIn("Invoice Total", summary)
