@@ -60,9 +60,9 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'_("Subtotal")',
 			'_("Total Qty")',
 			'_("Balance Due")',
-			receipt.get("show_footer")',
-			receipt.get("show_footer_separator")',
-			receipt.get("footer_message")',
+			'receipt.get("show_footer")',
+			'receipt.get("show_footer_separator")',
+			'receipt.get("footer_message")',
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn('_("Thank you for your business.")', source)
@@ -74,8 +74,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		for contract in (
 			'row.get("net_rate") if row.get("net_rate") is not None else row.get("rate")',
 			'row.get("net_amount") if row.get("net_amount") is not None else row.get("amount")',
-			receipt.get("show_payment_method")',
-			receipt.get("payment_method")',
+			'receipt.get("show_payment_method")',
+			'receipt.get("payment_method")',
 			'_("Discount")',
 			'_("Tax / Charges")',
 			'_("Paid")',
@@ -158,8 +158,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'PRINTING_PAGE = "edge-printing"',
 			'item["target_type"] = "Page"',
 			'item["target"] = PRINTING_PAGE',
-			target.startswith("/app/edge-printing?")',
-			target.startswith("/desk/edge-printing?")',
+			'target.startswith("/app/edge-printing?")',
+			'target.startswith("/desk/edge-printing?")',
 		):
 			self.assertIn(contract, source)
 		self.assertIn(
