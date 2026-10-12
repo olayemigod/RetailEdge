@@ -6,6 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
+from erpnext.accounts.doctype.pricing_rule.utils import apply_pricing_rule_on_transaction
+
 from retailedge.guided_entry_context import get_guided_branch_names
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.guided_sales_invoice import (
@@ -15,19 +17,35 @@ from retailedge.guided_sales_invoice import (
 	_normalise_items,
 	_validate_transaction_context,
 )
+from retailedge.professional_draft_items import update_draft_items
+from retailedge.standard_sales_invoice_completion import _validate_invoice_context
 from retailedge.utils.settings import get_retailedge_settings
 
 
 @frappe.whitelist(methods=["POST"])
-def get_sales_invoice_commercial_preview(values: dict | str | None = None) -> dict[str, Any]:
-	"""Return an unsaved ERPNext Sales Invoice commercial preview.
+def get_sales_invoice_commercial_preview(
+	values: dict | str | None = None,
+	document_name: str | None = None,
+) -> dict[str, Any]:
+	"""Return a persistence-free ERPNext Sales Invoice commercial preview.
 
-	This endpoint never inserts, saves or submits a document. It exists only to
-	show the same pricing, discount, tax and total information the Sales Invoice
-	will use when the user eventually saves the draft.
+	New sales are calculated from a new in-memory Sales Invoice. Existing draft
+	edits are calculated from an in-memory clone of the stored draft so accepted
+	commercial terms (tax templates, coupons, additional discounts, source links,
+	and the stored Price List) are preserved exactly as the real draft update path
+	would preserve them. No preview document is inserted, saved, submitted or
+	committed.
 	"""
-	_assert_can_preview_sales_invoice()
 	values = _coerce_values(values)
+	document_name = str(document_name or "").strip()
+	if document_name:
+		return _preview_existing_draft(document_name, values)
+
+	_assert_can_preview_sales_invoice()
+	return _preview_new_sale(values)
+
+
+def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 	user = frappe.session.user
 	company, branch, warehouse = _validate_transaction_context(values, user=user)
 
@@ -73,15 +91,109 @@ def get_sales_invoice_commercial_preview(values: dict | str | None = None) -> di
 	return _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
 
 
-def _assert_can_preview_sales_invoice() -> None:
-	if frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"):
-		return
-	if frappe.has_permission(SALES_INVOICE_DOCTYPE, "write"):
-		return
-	frappe.throw(
-		_("You do not have permission to calculate a Sales Invoice."),
-		frappe.PermissionError,
+def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[str, Any]:
+	stored = _get_editable_sales_invoice(document_name)
+	company, branch = _validate_invoice_context(stored)
+	customer = str(stored.get("customer") or "").strip()
+	_assert_read_permission("Customer", customer)
+
+	default_warehouse = str(stored.get("set_warehouse") or "").strip()
+	if not default_warehouse:
+		default_warehouse = next(
+			(
+				str(row.get("warehouse") or "").strip()
+				for row in list(stored.get("items") or [])
+				if str(row.get("warehouse") or "").strip()
+			),
+			"",
+		)
+	_validate_saved_preview_identity(
+		stored,
+		values,
+		branch=branch,
+		default_warehouse=default_warehouse,
 	)
+
+	# Construct a detached in-memory document from the authoritative draft. The
+	# original document is never mutated and this clone is never persisted.
+	doc = frappe.get_doc(stored.as_dict())
+	posting_date = getdate(values.get("posting_date") or stored.get("posting_date") or nowdate())
+	doc.set("posting_date", posting_date)
+
+	requested_items = values.get("items")
+	if requested_items is not None:
+		update_draft_items(
+			doc,
+			requested_items,
+			company=company,
+			branch=branch,
+			customer=customer,
+			posting_date=str(posting_date),
+			default_warehouse=default_warehouse,
+			selected_price_list=str(stored.get("selling_price_list") or "").strip(),
+		)
+
+	_prepare_preview_document(doc)
+	return _serialize_preview(
+		doc,
+		branch=branch,
+		pricing_context={
+			"price_list": str(stored.get("selling_price_list") or "").strip(),
+			"currency": str(stored.get("currency") or "").strip(),
+		},
+	)
+
+
+def _get_editable_sales_invoice(name: str):
+	if not name or not frappe.db.exists(SALES_INVOICE_DOCTYPE, name):
+		frappe.throw(_("Sales Invoice {0} does not exist.").format(name or "(blank)"))
+	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft Sales Invoices can be calculated here."), frappe.ValidationError)
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "read", doc=doc):
+		frappe.throw(_("You do not have permission to read this Sales Invoice."), frappe.PermissionError)
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+	return doc
+
+
+def _assert_can_preview_sales_invoice() -> None:
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"):
+		frappe.throw(
+			_("You do not have permission to calculate a new Sales Invoice."),
+			frappe.PermissionError,
+		)
+
+
+def _validate_saved_preview_identity(
+	doc,
+	values: dict[str, Any],
+	*,
+	branch: str,
+	default_warehouse: str,
+) -> None:
+	protected = {
+		"company": str(doc.get("company") or "").strip(),
+		"customer": str(doc.get("customer") or "").strip(),
+		"branch": branch,
+		"price_list": str(doc.get("selling_price_list") or "").strip(),
+		"warehouse": default_warehouse,
+	}
+	for fieldname, authoritative in protected.items():
+		requested = str(values.get(fieldname) or "").strip()
+		if requested and requested != authoritative:
+			frappe.throw(
+				_("The saved Sales Invoice {0} is fixed while editing this draft. Refresh before continuing.").format(
+					fieldname.replace("_", " ").title()
+				),
+				frappe.ValidationError,
+			)
+
+	if "update_stock" in values and bool(cint(values.get("update_stock") or 0)) != bool(cint(doc.get("update_stock") or 0)):
+		frappe.throw(
+			_("The saved Sales Invoice stock mode is fixed while editing this draft. Refresh before continuing."),
+			frappe.ValidationError,
+		)
 
 
 def _build_preview_document(
@@ -147,10 +259,12 @@ def _build_preview_document(
 
 
 def _prepare_preview_document(doc) -> None:
-	"""Use ERPNext's own document methods without persistence side effects."""
+	"""Use ERPNext commercial calculation methods without persistence side effects."""
 	doc.run_method("set_missing_values")
 	doc.run_method("set_taxes_and_charges")
 	doc.run_method("calculate_taxes_and_totals")
+	if not cint(doc.get("ignore_pricing_rule") or 0):
+		apply_pricing_rule_on_transaction(doc)
 
 
 def _set_branch(doc, branch: str) -> None:
@@ -165,6 +279,7 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 	item_rows = [_serialize_item(row) for row in list(doc.get("items") or [])]
 	item_savings = sum(_item_savings(row) for row in list(doc.get("items") or []))
 	tax_rows = [_serialize_tax(row) for row in list(doc.get("taxes") or [])]
+	promotions = _promotion_names(doc)
 	items_total = flt(doc.get("total") or 0)
 	rounded_total = flt(doc.get("rounded_total") or 0)
 	grand_total = flt(doc.get("grand_total") or 0)
@@ -189,6 +304,8 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"additional_discount_percentage": flt(doc.get("additional_discount_percentage") or 0),
 		"additional_discount": flt(doc.get("discount_amount") or 0),
 		"apply_discount_on": doc.get("apply_discount_on") or "",
+		"promotions": promotions,
+		"promotion_count": len(promotions),
 		"taxes": tax_rows,
 		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0),
 		"all_taxes_included": bool(tax_rows and all(row["included_in_print_rate"] for row in tax_rows)),
@@ -219,6 +336,15 @@ def _serialize_item(row) -> dict[str, Any]:
 		"pricing_rule": row.get("pricing_rules") or row.get("pricing_rule") or "",
 		"is_free_item": bool(cint(row.get("is_free_item") or 0)),
 	}
+
+
+def _promotion_names(doc) -> list[str]:
+	result: list[str] = []
+	for row in list(doc.get("pricing_rules") or []):
+		name = str(row.get("pricing_rule") or "").strip()
+		if name and name not in result:
+			result.append(name)
+	return result
 
 
 def _item_savings(row) -> float:
