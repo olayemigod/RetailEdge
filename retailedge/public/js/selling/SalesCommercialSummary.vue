@@ -14,6 +14,11 @@
 		</div>
 
 		<template v-else-if="preview">
+			<div v-if="preview.promotions?.length" class="sales-commercial-summary__promotions" role="status">
+				<strong>{{ preview.promotions.length === 1 ? "Promotion applied" : `${preview.promotions.length} promotions applied` }}</strong>
+				<span>{{ preview.promotions.join(", ") }}</span>
+			</div>
+
 			<div class="sales-commercial-summary__rows">
 				<div v-if="Number(preview.item_discount_total || 0)">
 					<span>List value</span>
@@ -136,6 +141,22 @@ export default {
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: .06em;
+}
+.sales-commercial-summary__promotions {
+	display: grid;
+	gap: 2px;
+	padding: 9px 11px;
+	border: 1px solid var(--edge-color-success, #12b76a);
+	border-radius: 8px;
+	background: var(--edge-color-success-subtle, #ecfdf3);
+}
+.sales-commercial-summary__promotions strong {
+	font-size: .82rem;
+	color: var(--edge-color-success, #067647);
+}
+.sales-commercial-summary__promotions span {
+	font-size: .76rem;
+	color: var(--edge-color-ink-600, #475467);
 }
 .sales-commercial-summary__rows {
 	display: grid;
