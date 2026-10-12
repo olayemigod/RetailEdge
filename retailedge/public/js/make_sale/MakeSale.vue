@@ -222,6 +222,7 @@
 							:true-value="1"
 							:false-value="0"
 							:disabled="editingSavedDraft || !canEditUpdateStock"
+							@change="queueCommercialPreview()"
 						/>
 						<span>
 							<strong>Update Stock</strong>
@@ -251,6 +252,12 @@
 						@update:rows="updateItems"
 					/>
 
+					<SalesCommercialSummary
+						:preview="commercialPreview"
+						:loading="previewLoading"
+						:error="previewError"
+					/>
+
 					<p class="guided-invoice-hint">
 						The effective Selling Price List follows Settings → Price List Governance. When switching is allowed, Branch-assigned alternatives can be chosen here.
 						Changing the Price List automatically re-prices entered items, and the server validates pricing again when the draft is saved.
@@ -277,7 +284,7 @@
 							<button
 								type="submit"
 								class="edge-button edge-button--primary"
-								:disabled="saving || loading || !transactionContextReady"
+								:disabled="saving || loading || !transactionContextReady || commercialPreviewBlocked"
 							>
 								{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}
 							</button>
@@ -318,6 +325,7 @@ import {
 import StandardDeliveryCompletionDialog from "../professional_selling/StandardDeliveryCompletionDialog.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
+import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
 import {
 	openRetailPrinterSetup,
 	printRetailReceipt,
@@ -328,6 +336,7 @@ const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoi
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
+const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview";
 const UPDATE_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
@@ -375,6 +384,18 @@ function cloneValues(values) {
 	return JSON.parse(JSON.stringify(values || emptyValues()));
 }
 
+function editableSnapshot(values) {
+	const clean = cloneValues(values);
+	clean.items = (clean.items || []).map((row) => {
+		const copy = { ...row };
+		delete copy.uom;
+		delete copy.discount_percentage;
+		delete copy.amount;
+		return copy;
+	});
+	return JSON.stringify(clean);
+}
+
 function cleanStoredPayload(raw, maxAge) {
 	if (!raw) return null;
 	try {
@@ -403,6 +424,7 @@ export default {
 		StandardDeliveryCompletionDialog,
 		SimplePaymentDialog,
 		PartyBusinessContext,
+		SalesCommercialSummary,
 	},
 	data() {
 		return {
@@ -417,6 +439,12 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingCache: new Map(),
+			previewLoading: false,
+			previewError: "",
+			previewToken: 0,
+			previewTimer: null,
+			previewAppliedSignature: "",
+			commercialPreview: null,
 			recoveryCandidate: null,
 			handoffNotice: "",
 			recoveryTimer: null,
@@ -440,8 +468,11 @@ export default {
 			},
 			itemColumns: [
 				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
+				{ fieldname: "uom", label: "UOM", fieldtype: "Data", read_only: 1 },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
 				{ fieldname: "rate", label: "Selling Rate", fieldtype: "Currency", placeholder: "Auto price" },
+				{ fieldname: "discount_percentage", label: "Discount %", fieldtype: "Float", read_only: 1 },
+				{ fieldname: "amount", label: "Amount", fieldtype: "Currency", read_only: 1 },
 			],
 		};
 	},
@@ -488,7 +519,7 @@ export default {
 			};
 		},
 		hasUnsavedChanges() {
-			return Boolean(this.initialSnapshot && JSON.stringify(this.values) !== this.initialSnapshot);
+			return Boolean(this.initialSnapshot && editableSnapshot(this.values) !== this.initialSnapshot);
 		},
 		populatedItemCount() {
 			return (this.values.items || []).filter((row) => row?.item_code).length;
@@ -501,6 +532,32 @@ export default {
 			const itemCount = (values.items || []).filter((row) => row?.item_code).length;
 			const party = values.customer ? `Customer: ${values.customer}. ` : "";
 			return `${party}${itemCount} item${itemCount === 1 ? "" : "s"} entered.`;
+		},
+		commercialPreviewRequired() {
+			return Boolean(this.values.customer && this.populatedItemCount && this.transactionContextReady);
+		},
+		commercialPreviewSignature() {
+			return JSON.stringify({
+				company: this.values.company || "",
+				branch: this.values.branch || "",
+				warehouse: this.values.warehouse || "",
+				customer: this.values.customer || "",
+				price_list: this.values.price_list || "",
+				posting_date: this.values.posting_date || "",
+				update_stock: Number(this.values.update_stock || 0),
+				items: (this.values.items || [])
+					.filter((row) => row?.item_code)
+					.map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0), rate: row.rate === "" ? "" : Number(row.rate || 0) })),
+			});
+		},
+		commercialPreviewBlocked() {
+			if (!this.commercialPreviewRequired) return false;
+			return Boolean(
+				this.previewLoading
+				|| this.previewError
+				|| !this.commercialPreview
+				|| this.previewAppliedSignature !== this.commercialPreviewSignature
+			);
 		},
 	},
 	watch: {
@@ -534,6 +591,8 @@ export default {
 		window.removeEventListener("retailedge-make-sale-page-show", this._onPageShow);
 		window.removeEventListener("beforeunload", this._beforeUnload);
 		if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer);
+		if (this.previewTimer) window.clearTimeout(this.previewTimer);
+		this.previewToken += 1;
 	},
 	methods: {
 		async loadPage() {
@@ -546,6 +605,7 @@ export default {
 			this.workflowError = "";
 			this.handoffNotice = "";
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			try {
 				const [data, shell] = await Promise.all([
 					callMethod(CONTEXT_METHOD),
@@ -571,7 +631,8 @@ export default {
 			};
 			if (!this.formContext.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
 			this.applyRatePermission();
-			this.initialSnapshot = JSON.stringify(this.values);
+			this.invalidateCommercialPreview();
+			this.initialSnapshot = editableSnapshot(this.values);
 		},
 		applyRatePermission(pricing = this.formContext.pricing || {}) {
 			const readOnly = pricing?.allow_rate_change === false;
@@ -681,10 +742,12 @@ export default {
 					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
 				}
 				await this.revalidateCarriedPricing();
+				this.queueCommercialPreview();
 				this.handoffNotice = "Quick Sale data was carried into Make Sale and its current Branch, Stock Location and Price List access were revalidated.";
 			} catch (error) {
 				this.values.branch = "";
 				this.values.warehouse = "";
+				this.invalidateCommercialPreview();
 				this.saveError = errorMessage(error, "The carried Branch or Stock Location is no longer available. Choose the current transaction context before saving.");
 				this.handoffNotice = "Quick Sale line items were carried over, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
 			}
@@ -709,7 +772,7 @@ export default {
 				this.editingSavedDraft = false;
 				this.recoveryCandidate = null;
 				this.clearRecovery();
-				this.initialSnapshot = JSON.stringify(this.values);
+				this.initialSnapshot = editableSnapshot(this.values);
 				this.handoffNotice = `Sales Invoice ${name} was saved from Quick Sale. Review workflow/submission below or continue editing on this page.`;
 				return true;
 			} catch (error) {
@@ -755,10 +818,12 @@ export default {
 					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
 				}
 				await this.revalidateCarriedPricing();
+				this.queueCommercialPreview();
 				this.handoffNotice = "Recovered unsaved Make Sale work and revalidated its current Branch, Stock Location and Price List access.";
 			} catch (error) {
 				this.values.branch = "";
 				this.values.warehouse = "";
+				this.invalidateCommercialPreview();
 				this.saveError = errorMessage(error, "The recovered Branch or Stock Location is no longer available. Choose the current transaction context before saving.");
 				this.handoffNotice = "Recovered line items, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
 			}
@@ -851,15 +916,19 @@ export default {
 			} catch (_error) {
 				await this.refreshPriceListContext();
 			}
-			if ((this.values.price_list || "") === previous) return;
+			if ((this.values.price_list || "") === previous) {
+				this.queueCommercialPreview();
+				return;
+			}
 			this.pricingCache.clear();
-			this.values.items = (this.values.items || []).map((row) => row?.item_code ? { ...row, rate: "" } : { ...row });
+			this.values.items = (this.values.items || []).map((row) => row?.item_code ? { ...row, rate: "", uom: "", discount_percentage: "", amount: "" } : { ...row });
 			this.refreshAllItemPricing();
 		},
 		async setPriceList(next) {
 			if (this.formContext.pricing?.locked) return;
 			this.values.price_list = next || "";
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			try {
 				await this.refreshPriceListContext({ preserveSelection: true });
 				this.refreshAllItemPricing();
@@ -873,6 +942,7 @@ export default {
 			if (this.values.posting_date === value) return;
 			this.values.posting_date = value;
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			this.refreshAllItemPricing();
 		},
 		searchLineLink(column, query) {
@@ -897,8 +967,9 @@ export default {
 			const changed = this.values.customer !== value;
 			this.values.customer = value;
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (changed) {
-				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
 					.catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
@@ -908,8 +979,9 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
-			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (!this.values.company) return;
 			if (!branch) {
 				try {
@@ -940,6 +1012,7 @@ export default {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -963,17 +1036,22 @@ export default {
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
 			const changed = [];
+			let rateOnlyChanged = false;
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
 				const itemChanged = row.item_code !== prior.item_code;
 				const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);
+				const rateChanged = String(row.rate ?? "") !== String(prior.rate ?? "");
 				if (row.item_code && (itemChanged || quantityChanged)) {
 					changed.push(index);
-					return { ...row, rate: "" };
+					return { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
 				}
+				if (row.item_code && rateChanged) rateOnlyChanged = true;
 				return { ...row };
 			});
+			this.invalidateCommercialPreview();
 			for (const index of changed) this.loadItemPricing(index);
+			if (!changed.length || rateOnlyChanged) this.queueCommercialPreview();
 		},
 		pricingCacheKey(row) {
 			return [
@@ -1019,20 +1097,97 @@ export default {
 					source: result?.source || this.formContext.pricing?.source || "item_fallback",
 				};
 				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
+				this.queueCommercialPreview();
 			} catch (error) {
-				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+				if (this.pricingTokens[index] === token) {
+					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+					this.invalidateCommercialPreview();
+				}
 			}
 		},
 		refreshAllItemPricing() {
+			this.invalidateCommercialPreview();
 			if (!this.values.customer) return;
+			let pending = 0;
 			this.values.items.forEach((row, index) => {
 				if (!row.item_code) return;
-				this.values.items[index] = { ...row, rate: "" };
+				pending += 1;
+				this.values.items[index] = { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
 				this.loadItemPricing(index);
+			});
+			if (!pending) this.queueCommercialPreview();
+		},
+		invalidateCommercialPreview() {
+			if (this.previewTimer) {
+				window.clearTimeout(this.previewTimer);
+				this.previewTimer = null;
+			}
+			this.previewToken += 1;
+			this.previewLoading = false;
+			this.previewError = "";
+			this.previewAppliedSignature = "";
+			this.commercialPreview = null;
+		},
+		queueCommercialPreview(delay = 120) {
+			if (this.previewTimer) window.clearTimeout(this.previewTimer);
+			this.previewAppliedSignature = "";
+			this.previewError = "";
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				this.commercialPreview = null;
+				return;
+			}
+			this.previewLoading = true;
+			this.previewTimer = window.setTimeout(() => {
+				this.previewTimer = null;
+				this.refreshCommercialPreview();
+			}, Math.max(0, Number(delay || 0)));
+		},
+		async refreshCommercialPreview() {
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				return;
+			}
+			const signature = this.commercialPreviewSignature;
+			const token = ++this.previewToken;
+			this.previewLoading = true;
+			this.previewError = "";
+			try {
+				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, { values: this.values }, "POST");
+				if (token !== this.previewToken || signature !== this.commercialPreviewSignature) return;
+				this.commercialPreview = result || null;
+				this.previewAppliedSignature = signature;
+				this.applyCommercialPreviewItems(result?.items || []);
+			} catch (error) {
+				if (token !== this.previewToken) return;
+				this.commercialPreview = null;
+				this.previewAppliedSignature = "";
+				this.previewError = errorMessage(error, "Check the Customer, items, pricing or tax setup and try again.");
+			} finally {
+				if (token === this.previewToken) this.previewLoading = false;
+			}
+		},
+		applyCommercialPreviewItems(items) {
+			const rows = (items || []).filter((row) => !row?.is_free_item);
+			let cursor = 0;
+			this.values.items = (this.values.items || []).map((row) => {
+				if (!row?.item_code) return { ...row };
+				const previewRow = rows[cursor++] || {};
+				return {
+					...row,
+					uom: previewRow.uom || "",
+					discount_percentage: Number(previewRow.discount_percentage || 0),
+					amount: Number(previewRow.amount || 0),
+				};
 			});
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;
+			if (this.commercialPreviewBlocked) {
+				this.saveError = this.previewError || "Wait for the current invoice total to finish updating before saving.";
+				this.queueCommercialPreview(0);
+				return;
+			}
 			this.saveError = "";
 			this.saving = true;
 			try {
@@ -1054,8 +1209,9 @@ export default {
 					}, "POST");
 					this.syncPageFromDraftPreview(result);
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
-					this.initialSnapshot = JSON.stringify(this.values);
+					this.initialSnapshot = editableSnapshot(this.values);
 					this.editingSavedDraft = false;
+					this.invalidateCommercialPreview();
 					await this.refreshSavedDocumentPreview({ silent: true });
 					frappe.show_alert?.({ message: `Sales Invoice ${result.name} draft updated`, indicator: "green" });
 					return;
@@ -1063,8 +1219,9 @@ export default {
 				result = await callMethod(CREATE_METHOD, { values: this.values });
 				if (!result?.name) throw new Error("The Sales Invoice draft was not returned after saving.");
 				this.clearRecovery();
-				this.initialSnapshot = JSON.stringify(this.values);
+				this.initialSnapshot = editableSnapshot(this.values);
 				this.savedDocument = { ...result, doctype: result.doctype || "Sales Invoice" };
+				this.invalidateCommercialPreview();
 				await this.refreshSavedDocumentPreview({ silent: true });
 				frappe.show_alert?.({ message: `Sales Invoice ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) {
@@ -1086,7 +1243,8 @@ export default {
 				}
 				this.syncPageFromDraftPreview(preview);
 				this.editingSavedDraft = true;
-				this.initialSnapshot = JSON.stringify(this.values);
+				this.initialSnapshot = editableSnapshot(this.values);
+				this.queueCommercialPreview(0);
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to reload this Sales Invoice draft for editing.");
 			} finally {
@@ -1097,6 +1255,7 @@ export default {
 			const close = () => {
 				try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {}
 				this.editingSavedDraft = false;
+				this.invalidateCommercialPreview();
 				this.saveError = "";
 			};
 			if (!this.hasUnsavedChanges) return close();
@@ -1134,7 +1293,7 @@ export default {
 				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Sales Invoice" };
 				if (Number(preview?.docstatus || 0) === 0) {
 					this.syncPageFromDraftPreview(preview);
-					if (!this.editingSavedDraft) this.initialSnapshot = JSON.stringify(this.values);
+					if (!this.editingSavedDraft) this.initialSnapshot = editableSnapshot(this.values);
 				}
 			} catch (error) {
 				this.workflowError = errorMessage(error, "Unable to refresh Sales Invoice workflow status.");
@@ -1201,7 +1360,7 @@ export default {
 				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "standard" }, "GET");
 				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Sales Invoice" };
 				this.syncPageFromDraftPreview(preview);
-				this.initialSnapshot = JSON.stringify(this.values);
+				this.initialSnapshot = editableSnapshot(this.values);
 			} catch (error) {
 				this.workflowError = errorMessage(error, "Unable to apply this Sales Invoice workflow action.");
 			} finally {
@@ -1335,6 +1494,7 @@ export default {
 			this.savedDocument = null;
 			this.editingSavedDraft = false;
 			this.recoveryCandidate = null;
+			this.invalidateCommercialPreview();
 			await this.loadPage();
 		},
 		openAdvancedNative() {
