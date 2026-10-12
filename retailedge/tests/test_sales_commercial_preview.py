@@ -26,7 +26,10 @@ class TestSalesCommercialPreview(unittest.TestCase):
 	def test_preview_uses_erpnext_document_calculation_without_persistence(self):
 		doc = _PreviewDocument()
 		_prepare_preview_document(doc)
-		self.assertEqual(doc.calls, ["set_missing_values", "calculate_taxes_and_totals"])
+		self.assertEqual(
+			doc.calls,
+			["set_missing_values", "set_taxes_and_charges", "calculate_taxes_and_totals"],
+		)
 
 	def test_item_savings_uses_price_list_reference_without_negative_savings(self):
 		self.assertEqual(
@@ -92,6 +95,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertEqual(result["items"][0]["uom"], "Nos")
 		self.assertEqual(result["items"][0]["amount"], 1800)
 		self.assertEqual(result["items"][0]["discount_percentage"], 10)
+		self.assertEqual(result["subtotal"], 1800)
 		self.assertEqual(result["item_discount_total"], 200)
 		self.assertEqual(result["total_taxes_and_charges"], 135)
 		self.assertEqual(result["invoice_total"], 1940)
@@ -102,6 +106,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		source = (APP_ROOT / "sales_commercial_preview.py").read_text()
 		self.assertIn('@frappe.whitelist(methods=["POST"])', source)
 		self.assertIn('doc.run_method("set_missing_values")', source)
+		self.assertIn('doc.run_method("set_taxes_and_charges")', source)
 		self.assertIn('doc.run_method("calculate_taxes_and_totals")', source)
 		self.assertIn("resolve_sales_item_pricing", source)
 		self.assertIn("resolve_price_list_context", source)
