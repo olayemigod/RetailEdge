@@ -321,7 +321,10 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		).read_text()
 		self.assertIn("Only enabled Branch Setup entries for the active Company are shown.", component)
 		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
-		self.assertIn(':disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"', component)
+		self.assertIn(
+			':disabled="saving || loading || !transactionContextReady || quickEntryTooLarge || commercialPreviewBlocked"',
+			component,
+		)
 		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):
