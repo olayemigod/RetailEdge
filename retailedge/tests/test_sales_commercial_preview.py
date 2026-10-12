@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import frappe
 
@@ -40,8 +40,8 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertEqual(
 			mock_permission.call_args_list,
 			[
-				unittest.mock.call("Sales Invoice", "create"),
-				unittest.mock.call("Sales Invoice", "write"),
+				call("Sales Invoice", "create"),
+				call("Sales Invoice", "write"),
 			],
 		)
 
@@ -60,7 +60,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			0,
 		)
 
-	def test_serialized_preview_exposes_line_amount_tax_and_payable_total(self):
+	def test_serialized_preview_exposes_line_amount_discount_tax_and_payable_total(self):
 		doc = frappe._dict(
 			company="RetailEdge Consulting",
 			branch="Ketu",
@@ -96,6 +96,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 					rate=7.5,
 					tax_amount=135,
 					tax_amount_after_discount_amount=135,
+					included_in_print_rate=0,
 				),
 			],
 			total_taxes_and_charges=135,
@@ -114,12 +115,41 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertEqual(result["items"][0]["uom"], "Nos")
 		self.assertEqual(result["items"][0]["amount"], 1800)
 		self.assertEqual(result["items"][0]["discount_percentage"], 10)
+		self.assertEqual(result["list_value"], 2000)
 		self.assertEqual(result["subtotal"], 1800)
+		self.assertEqual(result["net_total"], 1800)
 		self.assertEqual(result["item_discount_total"], 200)
 		self.assertEqual(result["total_taxes_and_charges"], 135)
+		self.assertFalse(result["all_taxes_included"])
 		self.assertEqual(result["invoice_total"], 1940)
 		self.assertTrue(result["has_discount"])
 		self.assertTrue(result["has_tax"])
+
+	def test_inclusive_tax_is_explicit_in_preview(self):
+		doc = frappe._dict(
+			company="RetailEdge Consulting",
+			branch="Ketu",
+			customer="CUST-001",
+			currency="NGN",
+			items=[frappe._dict(item_code="ITEM-001", qty=1, rate=1075, amount=1075)],
+			total=1075,
+			net_total=1000,
+			taxes=[
+				frappe._dict(
+					description="VAT",
+					rate=7.5,
+					tax_amount=75,
+					tax_amount_after_discount_amount=75,
+					included_in_print_rate=1,
+				),
+			],
+			total_taxes_and_charges=75,
+			grand_total=1075,
+			rounded_total=1075,
+		)
+		result = _serialize_preview(doc, branch="Ketu", pricing_context={"currency": "NGN"})
+		self.assertTrue(result["all_taxes_included"])
+		self.assertEqual(result["invoice_total"], 1075)
 
 	def test_backend_contract_is_post_only_and_has_no_persistence_path(self):
 		source = (APP_ROOT / "sales_commercial_preview.py").read_text()
@@ -163,8 +193,10 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			self.assertIn("token !== this.previewToken", source)
 			self.assertIn("signature !== this.commercialPreviewSignature", source)
 
+		self.assertIn("List value", summary)
 		self.assertIn("Invoice Total", summary)
 		self.assertIn("Item savings", summary)
+		self.assertIn("Tax (included)", summary)
 		self.assertIn("View tax breakdown", summary)
 		self.assertIn("Updating total", summary)
 
