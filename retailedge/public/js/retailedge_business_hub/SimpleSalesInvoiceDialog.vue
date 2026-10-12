@@ -112,6 +112,7 @@
 					:true-value="1"
 					:false-value="0"
 					:disabled="!canEditUpdateStock"
+					@change="queueCommercialPreview()"
 				/>
 				<span>
 					<strong>Update Stock</strong>
@@ -134,6 +135,12 @@
 			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">
 				Quick Sale is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
 			</p>
+
+			<SalesCommercialSummary
+				:preview="commercialPreview"
+				:loading="previewLoading"
+				:error="previewError"
+			/>
 
 			<p class="guided-invoice-hint">
 				The effective Selling Price List follows Price List Governance. When switching is allowed, Branch-assigned alternatives can be chosen.
@@ -167,7 +174,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"
+						:disabled="saving || loading || !transactionContextReady || quickEntryTooLarge || commercialPreviewBlocked"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -189,12 +196,14 @@ import {
 	QUICK_ENTRY_MAX_LINES,
 } from "./guidedEntryUtils";
 import PartyBusinessContext from "./PartyBusinessContext.vue";
+import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
+const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -238,6 +247,7 @@ export default {
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 		PartyBusinessContext,
+		SalesCommercialSummary,
 	},
 	props: {
 		nativeFallbackEnabled: { type: Boolean, default: false },
@@ -253,6 +263,12 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingCache: new Map(),
+			previewLoading: false,
+			previewError: "",
+			previewToken: 0,
+			previewTimer: null,
+			previewAppliedSignature: "",
+			commercialPreview: null,
 			initialValuesSnapshot: "",
 			formContext: {},
 			values: emptyValues(),
@@ -267,6 +283,7 @@ export default {
 					fieldtype: "Link",
 					placeholder: "Search item",
 				},
+				{ fieldname: "uom", label: "UOM", fieldtype: "Data", read_only: 1 },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
 				{
 					fieldname: "rate",
@@ -274,6 +291,8 @@ export default {
 					fieldtype: "Currency",
 					placeholder: "Auto price",
 				},
+				{ fieldname: "discount_percentage", label: "Discount %", fieldtype: "Float", read_only: 1 },
+				{ fieldname: "amount", label: "Amount", fieldtype: "Currency", read_only: 1 },
 			],
 		};
 	},
@@ -327,6 +346,32 @@ export default {
 		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
 		quickEntryTooLarge() { return this.populatedItemCount > QUICK_ENTRY_MAX_LINES; },
 		QUICK_ENTRY_MAX_LINES() { return QUICK_ENTRY_MAX_LINES; },
+		commercialPreviewRequired() {
+			return Boolean(this.values.customer && this.populatedItemCount && this.transactionContextReady);
+		},
+		commercialPreviewSignature() {
+			return JSON.stringify({
+				company: this.values.company || "",
+				branch: this.values.branch || "",
+				warehouse: this.values.warehouse || "",
+				customer: this.values.customer || "",
+				price_list: this.values.price_list || "",
+				posting_date: this.values.posting_date || "",
+				update_stock: Number(this.values.update_stock || 0),
+				items: (this.values.items || [])
+					.filter((row) => row?.item_code)
+					.map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0), rate: row.rate === "" ? "" : Number(row.rate || 0) })),
+			});
+		},
+		commercialPreviewBlocked() {
+			if (!this.commercialPreviewRequired) return false;
+			return Boolean(
+				this.previewLoading
+				|| this.previewError
+				|| !this.commercialPreview
+				|| this.previewAppliedSignature !== this.commercialPreviewSignature
+			);
+		},
 	},
 	watch: {
 		open(next) {
@@ -336,12 +381,17 @@ export default {
 	mounted() {
 		if (this.open) this.loadContext();
 	},
+	beforeUnmount() {
+		if (this.previewTimer) window.clearTimeout(this.previewTimer);
+		this.previewToken += 1;
+	},
 	methods: {
 		async loadContext() {
 			this.loading = true;
 			this.loadError = "";
 			this.saveError = "";
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -430,6 +480,7 @@ export default {
 			if (this.formContext.pricing?.locked) return;
 			this.values.price_list = next || "";
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			try {
 				await this.refreshPriceListContext({ preserveSelection: true });
 				this.refreshAllItemPricing();
@@ -440,6 +491,7 @@ export default {
 		},
 		postingDateChanged() {
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			this.refreshAllItemPricing();
 		},
 		searchLineLink(column, query) {
@@ -464,8 +516,9 @@ export default {
 			const changed = this.values.customer !== value;
 			this.values.customer = value;
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (changed) {
-				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
 					.catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
@@ -475,8 +528,9 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
-			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (!this.values.company) return;
 			if (!branch) {
 				try {
@@ -509,6 +563,7 @@ export default {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
 			this.pricingCache.clear();
+			this.invalidateCommercialPreview();
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -532,17 +587,22 @@ export default {
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
 			const changed = [];
+			let rateOnlyChanged = false;
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
 				const itemChanged = row.item_code !== prior.item_code;
 				const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);
+				const rateChanged = String(row.rate ?? "") !== String(prior.rate ?? "");
 				if (row.item_code && (itemChanged || quantityChanged)) {
 					changed.push(index);
-					return { ...row, rate: "" };
+					return { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
 				}
+				if (row.item_code && rateChanged) rateOnlyChanged = true;
 				return { ...row };
 			});
+			this.invalidateCommercialPreview();
 			for (const index of changed) this.loadItemPricing(index);
+			if (!changed.length || rateOnlyChanged) this.queueCommercialPreview();
 		},
 		pricingCacheKey(row) {
 			return [
@@ -590,24 +650,99 @@ export default {
 					source: result?.source || this.formContext.pricing?.source || "item_fallback",
 				};
 				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
+				this.queueCommercialPreview();
 			} catch (error) {
 				if (this.pricingTokens[index] === token) {
 					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+					this.invalidateCommercialPreview();
 				}
 			}
 		},
 		refreshAllItemPricing() {
+			this.invalidateCommercialPreview();
 			if (!this.values.customer) return;
+			let pending = 0;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {
-					this.values.items[index] = { ...row, rate: "" };
+					pending += 1;
+					this.values.items[index] = { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
 					this.loadItemPricing(index);
 				}
+			});
+			if (!pending) this.queueCommercialPreview();
+		},
+		invalidateCommercialPreview() {
+			if (this.previewTimer) {
+				window.clearTimeout(this.previewTimer);
+				this.previewTimer = null;
+			}
+			this.previewToken += 1;
+			this.previewLoading = false;
+			this.previewError = "";
+			this.previewAppliedSignature = "";
+			this.commercialPreview = null;
+		},
+		queueCommercialPreview(delay = 120) {
+			if (this.previewTimer) window.clearTimeout(this.previewTimer);
+			this.previewAppliedSignature = "";
+			this.previewError = "";
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				this.commercialPreview = null;
+				return;
+			}
+			this.previewLoading = true;
+			this.previewTimer = window.setTimeout(() => {
+				this.previewTimer = null;
+				this.refreshCommercialPreview();
+			}, Math.max(0, Number(delay || 0)));
+		},
+		async refreshCommercialPreview() {
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				return;
+			}
+			const signature = this.commercialPreviewSignature;
+			const token = ++this.previewToken;
+			this.previewLoading = true;
+			this.previewError = "";
+			try {
+				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, { values: this.values }, "POST");
+				if (token !== this.previewToken || signature !== this.commercialPreviewSignature) return;
+				this.commercialPreview = result || null;
+				this.previewAppliedSignature = signature;
+				this.applyCommercialPreviewItems(result?.items || []);
+			} catch (error) {
+				if (token !== this.previewToken) return;
+				this.commercialPreview = null;
+				this.previewAppliedSignature = "";
+				this.previewError = errorMessage(error, "Check the Customer, items, pricing or tax setup and try again.");
+			} finally {
+				if (token === this.previewToken) this.previewLoading = false;
+			}
+		},
+		applyCommercialPreviewItems(items) {
+			const rows = (items || []).filter((row) => !row?.is_free_item);
+			let cursor = 0;
+			this.values.items = (this.values.items || []).map((row) => {
+				if (!row?.item_code) return { ...row };
+				const previewRow = rows[cursor++] || {};
+				return {
+					...row,
+					uom: previewRow.uom || "",
+					discount_percentage: Number(previewRow.discount_percentage || 0),
+					amount: Number(previewRow.amount || 0),
+				};
 			});
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;
 			if (this.quickEntryTooLarge) { this.saveError = `Quick Sale supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in the full page for larger transactions.`; return; }
+			if (this.commercialPreviewBlocked) {
+				this.saveError = this.previewError || "Wait for the current invoice total to finish updating before saving.";
+				this.queueCommercialPreview(0);
+				return;
+			}
 			this.saveError = "";
 			this.saving = true;
 			try {
