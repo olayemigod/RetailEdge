@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 
 from retailedge.sales_commercial_preview import (
+	_assert_can_preview_sales_invoice,
 	_item_savings,
 	_prepare_preview_document,
 	_serialize_preview,
@@ -30,6 +32,23 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			doc.calls,
 			["set_missing_values", "set_taxes_and_charges", "calculate_taxes_and_totals"],
 		)
+
+	@patch("retailedge.sales_commercial_preview.frappe.has_permission")
+	def test_preview_allows_existing_draft_editor_without_create_permission(self, mock_permission):
+		mock_permission.side_effect = lambda _doctype, permission: permission == "write"
+		_assert_can_preview_sales_invoice()
+		self.assertEqual(
+			mock_permission.call_args_list,
+			[
+				unittest.mock.call("Sales Invoice", "create"),
+				unittest.mock.call("Sales Invoice", "write"),
+			],
+		)
+
+	@patch("retailedge.sales_commercial_preview.frappe.has_permission", return_value=False)
+	def test_preview_fails_closed_without_create_or_write_permission(self, _mock_permission):
+		with self.assertRaises(frappe.PermissionError):
+			_assert_can_preview_sales_invoice()
 
 	def test_item_savings_uses_price_list_reference_without_negative_savings(self):
 		self.assertEqual(
