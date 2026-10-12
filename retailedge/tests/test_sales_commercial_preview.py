@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from unittest.mock import call, patch
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import frappe
 
 from retailedge.sales_commercial_preview import (
 	_assert_can_preview_sales_invoice,
+	_get_editable_sales_invoice,
 	_item_savings,
 	_prepare_preview_document,
 	_serialize_preview,
+	_validate_saved_preview_identity,
 )
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -19,36 +22,93 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 class _PreviewDocument:
 	def __init__(self):
 		self.calls: list[str] = []
+		self.values = {"ignore_pricing_rule": 0}
 
 	def run_method(self, method: str):
 		self.calls.append(method)
 
+	def get(self, fieldname: str):
+		return self.values.get(fieldname)
+
 
 class TestSalesCommercialPreview(unittest.TestCase):
-	def test_preview_uses_erpnext_document_calculation_without_persistence(self):
+	@patch("retailedge.sales_commercial_preview.apply_pricing_rule_on_transaction")
+	def test_preview_uses_erpnext_commercial_calculation_without_persistence(self, mock_transaction_pricing):
 		doc = _PreviewDocument()
 		_prepare_preview_document(doc)
 		self.assertEqual(
 			doc.calls,
 			["set_missing_values", "set_taxes_and_charges", "calculate_taxes_and_totals"],
 		)
-
-	@patch("retailedge.sales_commercial_preview.frappe.has_permission")
-	def test_preview_allows_existing_draft_editor_without_create_permission(self, mock_permission):
-		mock_permission.side_effect = lambda _doctype, permission: permission == "write"
-		_assert_can_preview_sales_invoice()
-		self.assertEqual(
-			mock_permission.call_args_list,
-			[
-				call("Sales Invoice", "create"),
-				call("Sales Invoice", "write"),
-			],
-		)
+		mock_transaction_pricing.assert_called_once_with(doc)
 
 	@patch("retailedge.sales_commercial_preview.frappe.has_permission", return_value=False)
-	def test_preview_fails_closed_without_create_or_write_permission(self, _mock_permission):
+	def test_new_preview_requires_create_permission(self, _mock_permission):
 		with self.assertRaises(frappe.PermissionError):
 			_assert_can_preview_sales_invoice()
+
+	@patch("retailedge.sales_commercial_preview.frappe.has_permission", return_value=True)
+	def test_new_preview_accepts_create_permission(self, mock_permission):
+		_assert_can_preview_sales_invoice()
+		mock_permission.assert_called_once_with("Sales Invoice", "create")
+
+	@patch("retailedge.sales_commercial_preview.frappe.has_permission")
+	@patch("retailedge.sales_commercial_preview.frappe.get_doc")
+	@patch("retailedge.sales_commercial_preview.frappe.db.exists", return_value=True)
+	def test_saved_draft_preview_requires_read_and_write_on_exact_document(
+		self,
+		_mock_exists,
+		mock_get_doc,
+		mock_permission,
+	):
+		doc = SimpleNamespace(docstatus=0)
+		mock_get_doc.return_value = doc
+		mock_permission.side_effect = [True, True]
+		self.assertIs(_get_editable_sales_invoice("SINV-0001"), doc)
+		mock_get_doc.assert_called_once_with("Sales Invoice", "SINV-0001")
+		self.assertEqual(mock_permission.call_count, 2)
+
+	@patch("retailedge.sales_commercial_preview.frappe.has_permission")
+	@patch("retailedge.sales_commercial_preview.frappe.get_doc")
+	@patch("retailedge.sales_commercial_preview.frappe.db.exists", return_value=True)
+	def test_saved_draft_preview_fails_closed_without_write_permission(
+		self,
+		_mock_exists,
+		mock_get_doc,
+		mock_permission,
+	):
+		mock_get_doc.return_value = SimpleNamespace(docstatus=0)
+		mock_permission.side_effect = [True, False]
+		with self.assertRaises(frappe.PermissionError):
+			_get_editable_sales_invoice("SINV-0001")
+
+	def test_saved_preview_protected_commercial_identity_cannot_be_switched(self):
+		doc = frappe._dict(
+			company="RetailEdge Consulting",
+			customer="CUST-001",
+			selling_price_list="Standard Selling",
+			update_stock=1,
+		)
+		_validate_saved_preview_identity(
+			doc,
+			{
+				"company": "RetailEdge Consulting",
+				"customer": "CUST-001",
+				"branch": "Ketu",
+				"price_list": "Standard Selling",
+				"warehouse": "Stores - RC",
+				"update_stock": 1,
+			},
+			branch="Ketu",
+			default_warehouse="Stores - RC",
+		)
+		with self.assertRaises(frappe.ValidationError):
+			_validate_saved_preview_identity(
+				doc,
+				{"customer": "CUST-OTHER"},
+				branch="Ketu",
+				default_warehouse="Stores - RC",
+			)
 
 	def test_item_savings_uses_price_list_reference_without_negative_savings(self):
 		self.assertEqual(
@@ -60,7 +120,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			0,
 		)
 
-	def test_serialized_preview_exposes_line_amount_discount_tax_and_payable_total(self):
+	def test_serialized_preview_exposes_line_amount_promotion_discount_tax_and_payable_total(self):
 		doc = frappe._dict(
 			company="RetailEdge Consulting",
 			branch="Ketu",
@@ -69,6 +129,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			selling_price_list="Standard Selling",
 			tax_category="VAT",
 			taxes_and_charges="Nigeria Sales VAT",
+			pricing_rules=[frappe._dict(pricing_rule="Bulk Battery Promotion")],
 			items=[
 				frappe._dict(
 					item_code="ITEM-001",
@@ -119,6 +180,8 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertEqual(result["subtotal"], 1800)
 		self.assertEqual(result["net_total"], 1800)
 		self.assertEqual(result["item_discount_total"], 200)
+		self.assertEqual(result["promotions"], ["Bulk Battery Promotion"])
+		self.assertEqual(result["promotion_count"], 1)
 		self.assertEqual(result["total_taxes_and_charges"], 135)
 		self.assertFalse(result["all_taxes_included"])
 		self.assertEqual(result["invoice_total"], 1940)
@@ -157,8 +220,11 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertIn('doc.run_method("set_missing_values")', source)
 		self.assertIn('doc.run_method("set_taxes_and_charges")', source)
 		self.assertIn('doc.run_method("calculate_taxes_and_totals")', source)
+		self.assertIn("apply_pricing_rule_on_transaction(doc)", source)
 		self.assertIn("resolve_sales_item_pricing", source)
 		self.assertIn("resolve_price_list_context", source)
+		self.assertIn("update_draft_items(", source)
+		self.assertIn("frappe.get_doc(stored.as_dict())", source)
 		for forbidden in (
 			"doc.insert(",
 			"doc.save(",
@@ -193,6 +259,9 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			self.assertIn("token !== this.previewToken", source)
 			self.assertIn("signature !== this.commercialPreviewSignature", source)
 
+		self.assertIn("document_name", make_sale)
+		self.assertIn("this.editingSavedDraft", make_sale)
+		self.assertIn("Promotion applied", summary)
 		self.assertIn("List value", summary)
 		self.assertIn("Invoice Total", summary)
 		self.assertIn("Item savings", summary)
