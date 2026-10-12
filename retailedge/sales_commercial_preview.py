@@ -10,7 +10,6 @@ from retailedge.guided_entry_context import get_guided_branch_names
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.guided_sales_invoice import (
 	SALES_INVOICE_DOCTYPE,
-	_assert_can_create_sales_invoice,
 	_assert_read_permission,
 	_coerce_values,
 	_normalise_items,
@@ -27,7 +26,7 @@ def get_sales_invoice_commercial_preview(values: dict | str | None = None) -> di
 	show the same pricing, discount, tax and total information the Sales Invoice
 	will use when the user eventually saves the draft.
 	"""
-	_assert_can_create_sales_invoice()
+	_assert_can_preview_sales_invoice()
 	values = _coerce_values(values)
 	user = frappe.session.user
 	company, branch, warehouse = _validate_transaction_context(values, user=user)
@@ -72,6 +71,17 @@ def get_sales_invoice_commercial_preview(values: dict | str | None = None) -> di
 	)
 	_prepare_preview_document(doc)
 	return _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
+
+
+def _assert_can_preview_sales_invoice() -> None:
+	if frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"):
+		return
+	if frappe.has_permission(SALES_INVOICE_DOCTYPE, "write"):
+		return
+	frappe.throw(
+		_("You do not have permission to calculate a Sales Invoice."),
+		frappe.PermissionError,
+	)
 
 
 def _build_preview_document(
