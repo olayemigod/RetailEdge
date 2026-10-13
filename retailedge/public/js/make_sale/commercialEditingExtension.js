@@ -73,6 +73,21 @@ function mapEditableItems(rows = []) {
 	}));
 }
 
+function mutuallyExclusiveManualDiscountRows(nextRows = [], previousRows = []) {
+	return nextRows.map((row, index) => {
+		const prior = previousRows[index] || {};
+		const percentageChanged = String(row?.[MANUAL_PERCENTAGE] ?? "") !== String(prior?.[MANUAL_PERCENTAGE] ?? "");
+		const amountChanged = String(row?.[MANUAL_AMOUNT] ?? "") !== String(prior?.[MANUAL_AMOUNT] ?? "");
+		if (percentageChanged && Number(row?.[MANUAL_PERCENTAGE] || 0) > 0) {
+			return { ...row, [MANUAL_AMOUNT]: 0 };
+		}
+		if (amountChanged && Number(row?.[MANUAL_AMOUNT] || 0) > 0) {
+			return { ...row, [MANUAL_PERCENTAGE]: 0 };
+		}
+		return { ...row };
+	});
+}
+
 export function applyMakeSaleCommercialEditing(MakeSale) {
 	if (!MakeSale || MakeSale.__retailedgeCommercialEditingApplied) return MakeSale;
 	MakeSale.__retailedgeCommercialEditingApplied = true;
@@ -103,6 +118,12 @@ export function applyMakeSaleCommercialEditing(MakeSale) {
 			this.invalidateCommercialPreview();
 			this.queueCommercialPreview(0);
 		}
+	};
+
+	const baseUpdateItems = MakeSale.methods.updateItems;
+	MakeSale.methods.updateItems = function retailedgeUpdateItems(nextRows) {
+		const rows = mutuallyExclusiveManualDiscountRows(nextRows || [], this.values.items || []);
+		return baseUpdateItems.call(this, rows);
 	};
 
 	const baseSetCustomer = MakeSale.methods.setCustomer;
@@ -173,14 +194,6 @@ export function applyMakeSaleCommercialEditing(MakeSale) {
 			}, "POST");
 			this.syncPageFromDraftPreview(result);
 			this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
-			this.initialSnapshot = JSON.stringify(JSON.parse(this.initialSnapshot || "{}"));
-			this.initialSnapshot = JSON.stringify({
-				...JSON.parse(this.initialSnapshot || "{}"),
-				...JSON.parse(JSON.stringify(this.values || {})),
-			});
-			this.initialSnapshot = MakeSale.__retailedgeEditableSnapshot
-				? MakeSale.__retailedgeEditableSnapshot(this.values)
-				: JSON.stringify(this.values || {});
 			this.editingSavedDraft = false;
 			this.savedCommercialTermCapabilities = null;
 			this.invalidateCommercialPreview();
