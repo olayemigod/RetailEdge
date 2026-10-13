@@ -12,7 +12,11 @@ MANUAL_DISCOUNT_AMOUNT = "manual_discount_amount"
 
 
 def normalise_manual_item_discount(values: dict[str, Any], *, index: int | None = None) -> dict[str, Any]:
-	"""Return bounded manual line-discount input without touching ERPNext pricing truth."""
+	"""Return bounded manual line-discount input without touching ERPNext pricing truth.
+
+	ERPNext Sales Invoice Item ``discount_amount`` is a per-unit discount against
+	the item rate. RetailEdge keeps that native meaning and labels it accordingly.
+	"""
 	percentage_present = MANUAL_DISCOUNT_PERCENTAGE in values
 	amount_present = MANUAL_DISCOUNT_AMOUNT in values
 	percentage = flt(values.get(MANUAL_DISCOUNT_PERCENTAGE) or 0) if percentage_present else 0.0
@@ -26,12 +30,12 @@ def normalise_manual_item_discount(values: dict[str, Any], *, index: int | None 
 		)
 	if amount < 0:
 		frappe.throw(
-			_("Manual Discount Amount{0} cannot be negative.").format(label),
+			_("Discount per Unit{0} cannot be negative.").format(label),
 			frappe.ValidationError,
 		)
 	if percentage and amount:
 		frappe.throw(
-			_("Use either Manual Discount % or Manual Discount Amount{0}, not both.").format(label),
+			_("Use either Manual Discount % or Discount per Unit{0}, not both.").format(label),
 			frappe.ValidationError,
 		)
 
