@@ -220,14 +220,19 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 		).read_text(encoding="utf-8")
 
 		self.assertIn('label: "Manual Discount %"', extension)
-		self.assertIn('label: "Manual Discount Amount"', extension)
+		self.assertIn('label: "Discount per Unit"', extension)
 		self.assertIn('label: "Applied %"', extension)
 		self.assertIn("manual_discount_percentage", extension)
 		self.assertIn("manual_discount_amount", extension)
 		self.assertIn("tax_category", extension)
 		self.assertIn("applyMakeSaleCommercialEditing(MakeSale)", bundle)
 		self.assertNotIn("Manual Discount %", quick)
-		self.assertNotIn("Manual Discount Amount", quick)
+		self.assertNotIn("Discount per Unit", quick)
+
+	def test_native_discount_amount_is_documented_as_per_unit(self):
+		source = (APP_ROOT / "sales_item_discounts.py").read_text(encoding="utf-8")
+		self.assertIn("per-unit discount", source)
+		self.assertIn("Discount per Unit", source)
 
 	def test_tax_category_cascades_across_shared_and_quick_sale_ui(self):
 		controls = (
