@@ -8,7 +8,16 @@ from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
 
 from erpnext.accounts.doctype.pricing_rule.utils import validate_coupon_code
-from erpnext.accounts.services.taxes import get_taxes_and_charges
+
+try:
+	from erpnext.accounts.services.taxes import get_taxes_and_charges
+except ImportError:
+	# Earlier ERPNext v16 releases expose the same helper from AccountsController.
+	# RetailEdge's upgrade matrix must remain importable before ERPNext introduced
+	# accounts.services.taxes. Permission/company checks stay in this module.
+	from erpnext.controllers.accounts_controller import (
+		_get_taxes_and_charges as get_taxes_and_charges,
+	)
 
 
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
