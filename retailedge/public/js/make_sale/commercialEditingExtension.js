@@ -76,6 +76,9 @@ function mapEditableItems(rows = []) {
 function mutuallyExclusiveManualDiscountRows(nextRows = [], previousRows = []) {
 	return nextRows.map((row, index) => {
 		const prior = previousRows[index] || {};
+		if ((row?.item_code || "") !== (prior?.item_code || "")) {
+			return { ...row, [MANUAL_PERCENTAGE]: 0, [MANUAL_AMOUNT]: 0 };
+		}
 		const percentageChanged = String(row?.[MANUAL_PERCENTAGE] ?? "") !== String(prior?.[MANUAL_PERCENTAGE] ?? "");
 		const amountChanged = String(row?.[MANUAL_AMOUNT] ?? "") !== String(prior?.[MANUAL_AMOUNT] ?? "");
 		if (percentageChanged && Number(row?.[MANUAL_PERCENTAGE] || 0) > 0) {
