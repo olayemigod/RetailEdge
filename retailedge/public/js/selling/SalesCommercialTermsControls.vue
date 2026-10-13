@@ -80,7 +80,7 @@
 				<strong>{{ resolvedTaxLabel || "ERPNext automatic tax" }}</strong>
 				<small v-if="resolvedTaxCategory">Tax category: {{ resolvedTaxCategory }}</small>
 			</div>
-	</div>
+		</div>
 	</details>
 </template>
 
@@ -89,6 +89,12 @@ const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
 		: {};
+
+function discountModeFromValues(values = {}) {
+	if (Number(values.additional_discount_percentage || 0) > 0) return "percentage";
+	if (Number(values.discount_amount || 0) > 0) return "amount";
+	return "none";
+}
 
 export default {
 	name: "SalesCommercialTermsControls",
@@ -106,11 +112,14 @@ export default {
 		openByDefault: { type: Boolean, default: false },
 	},
 	emits: ["change"],
+	data() {
+		return {
+			selectedDiscountMode: discountModeFromValues(this.values),
+		};
+	},
 	computed: {
 		discountMode() {
-			if (Number(this.values.additional_discount_percentage || 0) > 0) return "percentage";
-			if (Number(this.values.discount_amount || 0) > 0) return "amount";
-			return "none";
+			return this.selectedDiscountMode;
 		},
 		discountModeOptions() {
 			return [
@@ -133,10 +142,24 @@ export default {
 		},
 		activeTermCount() {
 			let count = 0;
-			if (this.discountMode !== "none") count += 1;
+			if (Number(this.values.additional_discount_percentage || 0) > 0 || Number(this.values.discount_amount || 0) > 0) count += 1;
 			if (this.values.coupon_code) count += 1;
 			if (this.values.taxes_and_charges) count += 1;
 			return count;
+		},
+	},
+	watch: {
+		"values.additional_discount_percentage"(value) {
+			if (Number(value || 0) > 0) this.selectedDiscountMode = "percentage";
+		},
+		"values.discount_amount"(value) {
+			if (Number(value || 0) > 0) this.selectedDiscountMode = "amount";
+		},
+		"values.customer"(value, previous) {
+			if (value !== previous) this.selectedDiscountMode = discountModeFromValues(this.values);
+		},
+		"values.company"(value, previous) {
+			if (value !== previous) this.selectedDiscountMode = discountModeFromValues(this.values);
 		},
 	},
 	methods: {
@@ -145,6 +168,7 @@ export default {
 		},
 		setDiscountMode(mode) {
 			const next = mode || "none";
+			this.selectedDiscountMode = next;
 			if (next === "percentage") {
 				this.emitChange({ discount_amount: 0, additional_discount_percentage: Number(this.values.additional_discount_percentage || 0), apply_discount_on: this.values.apply_discount_on || "Grand Total" });
 				return;
@@ -156,9 +180,11 @@ export default {
 			this.emitChange({ additional_discount_percentage: 0, discount_amount: 0, apply_discount_on: this.values.apply_discount_on || "Grand Total" });
 		},
 		setDiscountPercentage(value) {
+			this.selectedDiscountMode = "percentage";
 			this.emitChange({ additional_discount_percentage: Number(value || 0), discount_amount: 0 });
 		},
 		setDiscountAmount(value) {
+			this.selectedDiscountMode = "amount";
 			this.emitChange({ discount_amount: Number(value || 0), additional_discount_percentage: 0 });
 		},
 		setDiscountTarget(value) {
