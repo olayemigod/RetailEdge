@@ -232,6 +232,7 @@ function emptyValues() {
 		price_list: "",
 		update_stock: 1,
 		coupon_code: "",
+		tax_category: "",
 		taxes_and_charges: "",
 		additional_discount_percentage: 0,
 		discount_amount: 0,
@@ -384,6 +385,7 @@ export default {
 				posting_date: this.values.posting_date || "",
 				update_stock: Number(this.values.update_stock || 0),
 				coupon_code: this.values.coupon_code || "",
+				tax_category: this.values.tax_category || "",
 				taxes_and_charges: this.values.taxes_and_charges || "",
 				additional_discount_percentage: Number(this.values.additional_discount_percentage || 0),
 				discount_amount: Number(this.values.discount_amount || 0),
@@ -471,6 +473,7 @@ export default {
 					customer: this.values.customer,
 					price_list: this.values.price_list,
 					coupon_code: this.values.coupon_code,
+					tax_category: this.values.tax_category,
 					taxes_and_charges: this.values.taxes_and_charges,
 				},
 			});
@@ -560,6 +563,7 @@ export default {
 			this.invalidateCommercialPreview();
 			if (changed) {
 				this.values.coupon_code = "";
+				this.values.tax_category = "";
 				this.values.taxes_and_charges = "";
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext()
