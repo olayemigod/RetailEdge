@@ -16,7 +16,6 @@
 					label="Additional discount"
 					:disabled="disabled"
 					@update:modelValue="setDiscountMode"
-					@change="setDiscountMode"
 				/>
 
 				<EdgeInput
@@ -49,7 +48,6 @@
 					label="Apply discount to"
 					:disabled="disabled"
 					@update:modelValue="setDiscountTarget"
-					@change="setDiscountTarget"
 				/>
 			</div>
 
@@ -184,9 +182,9 @@ export default {
 
 <style scoped>
 .sales-commercial-terms {
-	border: 1px solid var(--edge-border, #e5e7eb);
+	border: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
 	border-radius: 10px;
-	background: var(--edge-surface, #fff);
+	background: var(--edge-color-surface, var(--edge-surface, #fff));
 }
 .sales-commercial-terms summary {
 	display: flex;
@@ -195,7 +193,7 @@ export default {
 	gap: 12px;
 	padding: 12px 14px;
 	cursor: pointer;
-	color: var(--edge-text, #344054);
+	color: var(--edge-color-ink-700, var(--edge-text, #344054));
 }
 .sales-commercial-terms summary > span:first-child {
 	display: grid;
@@ -204,7 +202,7 @@ export default {
 .sales-commercial-terms summary small,
 .resolved-tax small,
 .resolved-tax span {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, var(--edge-text-muted, #667085));
 }
 .term-count {
 	font-size: .75rem;
@@ -225,9 +223,9 @@ export default {
 	display: grid;
 	gap: 2px;
 	padding: 10px 12px;
-	border: 1px solid var(--edge-border, #e5e7eb);
+	border: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
 	border-radius: 8px;
-	background: var(--edge-surface-muted, #f8fafc);
+	background: var(--edge-color-surface-muted, var(--edge-surface-muted, #f8fafc));
 }
 @media (max-width: 720px) {
 	.sales-commercial-terms__grid {
