@@ -125,10 +125,16 @@ class TestSalesCommercialTerms(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			apply_sales_commercial_terms(doc, {"taxes_and_charges": "Other VAT"})
 
-	def test_tax_template_cannot_be_cleared_through_guided_terms(self):
-		doc = _Doc(company="RetailEdge Consulting")
-		with self.assertRaises(frappe.ValidationError):
-			apply_sales_commercial_terms(doc, {"taxes_and_charges": ""})
+	def test_blank_tax_template_means_automatic_and_cannot_clear_existing_tax(self):
+		doc = _Doc(
+			company="RetailEdge Consulting",
+			taxes_and_charges="Nigeria Sales VAT - RC",
+			taxes=[{"description": "VAT", "rate": 7.5}],
+		)
+		result = apply_sales_commercial_terms(doc, {"taxes_and_charges": ""})
+		self.assertEqual(doc.get("taxes_and_charges"), "Nigeria Sales VAT - RC")
+		self.assertEqual(doc.get("taxes"), [{"description": "VAT", "rate": 7.5}])
+		self.assertEqual(result["taxes_and_charges"], "Nigeria Sales VAT - RC")
 
 	def test_discount_application_only_sets_erpnext_fields(self):
 		doc = _Doc(company="RetailEdge Consulting")
@@ -161,6 +167,7 @@ class TestSalesCommercialTerms(unittest.TestCase):
 		self.assertIn("validate_coupon_code", source)
 		self.assertIn("get_taxes_and_charges", source)
 		self.assertIn("frappe.has_permission", source)
+		self.assertIn("get_sales_commercial_edit_context", source)
 
 	def test_new_sale_preview_and_draft_share_one_commercial_terms_helper(self):
 		preview = (APP_ROOT / "sales_commercial_preview.py").read_text(encoding="utf-8")
@@ -186,6 +193,56 @@ class TestSalesCommercialTerms(unittest.TestCase):
 			"ignore_permissions=True",
 		):
 			self.assertNotIn(forbidden, guided)
+
+	def test_saved_draft_adapter_keeps_standard_completion_authority_and_no_commit(self):
+		source = (APP_ROOT / "sales_commercial_draft_update.py").read_text(encoding="utf-8")
+		self.assertIn("update_standard_sales_invoice_draft(", source)
+		self.assertIn("apply_sales_commercial_terms(doc, terms)", source)
+		self.assertLess(
+			source.index("update_standard_sales_invoice_draft("),
+			source.index("apply_sales_commercial_terms(doc, terms)"),
+		)
+		self.assertIn("doc.save()", source)
+		for forbidden in (
+			"frappe.db.commit(",
+			"doc.submit(",
+			"ignore_permissions=True",
+			"GL Entry",
+			"Stock Ledger Entry",
+			"Payment Ledger Entry",
+		):
+			self.assertNotIn(forbidden, source)
+
+	def test_quick_sale_uses_edgesuite_commercial_controls_and_exact_date(self):
+		quick = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text(encoding="utf-8")
+		controls = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "selling"
+			/ "SalesCommercialTermsControls.vue"
+		).read_text(encoding="utf-8")
+		self.assertIn("SalesCommercialTermsControls", quick)
+		self.assertIn('label="Posting Date"', quick)
+		self.assertIn('type="date"', quick)
+		for fieldname in (
+			"coupon_code",
+			"taxes_and_charges",
+			"additional_discount_percentage",
+			"discount_amount",
+			"apply_discount_on",
+		):
+			self.assertIn(fieldname, quick)
+		self.assertIn("EdgeDropdown", controls)
+		self.assertIn("EdgeInput", controls)
+		self.assertIn("EdgeLinkField", controls)
+		self.assertIn("Automatic tax treatment", controls)
 
 
 if __name__ == "__main__":
