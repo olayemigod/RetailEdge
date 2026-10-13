@@ -18,6 +18,10 @@ from retailedge.guided_sales_invoice import (
 	_validate_transaction_context,
 )
 from retailedge.professional_draft_items import update_draft_items
+from retailedge.sales_commercial_terms import (
+	apply_sales_commercial_terms,
+	get_sales_commercial_term_capabilities,
+)
 from retailedge.standard_sales_invoice_completion import (
 	_build_preview as _build_completion_preview,
 	_validate_invoice_context,
@@ -90,6 +94,7 @@ def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 		items=items,
 		user=user,
 	)
+	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
 	return _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
 
@@ -132,6 +137,7 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 			selected_price_list=str(stored.get("selling_price_list") or "").strip(),
 		)
 
+	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
 	return _serialize_preview(
 		doc,
@@ -295,6 +301,7 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"customer": doc.get("customer") or "",
 		"currency": doc.get("currency") or pricing_context.get("currency") or "",
 		"selling_price_list": doc.get("selling_price_list") or pricing_context.get("price_list") or "",
+		"coupon_code": doc.get("coupon_code") or "",
 		"tax_category": doc.get("tax_category") or "",
 		"taxes_and_charges": doc.get("taxes_and_charges") or "",
 		"items": item_rows,
@@ -317,6 +324,7 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"invoice_total": invoice_total,
 		"has_discount": bool(item_savings or flt(doc.get("discount_amount") or 0)),
 		"has_tax": bool(flt(doc.get("total_taxes_and_charges") or 0) or tax_rows),
+		"commercial_term_capabilities": get_sales_commercial_term_capabilities(),
 		"is_preview": True,
 	}
 
