@@ -252,6 +252,16 @@
 						@update:rows="updateItems"
 					/>
 
+					<SalesCommercialTermsControls
+						:values="values"
+						:capabilities="commercialTermCapabilities"
+						:preview="commercialPreview"
+						:searcher="searchCommercialTerm"
+						:disabled="saving || previewLoading"
+						:openByDefault="editingSavedDraft"
+						@change="updateCommercialTerms"
+					/>
+
 					<SalesCommercialSummary
 						:preview="commercialPreview"
 						:loading="previewLoading"
@@ -326,6 +336,7 @@ import StandardDeliveryCompletionDialog from "../professional_selling/StandardDe
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
+import SalesCommercialTermsControls from "../selling/SalesCommercialTermsControls.vue";
 import {
 	openRetailPrinterSetup,
 	printRetailReceipt,
@@ -337,7 +348,9 @@ const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice
 const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
 const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview";
-const UPDATE_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
+const COMMERCIAL_TERM_CONTEXT_METHOD = "retailedge.sales_commercial_terms.get_sales_commercial_edit_context";
+const COMMERCIAL_TERM_SEARCH_METHOD = "retailedge.sales_commercial_terms.search_sales_commercial_term_options";
+const UPDATE_WITH_TERMS_METHOD = "retailedge.sales_commercial_draft_update.update_sales_invoice_draft_with_commercial_terms";
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
@@ -360,6 +373,11 @@ function emptyValues() {
 		customer: "",
 		price_list: "",
 		update_stock: 1,
+		coupon_code: "",
+		taxes_and_charges: "",
+		additional_discount_percentage: 0,
+		discount_amount: 0,
+		apply_discount_on: "Grand Total",
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -425,6 +443,7 @@ export default {
 		SimplePaymentDialog,
 		PartyBusinessContext,
 		SalesCommercialSummary,
+		SalesCommercialTermsControls,
 	},
 	data() {
 		return {
@@ -445,6 +464,7 @@ export default {
 			previewTimer: null,
 			previewAppliedSignature: "",
 			commercialPreview: null,
+			savedCommercialTermCapabilities: null,
 			recoveryCandidate: null,
 			handoffNotice: "",
 			recoveryTimer: null,
@@ -485,6 +505,12 @@ export default {
 		},
 		canEditUpdateStock() {
 			return Boolean(this.formContext.capabilities?.can_edit_update_stock);
+		},
+		commercialTermCapabilities() {
+			if (this.editingSavedDraft && this.savedCommercialTermCapabilities) return this.savedCommercialTermCapabilities;
+			return this.commercialPreview?.commercial_term_capabilities
+				|| this.formContext.capabilities?.commercial_terms
+				|| {};
 		},
 		transactionContextReady() {
 			if (!this.values.update_stock) return true;
@@ -545,6 +571,11 @@ export default {
 				price_list: this.values.price_list || "",
 				posting_date: this.values.posting_date || "",
 				update_stock: Number(this.values.update_stock || 0),
+				coupon_code: this.values.coupon_code || "",
+				taxes_and_charges: this.values.taxes_and_charges || "",
+				additional_discount_percentage: Number(this.values.additional_discount_percentage || 0),
+				discount_amount: Number(this.values.discount_amount || 0),
+				apply_discount_on: this.values.apply_discount_on || "Grand Total",
 				items: (this.values.items || [])
 					.filter((row) => row?.item_code)
 					.map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0), rate: row.rate === "" ? "" : Number(row.rate || 0) })),
@@ -601,6 +632,7 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.savedDocument = null;
+			this.savedCommercialTermCapabilities = null;
 			this.recoveryCandidate = null;
 			this.workflowError = "";
 			this.handoffNotice = "";
@@ -624,6 +656,7 @@ export default {
 			}
 		},
 		applyFreshDefaults(defaults) {
+			this.savedCommercialTermCapabilities = null;
 			this.values = {
 				...emptyValues(),
 				...(defaults || {}),
@@ -770,6 +803,7 @@ export default {
 				this.savedDocument = { ...preview, doctype: "Sales Invoice" };
 				this.syncPageFromDraftPreview(preview);
 				this.editingSavedDraft = false;
+				this.savedCommercialTermCapabilities = null;
 				this.recoveryCandidate = null;
 				this.clearRecovery();
 				this.initialSnapshot = editableSnapshot(this.values);
@@ -859,6 +893,7 @@ export default {
 		resetForm() {
 			const reset = () => {
 				this.recoveryCandidate = null;
+				this.savedCommercialTermCapabilities = null;
 				this.clearRecovery();
 				this.applyFreshDefaults(this.formContext.defaults || {});
 				this.saveError = "";
@@ -879,6 +914,8 @@ export default {
 					warehouse: this.values.warehouse,
 					customer: this.values.customer,
 					price_list: this.values.price_list,
+					coupon_code: this.values.coupon_code,
+					taxes_and_charges: this.values.taxes_and_charges,
 				},
 			});
 			return Array.isArray(results) ? results : [];
@@ -894,6 +931,26 @@ export default {
 		},
 		searchPriceList(query) {
 			return this.searchOptions("price_list", query);
+		},
+		async searchCommercialTerm(fieldname, query) {
+			if (this.editingSavedDraft && this.savedDocument?.name) {
+				const results = await callMethod(COMMERCIAL_TERM_SEARCH_METHOD, {
+					fieldname,
+					txt: query || "",
+					values: {
+						document_name: this.savedDocument.name,
+						company: this.values.company,
+						customer: this.values.customer,
+					},
+				});
+				return Array.isArray(results) ? results : [];
+			}
+			return this.searchOptions(fieldname, query);
+		},
+		updateCommercialTerms(patch) {
+			this.values = { ...this.values, ...(patch || {}) };
+			this.invalidateCommercialPreview();
+			this.queueCommercialPreview(0);
 		},
 		async refreshPriceListContext({ preserveSelection = false } = {}) {
 			if (!this.values.company) return;
@@ -969,6 +1026,8 @@ export default {
 			this.pricingCache.clear();
 			this.invalidateCommercialPreview();
 			if (changed) {
+				this.values.coupon_code = "";
+				this.values.taxes_and_charges = "";
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
@@ -1152,8 +1211,10 @@ export default {
 			const token = ++this.previewToken;
 			this.previewLoading = true;
 			this.previewError = "";
+			const args = { values: this.values };
+			if (this.editingSavedDraft && this.savedDocument?.name) args.document_name = this.savedDocument.name;
 			try {
-				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, { values: this.values }, "POST");
+				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, args, "POST");
 				if (token !== this.previewToken || signature !== this.commercialPreviewSignature) return;
 				this.commercialPreview = result || null;
 				this.previewAppliedSignature = signature;
@@ -1162,7 +1223,7 @@ export default {
 				if (token !== this.previewToken) return;
 				this.commercialPreview = null;
 				this.previewAppliedSignature = "";
-				this.previewError = errorMessage(error, "Check the Customer, items, pricing or tax setup and try again.");
+				this.previewError = errorMessage(error, "Check the Customer, items, pricing, discount or tax setup and try again.");
 			} finally {
 				if (token === this.previewToken) this.previewLoading = false;
 			}
@@ -1193,12 +1254,17 @@ export default {
 			try {
 				let result;
 				if (this.savedDocument?.name && this.editingSavedDraft) {
-					result = await callMethod(UPDATE_METHOD, {
+					result = await callMethod(UPDATE_WITH_TERMS_METHOD, {
 						name: this.savedDocument.name,
 						expected_modified: this.savedDocument.modified || "",
 						values: {
 							posting_date: this.values.posting_date,
 							remarks: this.values.remarks || "",
+							coupon_code: this.values.coupon_code || "",
+							taxes_and_charges: this.values.taxes_and_charges || "",
+							additional_discount_percentage: Number(this.values.additional_discount_percentage || 0),
+							discount_amount: Number(this.values.discount_amount || 0),
+							apply_discount_on: this.values.apply_discount_on || "Grand Total",
 							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({
 								name: row.name || "",
 								item_code: row.item_code,
@@ -1211,6 +1277,7 @@ export default {
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 					this.initialSnapshot = editableSnapshot(this.values);
 					this.editingSavedDraft = false;
+					this.savedCommercialTermCapabilities = null;
 					this.invalidateCommercialPreview();
 					await this.refreshSavedDocumentPreview({ silent: true });
 					frappe.show_alert?.({ message: `Sales Invoice ${result.name} draft updated`, indicator: "green" });
@@ -1242,6 +1309,12 @@ export default {
 					return;
 				}
 				this.syncPageFromDraftPreview(preview);
+				const commercialContext = await callMethod(
+					COMMERCIAL_TERM_CONTEXT_METHOD,
+					{ name: this.savedDocument.name },
+					"GET"
+				);
+				this.applyCommercialTermContext(commercialContext);
 				this.editingSavedDraft = true;
 				this.initialSnapshot = editableSnapshot(this.values);
 				this.queueCommercialPreview(0);
@@ -1251,10 +1324,16 @@ export default {
 				this.saving = false;
 			}
 		},
+		applyCommercialTermContext(context) {
+			if (!context) return;
+			if (context.terms) this.values = { ...this.values, ...context.terms };
+			this.savedCommercialTermCapabilities = context.capabilities || null;
+		},
 		cancelSavedDraftEdit() {
 			const close = () => {
 				try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {}
 				this.editingSavedDraft = false;
+				this.savedCommercialTermCapabilities = null;
 				this.invalidateCommercialPreview();
 				this.saveError = "";
 			};
@@ -1271,6 +1350,8 @@ export default {
 			if (Object.prototype.hasOwnProperty.call(result, "update_stock")) this.values.update_stock = result.update_stock ? 1 : 0;
 			if (result.posting_date) this.values.posting_date = result.posting_date;
 			if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || "";
+			if (result.commercial_terms) this.values = { ...this.values, ...result.commercial_terms };
+			if (result.commercial_term_capabilities) this.savedCommercialTermCapabilities = result.commercial_term_capabilities;
 			if (result.pricing) {
 				this.formContext = { ...this.formContext, pricing: { ...(this.formContext.pricing || {}), ...result.pricing } };
 				this.applyRatePermission(result.pricing);
@@ -1330,6 +1411,7 @@ export default {
 				}, "POST");
 				this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 				this.editingSavedDraft = false;
+				this.savedCommercialTermCapabilities = null;
 				await this.refreshSubmittedSalesDocumentState();
 				frappe.show_alert?.({ message: `Sales Invoice ${result.name || this.savedDocument.name} submitted`, indicator: "green" }, 7);
 			} catch (error) {
@@ -1353,6 +1435,7 @@ export default {
 				if (Number(result?.docstatus || 0) === 1) {
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 					this.editingSavedDraft = false;
+					this.savedCommercialTermCapabilities = null;
 					await this.refreshSubmittedSalesDocumentState();
 					frappe.show_alert?.({ message: `Sales Invoice ${result.name || this.savedDocument.name} submitted through Workflow`, indicator: "green" }, 7);
 					return;
@@ -1493,6 +1576,7 @@ export default {
 		async startAnother() {
 			this.savedDocument = null;
 			this.editingSavedDraft = false;
+			this.savedCommercialTermCapabilities = null;
 			this.recoveryCandidate = null;
 			this.invalidateCommercialPreview();
 			await this.loadPage();

@@ -260,9 +260,10 @@ class TestSalesCommercialPreview(unittest.TestCase):
 			self.assertIn("token !== this.previewToken", source)
 			self.assertIn("signature !== this.commercialPreviewSignature", source)
 
-		self.assertIn("document_name", make_sale_bundle)
-		self.assertIn("this.editingSavedDraft", make_sale_bundle)
-		self.assertIn("this.savedDocument?.name", make_sale_bundle)
+		self.assertIn("args.document_name = this.savedDocument.name", make_sale)
+		self.assertIn("this.editingSavedDraft", make_sale)
+		self.assertIn("this.savedDocument?.name", make_sale)
+		self.assertNotIn("MakeSale.methods.refreshCommercialPreview", make_sale_bundle)
 		self.assertIn("Promotion applied", summary)
 		self.assertIn("List value", summary)
 		self.assertIn("Invoice Total", summary)

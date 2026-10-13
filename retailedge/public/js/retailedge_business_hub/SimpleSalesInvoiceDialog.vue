@@ -57,10 +57,13 @@
 					@update:modelValue="setCustomer"
 				/>
 
-				<label class="guided-field">
-					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
-				</label>
+				<EdgeInput
+					:modelValue="values.posting_date"
+					label="Posting Date"
+					type="date"
+					required
+					@update:modelValue="postingDateChanged"
+				/>
 
 				<EdgeLinkField
 					v-if="branchEnabled"
@@ -136,6 +139,15 @@
 				Quick Sale is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
 			</p>
 
+			<SalesCommercialTermsControls
+				:values="values"
+				:capabilities="commercialTermCapabilities"
+				:preview="commercialPreview"
+				:searcher="searchCommercialTerm"
+				:disabled="saving || previewLoading"
+				@change="updateCommercialTerms"
+			/>
+
 			<SalesCommercialSummary
 				:preview="commercialPreview"
 				:loading="previewLoading"
@@ -197,6 +209,7 @@ import {
 } from "./guidedEntryUtils";
 import PartyBusinessContext from "./PartyBusinessContext.vue";
 import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
+import SalesCommercialTermsControls from "../selling/SalesCommercialTermsControls.vue";
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
@@ -218,6 +231,11 @@ function emptyValues() {
 		customer: "",
 		price_list: "",
 		update_stock: 1,
+		coupon_code: "",
+		taxes_and_charges: "",
+		additional_discount_percentage: 0,
+		discount_amount: 0,
+		apply_discount_on: "Grand Total",
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -242,12 +260,14 @@ export default {
 	name: "SimpleSalesInvoiceDialog",
 	components: {
 		EdgeModal: runtimeComponents.EdgeModal,
+		EdgeInput: runtimeComponents.EdgeInput,
 		EdgeLinkField: runtimeComponents.EdgeLinkField,
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 		PartyBusinessContext,
 		SalesCommercialSummary,
+		SalesCommercialTermsControls,
 	},
 	props: {
 		nativeFallbackEnabled: { type: Boolean, default: false },
@@ -306,6 +326,11 @@ export default {
 		canEditUpdateStock() {
 			return Boolean(this.formContext.capabilities?.can_edit_update_stock);
 		},
+		commercialTermCapabilities() {
+			return this.commercialPreview?.commercial_term_capabilities
+				|| this.formContext.capabilities?.commercial_terms
+				|| {};
+		},
 		transactionContextReady() {
 			if (!this.values.update_stock) return true;
 			if (this.requiresBranchSelection && !this.values.branch) return false;
@@ -358,6 +383,11 @@ export default {
 				price_list: this.values.price_list || "",
 				posting_date: this.values.posting_date || "",
 				update_stock: Number(this.values.update_stock || 0),
+				coupon_code: this.values.coupon_code || "",
+				taxes_and_charges: this.values.taxes_and_charges || "",
+				additional_discount_percentage: Number(this.values.additional_discount_percentage || 0),
+				discount_amount: Number(this.values.discount_amount || 0),
+				apply_discount_on: this.values.apply_discount_on || "Grand Total",
 				items: (this.values.items || [])
 					.filter((row) => row?.item_code)
 					.map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0), rate: row.rate === "" ? "" : Number(row.rate || 0) })),
@@ -440,6 +470,8 @@ export default {
 					warehouse: this.values.warehouse,
 					customer: this.values.customer,
 					price_list: this.values.price_list,
+					coupon_code: this.values.coupon_code,
+					taxes_and_charges: this.values.taxes_and_charges,
 				},
 			});
 			return Array.isArray(results) ? results : [];
@@ -455,6 +487,14 @@ export default {
 		},
 		searchPriceList(query) {
 			return this.searchOptions("price_list", query);
+		},
+		searchCommercialTerm(fieldname, query) {
+			return this.searchOptions(fieldname, query);
+		},
+		updateCommercialTerms(patch) {
+			this.values = { ...this.values, ...(patch || {}) };
+			this.invalidateCommercialPreview();
+			this.queueCommercialPreview(0);
 		},
 		applyRatePermission(pricing = this.formContext.pricing || {}) {
 			const readOnly = pricing?.allow_rate_change === false;
@@ -489,7 +529,8 @@ export default {
 				this.saveError = errorMessage(error, "Unable to use the selected Selling Price List.");
 			}
 		},
-		postingDateChanged() {
+		postingDateChanged(next) {
+			if (next !== undefined) this.values.posting_date = next || "";
 			this.pricingCache.clear();
 			this.invalidateCommercialPreview();
 			this.refreshAllItemPricing();
@@ -518,6 +559,8 @@ export default {
 			this.pricingCache.clear();
 			this.invalidateCommercialPreview();
 			if (changed) {
+				this.values.coupon_code = "";
+				this.values.taxes_and_charges = "";
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
@@ -716,7 +759,7 @@ export default {
 				if (token !== this.previewToken) return;
 				this.commercialPreview = null;
 				this.previewAppliedSignature = "";
-				this.previewError = errorMessage(error, "Check the Customer, items, pricing or tax setup and try again.");
+				this.previewError = errorMessage(error, "Check the Customer, items, pricing, discount or tax setup and try again.");
 			} finally {
 				if (token === this.previewToken) this.previewLoading = false;
 			}
