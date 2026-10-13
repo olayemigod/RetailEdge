@@ -64,11 +64,22 @@
 				/>
 
 				<EdgeLinkField
+					v-if="capabilities.can_select_tax_category"
+					:modelValue="values.tax_category || ''"
+					label="Tax category"
+					placeholder="Automatic tax category"
+					description="Choose an enabled Tax Category you can use. Changing it refreshes the compatible tax treatment."
+					:searcher="searchTaxCategory"
+					:disabled="disabled"
+					@update:modelValue="setTaxCategory"
+				/>
+
+				<EdgeLinkField
 					v-if="capabilities.can_select_tax_template"
 					:modelValue="values.taxes_and_charges || ''"
 					label="Tax template"
 					placeholder="Automatic tax treatment"
-					description="Leave blank to use ERPNext's automatic tax treatment."
+					description="values.tax_category ? 'Only templates compatible with the selected Tax Category are shown. Leave blank for ERPNext automatic tax treatment.' : 'Leave blank to use ERPNext automatic tax treatment.'"
 					:searcher="searchTaxTemplate"
 					:disabled="disabled"
 					@update:modelValue="setTaxTemplate"
@@ -144,6 +155,7 @@ export default {
 			let count = 0;
 			if (Number(this.values.additional_discount_percentage || 0) > 0 || Number(this.values.discount_amount || 0) > 0) count += 1;
 			if (this.values.coupon_code) count += 1;
+			if (this.values.tax_category) count += 1;
 			if (this.values.taxes_and_charges) count += 1;
 			return count;
 		},
@@ -193,11 +205,17 @@ export default {
 		setCoupon(value) {
 			this.emitChange({ coupon_code: value || "" });
 		},
+		setTaxCategory(value) {
+			this.emitChange({ tax_category: value || "", taxes_and_charges: "" });
+		},
 		setTaxTemplate(value) {
 			this.emitChange({ taxes_and_charges: value || "" });
 		},
 		searchCoupon(query) {
 			return this.searcher("coupon_code", query || "");
+		},
+		searchTaxCategory(query) {
+			return this.searcher("tax_category", query || "");
 		},
 		searchTaxTemplate(query) {
 			return this.searcher("taxes_and_charges", query || "");
