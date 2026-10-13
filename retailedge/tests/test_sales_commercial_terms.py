@@ -213,7 +213,7 @@ class TestSalesCommercialTerms(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
-	def test_quick_sale_uses_edgesuite_commercial_controls_and_exact_date(self):
+	def test_sales_surfaces_share_edgesuite_commercial_controls_and_exact_date(self):
 		quick = (
 			APP_ROOT
 			/ "public"
@@ -221,6 +221,7 @@ class TestSalesCommercialTerms(unittest.TestCase):
 			/ "retailedge_business_hub"
 			/ "SimpleSalesInvoiceDialog.vue"
 		).read_text(encoding="utf-8")
+		make_sale = (APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue").read_text(encoding="utf-8")
 		controls = (
 			APP_ROOT
 			/ "public"
@@ -228,21 +229,48 @@ class TestSalesCommercialTerms(unittest.TestCase):
 			/ "selling"
 			/ "SalesCommercialTermsControls.vue"
 		).read_text(encoding="utf-8")
-		self.assertIn("SalesCommercialTermsControls", quick)
-		self.assertIn('label="Posting Date"', quick)
-		self.assertIn('type="date"', quick)
-		for fieldname in (
-			"coupon_code",
-			"taxes_and_charges",
-			"additional_discount_percentage",
-			"discount_amount",
-			"apply_discount_on",
-		):
-			self.assertIn(fieldname, quick)
+
+		for source in (quick, make_sale):
+			self.assertIn("SalesCommercialTermsControls", source)
+			self.assertIn('label="Posting Date"', source)
+			self.assertIn('type="date"', source)
+			for fieldname in (
+				"coupon_code",
+				"taxes_and_charges",
+				"additional_discount_percentage",
+				"discount_amount",
+				"apply_discount_on",
+			):
+				self.assertIn(fieldname, source)
+
 		self.assertIn("EdgeDropdown", controls)
 		self.assertIn("EdgeInput", controls)
 		self.assertIn("EdgeLinkField", controls)
 		self.assertIn("Automatic tax treatment", controls)
+		self.assertIn("No manual discount", controls)
+
+	def test_make_sale_saved_draft_loads_exact_terms_and_uses_atomic_update(self):
+		make_sale = (APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue").read_text(encoding="utf-8")
+		self.assertIn("retailedge.sales_commercial_terms.get_sales_commercial_edit_context", make_sale)
+		self.assertIn("retailedge.sales_commercial_terms.search_sales_commercial_term_options", make_sale)
+		self.assertIn("retailedge.sales_commercial_draft_update.update_sales_invoice_draft_with_commercial_terms", make_sale)
+		self.assertIn("applyCommercialTermContext", make_sale)
+		self.assertIn("savedCommercialTermCapabilities", make_sale)
+		self.assertIn("args.document_name = this.savedDocument.name", make_sale)
+		self.assertIn("UPDATE_WITH_TERMS_METHOD", make_sale)
+		self.assertIn("COMMERCIAL_TERM_CONTEXT_METHOD", make_sale)
+		self.assertIn("COMMERCIAL_TERM_SEARCH_METHOD", make_sale)
+		self.assertIn("result.commercial_terms", make_sale)
+
+	def test_make_sale_real_commercial_terms_remain_part_of_dirty_state(self):
+		make_sale = (APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue").read_text(encoding="utf-8")
+		self.assertIn("delete copy.uom", make_sale)
+		self.assertIn("delete copy.discount_percentage", make_sale)
+		self.assertIn("delete copy.amount", make_sale)
+		self.assertNotIn("delete copy.coupon_code", make_sale)
+		self.assertNotIn("delete copy.taxes_and_charges", make_sale)
+		self.assertNotIn("delete copy.additional_discount_percentage", make_sale)
+		self.assertNotIn("delete copy.discount_amount", make_sale)
 
 
 if __name__ == "__main__":
