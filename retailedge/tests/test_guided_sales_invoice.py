@@ -32,6 +32,9 @@ class _DraftSalesInvoice(SimpleNamespace):
 			insert_calls=0,
 		)
 
+	def get(self, key, default=None):
+		return getattr(self, key, default)
+
 	def append(self, table, row):
 		self.items.append(frappe._dict(row))
 		return self.items[-1]
