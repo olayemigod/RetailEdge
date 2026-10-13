@@ -22,6 +22,13 @@ from retailedge.sales_commercial_terms import (
 	apply_sales_commercial_terms,
 	get_sales_commercial_term_capabilities,
 )
+from retailedge.sales_item_discounts import (
+	MANUAL_DISCOUNT_AMOUNT,
+	MANUAL_DISCOUNT_PERCENTAGE,
+	apply_manual_item_discount,
+	manual_item_discount_state,
+	validate_manual_item_discounts_after_pricing,
+)
 from retailedge.standard_sales_invoice_completion import (
 	_build_preview as _build_completion_preview,
 	_validate_invoice_context,
@@ -96,6 +103,7 @@ def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 	)
 	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
+	validate_manual_item_discounts_after_pricing(doc, items)
 	return _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
 
 
@@ -139,6 +147,8 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 
 	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
+	if requested_items is not None:
+		validate_manual_item_discounts_after_pricing(doc, requested_items)
 	return _serialize_preview(
 		doc,
 		branch=effective_branch,
@@ -229,7 +239,7 @@ def _build_preview_document(
 	if branch:
 		_set_branch(doc, branch)
 
-	for item in items:
+	for index, item in enumerate(items, start=1):
 		_assert_read_permission("Item", item["item_code"])
 		resolved = resolve_sales_item_pricing(
 			item_code=item["item_code"],
@@ -245,9 +255,10 @@ def _build_preview_document(
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
+		rate_locked = not bool(resolved.get("allow_rate_change", True))
 		if resolved_rate is None and manual_rate is None:
 			frappe.throw(_("No selling price could be resolved for Item {0}.").format(item["item_code"]))
-		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
+		if rate_locked:
 			effective_rate = resolved_rate
 		else:
 			effective_rate = manual_rate if manual_rate is not None else resolved_rate
@@ -261,7 +272,14 @@ def _build_preview_document(
 		}
 		if warehouse:
 			row["warehouse"] = warehouse
-		doc.append("items", row)
+		child = doc.append("items", row)
+		apply_manual_item_discount(
+			child,
+			item,
+			index=index,
+			rate_locked=rate_locked,
+			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+		)
 
 	return doc
 
@@ -330,6 +348,7 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 
 
 def _serialize_item(row) -> dict[str, Any]:
+	manual_discount = manual_item_discount_state(row)
 	return {
 		"item_code": row.get("item_code") or "",
 		"item_name": row.get("item_name") or row.get("item_code") or "",
@@ -339,11 +358,13 @@ def _serialize_item(row) -> dict[str, Any]:
 		"price_list_rate": flt(row.get("price_list_rate") or 0),
 		"discount_percentage": flt(row.get("discount_percentage") or 0),
 		"discount_amount": flt(row.get("discount_amount") or 0),
+		MANUAL_DISCOUNT_PERCENTAGE: manual_discount[MANUAL_DISCOUNT_PERCENTAGE],
+		MANUAL_DISCOUNT_AMOUNT: manual_discount[MANUAL_DISCOUNT_AMOUNT],
 		"rate": flt(row.get("rate") or 0),
 		"amount": flt(row.get("amount") or 0),
 		"net_rate": flt(row.get("net_rate") or row.get("rate") or 0),
 		"net_amount": flt(row.get("net_amount") or row.get("amount") or 0),
-		"pricing_rule": row.get("pricing_rules") or row.get("pricing_rule") or "",
+		"pricing_rule": manual_discount["pricing_rule"],
 		"is_free_item": bool(cint(row.get("is_free_item") or 0)),
 	}
 
