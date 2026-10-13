@@ -22,6 +22,7 @@ except ImportError:
 
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
 COUPON_DOCTYPE = "Coupon Code"
+TAX_CATEGORY_DOCTYPE = "Tax Category"
 TAX_TEMPLATE_DOCTYPE = "Sales Taxes and Charges Template"
 MAX_SEARCH_RESULTS = 20
 ALLOWED_DISCOUNT_TARGETS = {"Grand Total", "Net Total"}
@@ -39,6 +40,7 @@ def get_sales_commercial_term_capabilities(doc=None) -> dict[str, bool]:
 	return {
 		"can_edit_additional_discount": can_edit,
 		"can_use_coupon": bool(can_edit and _can_select(COUPON_DOCTYPE)),
+		"can_select_tax_category": bool(can_edit and _can_select(TAX_CATEGORY_DOCTYPE)),
 		"can_select_tax_template": bool(can_edit and _can_select(TAX_TEMPLATE_DOCTYPE)),
 	}
 
@@ -71,8 +73,21 @@ def search_sales_commercial_term_options(
 	if doc is not None:
 		values["company"] = str(doc.get("company") or "").strip()
 		values["customer"] = str(doc.get("customer") or "").strip()
+		values["tax_category"] = str(doc.get("tax_category") or "").strip()
 	limit = max(1, min(cint(limit) or MAX_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
 	query = str(txt or "").strip()
+
+	if fieldname == "tax_category":
+		if not _can_select(TAX_CATEGORY_DOCTYPE):
+			return []
+		return search_link(
+			TAX_CATEGORY_DOCTYPE,
+			query,
+			filters={"disabled": 0},
+			page_length=limit,
+			reference_doctype=SALES_INVOICE_DOCTYPE,
+			link_fieldname="tax_category",
+		)
 
 	if fieldname == "taxes_and_charges":
 		if not _can_select(TAX_TEMPLATE_DOCTYPE):
@@ -80,14 +95,11 @@ def search_sales_commercial_term_options(
 		company = str(values.get("company") or "").strip()
 		if not company:
 			return []
-		filters: dict[str, Any] = {"company": company, "disabled": 0}
-		return search_link(
-			TAX_TEMPLATE_DOCTYPE,
+		return _search_sales_tax_templates(
 			query,
-			filters=filters,
-			page_length=limit,
-			reference_doctype=SALES_INVOICE_DOCTYPE,
-			link_fieldname="taxes_and_charges",
+			company=company,
+			tax_category=str(values.get("tax_category") or "").strip(),
+			limit=limit,
 		)
 
 	if fieldname == "coupon_code":
@@ -106,6 +118,9 @@ def normalise_sales_commercial_terms(values: dict | str | None) -> dict[str, Any
 
 	if "coupon_code" in values:
 		result["coupon_code"] = str(values.get("coupon_code") or "").strip()
+
+	if "tax_category" in values:
+		result["tax_category"] = str(values.get("tax_category") or "").strip()
 
 	if "taxes_and_charges" in values:
 		result["taxes_and_charges"] = str(values.get("taxes_and_charges") or "").strip()
@@ -142,8 +157,9 @@ def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, An
 	"""Apply bounded ERPNext Sales Invoice commercial terms in memory.
 
 	A blank tax-template input means "automatic": the current/default ERPNext
-	tax resolution is preserved. Guided selling therefore cannot clear an
-	existing tax template to manufacture a no-tax sale.
+	tax resolution is preserved unless Tax Category itself changes. A category
+	change clears the prior template and tax rows so ERPNext can resolve the new
+	tax treatment rather than retaining a stale category/template combination.
 	"""
 	terms = normalise_sales_commercial_terms(values)
 	if not terms:
@@ -155,6 +171,16 @@ def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, An
 			_assert_select_permission(COUPON_DOCTYPE, coupon)
 			validate_coupon_code(coupon)
 		doc.set("coupon_code", coupon)
+
+	if "tax_category" in terms:
+		tax_category = terms["tax_category"]
+		if tax_category:
+			_validate_tax_category(tax_category)
+		category_changed = tax_category != str(doc.get("tax_category") or "").strip()
+		doc.set("tax_category", tax_category)
+		if category_changed:
+			doc.set("taxes_and_charges", "")
+			doc.set("taxes", [])
 
 	if "taxes_and_charges" in terms:
 		tax_template = terms["taxes_and_charges"]
@@ -195,6 +221,15 @@ def sales_commercial_terms_from_doc(doc) -> dict[str, Any]:
 	}
 
 
+def _validate_tax_category(name: str) -> None:
+	_assert_select_permission(TAX_CATEGORY_DOCTYPE, name)
+	disabled = frappe.db.get_value(TAX_CATEGORY_DOCTYPE, name, "disabled")
+	if disabled is None:
+		frappe.throw(_("Tax Category {0} does not exist.").format(name))
+	if cint(disabled):
+		frappe.throw(_("Tax Category {0} is disabled.").format(name), frappe.ValidationError)
+
+
 def _validate_sales_tax_template(doc, name: str) -> None:
 	_assert_select_permission(TAX_TEMPLATE_DOCTYPE, name)
 	row = frappe.db.get_value(
@@ -224,6 +259,46 @@ def _validate_sales_tax_template(doc, name: str) -> None:
 			),
 			frappe.ValidationError,
 		)
+
+
+def _search_sales_tax_templates(
+	query: str,
+	*,
+	company: str,
+	tax_category: str,
+	limit: int,
+) -> list[dict[str, Any]]:
+	base_filters: dict[str, Any] = {"company": company, "disabled": 0}
+	if not tax_category:
+		return search_link(
+			TAX_TEMPLATE_DOCTYPE,
+			query,
+			filters=base_filters,
+			page_length=limit,
+			reference_doctype=SALES_INVOICE_DOCTYPE,
+			link_fieldname="taxes_and_charges",
+		)
+
+	result: list[dict[str, Any]] = []
+	seen: set[str] = set()
+	for category_filter in (tax_category, ["is", "not set"]):
+		filters = {**base_filters, "tax_category": category_filter}
+		for row in search_link(
+			TAX_TEMPLATE_DOCTYPE,
+			query,
+			filters=filters,
+			page_length=limit,
+			reference_doctype=SALES_INVOICE_DOCTYPE,
+			link_fieldname="taxes_and_charges",
+		):
+			value = str(row.get("value") or row.get("name") or "").strip() if isinstance(row, dict) else str(row or "").strip()
+			if not value or value in seen:
+				continue
+			seen.add(value)
+			result.append(row)
+			if len(result) >= limit:
+				return result
+	return result
 
 
 def _search_coupon_codes(query: str, *, values: dict[str, Any], limit: int) -> list[dict[str, Any]]:
