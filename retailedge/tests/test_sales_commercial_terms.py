@@ -162,6 +162,31 @@ class TestSalesCommercialTerms(unittest.TestCase):
 		self.assertIn("get_taxes_and_charges", source)
 		self.assertIn("frappe.has_permission", source)
 
+	def test_new_sale_preview_and_draft_share_one_commercial_terms_helper(self):
+		preview = (APP_ROOT / "sales_commercial_preview.py").read_text(encoding="utf-8")
+		guided = (APP_ROOT / "guided_sales_invoice.py").read_text(encoding="utf-8")
+
+		self.assertGreaterEqual(preview.count("apply_sales_commercial_terms(doc, values)"), 2)
+		self.assertIn("apply_sales_commercial_terms(doc, values)", guided)
+		self.assertLess(
+			guided.index("apply_sales_commercial_terms(doc, values)"),
+			guided.index("doc.insert()"),
+		)
+		self.assertIn('"commercial_terms": get_sales_commercial_term_capabilities()', guided)
+		self.assertIn('{"coupon_code", "taxes_and_charges"}', guided)
+
+	def test_guided_draft_keeps_erpnext_as_calculation_and_accounting_authority(self):
+		guided = (APP_ROOT / "guided_sales_invoice.py").read_text(encoding="utf-8")
+		for forbidden in (
+			"calculate_taxes_and_totals()",
+			"debit_to =",
+			"income_account =",
+			"frappe.db.commit(",
+			"doc.submit(",
+			"ignore_permissions=True",
+		):
+			self.assertNotIn(forbidden, guided)
+
 
 if __name__ == "__main__":
 	unittest.main()
