@@ -12,6 +12,7 @@ from retailedge.sales_commercial_terms import (
 	normalise_sales_commercial_terms,
 	sales_commercial_terms_from_doc,
 )
+from retailedge.sales_item_discounts import validate_manual_item_discounts_after_pricing
 from retailedge.standard_sales_invoice_completion import (
 	SALES_INVOICE_DOCTYPE,
 	_build_preview,
@@ -31,8 +32,8 @@ def update_sales_invoice_draft_with_commercial_terms(
 	version check, operating-context validation, bounded item update and first
 	ERPNext draft save. Commercial terms are then applied to that same draft and
 	saved through ERPNext. Frappe commits only after the whitelisted request
-	returns successfully, so a failure in the second validation rolls back the
-	whole request rather than leaving a partial edit.
+	returns successfully, so a failure in pricing/discount validation rolls back
+	the whole request rather than leaving a partial edit.
 	"""
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
@@ -47,8 +48,6 @@ def update_sales_invoice_draft_with_commercial_terms(
 		values=values,
 		expected_modified=expected_modified,
 	)
-	if not terms:
-		return result
 
 	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
 	if cint(doc.docstatus) != 0:
@@ -60,12 +59,19 @@ def update_sales_invoice_draft_with_commercial_terms(
 	):
 		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
 
+	if not terms:
+		if values.get("items") is not None:
+			validate_manual_item_discounts_after_pricing(doc, values.get("items"))
+		return result
+
 	apply_sales_commercial_terms(doc, terms)
 	# ERPNext validation recalculates pricing rules, discounts, tax and totals.
 	# This remains a draft save; no submission, ledger post or explicit commit
 	# occurs in this adapter.
 	doc.save()
 	doc.reload()
+	if values.get("items") is not None:
+		validate_manual_item_discounts_after_pricing(doc, values.get("items"))
 
 	result = _build_preview(doc)
 	result["commercial_terms"] = sales_commercial_terms_from_doc(doc)
