@@ -41,7 +41,7 @@ function withManualDiscountColumns(columns = []) {
 		if (column?.fieldname === "discount_percentage") {
 			result.push(
 				{ fieldname: MANUAL_PERCENTAGE, label: "Manual Discount %", fieldtype: "Float", default: 0 },
-				{ fieldname: MANUAL_AMOUNT, label: "Manual Discount Amount", fieldtype: "Currency", default: 0 },
+				{ fieldname: MANUAL_AMOUNT, label: "Discount per Unit", fieldtype: "Currency", default: 0 },
 			);
 			result.push({ ...column, label: "Applied %", read_only: 1 });
 			continue;
