@@ -18,20 +18,34 @@ MAX_SEARCH_RESULTS = 20
 ALLOWED_DISCOUNT_TARGETS = {"Grand Total", "Net Total"}
 
 
-def get_sales_commercial_term_capabilities() -> dict[str, bool]:
-	"""Return ERPNext-permission-backed commercial term capabilities.
-
-	RetailEdge does not introduce a parallel role matrix for standard Sales
-	Invoice commercial fields. Coupon and tax-template access therefore follow
-	the underlying ERPNext master permissions.
-	"""
+def get_sales_commercial_term_capabilities(doc=None) -> dict[str, bool]:
+	"""Return ERPNext-permission-backed commercial term capabilities."""
+	if doc is None:
+		can_edit = bool(frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"))
+	else:
+		can_edit = bool(
+			cint(doc.docstatus) == 0
+			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+		)
 	return {
-		"can_edit_additional_discount": bool(
-			frappe.has_permission(SALES_INVOICE_DOCTYPE, "create")
-			or frappe.has_permission(SALES_INVOICE_DOCTYPE, "write")
-		),
-		"can_use_coupon": _can_select(COUPON_DOCTYPE),
-		"can_select_tax_template": _can_select(TAX_TEMPLATE_DOCTYPE),
+		"can_edit_additional_discount": can_edit,
+		"can_use_coupon": bool(can_edit and _can_select(COUPON_DOCTYPE)),
+		"can_select_tax_template": bool(can_edit and _can_select(TAX_TEMPLATE_DOCTYPE)),
+	}
+
+
+@frappe.whitelist()
+def get_sales_commercial_edit_context(name: str) -> dict[str, Any]:
+	"""Return the exact saved draft terms a permitted Make Sale user may edit."""
+	doc = _assert_invoice_term_search_access(name)
+	if doc is None:
+		frappe.throw(_("Sales Invoice is required."), frappe.ValidationError)
+	return {
+		"document_name": doc.name,
+		"company": str(doc.get("company") or "").strip(),
+		"customer": str(doc.get("customer") or "").strip(),
+		"terms": sales_commercial_terms_from_doc(doc),
+		"capabilities": get_sales_commercial_term_capabilities(doc),
 	}
 
 
@@ -44,7 +58,10 @@ def search_sales_commercial_term_options(
 ) -> list[dict[str, Any]]:
 	"""Search only the ERPNext commercial masters the current user may select."""
 	values = _coerce_values(values)
-	_assert_invoice_term_search_access(values.get("document_name"))
+	doc = _assert_invoice_term_search_access(values.get("document_name"))
+	if doc is not None:
+		values["company"] = str(doc.get("company") or "").strip()
+		values["customer"] = str(doc.get("customer") or "").strip()
 	limit = max(1, min(cint(limit) or MAX_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
 	query = str(txt or "").strip()
 
@@ -250,12 +267,12 @@ def _search_coupon_codes(query: str, *, values: dict[str, Any], limit: int) -> l
 	return result
 
 
-def _assert_invoice_term_search_access(document_name: Any) -> None:
+def _assert_invoice_term_search_access(document_name: Any):
 	name = str(document_name or "").strip()
 	if not name:
 		if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"):
 			frappe.throw(_("You do not have permission to prepare a Sales Invoice."), frappe.PermissionError)
-		return
+		return None
 	if not frappe.db.exists(SALES_INVOICE_DOCTYPE, name):
 		frappe.throw(_("Sales Invoice {0} does not exist.").format(name))
 	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
@@ -267,6 +284,7 @@ def _assert_invoice_term_search_access(document_name: Any) -> None:
 		doc=doc,
 	):
 		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+	return doc
 
 
 def _can_select(doctype: str) -> bool:
