@@ -132,10 +132,9 @@ def normalise_sales_commercial_terms(values: dict | str | None) -> dict[str, Any
 def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, Any]:
 	"""Apply bounded ERPNext Sales Invoice commercial terms in memory.
 
-	This function does not save, submit, calculate totals, post stock or touch
-	ledgers. ERPNext remains responsible for coupon validation, tax rows,
-	pricing-rule application and final totals in the caller's normal document
-	lifecycle.
+	A blank tax-template input means "automatic": the current/default ERPNext
+	tax resolution is preserved. Guided selling therefore cannot clear an
+	existing tax template to manufacture a no-tax sale.
 	"""
 	terms = normalise_sales_commercial_terms(values)
 	if not terms:
@@ -150,16 +149,12 @@ def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, An
 
 	if "taxes_and_charges" in terms:
 		tax_template = terms["taxes_and_charges"]
-		if not tax_template:
-			frappe.throw(
-				_("Choose a Sales Taxes and Charges Template. Use Advanced Sales Invoice review for a deliberate no-tax override."),
-				frappe.ValidationError,
-			)
-		_validate_sales_tax_template(doc, tax_template)
-		doc.set("taxes_and_charges", tax_template)
-		doc.set("taxes", [])
-		for row in get_taxes_and_charges(TAX_TEMPLATE_DOCTYPE, tax_template) or []:
-			doc.append("taxes", row)
+		if tax_template:
+			_validate_sales_tax_template(doc, tax_template)
+			doc.set("taxes_and_charges", tax_template)
+			doc.set("taxes", [])
+			for row in get_taxes_and_charges(TAX_TEMPLATE_DOCTYPE, tax_template) or []:
+				doc.append("taxes", row)
 
 	percentage_supplied = "additional_discount_percentage" in terms
 	amount_supplied = "discount_amount" in terms
