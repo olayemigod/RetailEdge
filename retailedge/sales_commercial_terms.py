@@ -73,7 +73,8 @@ def search_sales_commercial_term_options(
 	if doc is not None:
 		values["company"] = str(doc.get("company") or "").strip()
 		values["customer"] = str(doc.get("customer") or "").strip()
-		values["tax_category"] = str(doc.get("tax_category") or "").strip()
+		if "tax_category" not in values:
+			values["tax_category"] = str(doc.get("tax_category") or "").strip()
 	limit = max(1, min(cint(limit) or MAX_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
 	query = str(txt or "").strip()
 
