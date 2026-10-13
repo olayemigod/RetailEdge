@@ -30,6 +30,14 @@ class TestSalesCommercialTermsControlsContract(unittest.TestCase):
 		self.assertIn('Number(this.values.additional_discount_percentage || 0) > 0', source)
 		self.assertIn('Number(this.values.discount_amount || 0) > 0', source)
 
+	def test_tax_helper_import_supports_older_erpnext_v16_upgrade_baselines(self):
+		source = (APP_ROOT / "sales_commercial_terms.py").read_text(encoding="utf-8")
+
+		self.assertIn("from erpnext.accounts.services.taxes import get_taxes_and_charges", source)
+		self.assertIn("except ImportError:", source)
+		self.assertIn("from erpnext.controllers.accounts_controller import (", source)
+		self.assertIn("_get_taxes_and_charges as get_taxes_and_charges", source)
+
 
 if __name__ == "__main__":
 	unittest.main()
