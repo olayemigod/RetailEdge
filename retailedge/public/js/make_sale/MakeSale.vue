@@ -598,6 +598,7 @@ export default {
 				if (!this.loaded || this.savedDocument) return;
 				this.scheduleRecovery();
 			},
+		},
 	},
 	created() {
 		this._onPageShow = () => {
