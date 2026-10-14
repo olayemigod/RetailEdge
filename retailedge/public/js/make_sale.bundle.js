@@ -1,4 +1,7 @@
 import MakeSale from "./make_sale/MakeSale.vue";
+import { applyMakeSaleCommercialEditing } from "./make_sale/commercialEditingExtension";
+
+applyMakeSaleCommercialEditing(MakeSale);
 
 function mountRetailEdgeMakeSale(target) {
 	if (typeof window === "undefined") return null;

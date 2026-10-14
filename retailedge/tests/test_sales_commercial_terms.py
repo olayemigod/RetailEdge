@@ -180,7 +180,7 @@ class TestSalesCommercialTerms(unittest.TestCase):
 			guided.index("doc.insert()"),
 		)
 		self.assertIn('"commercial_terms": get_sales_commercial_term_capabilities()', guided)
-		self.assertIn('{"coupon_code", "taxes_and_charges"}', guided)
+		self.assertIn('{"coupon_code", "tax_category", "taxes_and_charges"}', guided)
 
 	def test_guided_draft_keeps_erpnext_as_calculation_and_accounting_authority(self):
 		guided = (APP_ROOT / "guided_sales_invoice.py").read_text(encoding="utf-8")

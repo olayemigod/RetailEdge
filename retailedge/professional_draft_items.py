@@ -9,6 +9,12 @@ from frappe.utils import flt
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.guided_pricing import resolve_sales_item_pricing
 from retailedge.professional_selling import _assert_read
+from retailedge.sales_item_discounts import (
+	MANUAL_DISCOUNT_AMOUNT,
+	MANUAL_DISCOUNT_PERCENTAGE,
+	apply_manual_item_discount,
+	manual_item_discount_state,
+)
 
 
 MAX_DRAFT_ITEMS = 100
@@ -31,20 +37,27 @@ def clean(value: Any) -> str:
 
 
 def editable_items(doc) -> list[dict[str, Any]]:
-	return [
-		{
-			"name": clean(row.get("name")),
-			"item_code": clean(row.get("item_code")),
-			"item_name": clean(row.get("item_name")),
-			"qty": flt(row.get("qty")),
-			"rate": flt(row.get("rate")),
-			"amount": flt(row.get("amount")),
-			"warehouse": clean(row.get("warehouse")),
-			"delivery_date": clean(row.get("delivery_date")),
-			"source_locked": _source_linked(row),
-		}
-		for row in list(doc.get("items") or [])
-	]
+	return [_editable_item(row) for row in list(doc.get("items") or [])]
+
+
+def _editable_item(row) -> dict[str, Any]:
+	discount = manual_item_discount_state(row)
+	return {
+		"name": clean(row.get("name")),
+		"item_code": clean(row.get("item_code")),
+		"item_name": clean(row.get("item_name")),
+		"qty": flt(row.get("qty")),
+		"rate": flt(row.get("rate")),
+		"amount": flt(row.get("amount")),
+		"discount_percentage": flt(row.get("discount_percentage")),
+		"discount_amount": flt(row.get("discount_amount")),
+		"pricing_rule": discount["pricing_rule"],
+		MANUAL_DISCOUNT_PERCENTAGE: discount[MANUAL_DISCOUNT_PERCENTAGE],
+		MANUAL_DISCOUNT_AMOUNT: discount[MANUAL_DISCOUNT_AMOUNT],
+		"warehouse": clean(row.get("warehouse")),
+		"delivery_date": clean(row.get("delivery_date")),
+		"source_locked": _source_linked(row),
+	}
 
 
 def update_draft_items(
@@ -186,6 +199,14 @@ def _apply_editable_row_values(
 		frappe.throw(_("Rate on row {0} cannot be negative.").format(index))
 	if row.meta.has_field("rate"):
 		row.rate = rate
+
+	apply_manual_item_discount(
+		row,
+		values,
+		index=index,
+		rate_locked=rate_locked,
+		lock_reason=str(pricing.get("rate_change_lock_reason") or "").strip(),
+	)
 
 	if row.meta.has_field("delivery_date"):
 		delivery_date = clean(values.get("delivery_date") or row.get("delivery_date") or default_delivery_date)
