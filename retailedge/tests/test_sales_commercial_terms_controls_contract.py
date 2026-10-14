@@ -33,10 +33,17 @@ class TestSalesCommercialTermsControlsContract(unittest.TestCase):
 	def test_tax_helper_import_supports_older_erpnext_v16_upgrade_baselines(self):
 		source = (APP_ROOT / "sales_commercial_terms.py").read_text(encoding="utf-8")
 
+		# Newer ERPNext lines may expose the helper from accounts.services, while
+		# ERPNext v16.5 and the supported v16 controller surface expose the public
+		# whitelisted AccountsController helper. Never depend on its private
+		# underscored implementation because that symbol is absent on older v16.
 		self.assertIn("from erpnext.accounts.services.taxes import get_taxes_and_charges", source)
 		self.assertIn("except ImportError:", source)
-		self.assertIn("from erpnext.controllers.accounts_controller import (", source)
-		self.assertIn("_get_taxes_and_charges as get_taxes_and_charges", source)
+		self.assertIn(
+			"from erpnext.controllers.accounts_controller import get_taxes_and_charges",
+			source,
+		)
+		self.assertNotIn("_get_taxes_and_charges", source)
 
 
 if __name__ == "__main__":

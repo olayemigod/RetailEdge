@@ -12,12 +12,11 @@ from erpnext.accounts.doctype.pricing_rule.utils import validate_coupon_code
 try:
 	from erpnext.accounts.services.taxes import get_taxes_and_charges
 except ImportError:
-	# Earlier ERPNext v16 releases expose the same helper from AccountsController.
-	# RetailEdge's upgrade matrix must remain importable before ERPNext introduced
-	# accounts.services.taxes. Permission/company checks stay in this module.
-	from erpnext.controllers.accounts_controller import (
-		_get_taxes_and_charges as get_taxes_and_charges,
-	)
+	# ERPNext v16 releases before accounts.services.taxes expose the supported
+	# whitelisted helper from AccountsController. Use the public helper rather
+	# than the private underscored implementation so older v16 sites remain
+	# importable and permission checks stay inside ERPNext.
+	from erpnext.controllers.accounts_controller import get_taxes_and_charges
 
 
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
