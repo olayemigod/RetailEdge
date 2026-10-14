@@ -180,7 +180,11 @@ def _apply_editable_row_values(
 		user=frappe.session.user,
 	)
 	resolved_rate = pricing.get("rate")
-	rate_locked = not bool(pricing.get("allow_rate_change", True))
+	rate_policy_source = pricing.get("rate_policy_source") or pricing.get("source")
+	rate_locked = (
+		rate_policy_source == "pos_profile"
+		and not pricing.get("allow_rate_change", True)
+	)
 	if rate_locked or rate_value in (None, ""):
 		if resolved_rate is None:
 			frappe.throw(
