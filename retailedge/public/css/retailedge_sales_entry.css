@@ -1,0 +1,62 @@
+/* RetailEdge sale-entry composition.
+   EdgeSuite owns fields, child-table behavior, modal behavior and theme tokens.
+   RetailEdge only composes the sales workspace around those shared primitives. */
+
+@media (min-width: 1180px) {
+	body.edge-suite-product-retailedge form.make-sale-form,
+	[data-edge-product="retailedge"] form.make-sale-form,
+	body.edge-suite-product-retailedge .guided-invoice-form,
+	[data-edge-product="retailedge"] .guided-invoice-form {
+		grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+		column-gap: 18px;
+		align-items: start;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > *,
+	[data-edge-product="retailedge"] form.make-sale-form > *,
+	body.edge-suite-product-retailedge .guided-invoice-form > *,
+	[data-edge-product="retailedge"] .guided-invoice-form > * {
+		grid-column: 1;
+		min-width: 0;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary {
+		grid-column: 2;
+		grid-row: 1;
+		position: sticky;
+		top: 1rem;
+		z-index: 3;
+		align-self: start;
+		max-height: calc(100vh - 2rem);
+		overflow: auto;
+		overscroll-behavior: contain;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .make-sale-actions,
+	[data-edge-product="retailedge"] form.make-sale-form > .make-sale-actions {
+		grid-column: 1 / -1;
+	}
+}
+
+/* Shared EdgeChildTable owns responsive table sizing. These guards only keep
+   the composed work area from forcing the page wider than its shell/modal. */
+body.edge-suite-product-retailedge form.make-sale-form .edge-child-table,
+[data-edge-product="retailedge"] form.make-sale-form .edge-child-table,
+body.edge-suite-product-retailedge .guided-invoice-form .edge-child-table,
+[data-edge-product="retailedge"] .guided-invoice-form .edge-child-table {
+	max-width: 100%;
+}
+
+@media (max-width: 1179px) {
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary {
+		position: static;
+		max-height: none;
+		overflow: visible;
+	}
+}

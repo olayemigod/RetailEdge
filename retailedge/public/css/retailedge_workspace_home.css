@@ -1,4 +1,5 @@
 @import url("/assets/retailedge/css/retailedge_edgeui_theme_compat.css");
+@import url("/assets/retailedge/css/retailedge_sales_entry.css");
 
 /* Scoped RetailEdge Workspace polish. Do not target global Frappe cards. */
 body[data-route="Workspaces/RetailEdge"] .layout-main-section,

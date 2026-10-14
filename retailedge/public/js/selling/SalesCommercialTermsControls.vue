@@ -79,7 +79,7 @@
 					:modelValue="values.taxes_and_charges || ''"
 					label="Tax template"
 					placeholder="Automatic tax treatment"
-					description="values.tax_category ? 'Only templates compatible with the selected Tax Category are shown. Leave blank for ERPNext automatic tax treatment.' : 'Leave blank to use ERPNext automatic tax treatment.'"
+					:description="values.tax_category ? 'Only templates compatible with the selected Tax Category are shown. Leave blank for automatic tax treatment.' : 'Leave blank to use automatic tax treatment.'"
 					:searcher="searchTaxTemplate"
 					:disabled="disabled"
 					@update:modelValue="setTaxTemplate"
@@ -88,7 +88,7 @@
 
 			<div v-if="resolvedTaxLabel || resolvedTaxCategory" class="resolved-tax" role="status">
 				<span>Current tax treatment</span>
-				<strong>{{ resolvedTaxLabel || "ERPNext automatic tax" }}</strong>
+				<strong>{{ resolvedTaxLabel || "Automatic tax treatment" }}</strong>
 				<small v-if="resolvedTaxCategory">Tax category: {{ resolvedTaxCategory }}</small>
 			</div>
 		</div>
