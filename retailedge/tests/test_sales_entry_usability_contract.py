@@ -36,7 +36,7 @@ class TestSalesEntryUsabilityContract(unittest.TestCase):
 		controls = (JS_ROOT / "selling" / "SalesCommercialTermsControls.vue").read_text(encoding="utf-8")
 
 		self.assertIn(':description="values.tax_category ?', controls)
-		self.assertNotIn('description="values.tax_category ?', controls)
+		self.assertNotIn('\n\t\t\t\t\tdescription="values.tax_category ?', controls)
 		self.assertIn('Leave blank for automatic tax treatment.', controls)
 		self.assertIn('Automatic tax treatment', controls)
 		self.assertNotIn('ERPNext automatic tax treatment', controls)
