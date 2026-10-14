@@ -11,14 +11,21 @@ class TestSalesEntryUsabilityContract(unittest.TestCase):
 	def test_sale_entry_styles_are_loaded_and_keep_summary_visible_on_wide_screens(self):
 		loader = (CSS_ROOT / "retailedge_workspace_home.css").read_text(encoding="utf-8")
 		styles = (CSS_ROOT / "retailedge_sales_entry.css").read_text(encoding="utf-8")
+		summary = (JS_ROOT / "selling" / "SalesCommercialSummary.vue").read_text(encoding="utf-8")
 
 		self.assertIn('retailedge_sales_entry.css', loader)
 		self.assertIn('@media (min-width: 1180px)', styles)
 		self.assertIn('form.make-sale-form', styles)
 		self.assertIn('.guided-invoice-form', styles)
-		self.assertIn('> .sales-commercial-summary', styles)
+		self.assertIn('> .sales-commercial-summary-rail', styles)
+		self.assertIn('position: absolute', styles)
+		self.assertIn('inset-block: 0', styles)
+		self.assertIn('.sales-commercial-summary-rail > .sales-commercial-summary', styles)
 		self.assertIn('position: sticky', styles)
+		self.assertNotIn('grid-row: 1;', styles)
 		self.assertIn('grid-column: 1 / -1', styles)
+		self.assertIn('class="sales-commercial-summary-rail"', summary)
+		self.assertIn('class="edge-panel sales-commercial-summary"', summary)
 		self.assertIn('@media (max-width: 1179px)', styles)
 		self.assertIn('position: static', styles)
 

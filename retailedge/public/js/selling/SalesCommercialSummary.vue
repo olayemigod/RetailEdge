@@ -1,76 +1,78 @@
 <template>
-	<section class="edge-panel sales-commercial-summary" aria-live="polite" aria-label="Sale summary">
-		<div class="sales-commercial-summary__header">
-			<div>
-				<span>Sale summary</span>
-				<strong>{{ preview ? "Current invoice value" : "Invoice value" }}</strong>
-			</div>
-			<small v-if="loading">Updating total…</small>
-		</div>
-
-		<div v-if="error" class="sales-commercial-summary__error" role="alert">
-			<strong>Unable to calculate this sale</strong>
-			<span>{{ error }}</span>
-		</div>
-
-		<template v-else-if="preview">
-			<div v-if="preview.promotions?.length" class="sales-commercial-summary__promotions" role="status">
-				<strong>{{ preview.promotions.length === 1 ? "Promotion applied" : `${preview.promotions.length} promotions applied` }}</strong>
-				<span>{{ preview.promotions.join(", ") }}</span>
-			</div>
-
-			<div class="sales-commercial-summary__rows">
-				<div v-if="Number(preview.item_discount_total || 0)">
-					<span>List value</span>
-					<strong>{{ formatMoney(preview.list_value) }}</strong>
-				</div>
-				<div v-if="Number(preview.item_discount_total || 0)" class="sales-commercial-summary__muted-row">
-					<span>Item savings</span>
-					<strong>−{{ formatMoney(preview.item_discount_total) }}</strong>
-				</div>
+	<section class="sales-commercial-summary-rail" aria-live="polite" aria-label="Sale summary">
+		<div class="edge-panel sales-commercial-summary">
+			<div class="sales-commercial-summary__header">
 				<div>
-					<span>Subtotal</span>
-					<strong>{{ formatMoney(preview.subtotal) }}</strong>
+					<span>Sale summary</span>
+					<strong>{{ preview ? "Current invoice value" : "Invoice value" }}</strong>
 				</div>
-				<div v-if="Number(preview.additional_discount || 0)">
-					<span>Additional discount</span>
-					<strong>−{{ formatMoney(preview.additional_discount) }}</strong>
-				</div>
-				<div v-if="preview.has_tax || Number(preview.total_taxes_and_charges || 0)">
-					<span>{{ preview.all_taxes_included ? "Tax (included)" : "Tax" }}</span>
-					<strong>{{ formatMoney(preview.total_taxes_and_charges) }}</strong>
-				</div>
-				<div v-if="Number(preview.rounding_adjustment || 0)">
-					<span>Rounding</span>
-					<strong>{{ formatSignedMoney(preview.rounding_adjustment) }}</strong>
-				</div>
-				<div class="sales-commercial-summary__total">
-					<span>Invoice Total</span>
-					<strong>{{ formatMoney(preview.invoice_total) }}</strong>
-				</div>
+				<small v-if="loading">Updating total…</small>
 			</div>
 
-			<div v-if="preview.taxes_and_charges || preview.tax_category" class="sales-commercial-summary__context">
-				<span v-if="preview.taxes_and_charges">{{ preview.taxes_and_charges }}</span>
-				<span v-if="preview.tax_category">Tax category: {{ preview.tax_category }}</span>
+			<div v-if="error" class="sales-commercial-summary__error" role="alert">
+				<strong>Unable to calculate this sale</strong>
+				<span>{{ error }}</span>
 			</div>
 
-			<details v-if="preview.taxes?.length" class="sales-commercial-summary__taxes">
-				<summary>View tax breakdown</summary>
-				<div v-for="(tax, index) in preview.taxes" :key="`${tax.description || 'tax'}-${index}`">
-					<span>
-						{{ tax.description || "Tax" }}
-						<small v-if="Number(tax.rate || 0)"> {{ tax.rate }}%</small>
-						<small v-if="tax.included_in_print_rate"> · included</small>
-					</span>
-					<strong>{{ formatMoney(tax.tax_amount) }}</strong>
+			<template v-else-if="preview">
+				<div v-if="preview.promotions?.length" class="sales-commercial-summary__promotions" role="status">
+					<strong>{{ preview.promotions.length === 1 ? "Promotion applied" : `${preview.promotions.length} promotions applied` }}</strong>
+					<span>{{ preview.promotions.join(", ") }}</span>
 				</div>
-			</details>
-		</template>
 
-		<p v-else class="sales-commercial-summary__empty">
-			Add a Customer and sale item to see the subtotal, tax and invoice total before saving.
-		</p>
+				<div class="sales-commercial-summary__rows">
+					<div v-if="Number(preview.item_discount_total || 0)">
+						<span>List value</span>
+						<strong>{{ formatMoney(preview.list_value) }}</strong>
+					</div>
+					<div v-if="Number(preview.item_discount_total || 0)" class="sales-commercial-summary__muted-row">
+						<span>Item savings</span>
+						<strong>−{{ formatMoney(preview.item_discount_total) }}</strong>
+					</div>
+					<div>
+						<span>Subtotal</span>
+						<strong>{{ formatMoney(preview.subtotal) }}</strong>
+					</div>
+					<div v-if="Number(preview.additional_discount || 0)">
+						<span>Additional discount</span>
+						<strong>−{{ formatMoney(preview.additional_discount) }}</strong>
+					</div>
+					<div v-if="preview.has_tax || Number(preview.total_taxes_and_charges || 0)">
+						<span>{{ preview.all_taxes_included ? "Tax (included)" : "Tax" }}</span>
+						<strong>{{ formatMoney(preview.total_taxes_and_charges) }}</strong>
+					</div>
+					<div v-if="Number(preview.rounding_adjustment || 0)">
+						<span>Rounding</span>
+						<strong>{{ formatSignedMoney(preview.rounding_adjustment) }}</strong>
+					</div>
+					<div class="sales-commercial-summary__total">
+						<span>Invoice Total</span>
+						<strong>{{ formatMoney(preview.invoice_total) }}</strong>
+					</div>
+				</div>
+
+				<div v-if="preview.taxes_and_charges || preview.tax_category" class="sales-commercial-summary__context">
+					<span v-if="preview.taxes_and_charges">{{ preview.taxes_and_charges }}</span>
+					<span v-if="preview.tax_category">Tax category: {{ preview.tax_category }}</span>
+				</div>
+
+				<details v-if="preview.taxes?.length" class="sales-commercial-summary__taxes">
+					<summary>View tax breakdown</summary>
+					<div v-for="(tax, index) in preview.taxes" :key="`${tax.description || 'tax'}-${index}`">
+						<span>
+							{{ tax.description || "Tax" }}
+							<small v-if="Number(tax.rate || 0)"> {{ tax.rate }}%</small>
+							<small v-if="tax.included_in_print_rate"> · included</small>
+						</span>
+						<strong>{{ formatMoney(tax.tax_amount) }}</strong>
+					</div>
+				</details>
+			</template>
+
+			<p v-else class="sales-commercial-summary__empty">
+				Add a Customer and sale item to see the subtotal, tax and invoice total before saving.
+			</p>
+		</div>
 	</section>
 </template>
 
@@ -107,6 +109,9 @@ export default {
 </script>
 
 <style scoped>
+.sales-commercial-summary-rail {
+	min-width: 0;
+}
 .sales-commercial-summary {
 	display: grid;
 	gap: 12px;
