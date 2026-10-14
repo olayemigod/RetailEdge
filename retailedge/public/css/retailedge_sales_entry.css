@@ -7,7 +7,9 @@
 	[data-edge-product="retailedge"] form.make-sale-form,
 	body.edge-suite-product-retailedge .guided-invoice-form,
 	[data-edge-product="retailedge"] .guided-invoice-form {
-		grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem);
+		--sales-summary-rail-width: clamp(18rem, 24vw, 21rem);
+		position: relative;
+		grid-template-columns: minmax(0, 1fr) var(--sales-summary-rail-width);
 		column-gap: 18px;
 		align-items: start;
 	}
@@ -20,16 +22,24 @@
 		min-width: 0;
 	}
 
-	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary,
-	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary,
-	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary,
-	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary {
-		grid-column: 2;
-		grid-row: 1;
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail {
+		position: absolute;
+		inset-block: 0;
+		inset-inline-end: 0;
+		width: var(--sales-summary-rail-width);
+		min-width: 0;
+		z-index: 3;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary {
 		position: sticky;
 		top: 1rem;
-		z-index: 3;
-		align-self: start;
 		max-height: calc(100vh - 2rem);
 		overflow: auto;
 		overscroll-behavior: contain;
@@ -51,11 +61,16 @@ body.edge-suite-product-retailedge .guided-invoice-form .edge-child-table,
 }
 
 @media (max-width: 1179px) {
-	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary,
-	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary,
-	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary,
-	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary {
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary {
 		position: static;
+		width: auto;
 		max-height: none;
 		overflow: visible;
 	}
