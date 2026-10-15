@@ -4,7 +4,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from retailedge.operating_context import _allowed_branches, validate_operating_branch
+from retailedge.operating_context import (
+	_allowed_branches,
+	can_use_company_wide_branch_view,
+	validate_operating_branch,
+)
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +106,42 @@ class WorkingBranchOptionTests(unittest.TestCase):
 				},
 			)
 
+	def test_unrestricted_user_can_use_company_wide_branch_view(self):
+		with (
+			patch("retailedge.operating_context._assert_company_access"),
+			patch(
+				"retailedge.operating_context.get_operational_branch_scope",
+				return_value={"restricted": False, "source": "global", "allowed_branches": []},
+			),
+			patch("retailedge.operating_context._allowed_branches", return_value=["Ketu", "Lagos Island"]),
+		):
+			self.assertTrue(
+				can_use_company_wide_branch_view(
+					company="RetailEdge Consulting",
+					user="Administrator",
+				)
+			)
+
+	def test_restricted_user_cannot_use_company_wide_branch_view(self):
+		with (
+			patch("retailedge.operating_context._assert_company_access"),
+			patch(
+				"retailedge.operating_context.get_operational_branch_scope",
+				return_value={
+					"restricted": True,
+					"source": "branch_assignment",
+					"allowed_branches": ["Ketu", "Lagos Island"],
+				},
+			),
+			patch("retailedge.operating_context._allowed_branches", return_value=["Ketu", "Lagos Island"]),
+		):
+			self.assertFalse(
+				can_use_company_wide_branch_view(
+					company="RetailEdge Consulting",
+					user="branch-user@example.com",
+				)
+			)
+
 
 class WorkingBranchListScopeContractTests(unittest.TestCase):
 	def test_shared_document_scope_uses_stored_branch_attribution(self):
@@ -109,6 +149,8 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		for contract in (
 			"retailedge_branch",
 			"active_branch",
+			"active_company",
+			"company_wide",
 			"filter_area",
 			"before_refresh",
 			"filter_area.clear(false)",
@@ -120,12 +162,25 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_existing_list_filters_are_preserved_and_working_branch_replaces_stale_branch(self):
+	def test_existing_filters_are_preserved_while_company_and_branch_scope_are_replaced(self):
 		source = (APP_ROOT / "public/js/working_branch_document_scope.js").read_text(encoding="utf-8")
 		preserve = source.index("const preservedFilters = currentFilters.filter")
-		branch_filter = source.index("[listview.doctype, fieldname, \"=\", branch]")
-		self.assertLess(preserve, branch_filter)
-		self.assertIn("!isBranchFilter(filter, listview.doctype, fieldname)", source)
+		company_filter = source.index('[listview.doctype, companyFieldname, "=", company]')
+		branch_filter = source.index('[listview.doctype, branchFieldname, "=", branch]')
+		self.assertLess(preserve, company_filter)
+		self.assertLess(company_filter, branch_filter)
+		self.assertIn("!isFieldFilter(filter, listview.doctype, branchFieldname)", source)
+		self.assertIn("!isFieldFilter(filter, listview.doctype, companyFieldname)", source)
+
+	def test_company_wide_view_removes_branch_scope_only_with_company_boundary(self):
+		source = (APP_ROOT / "public/js/working_branch_document_scope.js").read_text(encoding="utf-8")
+		for contract in (
+			"if (isCompanyWide && (!company || !companyFieldname))",
+			"branchFilters.length === 0",
+			"if (!isCompanyWide)",
+			'nextFilters.push([listview.doctype, companyFieldname, "=", company])',
+		):
+			self.assertIn(contract, source)
 
 	def test_specialized_purchase_and_cashier_lists_compose_working_branch_scope(self):
 		purchase = (APP_ROOT / "public/js/purchase_documents_list.js").read_text(encoding="utf-8")
@@ -139,6 +194,20 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		self.assertIn('"/assets/retailedge/js/working_branch_document_scope.js"', hooks)
 		self.assertIn('"Purchase Order": "public/js/purchase_documents_list.js"', hooks)
 		self.assertNotIn('"Purchase Order": "public/js/purchase_order_list.js"', hooks)
+
+	def test_selector_exposes_company_wide_only_through_server_authority(self):
+		shell = (APP_ROOT / "public/js/retailedge_shell_context.js").read_text(encoding="utf-8")
+		profile = (APP_ROOT / "company_profile.py").read_text(encoding="utf-8")
+		page = (APP_ROOT / "public/js/operating_context/OperatingContext.vue").read_text(encoding="utf-8")
+		for contract in (
+			"COMPANY_WIDE_LABEL = \"All Branches\"",
+			"can_view_all_branches",
+			"switch_company_wide_context",
+		):
+			self.assertIn(contract, shell)
+		self.assertIn("can_use_company_wide_branch_view", profile)
+		self.assertIn("Use All Branches", page)
+		self.assertIn("switch_company_wide_context", page)
 
 	def test_browser_gate_runs_working_branch_scope_acceptance(self):
 		workflow = (REPO_ROOT / ".github/workflows/browser-persona-smoke.yml").read_text(encoding="utf-8")

@@ -8,7 +8,7 @@
 		product="retailedge"
 		title="Operating Context"
 		:tenantName="tenantName || current.company"
-		:branchName="current.branch || selectedBranch"
+		:branchName="current.company_wide ? 'All Branches' : (current.branch || selectedBranch)"
 		:userName="userName"
 		:menuItems="menuItems"
 		activeRoute="/app/operating-context"
@@ -31,7 +31,7 @@
 						<h3>{{ currentLabel }}</h3>
 						<p>New drafts and report defaults start from this context unless a valid explicit document value is already present.</p>
 					</div>
-					<EdgeStatusBadge :status="current.branch ? 'Active' : 'Warning'" />
+					<EdgeStatusBadge :status="current.branch || current.company_wide ? 'Active' : 'Warning'" />
 				</section>
 
 				<section class="edge-panel operating-context-form">
@@ -65,6 +65,15 @@
 						>
 							{{ busy ? "Updating…" : "Use Selected Branch" }}
 						</button>
+						<button
+							v-if="canViewAllBranches"
+							type="button"
+							class="edge-button edge-button--secondary"
+							:disabled="busy || !selectedCompany || (current.company === selectedCompany && current.company_wide)"
+							@click="switchCompanyWide"
+						>
+							Use All Branches
+						</button>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="restoreDefault">
 							Restore Default
 						</button>
@@ -94,10 +103,10 @@
 					<h4>What changes when you switch?</h4>
 					<ul>
 						<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
-						<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
+						<li>All Branches broadens eligible lists and reports only within the selected Company when your access permits it.</li>
+						<li>Branch-owned transactions still require a specific Branch before branch-dependent posting or stock work can continue.</li>
 						<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
-						<li>POS configuration is checked when POS is opened; an incomplete POS setup does not prevent switching Branch.</li>
-						<li>An active POS shift or unsaved POS/cart/payment state can still block switching until that work is completed.</li>
+						<li>POS configuration is checked when POS is opened; an active POS shift can block switching Branch or entering All Branches.</li>
 					</ul>
 				</section>
 			</div>
@@ -159,6 +168,7 @@ export default {
 			current: {},
 			selectedCompany: "",
 			selectedBranch: "",
+			canViewAllBranches: false,
 			posRequired: false,
 			posProfile: "",
 			posReady: true,
@@ -176,6 +186,7 @@ export default {
 	computed: {
 		currentLabel() {
 			if (!this.current?.company) return "No operating context selected";
+			if (this.current.company_wide) return `${this.current.company} · All Branches`;
 			return `${this.current.company}${this.current.branch ? ` · ${this.current.branch}` : ""}`;
 		},
 		entryPreferenceDescription() {
@@ -312,6 +323,7 @@ export default {
 				this.companies = Array.isArray(data.companies) ? data.companies : [];
 				this.branches = Array.isArray(data.branches) ? data.branches : [];
 				this.current = data.current || {};
+				this.canViewAllBranches = Boolean(data.can_view_all_branches);
 				this.switchBlockers = Array.isArray(data.switch_blockers) ? data.switch_blockers : [];
 				this.selectedCompany = company || data.current?.company || data.selected_company || "";
 				const currentBranch = data.current?.company === this.selectedCompany ? data.current?.branch || "" : "";
@@ -327,6 +339,7 @@ export default {
 		},
 		async onCompanyChange() {
 			this.selectedBranch = "";
+			this.canViewAllBranches = false;
 			this.resetPosState(this.posRequired);
 			await this.loadContext(this.selectedCompany);
 		},
@@ -357,6 +370,24 @@ export default {
 				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
 				window.retailedgeSyncShellIdentity?.(identity);
 				frappe.show_alert({ message: __("Operating context updated."), indicator: "green" });
+				window.location.reload();
+			} finally {
+				this.busy = false;
+			}
+		},
+		async switchCompanyWide() {
+			if (!this.selectedCompany || !this.canViewAllBranches || this.showClientBlocker()) return;
+			this.busy = true;
+			try {
+				await callMethod(
+					"retailedge.operating_context.switch_company_wide_context",
+					{ company: this.selectedCompany },
+					{ freeze: true, freezeMessage: __("Opening company-wide view...") },
+				);
+				this.invalidateContextCache();
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("All Branches view activated."), indicator: "green" });
 				window.location.reload();
 			} finally {
 				this.busy = false;

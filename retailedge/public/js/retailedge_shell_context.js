@@ -6,6 +6,8 @@
 	const SHELL_ADAPTER_NAME = "shell:retailedge";
 	const BUSINESS_HUB_CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 	const SHELL_CONTEXT_CACHE_TTL_MS = 30_000;
+	const COMPANY_WIDE_VALUE = "__retailedge_all_branches__";
+	const COMPANY_WIDE_LABEL = "All Branches";
 	const mounts = new Map();
 	let observer = null;
 	let scheduled = false;
@@ -26,9 +28,18 @@
 	function applyIdentity(payload = {}) {
 		const boot = window.frappe?.boot;
 		if (!boot || !payload || typeof payload !== "object") return identity();
-		boot.retailedge_ui_identity = { ...(boot.retailedge_ui_identity || {}), ...payload };
+		const previous = identity();
+		const merged = { ...previous, ...payload };
+		const branches = normalizeBranches(merged.branch_options);
+		if (merged.can_view_all_branches && branches.length) {
+			merged.can_switch_branch = true;
+		}
+		boot.retailedge_ui_identity = { ...(boot.retailedge_ui_identity || {}), ...merged };
 		boot.edgesuite_ui_identity = boot.edgesuite_ui_identity || {};
-		boot.edgesuite_ui_identity.retailedge = { ...(boot.edgesuite_ui_identity.retailedge || {}), ...payload };
+		boot.edgesuite_ui_identity.retailedge = {
+			...(boot.edgesuite_ui_identity.retailedge || {}),
+			...merged,
+		};
 		return boot.edgesuite_ui_identity.retailedge;
 	}
 
@@ -208,18 +219,25 @@
 			async getContext() {
 				const data = await fetchBusinessHubContext();
 				const context = data.context || {};
+				const existing = identity();
 				if (typeof window.retailedgeSyncShellIdentity === "function") {
 					window.retailedgeSyncShellIdentity({
 						active_company: context.company || "",
 						active_branch: context.branch || "",
 						branch_options: Array.isArray(context.branch_options) ? context.branch_options : [],
 						can_switch_branch: Boolean(context.can_switch_branch),
+						company_wide: context.company_wide ?? existing.company_wide ?? false,
+						can_view_all_branches:
+							context.can_view_all_branches ?? existing.can_view_all_branches ?? false,
 					});
 				}
+				const currentIdentity = identity();
 				return {
 					title: "ProcessEdge Retail",
 					tenantName: context.company_label || context.company || "",
-					branchName: context.branch || "",
+					branchName: currentIdentity.company_wide
+						? COMPANY_WIDE_LABEL
+						: context.branch || "",
 					userName: context.user_name || "",
 					menuItems: shellMenuItems(data),
 				};
@@ -243,18 +261,30 @@
 		const value = String(option?.value || option || "").trim();
 		const current = identity();
 		const company = String(current.active_company || "").trim();
-		if (!value || !company || value === String(current.active_branch || "").trim()) return;
+		const isCompanyWide = value === COMPANY_WIDE_VALUE;
+		if (!value || !company) return;
+		if (isCompanyWide && current.company_wide) return;
+		if (!isCompanyWide && !current.company_wide && value === String(current.active_branch || "").trim()) return;
 
 		try {
 			await frappe.call({
-				method: "retailedge.operating_context.switch_operating_context",
-				args: { company, branch: value },
+				method: isCompanyWide
+					? "retailedge.operating_context.switch_company_wide_context"
+					: "retailedge.operating_context.switch_operating_context",
+				args: isCompanyWide ? { company } : { company, branch: value },
 				freeze: true,
-				freeze_message: __("Switching working branch..."),
+				freeze_message: isCompanyWide
+					? __("Opening company-wide view...")
+					: __("Switching working branch..."),
 			});
 			clearRetailEdgeContextCaches();
 			document.dispatchEvent(new CustomEvent("edgesuite-context-changed", {
-				detail: { product: "retailedge", company, branch: value },
+				detail: {
+					product: "retailedge",
+					company,
+					branch: isCompanyWide ? "" : value,
+					company_wide: isCompanyWide,
+				},
 			}));
 			window.location.reload();
 		} catch (error) {
@@ -263,8 +293,8 @@
 				message:
 					window.retailedge?.userErrorMessage?.(
 						error,
-						__("The selected Branch could not be activated.")
-					) || __("The selected Branch could not be activated."),
+						__("The selected Branch view could not be activated.")
+					) || __("The selected Branch view could not be activated."),
 				indicator: "red",
 			});
 		}
@@ -314,7 +344,10 @@
 
 	function createBranchPopover(shell, host, current, branches, signature) {
 		const activeBranch = String(current.active_branch || "").trim();
-		const canSwitch = Boolean(current.can_switch_branch) && branches.length > 1;
+		const companyWide = Boolean(current.company_wide);
+		const canViewAllBranches = Boolean(current.can_view_all_branches);
+		const optionCount = branches.length + (canViewAllBranches ? 1 : 0);
+		const canSwitch = Boolean(current.can_switch_branch) && optionCount > 1;
 		const trigger = document.createElement("button");
 		trigger.type = "button";
 		trigger.className = "retailedge-topbar-branch-trigger";
@@ -329,7 +362,7 @@
 			</span>
 			<span class="retailedge-topbar-branch-trigger__chevron" aria-hidden="true">▾</span>
 		`;
-		trigger.querySelector("strong").textContent = activeBranch;
+		trigger.querySelector("strong").textContent = companyWide ? COMPANY_WIDE_LABEL : activeBranch;
 		host.appendChild(trigger);
 
 		let popover = null;
@@ -353,6 +386,29 @@
 			positionHandler = null;
 		}
 
+		function appendOption(list, value, labelText, selected) {
+			const option = document.createElement("button");
+			option.type = "button";
+			option.className = "retailedge-branch-popover__option";
+			option.setAttribute("role", "option");
+			option.setAttribute("aria-selected", selected ? "true" : "false");
+			if (selected) option.classList.add("is-active");
+			const label = document.createElement("span");
+			label.textContent = labelText;
+			const state = document.createElement("small");
+			state.textContent = selected ? "Current" : "Switch";
+			option.append(label, state);
+			option.addEventListener("click", async () => {
+				if (selected) {
+					closePopover();
+					return;
+				}
+				closePopover();
+				await switchBranch({ value });
+			});
+			list.appendChild(option);
+		}
+
 		function openPopover() {
 			if (!canSwitch || popover) return;
 			popover = document.createElement("section");
@@ -362,33 +418,17 @@
 
 			const header = document.createElement("header");
 			header.className = "retailedge-branch-popover__header";
-			header.innerHTML = "<strong>Working Branch</strong><small>Choose a permitted Branch for this session.</small>";
+			header.innerHTML = "<strong>Working Branch</strong><small>Choose one Branch, or all Branches when your access allows it.</small>";
 			popover.appendChild(header);
 
 			const list = document.createElement("div");
 			list.className = "retailedge-branch-popover__list";
 			list.setAttribute("role", "listbox");
+			if (canViewAllBranches) {
+				appendOption(list, COMPANY_WIDE_VALUE, COMPANY_WIDE_LABEL, companyWide);
+			}
 			for (const branch of branches) {
-				const option = document.createElement("button");
-				option.type = "button";
-				option.className = "retailedge-branch-popover__option";
-				option.setAttribute("role", "option");
-				option.setAttribute("aria-selected", branch === activeBranch ? "true" : "false");
-				if (branch === activeBranch) option.classList.add("is-active");
-				const label = document.createElement("span");
-				label.textContent = branch;
-				const state = document.createElement("small");
-				state.textContent = branch === activeBranch ? "Current" : "Switch";
-				option.append(label, state);
-				option.addEventListener("click", async () => {
-					if (branch === activeBranch) {
-						closePopover();
-						return;
-					}
-					closePopover();
-					await switchBranch({ value: branch });
-				});
-				list.appendChild(option);
+				appendOption(list, branch, branch, !companyWide && branch === activeBranch);
 			}
 			popover.appendChild(list);
 			document.body.appendChild(popover);
@@ -441,10 +481,13 @@
 		const current = identity();
 		const branches = normalizeBranches(current.branch_options);
 		const activeBranch = String(current.active_branch || "").trim();
-		if (!branches.length || !activeBranch) return;
+		const companyWide = Boolean(current.company_wide);
+		if (!branches.length || (!activeBranch && !companyWide)) return;
 
 		const signature = JSON.stringify({
 			activeBranch,
+			companyWide,
+			canViewAllBranches: Boolean(current.can_view_all_branches),
 			branches,
 			canSwitch: Boolean(current.can_switch_branch),
 		});

@@ -46,11 +46,21 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 	cached = persisted or _read_cached_context(user=user)
 
 	if cached:
-		validated = _validate_context(
-			company=_clean(cached.get("company")),
-			branch=_clean(cached.get("branch")),
-			user=user,
-			throw=False,
+		cached_company = _clean(cached.get("company"))
+		company_wide = bool(cached.get("company_wide"))
+		validated = (
+			_validate_company_wide_context(
+				company=cached_company,
+				user=user,
+				throw=False,
+			)
+			if company_wide
+			else _validate_context(
+				company=cached_company,
+				branch=_clean(cached.get("branch")),
+				user=user,
+				throw=False,
+			)
 		)
 		if validated.get("allowed"):
 			if not requested_company or validated.get("company") == requested_company:
@@ -59,6 +69,7 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 					branch=validated.get("branch") or "",
 					user=user,
 					source="session",
+					company_wide=bool(validated.get("company_wide")),
 				)
 		else:
 			_clear_session_context()
@@ -88,6 +99,11 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 		selected_company = companies[0] if len(companies) == 1 else ""
 
 	branches = _allowed_branches(company=selected_company, user=user) if selected_company else []
+	can_view_all_branches = (
+		can_use_company_wide_branch_view(company=selected_company, user=user)
+		if selected_company
+		else False
+	)
 	return {
 		"companies": companies,
 		"branches": branches,
@@ -95,7 +111,8 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 		"current": current,
 		"pos_required": user_has_pos_profile_assignment(user=user),
 		"can_switch_company": len(companies) > 1,
-		"can_switch_branch": len(branches) > 1,
+		"can_view_all_branches": can_view_all_branches,
+		"can_switch_branch": len(branches) + (1 if can_view_all_branches else 0) > 1,
 		"switch_blockers": _get_switch_blockers(user=user),
 	}
 
@@ -128,6 +145,28 @@ def switch_operating_context(company: str, branch: str) -> dict[str, Any]:
 		branch=validated["branch"],
 		user=user,
 		source="session",
+	)
+	_write_session_context(context)
+	_write_cached_context(context, user=user)
+	return context
+
+
+@frappe.whitelist()
+def switch_company_wide_context(company: str) -> dict[str, Any]:
+	"""Use an explicit Company-wide read/view context for an unrestricted user."""
+	user = frappe.session.user
+	company = _clean(company)
+	if not company:
+		frappe.throw(_("Company is required."))
+
+	validated = _validate_company_wide_context(company=company, user=user, throw=True)
+	_assert_switch_safe(company=validated["company"], branch="", user=user)
+	context = _build_context(
+		company=validated["company"],
+		branch="",
+		user=user,
+		source="session",
+		company_wide=True,
 	)
 	_write_session_context(context)
 	_write_cached_context(context, user=user)
@@ -191,6 +230,21 @@ def get_effective_operating_context(company: str = "", branch: str = "") -> dict
 def get_allowed_operating_branches(company: str, user: str | None = None) -> list[str]:
 	"""Shared Company→Branch option resolver for Operating Context and smart forms."""
 	return _allowed_branches(company=_clean(company), user=user or frappe.session.user)
+
+
+def can_use_company_wide_branch_view(company: str, user: str | None = None) -> bool:
+	"""Return whether the user may deliberately broaden the current Company to all Branches."""
+	company = _clean(company)
+	user = user or frappe.session.user
+	if not company:
+		return False
+	try:
+		_assert_company_access(company, user=user)
+		scope = get_operational_branch_scope(company=company, user=user)
+		branches = _allowed_branches(company=company, user=user)
+		return bool(not scope.get("restricted") and branches)
+	except Exception:
+		return False
 
 
 def get_operational_branch_scope(company: str, user: str | None = None) -> dict[str, Any]:
@@ -356,6 +410,43 @@ def validate_operating_branch(
 		return {"allowed": False, "company": company, "branch": branch, "reason": "validation_failed"}
 
 
+def _validate_company_wide_context(*, company: str, user: str, throw: bool) -> dict[str, Any]:
+	"""Validate an explicit all-Branches view without turning blank Branch into write authority."""
+	company = _clean(company)
+	previous_messages = list(getattr(frappe.local, "message_log", []) or []) if not throw else None
+	try:
+		if not company:
+			frappe.throw(_("Company is required."))
+		_assert_company_access(company, user=user)
+		scope = get_operational_branch_scope(company=company, user=user)
+		branches = _allowed_branches(company=company, user=user)
+		if scope.get("restricted") or not branches:
+			frappe.throw(
+				_("You do not have company-wide Branch access for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		return {
+			"allowed": True,
+			"company": company,
+			"branch": "",
+			"company_wide": True,
+			"reason": "company_wide_validated",
+		}
+	except Exception:
+		if throw:
+			raise
+		return {
+			"allowed": False,
+			"company": company,
+			"branch": "",
+			"company_wide": True,
+			"reason": "validation_failed",
+		}
+	finally:
+		if previous_messages is not None:
+			frappe.local.message_log = previous_messages
+
+
 def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	requested_company = _clean(company)
 	fallback_company = requested_company or _clean(frappe.defaults.get_user_default("Company"))
@@ -440,7 +531,14 @@ def _resolve_assignment_fallback(*, user: str, company: str) -> dict[str, str]:
 	}
 
 
-def _build_context(*, company: str, branch: str, user: str, source: str) -> dict[str, Any]:
+def _build_context(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	source: str,
+	company_wide: bool = False,
+) -> dict[str, Any]:
 	defaults = (
 		get_branch_profile_defaults(company=company or None, branch=branch or None, user=user)
 		if company and branch
@@ -450,6 +548,7 @@ def _build_context(*, company: str, branch: str, user: str, source: str) -> dict
 	return {
 		"company": company or "",
 		"branch": branch or "",
+		"company_wide": bool(company_wide),
 		"source": source,
 		"defaults": defaults,
 		"default_pos_profile": defaults.get("default_pos_profile") or "",
@@ -728,6 +827,7 @@ def _write_session_context(context: dict[str, Any]) -> None:
 	payload = {
 		"company": context.get("company") or "",
 		"branch": context.get("branch") or "",
+		"company_wide": bool(context.get("company_wide")),
 	}
 	data = getattr(frappe.session, "data", None)
 	if data is None:
@@ -770,7 +870,11 @@ def _read_cached_context(*, user: str) -> dict[str, Any]:
 def _write_cached_context(context: dict[str, Any], *, user: str) -> None:
 	frappe.cache.set_value(
 		_cache_key(user=user),
-		{"company": context.get("company") or "", "branch": context.get("branch") or ""},
+		{
+			"company": context.get("company") or "",
+			"branch": context.get("branch") or "",
+			"company_wide": bool(context.get("company_wide")),
+		},
 		expires_in_sec=OPERATING_CONTEXT_TTL_SECONDS,
 	)
 

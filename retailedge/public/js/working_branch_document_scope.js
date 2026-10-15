@@ -36,51 +36,101 @@
 		return String(value || "").trim();
 	}
 
-	function activeBranch() {
-		return clean(
-			frappe.boot?.retailedge_ui_identity?.active_branch ||
-				frappe.boot?.edgesuite_ui_identity?.retailedge?.active_branch
+	function activeIdentity() {
+		return (
+			frappe.boot?.edgesuite_ui_identity?.retailedge ||
+			frappe.boot?.retailedge_ui_identity ||
+			{}
 		);
+	}
+
+	function activeBranch() {
+		return clean(activeIdentity().active_branch);
+	}
+
+	function activeCompany() {
+		return clean(activeIdentity().active_company);
+	}
+
+	function companyWide() {
+		return Boolean(activeIdentity().company_wide);
+	}
+
+	function metaHasField(listview, fieldname) {
+		const fields = listview?.meta?.fields || [];
+		return fields.some((field) => field?.fieldname === fieldname);
 	}
 
 	function branchField(listview) {
 		const configured = BRANCH_FIELD_BY_DOCTYPE[listview?.doctype];
-		if (!configured) return "";
-		const fields = listview?.meta?.fields || [];
-		return fields.some((field) => field?.fieldname === configured) ? configured : "";
+		return configured && metaHasField(listview, configured) ? configured : "";
 	}
 
-	function isBranchFilter(filter, doctype, fieldname) {
-		if (!Array.isArray(filter)) return false;
+	function companyField(listview) {
+		return metaHasField(listview, "company") ? "company" : "";
+	}
+
+	function isFieldFilter(filter, doctype, fieldname) {
+		if (!fieldname || !Array.isArray(filter)) return false;
 		const filterDoctype = clean(filter[0]);
 		return (!filterDoctype || filterDoctype === doctype) && filter[1] === fieldname;
 	}
 
+	function exactFilter(filters, doctype, fieldname, value) {
+		const matches = filters.filter((filter) => isFieldFilter(filter, doctype, fieldname));
+		return (
+			matches.length === 1 &&
+			matches[0][2] === "=" &&
+			clean(matches[0][3]) === clean(value)
+		);
+	}
+
 	async function apply(listview) {
 		const branch = activeBranch();
-		const fieldname = branchField(listview);
-		if (!branch || !fieldname || !listview?.filter_area) {
+		const company = activeCompany();
+		const isCompanyWide = companyWide();
+		const branchFieldname = branchField(listview);
+		const companyFieldname = companyField(listview);
+		if (!listview?.filter_area || !branchFieldname) {
+			return;
+		}
+		if (!isCompanyWide && !branch) {
+			return;
+		}
+		// Company-wide view is allowed only where the list can retain the active
+		// Company as a hard boundary. Native permissions remain authoritative too.
+		if (isCompanyWide && (!company || !companyFieldname)) {
 			return;
 		}
 
 		const currentFilters = listview.filter_area.get?.() || listview.filters || [];
-		const preservedFilters = currentFilters.filter(
-			(filter) => !isBranchFilter(filter, listview.doctype, fieldname)
+		const branchFilters = currentFilters.filter((filter) =>
+			isFieldFilter(filter, listview.doctype, branchFieldname)
 		);
-		const nextFilters = [
-			...preservedFilters,
-			[listview.doctype, fieldname, "=", branch],
-		];
-
-		const currentBranchFilters = currentFilters.filter((filter) =>
-			isBranchFilter(filter, listview.doctype, fieldname)
-		);
-		if (
-			currentBranchFilters.length === 1 &&
-			currentBranchFilters[0][2] === "=" &&
-			clean(currentBranchFilters[0][3]) === branch
-		) {
+		const companyFilters = companyFieldname
+			? currentFilters.filter((filter) => isFieldFilter(filter, listview.doctype, companyFieldname))
+			: [];
+		const branchMatches = isCompanyWide
+			? branchFilters.length === 0
+			: exactFilter(currentFilters, listview.doctype, branchFieldname, branch);
+		const companyMatches = !companyFieldname || !company
+			? companyFilters.length === 0
+			: exactFilter(currentFilters, listview.doctype, companyFieldname, company);
+		if (branchMatches && companyMatches) {
 			return;
+		}
+
+		const preservedFilters = currentFilters.filter(
+			(filter) =>
+				!isFieldFilter(filter, listview.doctype, branchFieldname) &&
+				!isFieldFilter(filter, listview.doctype, companyFieldname)
+		);
+		const nextFilters = [...preservedFilters];
+		if (companyFieldname && company) {
+			nextFilters.push([listview.doctype, companyFieldname, "=", company]);
+		}
+		if (!isCompanyWide) {
+			nextFilters.push([listview.doctype, branchFieldname, "=", branch]);
 		}
 
 		await listview.filter_area.clear(false);
@@ -115,6 +165,8 @@
 
 	window.retailedge.workingBranchDocumentScope = {
 		activeBranch,
+		activeCompany,
+		companyWide,
 		apply,
 		install,
 	};
