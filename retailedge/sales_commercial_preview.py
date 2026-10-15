@@ -59,6 +59,26 @@ def get_sales_invoice_commercial_preview(
 	return _preview_new_sale(values)
 
 
+def _preview_item_rows(items: Any) -> Any:
+	"""Ignore blank child-table placeholders while calculating a live preview.
+
+	Clicking Add Item creates an editable row before an Item is selected. That row
+	must not make the persistence-free commercial preview fail while the operator
+	is still choosing the Item. Non-dict rows remain untouched so normal server
+	validation still rejects malformed payloads, and save/update paths remain
+	strict about incomplete item rows.
+	"""
+	if isinstance(items, str):
+		items = frappe.parse_json(items)
+	if not isinstance(items, list):
+		return items
+	return [
+		item
+		for item in items
+		if not isinstance(item, dict) or str(item.get("item_code") or "").strip()
+	]
+
+
 def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 	user = frappe.session.user
 	company, branch, warehouse = _validate_transaction_context(values, user=user)
@@ -68,7 +88,7 @@ def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 		frappe.throw(_("Customer is required before calculating the sale."))
 	_assert_read_permission("Customer", customer)
 
-	items = _normalise_items(values.get("items"))
+	items = _normalise_items(_preview_item_rows(values.get("items")))
 	pricing_context = resolve_price_list_context(
 		mode="selling",
 		company=company,
@@ -134,6 +154,7 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 
 	requested_items = values.get("items")
 	if requested_items is not None:
+		requested_items = _preview_item_rows(requested_items)
 		update_draft_items(
 			doc,
 			requested_items,
