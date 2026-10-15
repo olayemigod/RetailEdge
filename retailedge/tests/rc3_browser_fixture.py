@@ -88,14 +88,23 @@ def _ensure_warehouse(branch_name: str) -> str:
 def _ensure_branch_profile(
 	branch_name: str,
 	*,
-	default_warehouse: str,
+	default_warehouse: str = "",
 	is_default: bool = False,
 ) -> None:
 	profile_name = f"RC3 {branch_name}"
 	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
 		profile = frappe.get_doc("RetailEdge Branch Profile", profile_name)
-		if profile.default_warehouse != default_warehouse:
-			profile.default_warehouse = default_warehouse
+		changed = False
+		if (profile.default_warehouse or "") != default_warehouse:
+			profile.default_warehouse = default_warehouse or None
+			changed = True
+		if int(profile.enabled or 0) != 1:
+			profile.enabled = 1
+			changed = True
+		if int(profile.is_default_for_company or 0) != (1 if is_default else 0):
+			profile.is_default_for_company = 1 if is_default else 0
+			changed = True
+		if changed:
 			profile.save(ignore_permissions=True)
 		return
 	frappe.get_doc(
@@ -106,21 +115,10 @@ def _ensure_branch_profile(
 			"company": COMPANY,
 			"branch": branch_name,
 			"is_default_for_company": 1 if is_default else 0,
-			"default_warehouse": default_warehouse,
+			"default_warehouse": default_warehouse or None,
 			"notes": "Deterministic RC3 browser/persona fixture.",
 		}
 	).insert(ignore_permissions=True)
-
-
-def _remove_fixture_branch_profile(branch_name: str) -> None:
-	profile_name = f"RC3 {branch_name}"
-	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
-		frappe.delete_doc(
-			"RetailEdge Branch Profile",
-			profile_name,
-			ignore_permissions=True,
-			force=True,
-		)
 
 
 def _ensure_assignment(
@@ -167,10 +165,9 @@ def seed_rc3_personas() -> dict:
 		_ensure_branch(branch_name)
 		warehouses[branch_name] = _ensure_warehouse(branch_name)
 		if branch_name == BRANCH_WITHOUT_DEFAULTS:
-			# This Branch is intentionally permission-valid without Branch Setup.
-			# It proves the switcher is driven by access authority rather than by
-			# the presence of optional defaults/POS configuration.
-			_remove_fixture_branch_profile(branch_name)
+			# Branch Setup remains the Company→Branch authority while its optional
+			# operational defaults stay empty for this acceptance case.
+			_ensure_branch_profile(branch_name, default_warehouse="")
 			continue
 		_ensure_branch_profile(
 			branch_name,

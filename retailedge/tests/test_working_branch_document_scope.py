@@ -12,7 +12,7 @@ REPO_ROOT = APP_ROOT.parent
 
 
 class WorkingBranchOptionTests(unittest.TestCase):
-	def test_active_assignment_is_not_hidden_by_missing_branch_setup_profile(self):
+	def test_active_assignments_are_exposed_when_branch_setup_binds_both_branches(self):
 		with (
 			patch("retailedge.operating_context._doctype_has_field", return_value=False),
 			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
@@ -23,8 +23,12 @@ class WorkingBranchOptionTests(unittest.TestCase):
 			),
 			patch(
 				"retailedge.operating_context.get_enabled_branch_profiles",
-				return_value=[{"branch": "Ketu"}],
+				return_value=[
+					{"branch": "Ketu", "company": "RetailEdge Consulting"},
+					{"branch": "Lagos Island", "company": "RetailEdge Consulting"},
+				],
 			),
+			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
 			patch(
 				"retailedge.operating_context.get_assignment_branches",
 				return_value=["Ketu", "Lagos Island"],
@@ -35,12 +39,44 @@ class WorkingBranchOptionTests(unittest.TestCase):
 				["Ketu", "Lagos Island"],
 			)
 
-	def test_permitted_assigned_branch_can_be_selected_without_branch_defaults_profile(self):
+	def test_assignment_does_not_bypass_branch_setup_company_binding(self):
+		with (
+			patch("retailedge.operating_context._doctype_has_field", return_value=False),
+			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
+			patch("retailedge.operating_context.has_branch_assignments", return_value=True),
+			patch(
+				"retailedge.operating_context.frappe.get_all",
+				return_value=[{"name": "Ketu"}, {"name": "Lagos Island"}],
+			),
+			patch(
+				"retailedge.operating_context.get_enabled_branch_profiles",
+				return_value=[{"branch": "Ketu", "company": "RetailEdge Consulting"}],
+			),
+			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
+			patch(
+				"retailedge.operating_context.get_assignment_branches",
+				return_value=["Ketu", "Lagos Island"],
+			),
+		):
+			self.assertEqual(
+				_allowed_branches(company="RetailEdge Consulting", user="branch-user@example.com"),
+				["Ketu"],
+			)
+
+	def test_permitted_assigned_branch_can_be_selected_when_branch_setup_has_no_defaults(self):
 		with (
 			patch("retailedge.operating_context._assert_company_access"),
 			patch("retailedge.operating_context._assert_branch_exists_and_active"),
 			patch("retailedge.operating_context._branch_company", return_value=""),
-			patch("retailedge.operating_context.get_enabled_branch_profile_companies", return_value=[]),
+			patch(
+				"retailedge.operating_context.get_enabled_branch_profiles",
+				return_value=[{"branch": "Lagos Island", "company": "RetailEdge Consulting"}],
+			),
+			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
+			patch(
+				"retailedge.operating_context.get_enabled_branch_profile_companies",
+				return_value=["RetailEdge Consulting"],
+			),
 			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
 			patch("retailedge.operating_context.has_branch_assignments", return_value=True),
 			patch(
