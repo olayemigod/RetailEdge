@@ -322,7 +322,7 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertIn("Automatic promotion applied", summary)
 		self.assertIn("Price-list value", summary)
 		self.assertIn("Item promotions", summary)
-		self.assertIn("Selling rate adjustments", summary)
+		self.assertIn("Rate adjustments", summary)
 		self.assertIn("Line discounts", summary)
 		self.assertIn("Invoice promotion", summary)
 		self.assertIn("Invoice discount", summary)
