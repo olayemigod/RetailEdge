@@ -93,7 +93,7 @@ function mapEditableItems(rows = []) {
 		name: row.name || "",
 		item_code: row.item_code || "",
 		qty: row.qty,
-		rate: row.rate,
+		rate: row.selling_rate ?? row.rate,
 		uom: row.uom || "",
 		discount_percentage: Number(row.discount_percentage || 0),
 		amount: Number(row.amount || 0),
