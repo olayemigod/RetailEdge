@@ -300,6 +300,7 @@ def _build_preview_document(
 			index=index,
 			rate_locked=rate_locked,
 			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+			price_list_rate=resolved.get("price_list_rate"),
 		)
 
 	return doc
