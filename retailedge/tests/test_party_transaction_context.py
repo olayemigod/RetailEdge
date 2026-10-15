@@ -14,7 +14,7 @@ MAKE_SALE = ROOT / "public/js/make_sale/MakeSale.vue"
 RECORD_PURCHASE = ROOT / "public/js/record_purchase/RecordPurchase.vue"
 
 
-def test_party_transaction_context_is_permission_and_branch_aware():
+def test_party_transaction_context_preserves_permissions_and_supplier_branch_scope():
     source = inspect.getsource(party_transaction_context)
     assert 'frappe.has_permission(config["doctype"], "read")' in source
     assert '_assert_named_read("Company", company)' in source
@@ -22,9 +22,22 @@ def test_party_transaction_context_is_permission_and_branch_aware():
     assert "get_operational_branch_scope" in source
     assert "validate_operating_branch" in source
     assert "Choose an Operating Branch before loading party transaction context." in source
+    assert 'if config["party_type"] == "Supplier":' in source
     assert "ignore_permissions" not in source
     assert "frappe.get_all" not in source
     assert "frappe.db.commit" not in source
+
+
+def test_customer_context_is_company_wide_not_retailedge_branch_scoped():
+    source = inspect.getsource(party_transaction_context)
+    assert 'if config["party_type"] == "Supplier":' in source
+    assert 'else:\n\t\tbranch = ""\n\t\tbranch_field = None' in source
+    assert '"scope": "Company" if config["party_type"] == "Customer" else "Branch"' in source
+    assert "Company-wide submitted ERPNext Sales Invoices" in source
+
+    card = CARD.read_text(encoding="utf-8")
+    assert 'branch() { if (this.partyType === "Supplier") this.loadContext(); }' in card
+    assert 'branch: this.partyType === "Supplier" ? (this.branch || "") : ""' in card
 
 
 def test_party_context_uses_submitted_invoice_truth_and_bounded_multicurrency_open_rows():
@@ -44,11 +57,11 @@ def test_party_context_uses_submitted_invoice_truth_and_bounded_multicurrency_op
     assert "sum(base_net_total) as total_value" not in source
 
 
-def test_context_card_refreshes_on_party_company_and_branch_changes():
+def test_context_card_refreshes_on_party_company_and_supplier_branch_changes():
     source = CARD.read_text(encoding="utf-8")
     assert "party() { this.loadContext(); }" in source
     assert "company() { this.loadContext(); }" in source
-    assert "branch() { this.loadContext(); }" in source
+    assert 'branch() { if (this.partyType === "Supplier") this.loadContext(); }' in source
     assert "requestToken" in source
     assert "retailedge.party_transaction_context.get_party_transaction_context" in source
     for label in ("Current Balance", "Overdue", "Total Sales Value", "Total Purchase Value"):
