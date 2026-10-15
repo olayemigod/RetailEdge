@@ -6,6 +6,10 @@ const UPDATE_WITH_TERMS_METHOD = "retailedge.sales_commercial_draft_update.updat
 
 const MANUAL_PERCENTAGE = "manual_discount_percentage";
 const MANUAL_AMOUNT = "manual_discount_amount";
+const MANUAL_MODE = "manual_discount_mode";
+const MANUAL_VALUE = "manual_discount_value";
+const DISCOUNT_MODE_PERCENTAGE = "percentage";
+const DISCOUNT_MODE_AMOUNT = "amount";
 
 function commercialSignature(values = {}) {
 	return JSON.stringify({
@@ -34,16 +38,39 @@ function commercialSignature(values = {}) {
 	});
 }
 
+function discountEditorState(row = {}) {
+	const percentage = Number(row?.[MANUAL_PERCENTAGE] || 0);
+	const amount = Number(row?.[MANUAL_AMOUNT] || 0);
+	if (percentage) return { [MANUAL_MODE]: DISCOUNT_MODE_PERCENTAGE, [MANUAL_VALUE]: percentage };
+	if (amount) return { [MANUAL_MODE]: DISCOUNT_MODE_AMOUNT, [MANUAL_VALUE]: amount };
+	return { [MANUAL_MODE]: "", [MANUAL_VALUE]: "" };
+}
+
 function withManualDiscountColumns(columns = []) {
-	const base = columns.filter((column) => ![MANUAL_PERCENTAGE, MANUAL_AMOUNT].includes(column?.fieldname));
+	const hiddenFields = [MANUAL_PERCENTAGE, MANUAL_AMOUNT, MANUAL_MODE, MANUAL_VALUE];
+	const base = columns.filter((column) => !hiddenFields.includes(column?.fieldname));
 	const result = [];
 	for (const column of base) {
 		if (column?.fieldname === "discount_percentage") {
 			result.push(
-				{ fieldname: MANUAL_PERCENTAGE, label: "Manual Discount %", fieldtype: "Float", default: 0 },
-				{ fieldname: MANUAL_AMOUNT, label: "Discount per Unit", fieldtype: "Currency", default: 0 },
+				{
+					fieldname: MANUAL_MODE,
+					label: "Discount",
+					fieldtype: "Select",
+					options: [
+						{ value: DISCOUNT_MODE_PERCENTAGE, label: "Percentage" },
+						{ value: DISCOUNT_MODE_AMOUNT, label: "Amount / unit" },
+					],
+					default: "",
+				},
+				{
+					fieldname: MANUAL_VALUE,
+					label: "Value",
+					fieldtype: "Float",
+					default: "",
+					read_only_depends_on: `eval:!doc.${MANUAL_MODE}`,
+				},
 			);
-			result.push({ ...column, label: "Applied %", read_only: 1 });
 			continue;
 		}
 		result.push(column);
@@ -56,6 +83,8 @@ function clearLockedManualDiscounts(instance) {
 		...row,
 		[MANUAL_PERCENTAGE]: 0,
 		[MANUAL_AMOUNT]: 0,
+		[MANUAL_MODE]: "",
+		[MANUAL_VALUE]: "",
 	}));
 }
 
@@ -70,24 +99,61 @@ function mapEditableItems(rows = []) {
 		amount: Number(row.amount || 0),
 		[MANUAL_PERCENTAGE]: Number(row[MANUAL_PERCENTAGE] || 0),
 		[MANUAL_AMOUNT]: Number(row[MANUAL_AMOUNT] || 0),
+		...discountEditorState(row),
 	}));
 }
 
-function mutuallyExclusiveManualDiscountRows(nextRows = [], previousRows = []) {
+function normaliseManualDiscountRows(nextRows = [], previousRows = []) {
 	return nextRows.map((row, index) => {
 		const prior = previousRows[index] || {};
 		if ((row?.item_code || "") !== (prior?.item_code || "")) {
-			return { ...row, [MANUAL_PERCENTAGE]: 0, [MANUAL_AMOUNT]: 0 };
+			return {
+				...row,
+				[MANUAL_PERCENTAGE]: 0,
+				[MANUAL_AMOUNT]: 0,
+				[MANUAL_MODE]: "",
+				[MANUAL_VALUE]: "",
+			};
 		}
-		const percentageChanged = String(row?.[MANUAL_PERCENTAGE] ?? "") !== String(prior?.[MANUAL_PERCENTAGE] ?? "");
-		const amountChanged = String(row?.[MANUAL_AMOUNT] ?? "") !== String(prior?.[MANUAL_AMOUNT] ?? "");
-		if (percentageChanged && Number(row?.[MANUAL_PERCENTAGE] || 0) > 0) {
-			return { ...row, [MANUAL_AMOUNT]: 0 };
+
+		const priorEditor = {
+			...discountEditorState(prior),
+			...(prior?.[MANUAL_MODE] !== undefined ? { [MANUAL_MODE]: prior[MANUAL_MODE] } : {}),
+			...(prior?.[MANUAL_VALUE] !== undefined ? { [MANUAL_VALUE]: prior[MANUAL_VALUE] } : {}),
+		};
+		const mode = String(row?.[MANUAL_MODE] || "");
+		if (mode !== String(priorEditor[MANUAL_MODE] || "")) {
+			return {
+				...row,
+				[MANUAL_PERCENTAGE]: 0,
+				[MANUAL_AMOUNT]: 0,
+				[MANUAL_MODE]: mode,
+				[MANUAL_VALUE]: "",
+			};
 		}
-		if (amountChanged && Number(row?.[MANUAL_AMOUNT] || 0) > 0) {
-			return { ...row, [MANUAL_PERCENTAGE]: 0 };
+
+		const value = row?.[MANUAL_VALUE] === "" ? 0 : Number(row?.[MANUAL_VALUE]);
+		if (mode === DISCOUNT_MODE_PERCENTAGE) {
+			return {
+				...row,
+				[MANUAL_PERCENTAGE]: Number.isFinite(value) ? value : 0,
+				[MANUAL_AMOUNT]: 0,
+			};
 		}
-		return { ...row };
+		if (mode === DISCOUNT_MODE_AMOUNT) {
+			return {
+				...row,
+				[MANUAL_PERCENTAGE]: 0,
+				[MANUAL_AMOUNT]: Number.isFinite(value) ? value : 0,
+			};
+		}
+		return {
+			...row,
+			[MANUAL_PERCENTAGE]: 0,
+			[MANUAL_AMOUNT]: 0,
+			[MANUAL_MODE]: "",
+			[MANUAL_VALUE]: "",
+		};
 	});
 }
 
@@ -112,7 +178,7 @@ export function applyMakeSaleCommercialEditing(MakeSale) {
 		baseApplyRatePermission.call(this, pricing);
 		const readOnly = pricing?.allow_rate_change === false;
 		this.itemColumns = (this.itemColumns || []).map((column) =>
-			[MANUAL_PERCENTAGE, MANUAL_AMOUNT].includes(column?.fieldname)
+			[MANUAL_MODE, MANUAL_VALUE].includes(column?.fieldname)
 				? { ...column, read_only: readOnly ? 1 : 0 }
 				: column
 		);
@@ -125,7 +191,7 @@ export function applyMakeSaleCommercialEditing(MakeSale) {
 
 	const baseUpdateItems = MakeSale.methods.updateItems;
 	MakeSale.methods.updateItems = function retailedgeUpdateItems(nextRows) {
-		const rows = mutuallyExclusiveManualDiscountRows(nextRows || [], this.values.items || []);
+		const rows = normaliseManualDiscountRows(nextRows || [], this.values.items || []);
 		return baseUpdateItems.call(this, rows);
 	};
 
