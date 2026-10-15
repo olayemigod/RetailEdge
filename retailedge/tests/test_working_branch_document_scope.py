@@ -24,7 +24,6 @@ class WorkingBranchOptionTests(unittest.TestCase):
 				"retailedge.operating_context.get_enabled_branch_profiles",
 				return_value=[{"branch": "Ketu"}],
 			),
-			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
 			patch(
 				"retailedge.operating_context.get_assignment_branches",
 				return_value=["Ketu", "Lagos Island"],
@@ -40,11 +39,6 @@ class WorkingBranchOptionTests(unittest.TestCase):
 			patch("retailedge.operating_context._assert_company_access"),
 			patch("retailedge.operating_context._assert_branch_exists_and_active"),
 			patch("retailedge.operating_context._branch_company", return_value=""),
-			patch(
-				"retailedge.operating_context.get_enabled_branch_profiles",
-				return_value=[{"branch": "Ketu"}],
-			),
-			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
 			patch("retailedge.operating_context.get_enabled_branch_profile_companies", return_value=[]),
 			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
 			patch("retailedge.operating_context.has_branch_assignments", return_value=True),
@@ -78,8 +72,10 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		for contract in (
 			"retailedge_branch",
 			"active_branch",
-			"frappe.route_options",
 			"filter_area",
+			"before_refresh",
+			"filter_area.clear(false)",
+			"filter_area.set(nextFilters)",
 			"Sales Invoice",
 			"Purchase Invoice",
 			"Stock Entry",
@@ -87,16 +83,25 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_existing_list_filters_are_preserved_before_working_branch_wins(self):
+	def test_existing_list_filters_are_preserved_and_working_branch_replaces_stale_branch(self):
 		source = (APP_ROOT / "public/js/working_branch_document_scope.js").read_text(encoding="utf-8")
-		preserve = source.index("...routeOptionsFromFilters(currentFilters)")
-		branch = source.index("[fieldname]: branch")
-		self.assertLess(preserve, branch)
+		preserve = source.index("const preservedFilters = currentFilters.filter")
+		branch_filter = source.index("[listview.doctype, fieldname, \"=\", branch]")
+		self.assertLess(preserve, branch_filter)
+		self.assertIn("!isBranchFilter(filter, listview.doctype, fieldname)", source)
 
-	def test_specialized_cashier_expense_list_composes_working_branch_scope(self):
-		source = (APP_ROOT / "public/js/retailedge_cashier_expense_list.js").read_text(encoding="utf-8")
-		self.assertIn("workingBranchDocumentScope", source)
-		self.assertIn("apply(listview", source)
+	def test_specialized_purchase_and_cashier_lists_compose_working_branch_scope(self):
+		purchase = (APP_ROOT / "public/js/purchase_documents_list.js").read_text(encoding="utf-8")
+		cashier = (APP_ROOT / "public/js/retailedge_cashier_expense_list.js").read_text(encoding="utf-8")
+		for source in (purchase, cashier):
+			self.assertIn("workingBranchDocumentScope", source)
+			self.assertIn("install?.(listview)", source)
+
+	def test_helper_is_loaded_globally_and_purchase_order_uses_existing_list_module(self):
+		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+		self.assertIn('"/assets/retailedge/js/working_branch_document_scope.js"', hooks)
+		self.assertIn('"Purchase Order": "public/js/purchase_documents_list.js"', hooks)
+		self.assertNotIn('"Purchase Order": "public/js/purchase_order_list.js"', hooks)
 
 
 if __name__ == "__main__":
