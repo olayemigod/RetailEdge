@@ -12,7 +12,7 @@ from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 
 from retailedge.branch_assignment import get_branch_assignment_price_lists
 from retailedge.branch_context import validate_user_branch_access
-from retailedge.branch_profile import get_branch_profile, get_exact_branch_profile
+from retailedge.branch_profile import get_exact_branch_profile
 from retailedge.utils.settings import get_retailedge_settings
 
 PriceMode = Literal["selling", "buying"]
@@ -783,12 +783,14 @@ def _erpnext_item_details(
 
 def _resolve_user_pos_profile(*, company: str, branch: str, user: str) -> frappe._dict | None:
 	if branch:
-		profile = get_branch_profile(company=company, branch=branch, user=user, active_only=True)
+		# Branch is an explicit parent context. Only the exact Branch Profile may
+		# supply its POS Profile; never leak a company/user POS default from a
+		# different branch into the selected branch's pricing or rate policy.
+		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
 		configured = str(getattr(profile, "default_pos_profile", None) or "").strip() if profile else ""
-		if configured:
-			pos = _permitted_pos_profile(configured, company=company, user=user)
-			if pos:
-				return pos
+		if not configured:
+			return None
+		return _permitted_pos_profile(configured, company=company, user=user)
 
 	if not frappe.has_permission("POS Profile", "read", user=user):
 		return None
