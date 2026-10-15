@@ -4,6 +4,7 @@
 	}
 
 	window.retailedge = window.retailedge || {};
+	frappe.listview_settings = frappe.listview_settings || {};
 
 	const BRANCH_FIELD_BY_DOCTYPE = {
 		"Sales Invoice": "retailedge_branch",
