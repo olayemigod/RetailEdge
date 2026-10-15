@@ -199,14 +199,15 @@ class TestSalesPricingProvenance(unittest.TestCase):
 
 		for wording in (
 			"Item promotions",
-			"Selling rate adjustments",
+			"Rate adjustments",
 			"Line discounts",
 			"Invoice promotion",
 			"Invoice discount",
-			"Grand total before",
+			"Before invoice",
 		):
 			self.assertIn(wording, summary)
 		self.assertNotIn("Price adjustment", summary)
+		self.assertNotIn("Selling rate adjustments", summary)
 		self.assertIn("Automatic invoice promotion", terms)
 		self.assertIn('label="Invoice discount"', terms)
 		self.assertIn('label: "No invoice discount"', terms)
@@ -215,6 +216,18 @@ class TestSalesPricingProvenance(unittest.TestCase):
 		for source in (make_sale, quick_sale):
 			self.assertIn("SalesCommercialSummary", source)
 			self.assertIn("SalesCommercialTermsControls", source)
+
+	def test_shared_summary_uses_one_final_tax_label_and_compact_typography(self):
+		summary = (APP_ROOT / "public" / "js" / "selling" / "SalesCommercialSummary.vue").read_text(encoding="utf-8")
+
+		self.assertIn("taxDisplayName(tax)", summary)
+		self.assertIn("Final tax", summary)
+		self.assertIn("Tax change", summary)
+		self.assertIn("taxDescriptionIncludesRate", summary)
+		self.assertIn("sales-commercial-summary__final-tax", summary)
+		self.assertIn("font-size: .76rem", summary)
+		self.assertIn("font-weight: 500", summary)
+		self.assertIn("white-space: nowrap", summary)
 
 
 if __name__ == "__main__":
