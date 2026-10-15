@@ -6,7 +6,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = APP_ROOT.parent
-EDGESUITE_SHA = "a2d1705f794e17c88d66d7041df4dfb47b2684ff"
+EDGESUITE_SHA = "7f6c45142e72182b96fedb8b209ea5968a906faa"
 
 
 class TestSharedPrintingRetailAdoption(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn('_("Thank you for your business.")', source)
-		for forbidden in ("navigator.serial", "requestPort", "0x1b", "0x1d", "ESC @"):
+		for forbidden in ("navigator.serial", "navigator.usb", "requestPort", "requestDevice", "0x1b", "0x1d", "ESC @"):
 			self.assertNotIn(forbidden, source)
 
 	def test_receipt_uses_erpnext_net_values_and_keeps_payment_summary(self):
@@ -86,35 +86,53 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("_payment_blocks", source)
 
-	def test_browser_adapter_uses_shared_runtime_and_queryless_setup_route(self):
+	def test_browser_adapter_uses_shared_runtime_for_serial_and_usb(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
 			'adapter.profiles?.resolve',
 			'adapter.devices?.connectBoundSerial',
+			'adapter.devices?.connectBoundUsb',
+			'adapter.devices?.bindingMatchesStatus',
 			'adapter.profiles.receiptOptions(profile)',
 			'adapter.profiles.textEncoder(profile)',
-			'adapter.printReceipt(documentPayload, { encodeText })',
+			'transport: connection.transport',
 			'payload?.blocks_by_paper?.[paperWidth]',
 			'return "/app/edge-printing";',
 			'frappe.set_route("edge-printing")',
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("/app/edge-printing?", source)
-		for forbidden in ("navigator.serial", "requestPort(", "getPorts(", "bluetoothServiceClassId"):
+		for forbidden in (
+			"navigator.serial",
+			"navigator.usb",
+			"requestPort(",
+			"requestDevice(",
+			"getPorts(",
+			"getDevices(",
+			"bluetoothServiceClassId",
+		):
 			self.assertNotIn(forbidden, source)
 
 	def test_connected_printer_must_match_resolved_profile_binding(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
 			'adapter.bindingStore?.get?.(profile.name)',
+			'adapter.devices?.bindingMatchesStatus?.(profile.name, current || {})',
 			'portInfoMatchesBinding(current.portInfo || {}, binding.portInfo || {})',
-			'if (current?.connected && !currentMatchesBinding)',
-			'await adapter.disconnect("serial")',
-			'adapter.devices?.connectBoundSerial?.(',
-			'adapter.simulation?.isEnabled?.() && current?.connected',
+			'if (currentMatchesBinding) return { transport, status: current };',
+			'await adapter.disconnect(transport)',
+			'adapter.devices?.connectBoundUsb',
+			'adapter.devices?.connectBoundSerial',
+			'adapter.simulation?.isEnabled?.()',
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("if (current?.connected) return current;", source)
+
+	def test_usb_profile_has_safe_normal_system_print_fallback_message(self):
+		source = self.read_app("public/js/thermalReceiptPrinting.js")
+		self.assertIn('["serial", "usb"].includes(transport)', source)
+		self.assertIn("Serial / Bluetooth or USB receipt printer profile", source)
+		self.assertIn("If direct USB access is unavailable, use Print Document for normal system printing.", source)
 
 	def test_generic_reprint_never_opens_cash_drawer_by_default(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
@@ -129,6 +147,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			self.assertIn("printRetailReceipt", source)
 			self.assertIn("openRetailPrinterSetup", source)
 			self.assertNotIn("navigator.serial", source)
+			self.assertNotIn("navigator.usb", source)
 		self.assertIn("Print Document", document_output)
 
 	def test_final_devices_navigation_is_internal_page_without_query_context(self):

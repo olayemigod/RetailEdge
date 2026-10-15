@@ -54,6 +54,22 @@ function resolvedReceiptTemplate(payload = {}, profileOptions = {}) {
 	);
 }
 
+function directProfileTransport(profile) {
+	const transport = String(profile?.transport || "").trim().toLowerCase();
+	if (!["serial", "usb"].includes(transport)) {
+		throw printerError(
+			"RETAIL_DIRECT_PRINTER_REQUIRED",
+			"Direct receipt printing requires a Serial / Bluetooth or USB receipt printer profile.",
+		);
+	}
+	return transport;
+}
+
+function activeTransport(adapter, profile) {
+	if (adapter.simulation?.isEnabled?.()) return "serial";
+	return directProfileTransport(profile);
+}
+
 export function retailPrinterSetupUrl() {
 	return "/app/edge-printing";
 }
@@ -79,7 +95,7 @@ export function isRetailReceiptPrintable(documentOrDetails) {
 	return ["Sales Invoice", "POS Invoice"].includes(doctype);
 }
 
-async function resolveSerialProfile(adapter, context) {
+async function resolveDirectProfile(adapter, context) {
 	const profile = await adapter.profiles?.resolve?.(normalizedContext(context));
 	if (!profile) {
 		throw printerError(
@@ -87,44 +103,57 @@ async function resolveSerialProfile(adapter, context) {
 			"No active receipt printer profile is configured for this company or branch.",
 		);
 	}
-	if (profile.transport !== "serial") {
-		throw printerError(
-			"RETAIL_DIRECT_PRINTER_REQUIRED",
-			"Direct receipt printing requires a Serial / Bluetooth receipt printer profile.",
-		);
-	}
+	directProfileTransport(profile);
 	return profile;
 }
 
 async function ensureConnected(adapter, profile) {
-	const current = adapter.getStatus?.("serial");
-	if (adapter.simulation?.isEnabled?.() && current?.connected) return current;
+	const transport = activeTransport(adapter, profile);
+	const current = adapter.getStatus?.(transport);
+	if (adapter.simulation?.isEnabled?.() && transport === "serial" && current?.connected) {
+		return { transport, status: current };
+	}
 
 	try {
 		const binding = adapter.bindingStore?.get?.(profile.name);
-		const currentMatchesBinding = Boolean(
-			current?.connected
+		const sharedMatch = adapter.devices?.bindingMatchesStatus?.(profile.name, current || {});
+		const legacySerialMatch = Boolean(
+			transport === "serial"
+			&& current?.connected
 			&& binding?.transport === "serial"
 			&& portInfoMatchesBinding(current.portInfo || {}, binding.portInfo || {}),
 		);
+		const currentMatchesBinding = Boolean(current?.connected && (sharedMatch || legacySerialMatch));
 
-		if (current?.connected && !currentMatchesBinding) {
+		if (currentMatchesBinding) return { transport, status: current };
+
+		if (current?.connected) {
 			if (typeof adapter.disconnect !== "function") {
 				throw new Error("Shared print runtime cannot switch the connected printer safely.");
 			}
-			await adapter.disconnect("serial");
+			await adapter.disconnect(transport);
 		}
 
-		const restored = await adapter.devices?.connectBoundSerial?.(
+		const connectBound = transport === "usb"
+			? adapter.devices?.connectBoundUsb
+			: adapter.devices?.connectBoundSerial;
+		if (typeof connectBound !== "function") {
+			throw new Error(`Shared print runtime does not support ${transport.toUpperCase()} printer bindings.`);
+		}
+		const restored = await connectBound.call(
+			adapter.devices,
 			profile.name,
 			adapter.profiles.connectionOptions(profile),
 		);
 		if (!restored?.status?.connected) throw new Error("Printer did not reconnect.");
-		return restored.status;
+		return { transport, status: restored.status };
 	} catch (error) {
+		const suffix = transport === "usb"
+			? " If direct USB access is unavailable, use Print Document for normal system printing."
+			: "";
 		throw printerError(
 			"RETAIL_PRINTER_SETUP_REQUIRED",
-			"Connect this device to the receipt printer in Devices & Printing.",
+			`Connect this device to the receipt printer in Devices & Printing.${suffix}`,
 			error,
 		);
 	}
@@ -178,8 +207,8 @@ export async function printRetailReceipt({
 		company: String(payload?.company || company || "").trim(),
 		branch: String(payload?.branch || branch || "").trim(),
 	};
-	const profile = await resolveSerialProfile(adapter, context);
-	await ensureConnected(adapter, profile);
+	const profile = await resolveDirectProfile(adapter, context);
+	const connection = await ensureConnected(adapter, profile);
 	const options = adapter.profiles.receiptOptions(profile);
 	const template = resolvedReceiptTemplate(payload, options);
 	const documentPayload = {
@@ -199,12 +228,16 @@ export async function printRetailReceipt({
 	const results = [];
 	const encodeText = adapter.profiles.textEncoder(profile);
 	for (let copy = 0; copy < copies; copy += 1) {
-		results.push(await adapter.printReceipt(documentPayload, { encodeText }));
+		results.push(await adapter.printReceipt(documentPayload, {
+			transport: connection.transport,
+			encodeText,
+		}));
 	}
 	return Object.freeze({
 		printed: true,
 		copies,
 		profile,
+		transport: connection.transport,
 		template,
 		payload,
 		results,
