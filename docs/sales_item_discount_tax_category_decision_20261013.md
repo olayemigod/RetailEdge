@@ -38,13 +38,14 @@ References:
 
 1. **ERPNext remains commercial truth.** Manual input is mapped only to native Sales Invoice Item fields; taxes and final totals are calculated by ERPNext.
 2. **Manual input is kept separate from resolved promotion output.** RetailEdge keeps request fields `manual_discount_percentage` and `manual_discount_amount` without adding database fields. Make Sale presents those choices as one **Discount** selector (`Percentage` or `Amount / unit`) plus one **Value** field, then maps that compact editor back to the existing request fields before preview/save.
-3. **Automatic Pricing Rule and manual line discount do not silently stack.** If ERPNext resolves an automatic Pricing Rule on a line where a manual discount was requested, the preview/save fails closed and asks the user to remove the manual discount or review the Pricing Rule.
-4. **Existing price governance is reused.** Where the current POS/Profile/Price List context locks the selling rate, RetailEdge also blocks manual line discounts because they reduce the effective selling price. No parallel RetailEdge discount-permission schema is introduced in this slice.
-5. **Make Sale owns richer line editing without overloading the item grid.** The compact Discount + Value editor is exposed on persistent Make Sale. The resolved discount percentage is no longer a permanent extra Make Sale column; the effective line Amount and the Sale Summary remain the primary operator feedback. Quick Sale stays compact and keeps its resolved ERPNext discount read-only rather than exposing manual discount editing.
-6. **Fixed line discount meaning remains explicit.** The Discount selector uses `Amount / unit` because ERPNext item `discount_amount` is rate/unit based.
-7. **Tax Category is a governed Link, not a rate field.** Only enabled categories the current user may use are searchable. Changing category clears stale tax-template rows before ERPNext resolves the new treatment.
-8. **Tax templates remain company/category safe.** Search narrows to the active Company and selected Tax Category while still allowing generic templates. Backend validation remains authoritative.
-9. **No manual tax-row editor is added.** Account heads, charge types and tax rates remain advanced ERPNext configuration rather than cashier-facing RetailEdge controls.
+3. **The native `rate` remains a resolved post-discount value.** ERPNext's taxes-and-totals controller treats Sales Invoice Item `rate` as the effective line rate after native discount resolution. When a manual line discount is active, RetailEdge must not carry the undiscounted entry rate into that final field; it clears the intermediate rate so ERPNext calculates the effective rate from the native Price List/margin/discount fields. With no active manual discount, an entered Selling Rate remains unchanged.
+4. **Automatic Pricing Rule and manual line discount do not silently stack.** If ERPNext resolves an automatic Pricing Rule on a line where a manual discount was requested, the preview/save fails closed and asks the user to remove the manual discount or review the Pricing Rule.
+5. **Existing price governance is reused.** Where the current POS/Profile/Price List context locks the selling rate, RetailEdge also blocks manual line discounts because they reduce the effective selling price. No parallel RetailEdge discount-permission schema is introduced in this slice.
+6. **Make Sale owns richer line editing without overloading the item grid.** The compact Discount + Value editor is exposed on persistent Make Sale. The resolved discount percentage is no longer a permanent extra Make Sale column; the effective line Amount and the Sale Summary remain the primary operator feedback. Quick Sale stays compact and keeps its resolved ERPNext discount read-only rather than exposing manual discount editing.
+7. **Fixed line discount meaning remains explicit.** The Discount selector uses `Amount / unit` because ERPNext item `discount_amount` is rate/unit based.
+8. **Tax Category is a governed Link, not a rate field.** Only enabled categories the current user may use are searchable. Changing category clears stale tax-template rows before ERPNext resolves the new treatment.
+9. **Tax templates remain company/category safe.** Search narrows to the active Company and selected Tax Category while still allowing generic templates. Backend validation remains authoritative.
+10. **No manual tax-row editor is added.** Account heads, charge types and tax rates remain advanced ERPNext configuration rather than cashier-facing RetailEdge controls.
 
 ## Deliberate deviations / deferred work
 
@@ -60,6 +61,8 @@ References:
 - Confirm company/category cascade prevents invalid tax-template combinations through direct API attempts as well as UI search.
 - Confirm rate-locked POS/Profile contexts reject manual line discounts server-side.
 - Confirm percentage and per-unit amount discounts remain mutually exclusive and totals match ERPNext.
+- Confirm an active manual line discount changes the ERPNext effective line rate/Amount rather than being normalized away by a pre-discount `rate` value.
+- Confirm a zero/cleared manual discount does not clear or rewrite an entered Selling Rate.
 - Confirm switching Discount type clears the old Value so a percentage is never reinterpreted as a currency amount, or vice versa.
 - Confirm theme/dark mode and mobile behavior through EdgeSuite/browser persona validation.
 
