@@ -17,10 +17,10 @@ class TestSalesItemDiscountCascade(unittest.TestCase):
 			'if ((row?.item_code || "") !== (prior?.item_code || ""))',
 			source,
 		)
-		self.assertIn(
-			"return { ...row, [MANUAL_PERCENTAGE]: 0, [MANUAL_AMOUNT]: 0 };",
-			source,
-		)
+		self.assertIn("[MANUAL_PERCENTAGE]: 0", source)
+		self.assertIn("[MANUAL_AMOUNT]: 0", source)
+		self.assertIn('[MANUAL_MODE]: ""', source)
+		self.assertIn('[MANUAL_VALUE]: ""', source)
 
 	def test_quantity_change_does_not_clear_per_unit_discount_contract(self):
 		source = (
@@ -28,7 +28,9 @@ class TestSalesItemDiscountCascade(unittest.TestCase):
 		).read_text(encoding="utf-8")
 
 		self.assertNotIn("row?.qty || 0) !== (prior?.qty", source)
-		self.assertIn('label: "Discount per Unit"', source)
+		self.assertIn('const DISCOUNT_MODE_AMOUNT = "amount"', source)
+		self.assertIn('label: "Amount / unit"', source)
+		self.assertIn("[MANUAL_AMOUNT]: Number.isFinite(value) ? value : 0", source)
 
 
 if __name__ == "__main__":

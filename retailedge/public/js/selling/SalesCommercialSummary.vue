@@ -22,11 +22,11 @@
 
 				<div class="sales-commercial-summary__rows">
 					<div v-if="Number(preview.item_discount_total || 0)">
-						<span>List value</span>
+						<span>Price-list reference</span>
 						<strong>{{ formatMoney(preview.list_value) }}</strong>
 					</div>
 					<div v-if="Number(preview.item_discount_total || 0)" class="sales-commercial-summary__muted-row">
-						<span>Item savings</span>
+						<span>Price adjustment</span>
 						<strong>−{{ formatMoney(preview.item_discount_total) }}</strong>
 					</div>
 					<div>
@@ -114,8 +114,8 @@ export default {
 }
 .sales-commercial-summary {
 	display: grid;
-	gap: 12px;
-	padding: 14px 16px;
+	gap: 9px;
+	padding: 12px 14px;
 	border: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
 	border-radius: 10px;
 	background: var(--edge-color-surface, #fff);
@@ -126,7 +126,7 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 14px;
+	gap: 10px;
 }
 .sales-commercial-summary__header > div {
 	display: grid;
@@ -142,7 +142,7 @@ export default {
 	color: var(--edge-color-ink-500, var(--edge-text-muted, #667085));
 }
 .sales-commercial-summary__header span {
-	font-size: .72rem;
+	font-size: .7rem;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: .06em;
@@ -150,57 +150,57 @@ export default {
 .sales-commercial-summary__promotions {
 	display: grid;
 	gap: 2px;
-	padding: 9px 11px;
+	padding: 8px 10px;
 	border: 1px solid var(--edge-color-success, #12b76a);
 	border-radius: 8px;
 	background: var(--edge-color-success-subtle, #ecfdf3);
 }
 .sales-commercial-summary__promotions strong {
-	font-size: .82rem;
+	font-size: .8rem;
 	color: var(--edge-color-success, #067647);
 }
 .sales-commercial-summary__promotions span {
-	font-size: .76rem;
+	font-size: .74rem;
 	color: var(--edge-color-ink-600, #475467);
 }
 .sales-commercial-summary__rows {
 	display: grid;
-	gap: 8px;
+	gap: 6px;
 }
 .sales-commercial-summary__muted-row strong {
 	color: var(--edge-color-success, #067647);
 }
 .sales-commercial-summary__total {
 	margin-top: 3px;
-	padding-top: 10px;
+	padding-top: 9px;
 	border-top: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
-	font-size: 1.05rem;
+	font-size: 1rem;
 }
 .sales-commercial-summary__total strong {
-	font-size: 1.25rem;
+	font-size: 1.15rem;
 }
 .sales-commercial-summary__context {
 	display: flex;
-	gap: 8px 14px;
+	gap: 6px 12px;
 	flex-wrap: wrap;
-	font-size: .78rem;
+	font-size: .76rem;
 }
 .sales-commercial-summary__taxes {
-	padding-top: 2px;
+	padding-top: 1px;
 }
 .sales-commercial-summary__taxes summary {
 	cursor: pointer;
-	font-size: .8rem;
+	font-size: .78rem;
 	font-weight: 600;
 }
 .sales-commercial-summary__taxes > div {
-	padding: 7px 0 0;
-	font-size: .8rem;
+	padding: 6px 0 0;
+	font-size: .78rem;
 }
 .sales-commercial-summary__error {
 	display: grid;
 	gap: 3px;
-	padding: 10px 12px;
+	padding: 9px 10px;
 	border: 1px solid var(--edge-color-danger, #d92d20);
 	border-radius: 8px;
 	color: var(--edge-color-danger, #b42318);
@@ -208,7 +208,7 @@ export default {
 }
 .sales-commercial-summary__empty {
 	margin: 0;
-	font-size: .82rem;
+	font-size: .8rem;
 }
 :global(:root[data-edge-appearance="dark"]) .sales-commercial-summary {
 	background: var(--edge-color-surface);

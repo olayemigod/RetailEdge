@@ -210,7 +210,7 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 			self.assertNotIn("frappe.db.commit(", source)
 			self.assertNotIn("ignore_permissions=True", source)
 
-	def test_make_sale_exposes_manual_discount_controls_but_quick_sale_does_not(self):
+	def test_make_sale_uses_one_discount_selector_and_value_while_quick_sale_stays_compact(self):
 		extension = (
 			APP_ROOT / "public" / "js" / "make_sale" / "commercialEditingExtension.js"
 		).read_text(encoding="utf-8")
@@ -219,15 +219,23 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleSalesInvoiceDialog.vue"
 		).read_text(encoding="utf-8")
 
-		self.assertIn('label: "Manual Discount %"', extension)
-		self.assertIn('label: "Discount per Unit"', extension)
-		self.assertIn('label: "Applied %"', extension)
+		self.assertIn('const MANUAL_MODE = "manual_discount_mode"', extension)
+		self.assertIn('const MANUAL_VALUE = "manual_discount_value"', extension)
+		self.assertIn('label: "Discount"', extension)
+		self.assertIn('fieldtype: "Select"', extension)
+		self.assertIn('label: "Percentage"', extension)
+		self.assertIn('label: "Amount / unit"', extension)
+		self.assertIn('label: "Value"', extension)
+		self.assertIn('read_only_depends_on: `eval:!doc.${MANUAL_MODE}`', extension)
+		self.assertNotIn('label: "Manual Discount %"', extension)
+		self.assertNotIn('label: "Discount per Unit"', extension)
+		self.assertNotIn('label: "Applied %"', extension)
 		self.assertIn("manual_discount_percentage", extension)
 		self.assertIn("manual_discount_amount", extension)
 		self.assertIn("tax_category", extension)
 		self.assertIn("applyMakeSaleCommercialEditing(MakeSale)", bundle)
-		self.assertNotIn("Manual Discount %", quick)
-		self.assertNotIn("Discount per Unit", quick)
+		self.assertNotIn("manual_discount_mode", quick)
+		self.assertNotIn("manual_discount_value", quick)
 
 	def test_native_discount_amount_is_documented_as_per_unit(self):
 		source = (APP_ROOT / "sales_item_discounts.py").read_text(encoding="utf-8")

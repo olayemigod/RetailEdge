@@ -7,10 +7,10 @@
 	[data-edge-product="retailedge"] form.make-sale-form,
 	body.edge-suite-product-retailedge .guided-invoice-form,
 	[data-edge-product="retailedge"] .guided-invoice-form {
-		--sales-summary-rail-width: clamp(18rem, 24vw, 21rem);
+		--sales-summary-rail-width: clamp(15.5rem, 18vw, 18rem);
 		position: relative;
 		grid-template-columns: minmax(0, 1fr) var(--sales-summary-rail-width);
-		column-gap: 18px;
+		column-gap: 14px;
 		align-items: start;
 	}
 

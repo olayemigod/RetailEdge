@@ -17,6 +17,7 @@ class TestSalesEntryUsabilityContract(unittest.TestCase):
 		self.assertIn('@media (min-width: 1180px)', styles)
 		self.assertIn('form.make-sale-form', styles)
 		self.assertIn('.guided-invoice-form', styles)
+		self.assertIn('--sales-summary-rail-width: clamp(15.5rem, 18vw, 18rem);', styles)
 		self.assertIn('> .sales-commercial-summary-rail', styles)
 		self.assertIn('position: absolute', styles)
 		self.assertIn('inset-block: 0', styles)

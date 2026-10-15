@@ -188,6 +188,61 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertTrue(result["has_discount"])
 		self.assertTrue(result["has_tax"])
 
+	def test_edited_rate_total_remains_distinct_from_price_list_reference(self):
+		doc = frappe._dict(
+			company="RetailEdge Consulting",
+			branch="Lagos Island",
+			customer="CUST-001",
+			currency="NGN",
+			selling_price_list="Standard Selling",
+			items=[
+				frappe._dict(
+					item_code="SOLAR-GEN",
+					item_name="Solar Gen",
+					uom="Nos",
+					stock_uom="Nos",
+					qty=1,
+					price_list_rate=155000,
+					discount_percentage=0,
+					discount_amount=0,
+					rate=23000,
+					amount=23000,
+					net_rate=23000,
+					net_amount=23000,
+				),
+			],
+			total=23000,
+			net_total=23000,
+			additional_discount_percentage=0,
+			discount_amount=0,
+			apply_discount_on="Grand Total",
+			taxes=[
+				frappe._dict(
+					description="VAT",
+					rate=5,
+					tax_amount=1150,
+					tax_amount_after_discount_amount=1150,
+					included_in_print_rate=0,
+				),
+			],
+			total_taxes_and_charges=1150,
+			rounding_adjustment=0,
+			grand_total=24150,
+			rounded_total=24150,
+		)
+
+		result = _serialize_preview(
+			doc,
+			branch="Lagos Island",
+			pricing_context={"price_list": "Standard Selling", "currency": "NGN"},
+		)
+
+		self.assertEqual(result["list_value"], 155000)
+		self.assertEqual(result["item_discount_total"], 132000)
+		self.assertEqual(result["subtotal"], 23000)
+		self.assertEqual(result["total_taxes_and_charges"], 1150)
+		self.assertEqual(result["invoice_total"], 24150)
+
 	def test_inclusive_tax_is_explicit_in_preview(self):
 		doc = frappe._dict(
 			company="RetailEdge Consulting",
@@ -265,9 +320,9 @@ class TestSalesCommercialPreview(unittest.TestCase):
 		self.assertIn("this.savedDocument?.name", make_sale)
 		self.assertNotIn("MakeSale.methods.refreshCommercialPreview", make_sale_bundle)
 		self.assertIn("Promotion applied", summary)
-		self.assertIn("List value", summary)
+		self.assertIn("Price-list reference", summary)
 		self.assertIn("Invoice Total", summary)
-		self.assertIn("Item savings", summary)
+		self.assertIn("Price adjustment", summary)
 		self.assertIn("Tax (included)", summary)
 		self.assertIn("View tax breakdown", summary)
 		self.assertIn("Updating total", summary)

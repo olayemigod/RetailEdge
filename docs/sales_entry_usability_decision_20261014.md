@@ -1,6 +1,7 @@
 # Sales entry usability decision
 
 Date: 2026-10-14
+Updated: 2026-10-15
 
 ## Baseline
 
@@ -16,9 +17,11 @@ Mature retail sale surfaces such as Shopify POS and Square keep the current sale
 
 ## Decision
 
-For wide screens, Make Sale and Quick Sale use the existing entry work area as the primary column and keep the authoritative Sale Summary visible in a sticky secondary rail. The existing Discount & tax control remains progressive disclosure in the main entry flow. The existing sticky Make Sale action bar remains the save/update boundary.
+For wide screens, Make Sale and Quick Sale use the existing entry work area as the primary column and keep the authoritative Sale Summary visible in a sticky secondary rail. The rail is intentionally compact so the item-entry workspace remains dominant. The existing Discount & tax control remains progressive disclosure in the main entry flow. The existing sticky Make Sale action bar remains the save/update boundary.
 
-Below the wide-screen breakpoint, both surfaces remain single-column. EdgeSuite Child Table continues to own table responsiveness and horizontal constraints.
+The Sale Summary labels the Price List figure as a **Price-list reference** and the difference from the effective line amount as **Price adjustment**. Subtotal, Tax and Invoice Total remain the payable-value hierarchy. An operator-entered Selling Rate continues through the existing ERPNext-backed commercial preview; the Price List reference is not presented as the invoice total.
+
+Below the wide-screen breakpoint, both surfaces remain single-column. EdgeSuite Child Table continues to own table responsiveness and horizontal constraints. Make Sale reduces permanent line columns by presenting manual item discount as one Discount selector plus one Value field rather than separate percentage, amount and resolved-percentage columns. Quick Sale remains the compact path and does not gain the richer manual line-discount editor.
 
 The Tax Template help text is corrected to render business-facing guidance rather than a literal Vue expression. Normal user-facing guidance refers to automatic tax treatment rather than exposing implementation terminology.
 
@@ -33,4 +36,4 @@ The Tax Template help text is corrected to render business-facing guidance rathe
 
 ## Validation boundary
 
-The slice must preserve the five canonical RetailEdge gates on one exact candidate: Linters, CI, RetailEdge Upgrade Validation, EdgeSuite UI Candidate Compatibility and RetailEdge Browser Persona Smoke.
+The work must preserve the five canonical RetailEdge gates on one exact candidate: Linters, CI, RetailEdge Upgrade Validation, EdgeSuite UI Candidate Compatibility and RetailEdge Browser Persona Smoke. The commercial preview regression must also distinguish a high Price List reference from a lower edited Selling Rate and assert that the resulting subtotal, tax and Invoice Total use the effective rate rather than the reference price.
