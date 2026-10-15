@@ -57,6 +57,12 @@ class _Doc(_Row):
 		self.values.setdefault(fieldname, []).append(value)
 
 
+def _erpnext_calculate_item_rate(row: _PricingRow) -> None:
+	calculator = calculate_taxes_and_totals.__new__(calculate_taxes_and_totals)
+	calculator.doc = frappe._dict(ignore_pricing_rule=0)
+	calculator.calculate_item_rate(row)
+
+
 class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 	def test_manual_item_discount_accepts_percentage_or_amount(self):
 		percentage = normalise_manual_item_discount({MANUAL_DISCOUNT_PERCENTAGE: 12.5})
@@ -80,21 +86,102 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					normalise_manual_item_discount(values, index=1)
 
-	def test_manual_item_discount_maps_only_to_native_erpnext_item_fields(self):
+	def test_manual_item_discount_maps_to_native_erpnext_pricing_fields(self):
 		row = _Row(item_code="ITEM-001", rate=20000)
-		apply_manual_item_discount(row, {MANUAL_DISCOUNT_PERCENTAGE: 7.5}, index=1)
+		apply_manual_item_discount(
+			row,
+			{"rate": 20000, MANUAL_DISCOUNT_PERCENTAGE: 7.5},
+			index=1,
+			price_list_rate=20000,
+		)
+		self.assertEqual(row.get("price_list_rate"), 20000)
 		self.assertEqual(row.get("discount_percentage"), 7.5)
 		self.assertEqual(row.get("discount_amount"), 0)
+		self.assertEqual(row.get("margin_type"), "")
+		self.assertEqual(row.get("margin_rate_or_amount"), 0)
 		self.assertEqual(row.get("rate"), 0)
 		self.assertNotIn(MANUAL_DISCOUNT_PERCENTAGE, row.values)
 		self.assertNotIn(MANUAL_DISCOUNT_AMOUNT, row.values)
 
-	def test_active_fixed_discount_also_defers_final_rate_to_erpnext(self):
-		row = _Row(item_code="ITEM-001", rate=155000)
-		apply_manual_item_discount(row, {MANUAL_DISCOUNT_AMOUNT: 10000}, index=1)
-		self.assertEqual(row.get("discount_percentage"), 0)
-		self.assertEqual(row.get("discount_amount"), 10000)
-		self.assertEqual(row.get("rate"), 0)
+	def test_entered_rate_below_price_list_is_preserved_as_native_amount_margin(self):
+		row = _PricingRow(
+			item_code="ITEM-001",
+			price_list_rate=155000,
+			rate=23000,
+			discount_percentage=0,
+			discount_amount=0,
+			margin_type="",
+			margin_rate_or_amount=0,
+			pricing_rules="",
+		)
+		apply_manual_item_discount(
+			row,
+			{"rate": 23000, MANUAL_DISCOUNT_PERCENTAGE: 4},
+			index=1,
+			price_list_rate=155000,
+		)
+		self.assertEqual(row.price_list_rate, 155000)
+		self.assertEqual(row.margin_type, "Amount")
+		self.assertEqual(row.margin_rate_or_amount, -132000)
+		self.assertEqual(row.rate, 0)
+
+		_erpnext_calculate_item_rate(row)
+		self.assertEqual(row.rate_with_margin, 23000)
+		self.assertEqual(row.rate, 22080)
+		self.assertEqual(row.discount_percentage, 4)
+		self.assertEqual(row.discount_amount, 920)
+
+	def test_fixed_discount_uses_entered_rate_not_higher_price_list_reference(self):
+		row = _PricingRow(
+			item_code="ITEM-001",
+			price_list_rate=155000,
+			rate=23000,
+			discount_percentage=0,
+			discount_amount=0,
+			margin_type="",
+			margin_rate_or_amount=0,
+			pricing_rules="",
+		)
+		apply_manual_item_discount(
+			row,
+			{"rate": 23000, MANUAL_DISCOUNT_AMOUNT: 10000},
+			index=1,
+			price_list_rate=155000,
+		)
+		self.assertEqual(row.margin_type, "Amount")
+		self.assertEqual(row.margin_rate_or_amount, -132000)
+
+		_erpnext_calculate_item_rate(row)
+		self.assertEqual(row.rate_with_margin, 23000)
+		self.assertEqual(row.rate, 13000)
+		self.assertEqual(row.discount_percentage, 0)
+		self.assertEqual(row.discount_amount, 10000)
+
+	def test_manual_rate_without_item_price_remains_discount_basis(self):
+		row = _PricingRow(
+			item_code="ITEM-001",
+			price_list_rate=0,
+			rate=20000,
+			discount_percentage=0,
+			discount_amount=0,
+			margin_type="",
+			margin_rate_or_amount=0,
+			pricing_rules="",
+		)
+		apply_manual_item_discount(
+			row,
+			{"rate": 20000, MANUAL_DISCOUNT_PERCENTAGE: 5},
+			index=1,
+			price_list_rate=None,
+		)
+		self.assertEqual(row.price_list_rate, 20000)
+		self.assertEqual(row.margin_type, "")
+		self.assertEqual(row.margin_rate_or_amount, 0)
+
+		_erpnext_calculate_item_rate(row)
+		self.assertEqual(row.rate, 19000)
+		self.assertEqual(row.discount_percentage, 5)
+		self.assertEqual(row.discount_amount, 1000)
 
 	def test_native_erpnext_calculation_applies_percentage_manual_discount(self):
 		row = _PricingRow(
@@ -107,10 +194,13 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 			margin_rate_or_amount=0,
 			pricing_rules="",
 		)
-		apply_manual_item_discount(row, {MANUAL_DISCOUNT_PERCENTAGE: 4}, index=1)
-		calculator = calculate_taxes_and_totals.__new__(calculate_taxes_and_totals)
-		calculator.doc = frappe._dict(ignore_pricing_rule=0)
-		calculator.calculate_item_rate(row)
+		apply_manual_item_discount(
+			row,
+			{"rate": 20000, MANUAL_DISCOUNT_PERCENTAGE: 4},
+			index=1,
+			price_list_rate=20000,
+		)
+		_erpnext_calculate_item_rate(row)
 		self.assertEqual(row.rate, 19200)
 		self.assertEqual(row.discount_percentage, 4)
 		self.assertEqual(row.discount_amount, 800)
@@ -126,10 +216,13 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 			margin_rate_or_amount=0,
 			pricing_rules="",
 		)
-		apply_manual_item_discount(row, {MANUAL_DISCOUNT_AMOUNT: 10000}, index=1)
-		calculator = calculate_taxes_and_totals.__new__(calculate_taxes_and_totals)
-		calculator.doc = frappe._dict(ignore_pricing_rule=0)
-		calculator.calculate_item_rate(row)
+		apply_manual_item_discount(
+			row,
+			{"rate": 155000, MANUAL_DISCOUNT_AMOUNT: 10000},
+			index=1,
+			price_list_rate=155000,
+		)
+		_erpnext_calculate_item_rate(row)
 		self.assertEqual(row.rate, 145000)
 		self.assertEqual(row.discount_percentage, 0)
 		self.assertEqual(row.discount_amount, 10000)
@@ -138,10 +231,13 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 		row = _Row(item_code="ITEM-001", rate=20000)
 		apply_manual_item_discount(
 			row,
-			{MANUAL_DISCOUNT_PERCENTAGE: 0, MANUAL_DISCOUNT_AMOUNT: 0},
+			{"rate": 20000, MANUAL_DISCOUNT_PERCENTAGE: 0, MANUAL_DISCOUNT_AMOUNT: 0},
 			index=1,
+			price_list_rate=155000,
 		)
 		self.assertEqual(row.get("rate"), 20000)
+		self.assertIsNone(row.get("margin_type"))
+		self.assertIsNone(row.get("price_list_rate"))
 
 	def test_rate_lock_blocks_manual_item_discount(self):
 		row = _Row(item_code="ITEM-001")
@@ -152,6 +248,7 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 				index=1,
 				rate_locked=True,
 				lock_reason="Assigned POS Profile controls the selling rate.",
+				price_list_rate=20000,
 			)
 
 	def test_pricing_rule_discount_is_not_exposed_as_manual_input(self):
@@ -270,18 +367,30 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 		self.assertEqual(mock_search_templates.call_args.kwargs["tax_category"], "Pending Category")
 		self.assertEqual(mock_search_templates.call_args.kwargs["company"], "RetailEdge Consulting")
 
-	def test_server_paths_validate_manual_discount_after_erpnext_pricing(self):
+	def test_server_paths_use_governed_list_rate_and_validate_after_erpnext_pricing(self):
 		guided = (APP_ROOT / "guided_sales_invoice.py").read_text(encoding="utf-8")
 		preview = (APP_ROOT / "sales_commercial_preview.py").read_text(encoding="utf-8")
+		draft_items = (APP_ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
 		draft_update = (APP_ROOT / "sales_commercial_draft_update.py").read_text(encoding="utf-8")
 
-		self.assertIn("apply_manual_item_discount(", guided)
+		self.assertIn('price_list_rate=resolved.get("price_list_rate")', guided)
+		self.assertIn('price_list_rate=resolved.get("price_list_rate")', preview)
+		self.assertIn('price_list_rate=pricing.get("price_list_rate")', draft_items)
 		self.assertLess(guided.index("doc.insert()"), guided.index("validate_manual_item_discounts_after_pricing(doc, items)"))
 		self.assertGreaterEqual(preview.count("validate_manual_item_discounts_after_pricing"), 3)
 		self.assertIn("validate_manual_item_discounts_after_pricing(doc, values.get(\"items\"))", draft_update)
 		for source in (preview, draft_update):
 			self.assertNotIn("frappe.db.commit(", source)
 			self.assertNotIn("ignore_permissions=True", source)
+
+	def test_saved_make_sale_restores_pre_discount_selling_rate(self):
+		extension = (
+			APP_ROOT / "public" / "js" / "make_sale" / "commercialEditingExtension.js"
+		).read_text(encoding="utf-8")
+		draft_items = (APP_ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
+		self.assertIn("rate: row.selling_rate ?? row.rate", extension)
+		self.assertIn('"selling_rate": _editable_selling_rate(row, discount)', draft_items)
+		self.assertIn('row.get("rate_with_margin") or row.get("rate")', draft_items)
 
 	def test_make_sale_uses_one_discount_selector_and_value_while_quick_sale_stays_compact(self):
 		extension = (
