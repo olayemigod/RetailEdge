@@ -8,6 +8,7 @@ from retailedge.operating_context import _allowed_branches, validate_operating_b
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = APP_ROOT.parent
 
 
 class WorkingBranchOptionTests(unittest.TestCase):
@@ -102,6 +103,10 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 		self.assertIn('"/assets/retailedge/js/working_branch_document_scope.js"', hooks)
 		self.assertIn('"Purchase Order": "public/js/purchase_documents_list.js"', hooks)
 		self.assertNotIn('"Purchase Order": "public/js/purchase_order_list.js"', hooks)
+
+	def test_browser_gate_runs_working_branch_scope_acceptance(self):
+		workflow = (REPO_ROOT / ".github/workflows/browser-persona-smoke.yml").read_text(encoding="utf-8")
+		self.assertIn("browser-tests/retailedge_working_branch_scope.spec.cjs", workflow)
 
 
 if __name__ == "__main__":
