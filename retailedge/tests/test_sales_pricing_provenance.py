@@ -229,6 +229,15 @@ class TestSalesPricingProvenance(unittest.TestCase):
 		self.assertIn("font-weight: 500", summary)
 		self.assertIn("white-space: nowrap", summary)
 
+	def test_shared_summary_uses_configured_tax_rate_and_red_negative_values(self):
+		summary = (APP_ROOT / "public" / "js" / "selling" / "SalesCommercialSummary.vue").read_text(encoding="utf-8")
+
+		self.assertIn("configuredTaxDisplayName(tax)", summary)
+		self.assertIn("const rate = Number(tax?.rate || 0)", summary)
+		self.assertIn("sales-commercial-summary__negative-amount", summary)
+		self.assertIn("var(--edge-color-danger, #d92d20)", summary)
+		self.assertNotIn("sales-commercial-summary__muted-row strong {\n\tcolor: var(--edge-color-success", summary)
+
 
 if __name__ == "__main__":
 	unittest.main()
