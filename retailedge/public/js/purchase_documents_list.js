@@ -114,6 +114,7 @@
 	["Purchase Receipt", "Purchase Invoice", "Purchase Order"].forEach((doctype) => {
 		frappe.listview_settings[doctype] = Object.assign(frappe.listview_settings[doctype] || {}, {
 			onload(listview) {
+				window.retailedge?.workingBranchDocumentScope?.install?.(listview);
 				apply(listview);
 			},
 			before_render() {
