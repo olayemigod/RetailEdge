@@ -45,7 +45,7 @@ def get_sales_invoice_commercial_preview(
 
 	New sales are calculated from a new in-memory Sales Invoice. Existing draft
 	edits are calculated from an in-memory clone of the stored draft so accepted
-	commercial terms (tax templates, coupons, additional discounts, source links,
+	commercial terms (tax templates, coupons, invoice discounts, source links,
 	and the stored Price List) are preserved exactly as the real draft update path
 	would preserve them. No preview document is inserted, saved, submitted or
 	committed.
@@ -124,6 +124,7 @@ def _preview_new_sale(values: dict[str, Any]) -> dict[str, Any]:
 	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
 	validate_manual_item_discounts_after_pricing(doc, items)
+	_validate_manual_invoice_discount_against_promotions(doc, values)
 	return _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
 
 
@@ -165,11 +166,22 @@ def _preview_existing_draft(document_name: str, values: dict[str, Any]) -> dict[
 			default_warehouse=default_warehouse,
 			selected_price_list=str(stored.get("selling_price_list") or "").strip(),
 		)
+		_capture_requested_item_provenance(
+			doc,
+			requested_items,
+			company=company,
+			branch=invoice_branch,
+			customer=customer,
+			posting_date=str(posting_date),
+			default_warehouse=default_warehouse,
+			price_list=str(stored.get("selling_price_list") or "").strip(),
+		)
 
 	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
 	if requested_items is not None:
 		validate_manual_item_discounts_after_pricing(doc, requested_items)
+	_validate_manual_invoice_discount_against_promotions(doc, values)
 	return _serialize_preview(
 		doc,
 		branch=effective_branch,
@@ -253,6 +265,7 @@ def _build_preview_document(
 	doc.customer = customer
 	doc.posting_date = getdate(posting_date or nowdate())
 	doc.update_stock = update_stock
+	doc.flags.retailedge_item_pricing_provenance = []
 	if price_list:
 		doc.selling_price_list = price_list
 	if warehouse:
@@ -286,6 +299,17 @@ def _build_preview_document(
 		if effective_rate is None:
 			frappe.throw(_("Selling Rate is required for Item {0}.").format(item["item_code"]))
 
+		doc.flags.retailedge_item_pricing_provenance.append(
+			{
+				"index": index,
+				"item_code": item["item_code"],
+				"price_list_rate": flt(resolved.get("price_list_rate") or 0),
+				"automatic_rate": flt(resolved_rate) if resolved_rate is not None else None,
+				"entered_rate": flt(effective_rate),
+				"manual_rate_supplied": bool(manual_rate is not None and not rate_locked),
+			}
+		)
+
 		row = {
 			"item_code": item["item_code"],
 			"qty": item["qty"],
@@ -306,6 +330,51 @@ def _build_preview_document(
 	return doc
 
 
+def _capture_requested_item_provenance(
+	doc,
+	requested_items: list[dict[str, Any]],
+	*,
+	company: str,
+	branch: str,
+	customer: str,
+	posting_date: str,
+	default_warehouse: str,
+	price_list: str,
+) -> None:
+	provenance: list[dict[str, Any]] = []
+	actual_rows = [row for row in list(doc.get("items") or []) if not cint(row.get("is_free_item") or 0)]
+	requested_rows = [row for row in requested_items if isinstance(row, dict) and str(row.get("item_code") or "").strip()]
+	for index, (item, row) in enumerate(zip(requested_rows, actual_rows), start=1):
+		warehouse = str(row.get("warehouse") or default_warehouse or "").strip()
+		resolved = resolve_sales_item_pricing(
+			item_code=str(row.get("item_code") or item.get("item_code") or "").strip(),
+			company=company,
+			customer=customer,
+			branch=branch,
+			warehouse=warehouse,
+			posting_date=posting_date,
+			qty=flt(row.get("qty") or item.get("qty") or 0),
+			document_price_list=price_list,
+			user=frappe.session.user,
+		)
+		resolved_rate = resolved.get("rate")
+		rate_policy_source = resolved.get("rate_policy_source") or resolved.get("source")
+		rate_locked = rate_policy_source == "pos_profile" and not resolved.get("allow_rate_change", True)
+		manual_rate = item.get("rate")
+		entered_rate = resolved_rate if rate_locked or manual_rate in (None, "") else flt(manual_rate)
+		provenance.append(
+			{
+				"index": index,
+				"item_code": str(row.get("item_code") or "").strip(),
+				"price_list_rate": flt(resolved.get("price_list_rate") or row.get("price_list_rate") or 0),
+				"automatic_rate": flt(resolved_rate) if resolved_rate is not None else None,
+				"entered_rate": flt(entered_rate) if entered_rate is not None else flt(row.get("rate") or 0),
+				"manual_rate_supplied": bool(manual_rate not in (None, "") and not rate_locked),
+			}
+		)
+	doc.flags.retailedge_item_pricing_provenance = provenance
+
+
 def _prepare_preview_document(doc) -> None:
 	"""Use ERPNext commercial calculation methods without persistence side effects."""
 	doc.run_method("set_missing_values")
@@ -313,6 +382,22 @@ def _prepare_preview_document(doc) -> None:
 	doc.run_method("calculate_taxes_and_totals")
 	if not cint(doc.get("ignore_pricing_rule") or 0):
 		apply_pricing_rule_on_transaction(doc)
+
+
+def _validate_manual_invoice_discount_against_promotions(doc, values: dict[str, Any]) -> None:
+	if not _transaction_promotion_names(doc):
+		return
+	if not (
+		flt(values.get("additional_discount_percentage") or 0)
+		or flt(values.get("discount_amount") or 0)
+	):
+		return
+	frappe.throw(
+		_(
+			"An automatic invoice promotion applies to this sale. Remove the manual invoice discount to use the promotion, or change the sale so the promotion no longer qualifies."
+		),
+		frappe.ValidationError,
+	)
 
 
 def _set_branch(doc, branch: str) -> None:
@@ -324,15 +409,46 @@ def _set_branch(doc, branch: str) -> None:
 
 
 def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> dict[str, Any]:
-	item_rows = [_serialize_item(row) for row in list(doc.get("items") or [])]
+	provenance = list(getattr(doc.flags, "retailedge_item_pricing_provenance", []) or [])
+	item_rows = [
+		_serialize_item(row, provenance[index] if index < len(provenance) else None)
+		for index, row in enumerate(list(doc.get("items") or []))
+	]
 	item_savings = sum(_item_savings(row) for row in list(doc.get("items") or []))
 	tax_rows = [_serialize_tax(row) for row in list(doc.get("taxes") or [])]
-	promotions = _promotion_names(doc)
+	transaction_promotions = _transaction_promotion_names(doc)
+	item_promotions = _unique_names(
+		name
+		for item in item_rows
+		for name in list(item.get("item_promotion_names") or [])
+	)
+	promotions = _unique_names([*item_promotions, *transaction_promotions])
 	items_total = flt(doc.get("total") or 0)
 	rounded_total = flt(doc.get("rounded_total") or 0)
 	grand_total = flt(doc.get("grand_total") or 0)
 	invoice_total = rounded_total or grand_total
 	net_total = flt(doc.get("net_total") or 0)
+	invoice_adjustment_amount = flt(doc.get("discount_amount") or 0)
+	invoice_adjustment_percentage = flt(doc.get("additional_discount_percentage") or 0)
+	invoice_adjustment_target = str(doc.get("apply_discount_on") or "").strip()
+	invoice_adjustment_kind = "promotion" if transaction_promotions and invoice_adjustment_amount else (
+		"discount" if invoice_adjustment_amount else ""
+	)
+	item_promotion_total = flt(sum(flt(item.get("item_promotion_amount") or 0) for item in item_rows))
+	selling_rate_adjustment_total = flt(
+		sum(flt(item.get("selling_rate_adjustment") or 0) for item in item_rows)
+	)
+	line_discount_total = flt(sum(flt(item.get("line_discount_amount") or 0) for item in item_rows))
+	price_list_value = flt(sum(flt(item.get("price_list_value") or 0) for item in item_rows))
+	tax_before_invoice_adjustment = flt(
+		sum(flt(row.get("tax_amount_before_invoice_adjustment") or 0) for row in tax_rows)
+	)
+	tax_after_invoice_adjustment = flt(doc.get("total_taxes_and_charges") or 0)
+	gross_before_invoice_adjustment = (
+		flt(grand_total + invoice_adjustment_amount)
+		if invoice_adjustment_amount and invoice_adjustment_target == "Grand Total"
+		else 0.0
+	)
 
 	return {
 		"doctype": SALES_INVOICE_DOCTYPE,
@@ -345,39 +461,106 @@ def _serialize_preview(doc, *, branch: str, pricing_context: dict[str, Any]) -> 
 		"tax_category": doc.get("tax_category") or "",
 		"taxes_and_charges": doc.get("taxes_and_charges") or "",
 		"items": item_rows,
-		"list_value": flt(items_total + item_savings),
+		"list_value": price_list_value or flt(items_total + item_savings),
+		"price_list_value": price_list_value or flt(items_total + item_savings),
 		"items_total": items_total,
 		"subtotal": items_total,
 		"net_total": net_total,
 		"item_discount_total": flt(item_savings),
-		"additional_discount_percentage": flt(doc.get("additional_discount_percentage") or 0),
-		"additional_discount": flt(doc.get("discount_amount") or 0),
-		"apply_discount_on": doc.get("apply_discount_on") or "",
+		"item_promotion_total": item_promotion_total,
+		"selling_rate_adjustment_total": selling_rate_adjustment_total,
+		"line_discount_total": line_discount_total,
+		"additional_discount_percentage": invoice_adjustment_percentage,
+		"additional_discount": invoice_adjustment_amount,
+		"apply_discount_on": invoice_adjustment_target,
+		"invoice_adjustment_kind": invoice_adjustment_kind,
+		"invoice_adjustment_percentage": invoice_adjustment_percentage,
+		"invoice_adjustment_amount": invoice_adjustment_amount,
+		"invoice_adjustment_target": invoice_adjustment_target,
+		"invoice_promotion_names": transaction_promotions,
+		"invoice_promotion_amount": invoice_adjustment_amount if invoice_adjustment_kind == "promotion" else 0.0,
+		"invoice_discount_amount": invoice_adjustment_amount if invoice_adjustment_kind == "discount" else 0.0,
 		"promotions": promotions,
 		"promotion_count": len(promotions),
 		"taxes": tax_rows,
-		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0),
+		"tax_before_invoice_adjustment": tax_before_invoice_adjustment,
+		"tax_after_invoice_adjustment": tax_after_invoice_adjustment,
+		"gross_before_invoice_adjustment": gross_before_invoice_adjustment,
+		"total_taxes_and_charges": tax_after_invoice_adjustment,
 		"all_taxes_included": bool(tax_rows and all(row["included_in_print_rate"] for row in tax_rows)),
 		"rounding_adjustment": flt(doc.get("rounding_adjustment") or 0),
 		"grand_total": grand_total,
 		"rounded_total": rounded_total,
 		"invoice_total": invoice_total,
-		"has_discount": bool(item_savings or flt(doc.get("discount_amount") or 0)),
-		"has_tax": bool(flt(doc.get("total_taxes_and_charges") or 0) or tax_rows),
+		"has_discount": bool(
+			item_promotion_total
+			or selling_rate_adjustment_total
+			or line_discount_total
+			or invoice_adjustment_amount
+		),
+		"has_tax": bool(tax_after_invoice_adjustment or tax_rows),
 		"commercial_term_capabilities": get_sales_commercial_term_capabilities(),
 		"is_preview": True,
 	}
 
 
-def _serialize_item(row) -> dict[str, Any]:
+def _serialize_item(row, provenance: dict[str, Any] | None = None) -> dict[str, Any]:
+	provenance = provenance or {}
 	manual_discount = manual_item_discount_state(row)
+	qty = flt(row.get("qty") or 0)
+	price_list_rate = flt(provenance.get("price_list_rate") or row.get("price_list_rate") or 0)
+	automatic_rate_value = provenance.get("automatic_rate")
+	manual_discount_active = bool(
+		manual_discount[MANUAL_DISCOUNT_PERCENTAGE] or manual_discount[MANUAL_DISCOUNT_AMOUNT]
+	)
+	entered_rate = flt(
+		provenance.get("entered_rate")
+		if provenance.get("entered_rate") is not None
+		else (
+			row.get("rate_with_margin")
+			if manual_discount_active and row.get("rate_with_margin") not in (None, "")
+			else row.get("rate")
+		)
+		or 0
+	)
+	pricing_rule_names = _pricing_rule_names(
+		row.get("pricing_rules") or row.get("pricing_rule") or manual_discount.get("pricing_rule")
+	)
+	if automatic_rate_value is None:
+		automatic_rate = entered_rate if pricing_rule_names else price_list_rate or entered_rate
+	else:
+		automatic_rate = flt(automatic_rate_value)
+	item_promotion_amount = (
+		max(flt((price_list_rate - automatic_rate) * qty), 0.0)
+		if pricing_rule_names and price_list_rate > 0 and qty > 0
+		else 0.0
+	)
+	selling_rate_adjustment = flt((entered_rate - automatic_rate) * qty) if qty > 0 else 0.0
+	line_discount_amount = (
+		max(flt((entered_rate * qty) - flt(row.get("amount") or 0)), 0.0)
+		if manual_discount_active and qty > 0
+		else 0.0
+	)
+	item_promotion_percentage = (
+		flt(((price_list_rate - automatic_rate) / price_list_rate) * 100)
+		if item_promotion_amount and price_list_rate
+		else 0.0
+	)
 	return {
 		"item_code": row.get("item_code") or "",
 		"item_name": row.get("item_name") or row.get("item_code") or "",
 		"uom": row.get("uom") or row.get("stock_uom") or "",
 		"stock_uom": row.get("stock_uom") or "",
-		"qty": flt(row.get("qty") or 0),
-		"price_list_rate": flt(row.get("price_list_rate") or 0),
+		"qty": qty,
+		"price_list_rate": price_list_rate,
+		"price_list_value": flt(price_list_rate * qty),
+		"automatic_rate": automatic_rate,
+		"selling_rate": entered_rate,
+		"item_promotion_names": pricing_rule_names,
+		"item_promotion_percentage": item_promotion_percentage,
+		"item_promotion_amount": item_promotion_amount,
+		"selling_rate_adjustment": selling_rate_adjustment,
+		"line_discount_amount": line_discount_amount,
 		"discount_percentage": flt(row.get("discount_percentage") or 0),
 		"discount_amount": flt(row.get("discount_amount") or 0),
 		MANUAL_DISCOUNT_PERCENTAGE: manual_discount[MANUAL_DISCOUNT_PERCENTAGE],
@@ -389,6 +572,46 @@ def _serialize_item(row) -> dict[str, Any]:
 		"pricing_rule": manual_discount["pricing_rule"],
 		"is_free_item": bool(cint(row.get("is_free_item") or 0)),
 	}
+
+
+def _pricing_rule_names(value: Any) -> list[str]:
+	if not value:
+		return []
+	if isinstance(value, (list, tuple, set)):
+		return _unique_names(str(item or "").strip() for item in value)
+	text = str(value or "").strip()
+	if not text:
+		return []
+	if text.startswith("["):
+		try:
+			parsed = frappe.parse_json(text)
+			if isinstance(parsed, list):
+				return _unique_names(str(item or "").strip() for item in parsed)
+		except Exception:
+			pass
+	return _unique_names(part.strip() for part in text.split(","))
+
+
+def _unique_names(values) -> list[str]:
+	result: list[str] = []
+	for value in values:
+		name = str(value or "").strip()
+		if name and name not in result:
+			result.append(name)
+	return result
+
+
+def _transaction_promotion_names(doc) -> list[str]:
+	result: list[str] = []
+	for row in list(doc.get("pricing_rules") or []):
+		name = str(row.get("pricing_rule") or "").strip()
+		if not name:
+			continue
+		if row.get("item_code") or row.get("child_docname"):
+			continue
+		if name not in result:
+			result.append(name)
+	return result
 
 
 def _promotion_names(doc) -> list[str]:
@@ -410,10 +633,14 @@ def _item_savings(row) -> float:
 
 
 def _serialize_tax(row) -> dict[str, Any]:
-	amount = flt(row.get("tax_amount_after_discount_amount") or row.get("tax_amount") or 0)
+	before = flt(row.get("tax_amount") or 0)
+	after_value = row.get("tax_amount_after_discount_amount")
+	after = before if after_value in (None, "") else flt(after_value)
 	return {
 		"description": row.get("description") or row.get("account_head") or _("Tax"),
 		"rate": flt(row.get("rate") or 0),
-		"tax_amount": amount,
+		"tax_amount": after,
+		"tax_amount_before_invoice_adjustment": before,
+		"tax_amount_after_invoice_adjustment": after,
 		"included_in_print_rate": bool(cint(row.get("included_in_print_rate") or 0)),
 	}

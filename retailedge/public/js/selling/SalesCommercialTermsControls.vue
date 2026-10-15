@@ -2,18 +2,23 @@
 	<details class="sales-commercial-terms" :open="openByDefault">
 		<summary>
 			<span>
-				<strong>Discount &amp; tax</strong>
-				<small>Optional commercial terms. Invoice totals update before saving.</small>
+				<strong>Invoice discount &amp; tax</strong>
+				<small>Optional invoice discount and tax choices. Automatic promotions are applied by pricing rules.</small>
 			</span>
-			<span v-if="activeTermCount" class="term-count">{{ activeTermCount }} applied</span>
 		</summary>
 
 		<div class="sales-commercial-terms__body">
-			<div v-if="capabilities.can_edit_additional_discount" class="sales-commercial-terms__grid">
+			<div v-if="invoicePromotionActive" class="automatic-promotion" role="status">
+				<span>Automatic invoice promotion</span>
+				<strong>{{ invoicePromotionLabel }}</strong>
+				<small>Manual invoice discount is unavailable while this promotion applies.</small>
+			</div>
+
+			<div v-else-if="capabilities.can_edit_additional_discount" class="sales-commercial-terms__grid">
 				<EdgeDropdown
 					:modelValue="discountMode"
 					:options="discountModeOptions"
-					label="Additional discount"
+					label="Invoice discount"
 					:disabled="disabled"
 					@update:modelValue="setDiscountMode"
 				/>
@@ -107,6 +112,11 @@ function discountModeFromValues(values = {}) {
 	return "none";
 }
 
+function formatPercent(value) {
+	const amount = Number(value || 0);
+	return `${Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
+}
+
 export default {
 	name: "SalesCommercialTermsControls",
 	components: {
@@ -134,7 +144,7 @@ export default {
 		},
 		discountModeOptions() {
 			return [
-				{ value: "none", label: "No manual discount" },
+				{ value: "none", label: "No invoice discount" },
 				{ value: "percentage", label: "Percentage" },
 				{ value: "amount", label: "Fixed amount" },
 			];
@@ -151,13 +161,18 @@ export default {
 		resolvedTaxCategory() {
 			return this.preview?.tax_category || "";
 		},
-		activeTermCount() {
-			let count = 0;
-			if (Number(this.values.additional_discount_percentage || 0) > 0 || Number(this.values.discount_amount || 0) > 0) count += 1;
-			if (this.values.coupon_code) count += 1;
-			if (this.values.tax_category) count += 1;
-			if (this.values.taxes_and_charges) count += 1;
-			return count;
+		invoicePromotionActive() {
+			return Boolean(
+				this.preview?.invoice_adjustment_kind === "promotion" &&
+				Number(this.preview?.invoice_adjustment_amount || 0),
+			);
+		},
+		invoicePromotionLabel() {
+			const percentage = Number(this.preview?.invoice_adjustment_percentage || 0);
+			const target = this.preview?.invoice_adjustment_target || "";
+			const parts = [percentage ? `${formatPercent(percentage)} promotion` : "Promotion"];
+			if (target) parts.push(`on ${target}`);
+			return parts.join(" ");
 		},
 	},
 	watch: {
@@ -245,13 +260,10 @@ export default {
 }
 .sales-commercial-terms summary small,
 .resolved-tax small,
-.resolved-tax span {
+.resolved-tax span,
+.automatic-promotion small,
+.automatic-promotion span {
 	color: var(--edge-color-ink-500, var(--edge-text-muted, #667085));
-}
-.term-count {
-	font-size: .75rem;
-	font-weight: 600;
-	white-space: nowrap;
 }
 .sales-commercial-terms__body {
 	display: grid;
@@ -263,13 +275,21 @@ export default {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 12px;
 }
-.resolved-tax {
+.resolved-tax,
+.automatic-promotion {
 	display: grid;
 	gap: 2px;
 	padding: 10px 12px;
 	border: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
 	border-radius: 8px;
 	background: var(--edge-color-surface-muted, var(--edge-surface-muted, #f8fafc));
+}
+.automatic-promotion {
+	border-color: var(--edge-color-success, #12b76a);
+	background: var(--edge-color-success-subtle, #ecfdf3);
+}
+.automatic-promotion strong {
+	color: var(--edge-color-success, #067647);
 }
 @media (max-width: 720px) {
 	.sales-commercial-terms__grid {

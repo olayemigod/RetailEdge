@@ -247,7 +247,8 @@ class TestSalesCommercialTerms(unittest.TestCase):
 		self.assertIn("EdgeInput", controls)
 		self.assertIn("EdgeLinkField", controls)
 		self.assertIn("Automatic tax treatment", controls)
-		self.assertIn("No manual discount", controls)
+		self.assertIn("No invoice discount", controls)
+		self.assertIn("Automatic invoice promotion", controls)
 
 	def test_make_sale_saved_draft_loads_exact_terms_and_uses_atomic_update(self):
 		make_sale = (APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue").read_text(encoding="utf-8")
