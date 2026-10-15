@@ -63,12 +63,29 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 					normalise_manual_item_discount(values, index=1)
 
 	def test_manual_item_discount_maps_only_to_native_erpnext_item_fields(self):
-		row = _Row(item_code="ITEM-001")
+		row = _Row(item_code="ITEM-001", rate=20000)
 		apply_manual_item_discount(row, {MANUAL_DISCOUNT_PERCENTAGE: 7.5}, index=1)
 		self.assertEqual(row.get("discount_percentage"), 7.5)
 		self.assertEqual(row.get("discount_amount"), 0)
+		self.assertEqual(row.get("rate"), 0)
 		self.assertNotIn(MANUAL_DISCOUNT_PERCENTAGE, row.values)
 		self.assertNotIn(MANUAL_DISCOUNT_AMOUNT, row.values)
+
+	def test_active_fixed_discount_also_defers_final_rate_to_erpnext(self):
+		row = _Row(item_code="ITEM-001", rate=155000)
+		apply_manual_item_discount(row, {MANUAL_DISCOUNT_AMOUNT: 10000}, index=1)
+		self.assertEqual(row.get("discount_percentage"), 0)
+		self.assertEqual(row.get("discount_amount"), 10000)
+		self.assertEqual(row.get("rate"), 0)
+
+	def test_zero_manual_discount_does_not_clear_selling_rate(self):
+		row = _Row(item_code="ITEM-001", rate=20000)
+		apply_manual_item_discount(
+			row,
+			{MANUAL_DISCOUNT_PERCENTAGE: 0, MANUAL_DISCOUNT_AMOUNT: 0},
+			index=1,
+		)
+		self.assertEqual(row.get("rate"), 20000)
 
 	def test_rate_lock_blocks_manual_item_discount(self):
 		row = _Row(item_code="ITEM-001")
