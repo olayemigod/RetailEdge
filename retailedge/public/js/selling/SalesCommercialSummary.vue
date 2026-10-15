@@ -27,15 +27,15 @@
 					</div>
 					<div v-if="Number(preview.item_promotion_total || 0)" class="sales-commercial-summary__muted-row">
 						<span>Item promotions</span>
-						<strong>−{{ formatMoney(preview.item_promotion_total) }}</strong>
+						<strong class="sales-commercial-summary__negative-amount">−{{ formatMoney(preview.item_promotion_total) }}</strong>
 					</div>
 					<div v-if="Number(preview.selling_rate_adjustment_total || 0)" class="sales-commercial-summary__muted-row">
 						<span>Rate adjustments</span>
-						<strong>{{ formatSignedMoney(preview.selling_rate_adjustment_total) }}</strong>
+						<strong :class="amountClass(preview.selling_rate_adjustment_total)">{{ formatSignedMoney(preview.selling_rate_adjustment_total) }}</strong>
 					</div>
 					<div v-if="Number(preview.line_discount_total || 0)" class="sales-commercial-summary__muted-row">
 						<span>Line discounts</span>
-						<strong>−{{ formatMoney(preview.line_discount_total) }}</strong>
+						<strong class="sales-commercial-summary__negative-amount">−{{ formatMoney(preview.line_discount_total) }}</strong>
 					</div>
 					<div>
 						<span>Items subtotal</span>
@@ -49,7 +49,7 @@
 						</div>
 						<div class="sales-commercial-summary__muted-row">
 							<span>{{ invoiceAdjustmentLabel }}</span>
-							<strong>−{{ formatMoney(preview.invoice_adjustment_amount) }}</strong>
+							<strong class="sales-commercial-summary__negative-amount">−{{ formatMoney(preview.invoice_adjustment_amount) }}</strong>
 						</div>
 						<div v-if="Number(preview.rounding_adjustment || 0)">
 							<span>Total before rounding</span>
@@ -60,7 +60,7 @@
 					<template v-else-if="hasInvoiceAdjustment">
 						<div class="sales-commercial-summary__muted-row">
 							<span>{{ invoiceAdjustmentLabel }}</span>
-							<strong>−{{ formatMoney(preview.invoice_adjustment_amount) }}</strong>
+							<strong class="sales-commercial-summary__negative-amount">−{{ formatMoney(preview.invoice_adjustment_amount) }}</strong>
 						</div>
 						<div>
 							<span>{{ netAfterAdjustmentLabel }}</span>
@@ -89,7 +89,7 @@
 
 					<div v-if="Number(preview.rounding_adjustment || 0)">
 						<span>Rounding</span>
-						<strong>{{ formatSignedMoney(preview.rounding_adjustment) }}</strong>
+						<strong :class="amountClass(preview.rounding_adjustment)">{{ formatSignedMoney(preview.rounding_adjustment) }}</strong>
 					</div>
 					<div class="sales-commercial-summary__total">
 						<span>Invoice Total</span>
@@ -116,14 +116,14 @@
 						<strong>{{ item.item_name || item.item_code || `Item ${index + 1}` }}</strong>
 						<span v-if="Number(item.item_promotion_amount || 0)">
 							Item promotion<span v-if="Number(item.item_promotion_percentage || 0)"> {{ formatPercent(item.item_promotion_percentage) }}</span>
-							· −{{ formatMoney(item.item_promotion_amount) }}
+							· <span class="sales-commercial-summary__negative-amount">−{{ formatMoney(item.item_promotion_amount) }}</span>
 						</span>
 						<span v-if="Number(item.selling_rate_adjustment || 0)">
-							Rate adjustment · {{ formatSignedMoney(item.selling_rate_adjustment) }}
+							Rate adjustment · <span :class="amountClass(item.selling_rate_adjustment)">{{ formatSignedMoney(item.selling_rate_adjustment) }}</span>
 						</span>
 						<span v-if="Number(item.line_discount_amount || 0)">
 							Line discount<span v-if="Number(item.manual_discount_percentage || 0)"> {{ formatPercent(item.manual_discount_percentage) }}</span>
-							· −{{ formatMoney(item.line_discount_amount) }}
+							· <span class="sales-commercial-summary__negative-amount">−{{ formatMoney(item.line_discount_amount) }}</span>
 						</span>
 						<small>Line amount {{ formatMoney(item.amount) }}</small>
 					</div>
@@ -144,7 +144,7 @@
 							<span>Before {{ invoiceAdjustmentNoun }}</span>
 							<strong>{{ formatMoney(tax.tax_amount_before_invoice_adjustment) }}</strong>
 							<span>Tax change</span>
-							<strong>{{ formatSignedMoney(taxChangeAmount(tax)) }}</strong>
+							<strong :class="amountClass(taxChangeAmount(tax))">{{ formatSignedMoney(taxChangeAmount(tax)) }}</strong>
 						</div>
 					</div>
 				</details>
@@ -242,6 +242,12 @@ export default {
 			if (!amount) return this.formatMoney(0);
 			return `${amount > 0 ? "+" : "−"}${this.formatMoney(Math.abs(amount))}`;
 		},
+		amountClass(value) {
+			const amount = Number(value || 0);
+			if (amount < 0) return "sales-commercial-summary__negative-amount";
+			if (amount > 0) return "sales-commercial-summary__positive-amount";
+			return "";
+		},
 		formatPercent(value) {
 			const amount = Number(value || 0);
 			return `${Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
@@ -252,11 +258,22 @@ export default {
 			const matches = String(description || "").match(/-?\d+(?:\.\d+)?\s*%/g) || [];
 			return matches.some((match) => Math.abs(Number.parseFloat(match) - expected) < 0.000001);
 		},
-		taxDisplayName(tax) {
+		configuredTaxDisplayName(tax) {
 			let label = String(tax?.description || "Tax").trim() || "Tax";
 			const rate = Number(tax?.rate || 0);
-			if (rate && !this.taxDescriptionIncludesRate(label, rate)) label += ` ${this.formatPercent(rate)}`;
+			if (!rate) return label;
+
+			const configuredRate = this.formatPercent(rate);
+			const atRate = /(@\s*)-?\d+(?:\.\d+)?\s*%?\s*$/i;
+			if (atRate.test(label)) return label.replace(atRate, `$1${configuredRate}`);
+
+			const trailingPercentage = /-?\d+(?:\.\d+)?\s*%\s*$/;
+			if (trailingPercentage.test(label)) return label.replace(trailingPercentage, configuredRate);
+			if (!this.taxDescriptionIncludesRate(label, rate)) label += ` ${configuredRate}`;
 			return label;
+		},
+		taxDisplayName(tax) {
+			return this.configuredTaxDisplayName(tax);
 		},
 		taxLabel() {
 			const taxes = this.preview?.taxes || [];
@@ -361,8 +378,11 @@ export default {
 	line-height: 1.2;
 	white-space: nowrap;
 }
-.sales-commercial-summary__muted-row strong {
-	color: var(--edge-color-success, #067647);
+.sales-commercial-summary__negative-amount {
+	color: var(--edge-color-danger, #d92d20) !important;
+}
+.sales-commercial-summary__positive-amount {
+	color: var(--edge-color-success, #067647) !important;
 }
 .sales-commercial-summary__total {
 	margin-top: 2px;
