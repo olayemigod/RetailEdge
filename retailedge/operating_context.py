@@ -36,9 +36,9 @@ OPERATING_CONTEXT_SESSION_KEY = "retailedge_operating_context"
 def get_operating_context(company: str = "") -> dict[str, Any]:
 	"""Return the current session-scoped operating Company/Branch context.
 
-	The operating context guides new work only. Existing documents continue to use
-	their stored Company/Branch/Warehouse truth and are never rewritten from this
-	selection.
+	The operating context guides new work and the normal branch-scoped document
+	view. Existing documents keep their stored Company/Branch/Warehouse truth and
+	are never rewritten from this selection.
 	"""
 	user = frappe.session.user
 	requested_company = _clean(company)
@@ -300,7 +300,7 @@ def validate_operating_branch(
 	user: str | None = None,
 	throw: bool = True,
 ) -> dict[str, Any]:
-	"""Validate Company→Branch setup/access without imposing POS document semantics."""
+	"""Validate Company→Branch access without imposing POS document semantics."""
 	company = _clean(company)
 	branch = _clean(branch)
 	user = user or frappe.session.user
@@ -317,16 +317,9 @@ def validate_operating_branch(
 		if branch_company and branch_company != company:
 			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
 
-		configured_rows = get_enabled_branch_profiles(company=company)
-		configured_branches = {
-			_clean(row.get("branch")) for row in configured_rows if _clean(row.get("branch"))
-		}
-		has_any_setup = bool(frappe.db.exists("RetailEdge Branch Profile", {"company": company}))
-		if has_any_setup and branch not in configured_branches:
-			frappe.throw(
-				_("Branch {0} is not enabled in Branch Setup for Company {1}.").format(branch, company)
-			)
-
+		# Branch Setup supplies defaults/POS configuration. It must not erase a
+		# Branch that the permission/assignment model otherwise permits. An
+		# explicit enabled mapping to another Company remains a Company boundary.
 		mapped_companies = get_enabled_branch_profile_companies(branch=branch)
 		if mapped_companies and company not in mapped_companies:
 			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
@@ -613,7 +606,7 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 	try:
 		# Global RetailEdge roles and assignment-authoritative restricted users
 		# already passed the product access model. Enumerate the candidate Branch
-		# set here, then apply Branch Setup / assignment constraints below.
+		# set here, then apply the real permission/assignment constraints below.
 		reader = frappe.get_all if (global_access or assignment_authoritative) else frappe.get_list
 		rows = reader(
 			"Branch",
@@ -626,16 +619,21 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 		rows = []
 	permission_visible = [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
 
-	# Branch Setup is the RetailEdge Company→Branch binding whenever the Company
-	# has any setup history. Disabled-only mappings deliberately produce no
-	# operational Branches rather than falling back to unrelated global Branches.
-	configured_rows = get_enabled_branch_profiles(company=company)
-	configured_branches = {_clean(row.get("branch")) for row in configured_rows if _clean(row.get("branch"))}
-	has_any_setup = bool(frappe.db.exists("RetailEdge Branch Profile", {"company": company}))
-	if configured_branches:
-		permission_visible = [branch for branch in permission_visible if branch in configured_branches]
-	elif has_any_setup:
-		permission_visible = []
+	# ERPNext Branch is not always Company-bound. Keep explicit enabled Branch
+	# Setup mappings as a Company boundary when they exist, but do not require a
+	# Branch Setup row merely to expose a Branch the user is otherwise permitted
+	# to operate. Branch Setup remains the source of defaults/POS readiness.
+	mapped_companies_by_branch: dict[str, set[str]] = {}
+	for row in get_enabled_branch_profiles():
+		profile_branch = _clean(row.get("branch"))
+		profile_company = _clean(row.get("company"))
+		if profile_branch and profile_company:
+			mapped_companies_by_branch.setdefault(profile_branch, set()).add(profile_company)
+	permission_visible = [
+		branch
+		for branch in permission_visible
+		if not mapped_companies_by_branch.get(branch) or company in mapped_companies_by_branch[branch]
+	]
 
 	if global_access:
 		return permission_visible
