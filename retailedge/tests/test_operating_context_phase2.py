@@ -145,23 +145,22 @@ class TestOperatingContextPhase2(unittest.TestCase):
 	def test_context_guides_new_work_but_explicit_selection_wins(self):
 		source = self.read("operating_context.py")
 		self.assertIn("Explicit arguments win", source)
-		self.assertIn("Existing documents keep their stored", source)
+		self.assertIn("Existing documents continue to use", source)
 		self.assertNotIn("db.set_value", source)
 		self.assertNotIn("set_value(\"Sales Invoice\"", source)
 		self.assertNotIn("set_value(\"Payment Entry\"", source)
 		self.assertNotIn("set_value(\"Stock Entry\"", source)
 
-	def test_branch_setup_defaults_do_not_hide_permitted_operating_branches(self):
+	def test_branch_setup_membership_adds_a_server_side_branch_constraint(self):
 		source = self.read("operating_context.py")
 		for contract in (
-			"mapped_companies_by_branch",
-			"get_enabled_branch_profiles()",
-			"if not mapped_companies_by_branch.get(branch) or company in mapped_companies_by_branch[branch]",
 			"get_user_branch_profiles(user=user, company=company)",
-			"Branch Setup remains the source of defaults/POS readiness",
+			"profile_branches = {",
+			'row.get("enabled")',
+			"if profile_branches:",
+			"if branch in profile_branches",
 		):
 			self.assertIn(contract, source)
-		self.assertNotIn("is not enabled in Branch Setup for Company", source)
 
 	def test_default_context_restore_cannot_bypass_pos_switch_safety(self):
 		source = self.read("operating_context.py")
