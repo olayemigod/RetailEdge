@@ -5,6 +5,8 @@ from collections.abc import Iterable
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
+from retailedge.branch_context import GLOBAL_BRANCH_ACCESS_ROLES
+
 
 RETAILEDGE_ROLE_NAMES = (
 	"RetailEdgeCashier",
@@ -73,17 +75,19 @@ def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
 
 
 def _ensure_operational_branch_read() -> None:
-	"""Give RetailEdge operational roles only the Branch visibility they need.
+	"""Give RetailEdge operating/global roles only the Branch visibility they need.
 
 	The Working Branch selector and Branch Assignment validation require normal
-	Frappe read permission on the Branch master. This intentionally grants only
-	read/select; it does not grant create, write, delete, import or permission
+	Frappe read permission on the Branch master. Roles that RetailEdge explicitly
+	classifies as global Branch authority must have the same minimum read/select
+	capability. This does not grant create, write, delete, import or permission
 	administration rights. User Permissions and Branch Assignment scope continue
-	to decide which Branch records a user may actually reach.
+	to decide which Branch records a restricted user may actually reach.
 	"""
 	if not frappe.db.exists("DocType", "Branch"):
 		return
-	for role_name in ALL_RETAILEDGE_ROLE_NAMES:
+	role_names = sorted(set(ALL_RETAILEDGE_ROLE_NAMES).union(GLOBAL_BRANCH_ACCESS_ROLES))
+	for role_name in role_names:
 		if not frappe.db.exists("Role", role_name):
 			continue
 		if not frappe.db.exists(
