@@ -55,7 +55,14 @@ def apply_manual_item_discount(
 	rate_locked: bool = False,
 	lock_reason: str = "",
 ) -> dict[str, Any]:
-	"""Map explicit RetailEdge input onto native ERPNext Sales Invoice Item fields."""
+	"""Map explicit RetailEdge input onto native ERPNext Sales Invoice Item fields.
+
+	ERPNext's taxes-and-totals controller treats ``rate`` as the already-resolved
+	post-discount line rate. When a manual discount is active, leave that final
+	rate for ERPNext to calculate from its native Price List/margin/discount fields
+	instead of carrying the pre-discount entry rate forward and causing ERPNext to
+	normalise the discount back to zero.
+	"""
 	discount = normalise_manual_item_discount(values, index=index)
 	if not discount["supplied"]:
 		return discount
@@ -70,6 +77,8 @@ def apply_manual_item_discount(
 
 	row.set("discount_percentage", discount[MANUAL_DISCOUNT_PERCENTAGE])
 	row.set("discount_amount", discount[MANUAL_DISCOUNT_AMOUNT])
+	if discount["active"]:
+		row.set("rate", 0)
 	return discount
 
 
