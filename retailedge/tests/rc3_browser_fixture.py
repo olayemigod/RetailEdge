@@ -10,6 +10,7 @@ BRANCHES = (
 	"RetailEdge RC3 Ikeja",
 	"RetailEdge RC3 Abuja",
 )
+BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -111,6 +112,17 @@ def _ensure_branch_profile(
 	).insert(ignore_permissions=True)
 
 
+def _remove_fixture_branch_profile(branch_name: str) -> None:
+	profile_name = f"RC3 {branch_name}"
+	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
+		frappe.delete_doc(
+			"RetailEdge Branch Profile",
+			profile_name,
+			ignore_permissions=True,
+			force=True,
+		)
+
+
 def _ensure_assignment(
 	email: str,
 	branch_name: str,
@@ -154,6 +166,12 @@ def seed_rc3_personas() -> dict:
 	for index, branch_name in enumerate(BRANCHES):
 		_ensure_branch(branch_name)
 		warehouses[branch_name] = _ensure_warehouse(branch_name)
+		if branch_name == BRANCH_WITHOUT_DEFAULTS:
+			# This Branch is intentionally permission-valid without Branch Setup.
+			# It proves the switcher is driven by access authority rather than by
+			# the presence of optional defaults/POS configuration.
+			_remove_fixture_branch_profile(branch_name)
+			continue
 		_ensure_branch_profile(
 			branch_name,
 			default_warehouse=warehouses[branch_name],
@@ -191,6 +209,7 @@ def seed_rc3_personas() -> dict:
 		**base,
 		"branches": list(BRANCHES),
 		"warehouses": warehouses,
+		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
 			email: [branch for branch, _role, _primary in assignments]
