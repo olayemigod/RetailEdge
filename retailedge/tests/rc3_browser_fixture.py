@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import frappe
 
+from retailedge.professional_quotation import create_professional_quotation_draft
 from retailedge.tests.browser_persona_fixture import _ensure_user, seed_browser_personas
-from retailedge.tests.upgrade_validation_fixture import COMPANY
+from retailedge.tests.upgrade_validation_fixture import (
+	COMPANY,
+	CUSTOMER,
+	ITEM,
+	PRICE_LIST,
+	_ensure_customer,
+	_ensure_item,
+)
 
 BRANCHES = (
 	"RetailEdge RC3 Lagos",
@@ -17,9 +25,15 @@ EXTRA_PERSONAS = {
 	"browser-purchasing@example.com": ("Browser Purchasing", ("Purchase User", "Accounts User")),
 	"browser-sales@example.com": ("Browser Sales", ("Sales User", "Accounts User")),
 	"browser-stock-manager@example.com": ("Browser Stock Manager", ("Stock Manager",)),
-	"browser-one-branch@example.com": ("Browser One Branch", ("Stock User",)),
-	"browser-multi-branch@example.com": ("Browser Multi Branch", ("Stock User",)),
-	"browser-zero-branch@example.com": ("Browser Zero Branch", ("Stock User",)),
+	"browser-one-branch@example.com": (
+		"Browser One Branch",
+		("RetailEdgeBranchManager", "Stock User", "Sales User"),
+	),
+	"browser-multi-branch@example.com": (
+		"Browser Multi Branch",
+		("RetailEdgeBranchManager", "Stock User", "Sales User"),
+	),
+	"browser-zero-branch@example.com": ("Browser Zero Branch", ("RetailEdgeBranchManager", "Stock User")),
 	"browser-native@example.com": ("Browser Native Advanced", ("System Manager",)),
 }
 
@@ -153,6 +167,27 @@ def _ensure_assignment(
 	).insert(ignore_permissions=True)
 
 
+def _ensure_branch_quotation(branch_name: str) -> str:
+	filters = {
+		"company": COMPANY,
+		"party_name": CUSTOMER,
+		"retailedge_branch": branch_name,
+	}
+	existing = frappe.db.get_value("Quotation", filters, "name", order_by="creation asc")
+	if existing:
+		return str(existing)
+	result = create_professional_quotation_draft(
+		{
+			"company": COMPANY,
+			"branch": branch_name,
+			"customer": CUSTOMER,
+			"price_list": PRICE_LIST,
+			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
+		}
+	)
+	return str(result["name"])
+
+
 def seed_rc3_personas() -> dict:
 	"""Extend the base browser smoke fixture with the full RC3 persona matrix."""
 	base = seed_browser_personas()
@@ -201,12 +236,22 @@ def seed_rc3_personas() -> dict:
 				active=False,
 			)
 
+	# Seed real ERPNext drafts through the governed Professional Selling path so
+	# browser acceptance can prove server-side Working Branch visibility.
+	_ensure_customer()
+	_ensure_item()
+	branch_quotations = {
+		branch_name: _ensure_branch_quotation(branch_name)
+		for branch_name in (BRANCHES[0], BRANCHES[1])
+	}
+
 	frappe.db.commit()
 	return {
 		**base,
 		"branches": list(BRANCHES),
 		"warehouses": warehouses,
 		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
+		"branch_quotations": branch_quotations,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
 			email: [branch for branch, _role, _primary in assignments]

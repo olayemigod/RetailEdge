@@ -80,6 +80,36 @@ async function switchAllBranches(page) {
 	expect(result.company_wide).toBe(true);
 }
 
+async function sellingRows(page) {
+	const result = await page.evaluate(
+		() =>
+			new Promise((resolve, reject) => {
+				frappe.call({
+					method: "retailedge.professional_selling.get_professional_selling_list",
+					args: { document: "quotation", status: "All", start: 0, page_length: 50 },
+					callback: (response) => resolve(response.message || {}),
+					error: (error) => reject(new Error(error?.message || "Could not load selling records")),
+				});
+			})
+	);
+	return Array.isArray(result.rows) ? result.rows : [];
+}
+
+async function directDocumentRead(page, doctype, name) {
+	return page.evaluate(
+		({ targetDoctype, targetName }) =>
+			new Promise((resolve) => {
+				frappe.call({
+					method: "frappe.client.get",
+					args: { doctype: targetDoctype, name: targetName },
+					callback: (response) => resolve({ ok: true, name: response.message?.name || "" }),
+					error: () => resolve({ ok: false, name: "" }),
+				});
+			}),
+		{ targetDoctype: doctype, targetName: name }
+	);
+}
+
 async function expectStockEntryBranchFilter(page, branch) {
 	await expect
 		.poll(() => page.evaluate(() => window.cur_list?.doctype || ""), { timeout: 20_000 })
@@ -124,7 +154,7 @@ async function expectStockEntryCompanyWideScope(page) {
 		.toEqual({ branch: "", company: COMPANY });
 }
 
-test("Working Branch exposes every permitted Branch and scopes document lists after switching", async ({ browser }) => {
+test("Working Branch is a server-enforced document visibility boundary", async ({ browser }) => {
 	const context = await browser.newContext({ baseURL: BASE_URL });
 	await login(context, RESTRICTED_USER);
 	const page = await context.newPage();
@@ -136,6 +166,20 @@ test("Working Branch exposes every permitted Branch and scopes document lists af
 		expect(allowed.can_view_all_branches).toBe(false);
 
 		await switchBranch(page, LAGOS);
+		const lagosRows = await sellingRows(page);
+		expect(lagosRows.length).toBeGreaterThan(0);
+		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
+
+		await switchBranch(page, IKEJA);
+		const ikejaRows = await sellingRows(page);
+		expect(ikejaRows.length).toBeGreaterThan(0);
+		expect(ikejaRows.every((row) => row.branch === IKEJA)).toBe(true);
+		const ikejaDocument = ikejaRows[0].name;
+
+		await switchBranch(page, LAGOS);
+		const crossBranchRead = await directDocumentRead(page, "Quotation", ikejaDocument);
+		expect(crossBranchRead.ok).toBe(false);
+
 		await page.goto(`${BASE_URL}/app/stock-entry`, {
 			waitUntil: "domcontentloaded",
 			timeout: 30_000,
@@ -150,7 +194,7 @@ test("Working Branch exposes every permitted Branch and scopes document lists af
 	}
 });
 
-test("company-wide users can select All Branches without widening beyond the Company", async ({ browser }) => {
+test("company-wide users can deliberately broaden from one Branch to All Branches", async ({ browser }) => {
 	const context = await browser.newContext({ baseURL: BASE_URL });
 	await login(context, GLOBAL_USER);
 	const page = await context.newPage();
@@ -162,7 +206,17 @@ test("company-wide users can select All Branches without widening beyond the Com
 			new Set(["RetailEdge RC3 Lagos", "RetailEdge RC3 Ikeja", "RetailEdge RC3 Abuja"])
 		);
 
+		await switchBranch(page, LAGOS);
+		const lagosRows = await sellingRows(page);
+		expect(lagosRows.length).toBeGreaterThan(0);
+		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
+
 		await switchAllBranches(page);
+		const allRows = await sellingRows(page);
+		const branches = new Set(allRows.map((row) => row.branch).filter(Boolean));
+		expect(branches.has(LAGOS)).toBe(true);
+		expect(branches.has(IKEJA)).toBe(true);
+
 		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
 		await expect(page.locator(".retailedge-topbar-branch-trigger strong")).toHaveText("All Branches", {
 			timeout: 20_000,

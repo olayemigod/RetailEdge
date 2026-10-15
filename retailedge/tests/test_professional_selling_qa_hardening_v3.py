@@ -86,7 +86,9 @@ def test_payment_handoff_prefers_document_and_operating_branch():
 	assert "get_operating_context" in backend
 	assert 'operating.get("branch")' in backend
 	assert 'row.branch || row.retailedge_branch' in selling
-	assert "branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)" in list_service
+	assert "def _transaction_branch_field(doctype: str)" in list_service
+	assert 'if has_field(doctype, "retailedge_branch")' in list_service
+	assert 'return "retailedge_branch"' in list_service
 	assert 'payload["branch"]' in list_service
 
 

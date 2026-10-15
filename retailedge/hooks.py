@@ -279,6 +279,36 @@ has_permission = {
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
 
+_TRANSACTION_SCOPE_DOCTYPES = (
+	"Quotation",
+	"Sales Order",
+	"Delivery Note",
+	"Sales Invoice",
+	"POS Invoice",
+	"Purchase Order",
+	"Purchase Receipt",
+	"Purchase Invoice",
+	"Supplier Quotation",
+	"Request for Quotation",
+	"Payment Entry",
+	"Payment Request",
+	"Material Request",
+	"Stock Entry",
+	"Stock Reconciliation",
+)
+permission_query_conditions.update(
+	{
+		doctype: "retailedge.transaction_read_scope.get_permission_query_conditions"
+		for doctype in _TRANSACTION_SCOPE_DOCTYPES
+	}
+)
+has_permission.update(
+	{
+		doctype: "retailedge.transaction_read_scope.has_permission"
+		for doctype in _TRANSACTION_SCOPE_DOCTYPES
+	}
+)
+
 # Extend DocType Class
 # ------------------------------
 # extend_doctype_class = {}

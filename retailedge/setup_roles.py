@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import frappe
+from frappe.permissions import add_permission, update_permission_property
 
 
 RETAILEDGE_ROLE_NAMES = (
@@ -67,7 +68,31 @@ def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
 	if migrate_alias_assignments:
 		_add_canonical_roles_for_alias_assignments()
 
+	_ensure_operational_branch_read()
 	_ensure_retailedge_page_role_variants()
+
+
+def _ensure_operational_branch_read() -> None:
+	"""Give RetailEdge operational roles only the Branch visibility they need.
+
+	The Working Branch selector and Branch Assignment validation require normal
+	Frappe read permission on the Branch master. This intentionally grants only
+	read/select; it does not grant create, write, delete, import or permission
+	administration rights. User Permissions and Branch Assignment scope continue
+	to decide which Branch records a user may actually reach.
+	"""
+	if not frappe.db.exists("DocType", "Branch"):
+		return
+	for role_name in ALL_RETAILEDGE_ROLE_NAMES:
+		if not frappe.db.exists("Role", role_name):
+			continue
+		if not frappe.db.exists(
+			"Custom DocPerm",
+			{"parent": "Branch", "role": role_name, "permlevel": 0},
+		):
+			add_permission("Branch", role_name, 0)
+		update_permission_property("Branch", role_name, 0, "read", 1)
+		update_permission_property("Branch", role_name, 0, "select", 1)
 
 
 def _add_canonical_roles_for_alias_assignments():
