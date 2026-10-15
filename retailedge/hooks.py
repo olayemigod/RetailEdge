@@ -47,6 +47,7 @@ app_include_css = [
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
 	"/assets/retailedge/js/retailedge_shell_context.js",
+	"/assets/retailedge/js/working_branch_document_scope.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
 	"/assets/retailedge/js/retailedge_query_report_smart_date.js",
@@ -107,7 +108,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_order_list.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
