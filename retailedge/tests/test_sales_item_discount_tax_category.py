@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 import frappe
 
+from erpnext.controllers.taxes_and_totals import calculate_taxes_and_totals
+
 from retailedge.sales_commercial_terms import (
 	apply_sales_commercial_terms,
 	normalise_sales_commercial_terms,
@@ -32,6 +34,22 @@ class _Row:
 
 	def set(self, fieldname, value):
 		self.values[fieldname] = value
+
+
+class _PricingRow(_Row):
+	def __getattr__(self, fieldname):
+		if fieldname == "values":
+			raise AttributeError(fieldname)
+		return self.values.get(fieldname)
+
+	def __setattr__(self, fieldname, value):
+		if fieldname == "values":
+			object.__setattr__(self, fieldname, value)
+			return
+		self.values[fieldname] = value
+
+	def precision(self, _fieldname):
+		return 2
 
 
 class _Doc(_Row):
@@ -77,6 +95,44 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 		self.assertEqual(row.get("discount_percentage"), 0)
 		self.assertEqual(row.get("discount_amount"), 10000)
 		self.assertEqual(row.get("rate"), 0)
+
+	def test_native_erpnext_calculation_applies_percentage_manual_discount(self):
+		row = _PricingRow(
+			item_code="ITEM-001",
+			price_list_rate=20000,
+			rate=20000,
+			discount_percentage=0,
+			discount_amount=0,
+			margin_type="",
+			margin_rate_or_amount=0,
+			pricing_rules="",
+		)
+		apply_manual_item_discount(row, {MANUAL_DISCOUNT_PERCENTAGE: 4}, index=1)
+		calculator = calculate_taxes_and_totals.__new__(calculate_taxes_and_totals)
+		calculator.doc = frappe._dict(ignore_pricing_rule=0)
+		calculator.calculate_item_rate(row)
+		self.assertEqual(row.rate, 19200)
+		self.assertEqual(row.discount_percentage, 4)
+		self.assertEqual(row.discount_amount, 800)
+
+	def test_native_erpnext_calculation_applies_fixed_per_unit_manual_discount(self):
+		row = _PricingRow(
+			item_code="ITEM-001",
+			price_list_rate=155000,
+			rate=155000,
+			discount_percentage=0,
+			discount_amount=0,
+			margin_type="",
+			margin_rate_or_amount=0,
+			pricing_rules="",
+		)
+		apply_manual_item_discount(row, {MANUAL_DISCOUNT_AMOUNT: 10000}, index=1)
+		calculator = calculate_taxes_and_totals.__new__(calculate_taxes_and_totals)
+		calculator.doc = frappe._dict(ignore_pricing_rule=0)
+		calculator.calculate_item_rate(row)
+		self.assertEqual(row.rate, 145000)
+		self.assertEqual(row.discount_percentage, 0)
+		self.assertEqual(row.discount_amount, 10000)
 
 	def test_zero_manual_discount_does_not_clear_selling_rate(self):
 		row = _Row(item_code="ITEM-001", rate=20000)
