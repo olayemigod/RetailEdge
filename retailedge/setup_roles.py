@@ -93,6 +93,7 @@ def _ensure_operational_branch_read() -> None:
 			add_permission("Branch", role_name, 0)
 		update_permission_property("Branch", role_name, 0, "read", 1)
 		update_permission_property("Branch", role_name, 0, "select", 1)
+	frappe.clear_cache(doctype="Branch")
 
 
 def _add_canonical_roles_for_alias_assignments():
