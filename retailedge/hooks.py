@@ -271,43 +271,43 @@ permission_query_conditions = {
 	"Item Price": "retailedge.pricing_promotions_workspace.get_item_price_permission_query_conditions",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
 	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
+	"Quotation": "retailedge.transaction_read_scope.get_quotation_permission_query_conditions",
+	"Sales Order": "retailedge.transaction_read_scope.get_sales_order_permission_query_conditions",
+	"Delivery Note": "retailedge.transaction_read_scope.get_delivery_note_permission_query_conditions",
+	"Sales Invoice": "retailedge.transaction_read_scope.get_sales_invoice_permission_query_conditions",
+	"POS Invoice": "retailedge.transaction_read_scope.get_pos_invoice_permission_query_conditions",
+	"Purchase Order": "retailedge.transaction_read_scope.get_purchase_order_permission_query_conditions",
+	"Purchase Receipt": "retailedge.transaction_read_scope.get_purchase_receipt_permission_query_conditions",
+	"Purchase Invoice": "retailedge.transaction_read_scope.get_purchase_invoice_permission_query_conditions",
+	"Supplier Quotation": "retailedge.transaction_read_scope.get_supplier_quotation_permission_query_conditions",
+	"Request for Quotation": "retailedge.transaction_read_scope.get_request_for_quotation_permission_query_conditions",
+	"Payment Entry": "retailedge.transaction_read_scope.get_payment_entry_permission_query_conditions",
+	"Payment Request": "retailedge.transaction_read_scope.get_payment_request_permission_query_conditions",
+	"Material Request": "retailedge.transaction_read_scope.get_material_request_permission_query_conditions",
+	"Stock Entry": "retailedge.transaction_read_scope.get_stock_entry_permission_query_conditions",
+	"Stock Reconciliation": "retailedge.transaction_read_scope.get_stock_reconciliation_permission_query_conditions",
 }
 has_permission = {
 	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
 	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
+	"Quotation": "retailedge.transaction_read_scope.has_permission",
+	"Sales Order": "retailedge.transaction_read_scope.has_permission",
+	"Delivery Note": "retailedge.transaction_read_scope.has_permission",
+	"Sales Invoice": "retailedge.transaction_read_scope.has_permission",
+	"POS Invoice": "retailedge.transaction_read_scope.has_permission",
+	"Purchase Order": "retailedge.transaction_read_scope.has_permission",
+	"Purchase Receipt": "retailedge.transaction_read_scope.has_permission",
+	"Purchase Invoice": "retailedge.transaction_read_scope.has_permission",
+	"Supplier Quotation": "retailedge.transaction_read_scope.has_permission",
+	"Request for Quotation": "retailedge.transaction_read_scope.has_permission",
+	"Payment Entry": "retailedge.transaction_read_scope.has_permission",
+	"Payment Request": "retailedge.transaction_read_scope.has_permission",
+	"Material Request": "retailedge.transaction_read_scope.has_permission",
+	"Stock Entry": "retailedge.transaction_read_scope.has_permission",
+	"Stock Reconciliation": "retailedge.transaction_read_scope.has_permission",
 }
-
-_TRANSACTION_SCOPE_DOCTYPES = (
-	"Quotation",
-	"Sales Order",
-	"Delivery Note",
-	"Sales Invoice",
-	"POS Invoice",
-	"Purchase Order",
-	"Purchase Receipt",
-	"Purchase Invoice",
-	"Supplier Quotation",
-	"Request for Quotation",
-	"Payment Entry",
-	"Payment Request",
-	"Material Request",
-	"Stock Entry",
-	"Stock Reconciliation",
-)
-permission_query_conditions.update(
-	{
-		doctype: "retailedge.transaction_read_scope.get_permission_query_conditions"
-		for doctype in _TRANSACTION_SCOPE_DOCTYPES
-	}
-)
-has_permission.update(
-	{
-		doctype: "retailedge.transaction_read_scope.has_permission"
-		for doctype in _TRANSACTION_SCOPE_DOCTYPES
-	}
-)
 
 # Extend DocType Class
 # ------------------------------

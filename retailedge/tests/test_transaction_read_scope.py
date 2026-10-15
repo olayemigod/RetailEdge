@@ -33,10 +33,7 @@ def test_explicit_working_branch_is_a_server_query_scope():
 		patch.object(scope, "_meta_has_field", return_value=True),
 		patch.object(scope.frappe.db, "escape", side_effect=_escape),
 	):
-		condition = scope.get_permission_query_conditions(
-			"manager@example.com",
-			doctype="Sales Invoice",
-		)
+		condition = scope.get_sales_invoice_permission_query_conditions("manager@example.com")
 	assert "`tabSales Invoice`.`company` = 'RetailEdge Consulting'" in condition
 	assert "`tabSales Invoice`.`retailedge_branch` in ('Ketu')" in condition
 
@@ -51,10 +48,7 @@ def test_all_branches_keeps_company_as_hard_boundary():
 		patch.object(scope, "_meta_has_field", return_value=True),
 		patch.object(scope.frappe.db, "escape", side_effect=_escape),
 	):
-		condition = scope.get_permission_query_conditions(
-			"manager@example.com",
-			doctype="Sales Invoice",
-		)
+		condition = scope.get_sales_invoice_permission_query_conditions("manager@example.com")
 	assert condition == "`tabSales Invoice`.`company` = 'RetailEdge Consulting'"
 	assert "retailedge_branch" not in condition
 
@@ -75,10 +69,7 @@ def test_assignment_history_limits_native_lists_when_no_explicit_switch_exists()
 		patch.object(scope, "_meta_has_field", return_value=True),
 		patch.object(scope.frappe.db, "escape", side_effect=_escape),
 	):
-		condition = scope.get_permission_query_conditions(
-			"branch-user@example.com",
-			doctype="Sales Invoice",
-		)
+		condition = scope.get_sales_invoice_permission_query_conditions("branch-user@example.com")
 	assert "'Ketu'" in condition
 	assert "'Lagos Island'" in condition
 	assert "RetailEdge Consulting" in condition
@@ -90,13 +81,10 @@ def test_users_without_branch_assignment_history_keep_native_erp_permissions():
 		patch.object(scope, "user_has_global_branch_access", return_value=False),
 		patch.object(scope, "has_branch_assignments", return_value=False),
 	):
-		assert scope.get_permission_query_conditions(
-			"native-user@example.com",
-			doctype="Sales Invoice",
-		) == ""
+		assert scope.get_sales_invoice_permission_query_conditions("native-user@example.com") == ""
 
 
-def test_direct_document_access_matches_selected_working_branch():
+def test_direct_document_access_denies_other_branch_without_granting_native_access():
 	with patch.object(
 		scope,
 		"_explicit_working_scope",
@@ -106,7 +94,7 @@ def test_direct_document_access_matches_selected_working_branch():
 			_doc(company="RetailEdge Consulting", branch="Ketu"),
 			user="manager@example.com",
 			permission_type="read",
-		) is True
+		) is None
 		assert scope.has_permission(
 			_doc(company="RetailEdge Consulting", branch="Lagos Island"),
 			user="manager@example.com",
@@ -114,7 +102,7 @@ def test_direct_document_access_matches_selected_working_branch():
 		) is False
 
 
-def test_direct_company_wide_access_still_rejects_another_company():
+def test_direct_company_wide_scope_only_denies_another_company():
 	with patch.object(
 		scope,
 		"_explicit_working_scope",
@@ -124,12 +112,26 @@ def test_direct_company_wide_access_still_rejects_another_company():
 			_doc(company="RetailEdge Consulting", branch="Lagos Island"),
 			user="manager@example.com",
 			permission_type="read",
-		) is True
+		) is None
 		assert scope.has_permission(
 			_doc(company="Other Company", branch="Lagos Island"),
 			user="manager@example.com",
 			permission_type="read",
 		) is False
+
+
+def test_query_hooks_have_concrete_doctype_wrappers():
+	hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+	contracts = {
+		"Sales Invoice": "get_sales_invoice_permission_query_conditions",
+		"Purchase Invoice": "get_purchase_invoice_permission_query_conditions",
+		"Stock Entry": "get_stock_entry_permission_query_conditions",
+		"Payment Entry": "get_payment_entry_permission_query_conditions",
+	}
+	for doctype, function in contracts.items():
+		assert f'"{doctype}": "retailedge.transaction_read_scope.{function}"' in hooks
+		assert f"def {function}(" in (APP_ROOT / "transaction_read_scope.py").read_text(encoding="utf-8")
+	assert "retailedge.transaction_read_scope.has_permission" in hooks
 
 
 def test_professional_selling_keeps_native_if_owner_and_user_permissions_in_path():
@@ -145,13 +147,12 @@ def test_professional_selling_keeps_native_if_owner_and_user_permissions_in_path
 	assert 'frappe.has_permission(parent_doctype, "read", doc=doc)' in linked_source
 
 
-def test_hooks_compose_branch_scope_with_native_permissions():
-	hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
-	assert "_TRANSACTION_SCOPE_DOCTYPES" in hooks
-	assert "retailedge.transaction_read_scope.get_permission_query_conditions" in hooks
-	assert "retailedge.transaction_read_scope.has_permission" in hooks
-	for doctype in ("Sales Invoice", "Purchase Invoice", "Stock Entry", "Payment Entry"):
-		assert f'"{doctype}"' in hooks
+def test_professional_selling_prefers_stored_retailedge_branch_attribution():
+	source = (APP_ROOT / "professional_selling.py").read_text(encoding="utf-8")
+	assert "def _transaction_branch_field(doctype: str)" in source
+	assert 'if has_field(doctype, "retailedge_branch")' in source
+	assert 'return "retailedge_branch"' in source
+	assert "branch_field = _transaction_branch_field(doctype)" in source
 
 
 def test_retailedge_roles_receive_only_minimum_branch_master_visibility():
