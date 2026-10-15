@@ -40,6 +40,12 @@ def editable_items(doc) -> list[dict[str, Any]]:
 	return [_editable_item(row) for row in list(doc.get("items") or [])]
 
 
+def _editable_selling_rate(row, discount: dict[str, Any]) -> float:
+	if discount[MANUAL_DISCOUNT_PERCENTAGE] or discount[MANUAL_DISCOUNT_AMOUNT]:
+		return flt(row.get("rate_with_margin") or row.get("rate"))
+	return flt(row.get("rate"))
+
+
 def _editable_item(row) -> dict[str, Any]:
 	discount = manual_item_discount_state(row)
 	return {
@@ -48,6 +54,7 @@ def _editable_item(row) -> dict[str, Any]:
 		"item_name": clean(row.get("item_name")),
 		"qty": flt(row.get("qty")),
 		"rate": flt(row.get("rate")),
+		"selling_rate": _editable_selling_rate(row, discount),
 		"amount": flt(row.get("amount")),
 		"discount_percentage": flt(row.get("discount_percentage")),
 		"discount_amount": flt(row.get("discount_amount")),
@@ -206,6 +213,7 @@ def _apply_editable_row_values(
 		index=index,
 		rate_locked=rate_locked,
 		lock_reason=str(pricing.get("rate_change_lock_reason") or "").strip(),
+		price_list_rate=pricing.get("price_list_rate"),
 	)
 
 	if row.meta.has_field("delivery_date"):

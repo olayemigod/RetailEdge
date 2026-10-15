@@ -54,8 +54,17 @@ def apply_manual_item_discount(
 	index: int | None = None,
 	rate_locked: bool = False,
 	lock_reason: str = "",
+	price_list_rate: float | None = None,
 ) -> dict[str, Any]:
-	"""Map explicit RetailEdge input onto native ERPNext Sales Invoice Item fields."""
+	"""Map explicit RetailEdge input onto native ERPNext Sales Invoice Item fields.
+
+	ERPNext treats ``rate`` as the resolved post-discount line rate. RetailEdge's
+	Selling Rate is the operator's pre-discount basis. When those values differ
+	from the governed Price List, encode the Selling Rate with ERPNext's native
+	Amount margin fields, then leave the final ``rate`` for ERPNext to calculate.
+	If no Price List rate exists, the entered Selling Rate becomes the native
+	price-list basis for this line so ERPNext can still calculate the discount.
+	"""
 	discount = normalise_manual_item_discount(values, index=index)
 	if not discount["supplied"]:
 		return discount
@@ -70,7 +79,39 @@ def apply_manual_item_discount(
 
 	row.set("discount_percentage", discount[MANUAL_DISCOUNT_PERCENTAGE])
 	row.set("discount_amount", discount[MANUAL_DISCOUNT_AMOUNT])
+	if discount["active"]:
+		_set_manual_discount_rate_basis(row, values, price_list_rate=price_list_rate)
 	return discount
+
+
+def _set_manual_discount_rate_basis(row, values: dict[str, Any], *, price_list_rate: float | None) -> None:
+	"""Represent the entered Selling Rate with native ERPNext price/margin fields."""
+	rate_value = values.get("rate")
+	base_rate = flt(row.get("rate") if rate_value in (None, "") else rate_value)
+
+	list_rate_value = price_list_rate
+	if list_rate_value in (None, ""):
+		list_rate_value = row.get("price_list_rate")
+	list_rate = flt(list_rate_value or 0)
+
+	if list_rate:
+		row.set("price_list_rate", list_rate)
+		margin_amount = flt(base_rate - list_rate)
+		if margin_amount:
+			row.set("margin_type", "Amount")
+			row.set("margin_rate_or_amount", margin_amount)
+		else:
+			row.set("margin_type", "")
+			row.set("margin_rate_or_amount", 0)
+	elif base_rate:
+		# ERPNext removes manual discount fields when price_list_rate is blank.
+		# Use the entered Selling Rate as the native basis when no Item Price exists.
+		row.set("price_list_rate", base_rate)
+		row.set("margin_type", "")
+		row.set("margin_rate_or_amount", 0)
+
+	# ERPNext will resolve the final post-discount rate from the native basis above.
+	row.set("rate", 0)
 
 
 def manual_item_discount_state(row) -> dict[str, Any]:

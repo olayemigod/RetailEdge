@@ -93,7 +93,7 @@ function mapEditableItems(rows = []) {
 		name: row.name || "",
 		item_code: row.item_code || "",
 		qty: row.qty,
-		rate: row.rate,
+		rate: row.selling_rate ?? row.rate,
 		uom: row.uom || "",
 		discount_percentage: Number(row.discount_percentage || 0),
 		amount: Number(row.amount || 0),
@@ -103,9 +103,30 @@ function mapEditableItems(rows = []) {
 	}));
 }
 
+function previousDiscountRow(row, index, previousRows = []) {
+	const name = String(row?.name || "").trim();
+	if (name) {
+		const named = previousRows.find((candidate) => String(candidate?.name || "").trim() === name);
+		if (named) return named;
+	}
+
+	const temporaryKey = String(row?.__temporary_key || "").trim();
+	if (temporaryKey) {
+		const temporary = previousRows.find(
+			(candidate) => String(candidate?.__temporary_key || "").trim() === temporaryKey,
+		);
+		if (temporary) return temporary;
+	}
+
+	const sameReference = previousRows.find((candidate) => candidate === row);
+	if (sameReference) return sameReference;
+
+	return previousRows[index] || {};
+}
+
 function normaliseManualDiscountRows(nextRows = [], previousRows = []) {
 	return nextRows.map((row, index) => {
-		const prior = previousRows[index] || {};
+		const prior = previousDiscountRow(row, index, previousRows);
 		if ((row?.item_code || "") !== (prior?.item_code || "")) {
 			return {
 				...row,

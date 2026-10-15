@@ -377,6 +377,7 @@ def _create_simple_sales_invoice_draft(
 			index=index,
 			rate_locked=rate_locked,
 			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+			price_list_rate=resolved.get("price_list_rate"),
 		)
 
 	apply_sales_commercial_terms(doc, values)
