@@ -27,34 +27,11 @@ RETAILEDGE_COMPATIBILITY_ROLE_NAMES = tuple(
 )
 ALL_RETAILEDGE_ROLE_NAMES = RETAILEDGE_ROLE_NAMES + RETAILEDGE_COMPATIBILITY_ROLE_NAMES
 
-# These ERPNext/master source documents already sit behind RetailEdge
-# management/report capability checks. Product management/audit roles receive
-# read/select/report only; mutation remains governed by native ERPNext roles and
-# workflows. RetailEdge-owned workflow DocTypes keep their explicit DocType
-# permissions and are deliberately not rewritten here.
-MANAGEMENT_READ_DOCTYPES = (
-	"Company",
-	"Customer",
-	"Supplier",
-	"Item",
-	"Warehouse",
-	"Price List",
-	"Quotation",
-	"Sales Order",
-	"Delivery Note",
-	"Sales Invoice",
-	"POS Invoice",
-	"Purchase Order",
-	"Purchase Receipt",
-	"Purchase Invoice",
-	"Supplier Quotation",
-	"Request for Quotation",
-	"Material Request",
-	"Stock Entry",
-	"Stock Reconciliation",
-	"Stock Ledger Entry",
-	"Payment Entry",
-)
+# Product management/audit roles need Company visibility so RetailEdge can
+# validate the selected operating/reporting context. Business-document authority
+# deliberately remains merchant-governed through native ERPNext roles and Role
+# Permission Manager (including If Owner, User Permissions and sharing).
+MANAGEMENT_READ_DOCTYPES = ("Company",)
 
 
 def canonical_retailedge_role(role_name: str | None) -> str | None:
@@ -100,7 +77,7 @@ def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
 		_add_canonical_roles_for_alias_assignments()
 
 	_ensure_operational_branch_read()
-	_ensure_management_read_permissions()
+	_ensure_management_context_read_permissions()
 	_ensure_retailedge_page_role_variants()
 
 
@@ -130,8 +107,13 @@ def _ensure_operational_branch_read() -> None:
 	frappe.clear_cache(doctype="Branch")
 
 
-def _ensure_management_read_permissions() -> None:
-	"""Align RetailEdge management/audit report roles with ERPNext source reads."""
+def _ensure_management_context_read_permissions() -> None:
+	"""Grant only the context-master read needed by RetailEdge management roles.
+
+	Do not add or repair transaction permissions here. Sales, purchase, stock and
+	payment document access must stay configurable in ERPNext Role Permission
+	Manager so merchant policies such as If Owner remain authoritative.
+	"""
 	role_names = tuple(
 		dict.fromkeys(
 			(
@@ -154,7 +136,6 @@ def _ensure_management_read_permissions() -> None:
 				add_permission(doctype, role_name, 0)
 			update_permission_property(doctype, role_name, 0, "read", 1)
 			update_permission_property(doctype, role_name, 0, "select", 1)
-			update_permission_property(doctype, role_name, 0, "report", 1)
 		frappe.clear_cache(doctype=doctype)
 
 
