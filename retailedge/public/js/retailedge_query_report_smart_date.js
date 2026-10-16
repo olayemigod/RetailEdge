@@ -163,8 +163,6 @@
 					"onUpdate:modelValue": this.onModelUpdate,
 					onResolved: this.onResolved,
 					label: "Period",
-					showPresets: false,
-					presets: [],
 				});
 			},
 		});
