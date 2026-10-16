@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import flt
 
 from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.reporting_scope import apply_working_context_to_report_filters
 from retailedge.sales_reporting import (
 	get_sales_by_item,
 	get_sales_invoice_register,
@@ -20,7 +21,10 @@ PREVIEW_ROWS = 8
 @frappe.whitelist()
 def get_sales_dashboard_context() -> dict[str, Any]:
 	context = get_sales_reporting_context()
-	filters = context.get("default_filters") or {}
+	filters = apply_working_context_to_report_filters(context.get("default_filters") or {})
+	context["default_filters"] = filters
+	context["tenant_name"] = filters.get("company") or context.get("tenant_name") or ""
+	context["branch_name"] = filters.get("branch") or ""
 	context["dashboard_key"] = DASHBOARD_KEY
 	context["capabilities"] = require_dashboard_action(
 		DASHBOARD_KEY,
@@ -146,4 +150,4 @@ def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	return frappe._dict(filters or {})
+	return frappe._dict(apply_working_context_to_report_filters(filters or {}))
