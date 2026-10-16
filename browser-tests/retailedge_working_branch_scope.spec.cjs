@@ -7,6 +7,7 @@ const LAGOS = "RetailEdge RC3 Lagos";
 const IKEJA = "RetailEdge RC3 Ikeja";
 const RESTRICTED_USER = "browser-multi-branch@example.com";
 const GLOBAL_USER = "browser-native@example.com";
+const SALES_INVOICE_FIXTURE_PREFIX = "RetailEdge browser Working Branch fixture:";
 
 if (!PASSWORD) {
 	throw new Error("RETAILEDGE_BROWSER_PASSWORD is required for Working Branch acceptance.");
@@ -95,6 +96,27 @@ async function sellingRows(page) {
 	return Array.isArray(result.rows) ? result.rows : [];
 }
 
+async function fixtureSalesInvoices(page) {
+	const rows = await page.evaluate(
+		(prefix) =>
+			new Promise((resolve, reject) => {
+				frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Sales Invoice",
+						filters: [["remarks", "like", `${prefix}%`]],
+						fields: ["name", "retailedge_branch"],
+						limit_page_length: 20,
+					},
+					callback: (response) => resolve(response.message || []),
+					error: (error) => reject(new Error(error?.message || "Could not load Sales Invoice fixtures")),
+				});
+			}),
+		SALES_INVOICE_FIXTURE_PREFIX
+	);
+	return Object.fromEntries((rows || []).map((row) => [row.retailedge_branch, row.name]));
+}
+
 async function directDocumentRead(page, doctype, name) {
 	return page.evaluate(
 		({ targetDoctype, targetName }) =>
@@ -110,48 +132,57 @@ async function directDocumentRead(page, doctype, name) {
 	);
 }
 
-async function expectStockEntryBranchFilter(page, branch) {
+async function expectListScope(page, doctype, branch, { companyWide = false } = {}) {
 	await expect
 		.poll(() => page.evaluate(() => window.cur_list?.doctype || ""), { timeout: 20_000 })
-		.toBe("Stock Entry");
+		.toBe(doctype);
 	await expect
 		.poll(
 			() =>
 				page.evaluate(() => {
 					const filters = window.cur_list?.filter_area?.get?.() || [];
-					const match = filters.find(
+					const branchFilter = filters.find(
 						(filter) => Array.isArray(filter) && filter[1] === "retailedge_branch"
 					);
-					return match?.[3] || "";
-				}),
-			{ timeout: 20_000 }
-		)
-		.toBe(branch);
-}
-
-async function expectStockEntryCompanyWideScope(page) {
-	await expect
-		.poll(() => page.evaluate(() => window.cur_list?.doctype || ""), { timeout: 20_000 })
-		.toBe("Stock Entry");
-	await expect
-		.poll(
-			() =>
-				page.evaluate(() => {
-					const filters = window.cur_list?.filter_area?.get?.() || [];
-					const branch = filters.find(
-						(filter) => Array.isArray(filter) && filter[1] === "retailedge_branch"
-					);
-					const company = filters.find(
+					const companyFilter = filters.find(
 						(filter) => Array.isArray(filter) && filter[1] === "company"
 					);
 					return {
-						branch: branch?.[3] || "",
-						company: company?.[3] || "",
+						branch: branchFilter?.[3] || "",
+						company: companyFilter?.[3] || "",
 					};
 				}),
 			{ timeout: 20_000 }
 		)
-		.toEqual({ branch: "", company: COMPANY });
+		.toEqual({ branch: companyWide ? "" : branch, company: COMPANY });
+}
+
+async function expectSalesInvoiceRows(page, { included = [], excluded = [] }) {
+	await expect
+		.poll(
+			() => page.evaluate(() => (window.cur_list?.data || []).map((row) => row.name)),
+			{ timeout: 20_000 }
+		)
+		.toEqual(expect.arrayContaining(included));
+	const names = await page.evaluate(() => (window.cur_list?.data || []).map((row) => row.name));
+	for (const name of excluded) expect(names).not.toContain(name);
+}
+
+async function openSalesInvoiceList(page, branch, expected, excluded = [], { companyWide = false } = {}) {
+	await page.goto(`${BASE_URL}/app/sales-invoice`, {
+		waitUntil: "domcontentloaded",
+		timeout: 30_000,
+	});
+	await expectListScope(page, "Sales Invoice", branch, { companyWide });
+	await expectSalesInvoiceRows(page, { included: expected, excluded });
+}
+
+async function expectStockEntryBranchFilter(page, branch) {
+	await expectListScope(page, "Stock Entry", branch);
+}
+
+async function expectStockEntryCompanyWideScope(page) {
+	await expectListScope(page, "Stock Entry", "", { companyWide: true });
 }
 
 test("Working Branch is a server-enforced document visibility boundary", async ({ browser }) => {
@@ -164,21 +195,30 @@ test("Working Branch is a server-enforced document visibility boundary", async (
 		const allowed = await allowedContexts(page);
 		expect(new Set(allowed.branches || [])).toEqual(new Set([LAGOS, IKEJA]));
 		expect(allowed.can_view_all_branches).toBe(false);
+		const invoiceFixtures = await fixtureSalesInvoices(page);
+		expect(invoiceFixtures[LAGOS]).toBeTruthy();
+		expect(invoiceFixtures[IKEJA]).toBeTruthy();
 
 		await switchBranch(page, LAGOS);
 		const lagosRows = await sellingRows(page);
 		expect(lagosRows.length).toBeGreaterThan(0);
 		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
+		await openSalesInvoiceList(page, LAGOS, [invoiceFixtures[LAGOS]], [invoiceFixtures[IKEJA]]);
 
 		await switchBranch(page, IKEJA);
+		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
 		const ikejaRows = await sellingRows(page);
 		expect(ikejaRows.length).toBeGreaterThan(0);
 		expect(ikejaRows.every((row) => row.branch === IKEJA)).toBe(true);
 		const ikejaDocument = ikejaRows[0].name;
+		await openSalesInvoiceList(page, IKEJA, [invoiceFixtures[IKEJA]], [invoiceFixtures[LAGOS]]);
 
 		await switchBranch(page, LAGOS);
+		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
 		const crossBranchRead = await directDocumentRead(page, "Quotation", ikejaDocument);
 		expect(crossBranchRead.ok).toBe(false);
+		const crossBranchInvoiceRead = await directDocumentRead(page, "Sales Invoice", invoiceFixtures[IKEJA]);
+		expect(crossBranchInvoiceRead.ok).toBe(false);
 
 		await page.goto(`${BASE_URL}/app/stock-entry`, {
 			waitUntil: "domcontentloaded",
@@ -205,22 +245,33 @@ test("company-wide users can deliberately broaden from one Branch to All Branche
 		expect(new Set(allowed.branches || [])).toEqual(
 			new Set(["RetailEdge RC3 Lagos", "RetailEdge RC3 Ikeja", "RetailEdge RC3 Abuja"])
 		);
+		const invoiceFixtures = await fixtureSalesInvoices(page);
+		expect(invoiceFixtures[LAGOS]).toBeTruthy();
+		expect(invoiceFixtures[IKEJA]).toBeTruthy();
 
 		await switchBranch(page, LAGOS);
 		const lagosRows = await sellingRows(page);
 		expect(lagosRows.length).toBeGreaterThan(0);
 		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
+		await openSalesInvoiceList(page, LAGOS, [invoiceFixtures[LAGOS]], [invoiceFixtures[IKEJA]]);
 
 		await switchAllBranches(page);
+		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
 		const allRows = await sellingRows(page);
 		const branches = new Set(allRows.map((row) => row.branch).filter(Boolean));
 		expect(branches.has(LAGOS)).toBe(true);
 		expect(branches.has(IKEJA)).toBe(true);
 
-		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
 		await expect(page.locator(".retailedge-topbar-branch-trigger strong")).toHaveText("All Branches", {
 			timeout: 20_000,
 		});
+		await openSalesInvoiceList(
+			page,
+			"",
+			[invoiceFixtures[LAGOS], invoiceFixtures[IKEJA]],
+			[],
+			{ companyWide: true }
+		);
 
 		await page.goto(`${BASE_URL}/app/stock-entry`, {
 			waitUntil: "domcontentloaded",
