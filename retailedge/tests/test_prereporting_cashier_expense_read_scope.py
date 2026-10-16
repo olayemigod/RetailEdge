@@ -14,8 +14,82 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 		with (
 			patch.object(read_scope.frappe, "has_permission", return_value=True),
 			patch.object(read_scope, "get_operational_branch_scope", return_value=scope),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 		):
 			return read_scope.apply_cashier_expense_read_scope(filters, user="reader@example.com")
+
+	def test_working_branch_overrides_stale_multi_branch_filter(self):
+		with (
+			patch.object(read_scope.frappe, "has_permission", return_value=True),
+			patch.object(
+				read_scope,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Ketu", "Lagos Island"]},
+			),
+			patch.object(
+				read_scope,
+				"_current_working_scope",
+				return_value={"company": "RetailEdge Consulting", "branch": "Ketu", "company_wide": False},
+			),
+		):
+			result = read_scope.apply_cashier_expense_read_scope(
+				{"company": "RetailEdge Consulting", "branch": "Lagos Island", "expense_status": "Submitted"},
+				user="reader@example.com",
+			)
+		self.assertEqual(result["company"], "RetailEdge Consulting")
+		self.assertEqual(result["branch"], "Ketu")
+		self.assertEqual(result["expense_status"], "Submitted")
+
+	def test_working_branch_replaces_stale_list_branch_filter(self):
+		filters = [
+			[read_scope.CASHIER_EXPENSE_DOCTYPE, "company", "=", "RetailEdge Consulting"],
+			[read_scope.CASHIER_EXPENSE_DOCTYPE, "branch", "=", "Lagos Island"],
+			[read_scope.CASHIER_EXPENSE_DOCTYPE, "expense_status", "!=", "Cancelled"],
+		]
+		with (
+			patch.object(read_scope.frappe, "has_permission", return_value=True),
+			patch.object(
+				read_scope,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Ketu", "Lagos Island"]},
+			),
+			patch.object(
+				read_scope,
+				"_current_working_scope",
+				return_value={"company": "RetailEdge Consulting", "branch": "Ketu", "company_wide": False},
+			),
+		):
+			result = read_scope.apply_cashier_expense_read_scope(filters, user="reader@example.com")
+		self.assertIn(
+			[read_scope.CASHIER_EXPENSE_DOCTYPE, "branch", "=", "Ketu"],
+			result,
+		)
+		self.assertNotIn(
+			[read_scope.CASHIER_EXPENSE_DOCTYPE, "branch", "=", "Lagos Island"],
+			result,
+		)
+		self.assertIn(filters[2], result)
+
+	def test_company_wide_context_is_the_only_branch_broadening_state(self):
+		with (
+			patch.object(read_scope.frappe, "has_permission", return_value=True),
+			patch.object(
+				read_scope,
+				"get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": []},
+			),
+			patch.object(
+				read_scope,
+				"_current_working_scope",
+				return_value={"company": "RetailEdge Consulting", "branch": "", "company_wide": True},
+			),
+		):
+			result = read_scope.apply_cashier_expense_read_scope(
+				{"company": "RetailEdge Consulting", "branch": "Ketu"},
+				user="reader@example.com",
+			)
+		self.assertEqual(result["company"], "RetailEdge Consulting")
+		self.assertNotIn("branch", result)
 
 	def test_restricted_explicit_branch_outside_assignments_is_rejected(self):
 		with (
@@ -25,6 +99,7 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 				"get_operational_branch_scope",
 				return_value={"restricted": True, "allowed_branches": ["Branch A"]},
 			),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 			patch.object(read_scope.frappe, "throw", side_effect=RuntimeError("denied")),
 		):
 			with self.assertRaises(RuntimeError):
@@ -91,6 +166,7 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 				"get_operational_branch_scope",
 				return_value={"restricted": True, "allowed_branches": ["Branch A"]},
 			),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 			patch.object(read_scope.frappe, "throw", side_effect=RuntimeError("denied")),
 		):
 			with self.assertRaises(RuntimeError):
@@ -103,6 +179,7 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 		]
 		with (
 			patch.object(read_scope.frappe, "has_permission", return_value=True),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 			patch.object(read_scope.frappe, "throw", side_effect=RuntimeError("invalid")),
 		):
 			with self.assertRaises(RuntimeError):
@@ -113,6 +190,7 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 			patch.object(read_scope.frappe, "has_permission", return_value=True),
 			patch.object(read_scope.frappe.defaults, "get_user_default", return_value=None),
 			patch.object(read_scope, "user_has_global_branch_access", return_value=False),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 			patch.object(read_scope.frappe, "throw", side_effect=RuntimeError("company required")),
 		):
 			with self.assertRaises(RuntimeError):
@@ -123,6 +201,7 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 			patch.object(read_scope.frappe, "has_permission", return_value=True),
 			patch.object(read_scope.frappe.defaults, "get_user_default", return_value=None),
 			patch.object(read_scope, "user_has_global_branch_access", return_value=True),
+			patch.object(read_scope, "_current_working_scope", return_value={}),
 		):
 			result = read_scope.apply_cashier_expense_read_scope(
 				{"expense_status": "Submitted"}, user="Administrator"
