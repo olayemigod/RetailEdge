@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import traceback
+
 import frappe
 
 from retailedge.guided_sales_invoice import _create_simple_sales_invoice_draft
@@ -206,18 +209,25 @@ def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	)
 	if existing:
 		return str(existing)
-	result = _create_simple_sales_invoice_draft(
-		{
-			"company": COMPANY,
-			"branch": branch_name,
-			"customer": CUSTOMER,
-			"price_list": PRICE_LIST,
-			"update_stock": 0,
-			"remarks": marker,
-			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
-		},
-		allow_update_stock_edit=True,
-	)
+	try:
+		result = _create_simple_sales_invoice_draft(
+			{
+				"company": COMPANY,
+				"branch": branch_name,
+				"customer": CUSTOMER,
+				"price_list": PRICE_LIST,
+				"update_stock": 0,
+				"remarks": marker,
+				"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
+			},
+			allow_update_stock_edit=True,
+		)
+	except Exception:
+		print(
+			f"RetailEdge browser Sales Invoice fixture failed for Branch {branch_name}:\n{traceback.format_exc()}",
+			file=sys.stderr,
+		)
+		raise
 	return str(result["name"])
 
 
