@@ -22,6 +22,7 @@ BRANCHES = (
 	"RetailEdge RC3 Abuja",
 )
 BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
+EXPENSE_CATEGORY = "Browser Working Branch Expense"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -248,6 +249,54 @@ def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	return str(invoice.name)
 
 
+def _ensure_expense_category() -> str:
+	if frappe.db.exists("RetailEdge Expense Category", EXPENSE_CATEGORY):
+		return EXPENSE_CATEGORY
+	frappe.get_doc(
+		{
+			"doctype": "RetailEdge Expense Category",
+			"category_name": EXPENSE_CATEGORY,
+			"category_code": "BROWSER-WORKING-BRANCH",
+			"company": COMPANY,
+			"is_active": 1,
+			"description": "Deterministic browser read-scope fixture.",
+		}
+	).insert(ignore_permissions=True)
+	return EXPENSE_CATEGORY
+
+
+def _ensure_branch_cashier_expense(branch_name: str) -> str:
+	"""Seed a read/list-only draft without depending on POS shift creation."""
+	category = _ensure_expense_category()
+	name = f"RE-CE-BROWSER-{branch_name.replace(' ', '-').upper()}"
+	if frappe.db.exists("RetailEdge Cashier Expense", name):
+		return name
+	doc = frappe.get_doc(
+		{
+			"doctype": "RetailEdge Cashier Expense",
+			"name": name,
+			"naming_series": "RE-CE-.YYYY.-.####",
+			"expense_category": category,
+			"amount": 1000,
+			"description": f"RetailEdge browser Working Branch expense fixture: {branch_name}",
+			"company": COMPANY,
+			"cashier": "browser-multi-branch@example.com",
+			"expense_date": nowdate(),
+			"branch": branch_name,
+			"expense_status": "Draft",
+			"ledger_status": "Not Applicable",
+			"entry_source": "API",
+			"cash_source": "Other",
+			"cash_movement_status": "Not Disbursed",
+			"posting_ready": 0,
+		}
+	)
+	# This fixture exercises read visibility only. db_insert deliberately avoids
+	# creating a synthetic POS shift or invoking posting/readiness workflows.
+	doc.db_insert()
+	return str(doc.name)
+
+
 def seed_rc3_personas() -> dict:
 	"""Extend the base browser smoke fixture with the full RC3 persona matrix."""
 	base = seed_browser_personas()
@@ -308,6 +357,10 @@ def seed_rc3_personas() -> dict:
 		branch_name: _ensure_branch_sales_invoice(branch_name)
 		for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
+	branch_cashier_expenses = {
+		branch_name: _ensure_branch_cashier_expense(branch_name)
+		for branch_name in (BRANCHES[0], BRANCHES[1])
+	}
 
 	frappe.db.commit()
 	return {
@@ -317,6 +370,7 @@ def seed_rc3_personas() -> dict:
 		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
 		"branch_quotations": branch_quotations,
 		"branch_sales_invoices": branch_sales_invoices,
+		"branch_cashier_expenses": branch_cashier_expenses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
 			email: [branch for branch, _role, _primary in assignments]
