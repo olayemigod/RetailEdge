@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: a2d1705f794e17c88d66d7041df4dfb47b2684ff
+          ref: 3b0059cd1d18aa82ac7f6038b853be66a36b9f6e
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "a2d1705f794e17c88d66d7041df4dfb47b2684ff"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "3b0059cd1d18aa82ac7f6038b853be66a36b9f6e"
 
           python - <<'PY'
           import json
