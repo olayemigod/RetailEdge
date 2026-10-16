@@ -40,7 +40,7 @@ BRANCH_SCOPED_PERSONAS = {
 
 
 def _reset_branch_scoped_company_context(user: str) -> None:
-	"""Keep dedicated QA users deterministic without widening Company authority."""
+	"""Keep dedicated QA users deterministic without adding Company User Permission scope."""
 	frappe.db.delete("User Permission", {"user": user, "allow": "Company"})
 	frappe.defaults.clear_user_default("Company", user=user)
 	frappe.defaults.clear_user_default("company", user=user)
@@ -68,9 +68,9 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 		for email, (first_name, roles) in PERSONAS.items():
 			_ensure_permission_user(email, first_name, roles)
 
-		# Branch Manager and Auditor are intentionally branch-scoped product roles,
-		# not global Company roles. Give these page/API personas one deterministic
-		# active assignment instead of widening native Company permission.
+		# Branch Manager and Auditor remain branch-scoped product roles. Their
+		# read-only Company context comes from RetailEdge role setup, while Branch
+		# Assignment controls the working branch; do not add Company User Permission.
 		branch = BRANCHES[0]
 		_ensure_branch(branch)
 		warehouse = _ensure_warehouse(branch)
@@ -108,10 +108,12 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				frappe.set_user(user)
 				self.assertTrue(bool(frappe.get_doc("Page", "reports-centre").is_permitted()))
 
-	def test_branch_scoped_page_personas_do_not_gain_native_company_read(self):
+	def test_branch_scoped_page_personas_get_read_only_company_context_without_user_permission(self):
 		for user in BRANCH_SCOPED_PERSONAS:
 			with self.subTest(user=user):
-				self.assertFalse(bool(frappe.has_permission("Company", ptype="read", user=user)))
+				self.assertTrue(bool(frappe.has_permission("Company", ptype="read", user=user)))
+				for permission_type in ("write", "create", "delete"):
+					self.assertFalse(bool(frappe.has_permission("Company", ptype=permission_type, user=user)))
 				self.assertEqual(frappe.defaults.get_user_default("Company", user=user), COMPANY)
 				self.assertFalse(
 					bool(frappe.db.exists("User Permission", {"user": user, "allow": "Company"}))
