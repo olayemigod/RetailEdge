@@ -9,6 +9,7 @@ from frappe.utils import flt
 from retailedge.cash_movement import get_cash_movement, get_cash_movement_context
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.reporting_scope import apply_working_context_to_report_filters
 from retailedge.supplier_payables import get_supplier_payables
 
 DASHBOARD_KEY = "money-overview"
@@ -18,7 +19,10 @@ PREVIEW_ROWS = 8
 @frappe.whitelist()
 def get_money_dashboard_context() -> dict[str, Any]:
 	context = get_cash_movement_context()
-	filters = context.get("default_filters") or {}
+	filters = apply_working_context_to_report_filters(context.get("default_filters") or {})
+	context["default_filters"] = filters
+	context["tenant_name"] = filters.get("company") or context.get("tenant_name") or ""
+	context["branch_name"] = filters.get("branch") or ""
 	context["dashboard_key"] = DASHBOARD_KEY
 	context["capabilities"] = require_dashboard_action(
 		DASHBOARD_KEY,
@@ -195,4 +199,4 @@ def _time_basis_label(value: str | None) -> str:
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	return frappe._dict(filters or {})
+	return frappe._dict(apply_working_context_to_report_filters(filters or {}))

@@ -6,7 +6,7 @@ from frappe.tests import IntegrationTestCase
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
 from retailedge.patches.ensure_retailedge_cashier_operational_permissions import execute as ensure_cashier_operational_permissions
 from retailedge.patches.ensure_retailedge_manager_payment_entry_read import execute as ensure_manager_payment_entry_read
-from retailedge.setup_roles import ensure_retailedge_roles
+from retailedge.setup_roles import MANAGEMENT_READ_DOCTYPES, ensure_retailedge_roles
 from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
 	_ensure_company,
@@ -22,6 +22,19 @@ PERSONAS = {
 	"permission-auditor@example.com": ("Permission Auditor", ("RetailEdgeAuditor",)),
 	"permission-accounts@example.com": ("Permission Accounts", ("Accounts User",)),
 	"permission-stock@example.com": ("Permission Stock", ("Stock User",)),
+	"permission-global-manager@example.com": (
+		"Permission Global Manager",
+		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
+	),
+}
+
+
+MUTATION_PERMISSIONS = {
+	"create": False,
+	"write": False,
+	"submit": False,
+	"cancel": False,
+	"delete": False,
 }
 
 
@@ -120,30 +133,59 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				{"read": False, "create": False, "write": False, "submit": False, "cancel": False},
 			)
 
-	def test_retailedge_managers_receive_payment_visibility_not_posting_authority(self):
+	def test_retailedge_management_roles_get_only_context_master_read_by_default(self):
+		users = (
+			"permission-retail-manager@example.com",
+			"permission-branch-manager@example.com",
+			"permission-auditor@example.com",
+		)
+		self.assertEqual(MANAGEMENT_READ_DOCTYPES, ("Company",))
+		for user in users:
+			for doctype in MANAGEMENT_READ_DOCTYPES:
+				with self.subTest(user=user, doctype=doctype):
+					self.assert_permissions(
+						user,
+						doctype,
+						{"read": True, "select": True, **MUTATION_PERMISSIONS},
+					)
+
+	def test_retailedge_management_roles_do_not_override_native_transaction_visibility(self):
 		for user in (
 			"permission-retail-manager@example.com",
 			"permission-branch-manager@example.com",
+			"permission-auditor@example.com",
 		):
-			self.assert_permissions(
-				user,
-				"Payment Entry",
-				{"read": True, "create": False, "write": False, "submit": False, "cancel": False},
-			)
+			for doctype in ("Quotation", "Sales Invoice", "Purchase Invoice", "Stock Entry"):
+				with self.subTest(user=user, doctype=doctype):
+					self.assert_permissions(user, doctype, {"read": False})
+
+	def test_retailedge_managers_do_not_gain_journal_entry_posting_authority(self):
+		for user in (
+			"permission-retail-manager@example.com",
+			"permission-branch-manager@example.com",
+			"permission-auditor@example.com",
+		):
 			self.assert_permissions(
 				user,
 				"Journal Entry",
 				{"read": False, "create": False, "write": False, "submit": False, "cancel": False},
 			)
 
-	def test_auditor_does_not_gain_accounting_mutation_authority(self):
-		user = "permission-auditor@example.com"
-		for doctype in ("Sales Invoice", "Payment Entry", "Journal Entry", "Purchase Invoice"):
-			self.assert_permissions(
-				user,
-				doctype,
-				{"create": False, "write": False, "submit": False, "cancel": False, "delete": False},
-			)
+	def test_global_native_manager_composition_can_read_business_documents(self):
+		user = "permission-global-manager@example.com"
+		for doctype in (
+			"Quotation",
+			"Sales Order",
+			"Delivery Note",
+			"Sales Invoice",
+			"Purchase Order",
+			"Purchase Receipt",
+			"Purchase Invoice",
+			"Stock Entry",
+			"Stock Reconciliation",
+			"Payment Entry",
+		):
+			self.assert_permissions(user, doctype, {"read": True})
 
 	def test_native_accounts_user_retains_erpnext_read_access(self):
 		user = "permission-accounts@example.com"

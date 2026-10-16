@@ -253,13 +253,20 @@ def _validate_context(
 	return company, branch, warehouse
 
 
+def _transaction_branch_field(doctype: str) -> str | None:
+	"""Prefer the stored RetailEdge attribution used by Working Branch governance."""
+	if has_field(doctype, "retailedge_branch"):
+		return "retailedge_branch"
+	return get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+
+
 def _operating_document_filters(doctype: str, *, company: str, branch: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta(doctype)
 	if company and meta.has_field("company"):
 		filters["company"] = company
 
-	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	branch_field = _transaction_branch_field(doctype)
 	if branch:
 		branch = resolve_operational_branch(company, branch, user=frappe.session.user)["branch"]
 		if branch_field:
@@ -526,7 +533,7 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 	limit = max(1, min(int(limit or 8), 20))
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "docstatus", "modified"]
-	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	branch_field = _transaction_branch_field(doctype)
 	if branch_field and branch_field not in fields:
 		fields.append(branch_field)
 	for candidate in (
@@ -864,7 +871,7 @@ def get_professional_selling_list(
 
 	filters = _operating_document_filters(doctype, company=company, branch=branch)
 	meta = frappe.get_meta(doctype)
-	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	branch_field = _transaction_branch_field(doctype)
 	_selling_list_status_filter(meta, status, filters)
 
 	date_field = definition["date_field"]
