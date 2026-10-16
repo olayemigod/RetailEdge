@@ -623,34 +623,44 @@ def _get_switch_blockers(*, user: str) -> list[dict[str, str]]:
 
 
 def _find_open_erpnext_pos_opening(*, user: str) -> dict[str, Any] | None:
-	if not frappe.db.exists("DocType", "POS Opening Entry"):
-		return None
+	"""Probe native ERPNext POS state without leaking permission messages."""
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
-		meta = frappe.get_meta("POS Opening Entry")
-	except Exception:
-		return None
-	filters: dict[str, Any] = {"docstatus": ["in", [0, 1]]}
-	if meta.has_field("user"):
-		filters["user"] = user
-	elif meta.has_field("owner"):
-		filters["owner"] = user
-	if meta.has_field("status"):
-		filters["status"] = ["in", ["Open", "Opened"]]
-	fields = ["name"]
-	for fieldname in ("company", "pos_profile", "status"):
-		if meta.has_field(fieldname):
-			fields.append(fieldname)
-	try:
-		rows = frappe.get_list(
-			"POS Opening Entry",
-			filters=filters,
-			fields=fields,
-			order_by="creation desc",
-			limit_page_length=1,
-		)
-	except Exception:
-		rows = []
-	return dict(rows[0]) if rows else None
+		if not frappe.db.exists("DocType", "POS Opening Entry"):
+			return None
+		try:
+			if not frappe.has_permission("POS Opening Entry", "read", user=user):
+				return None
+		except Exception:
+			return None
+		try:
+			meta = frappe.get_meta("POS Opening Entry")
+		except Exception:
+			return None
+		filters: dict[str, Any] = {"docstatus": ["in", [0, 1]]}
+		if meta.has_field("user"):
+			filters["user"] = user
+		elif meta.has_field("owner"):
+			filters["owner"] = user
+		if meta.has_field("status"):
+			filters["status"] = ["in", ["Open", "Opened"]]
+		fields = ["name"]
+		for fieldname in ("company", "pos_profile", "status"):
+			if meta.has_field(fieldname):
+				fields.append(fieldname)
+		try:
+			rows = frappe.get_list(
+				"POS Opening Entry",
+				filters=filters,
+				fields=fields,
+				order_by="creation desc",
+				limit_page_length=1,
+			)
+		except Exception:
+			return None
+		return dict(rows[0]) if rows else None
+	finally:
+		frappe.local.message_log = previous_messages
 
 
 def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
