@@ -152,9 +152,7 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 			"active_company",
 			"company_wide",
 			"filter_area",
-			"listview.refresh = function",
-			"frappe.router.on(\"change\"",
-			"installCurrentListview",
+			"listview.refresh",
 			"filter_area.clear(false)",
 			"filter_area.set(nextFilters)",
 			"Sales Invoice",
@@ -181,6 +179,16 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 			"branchFilters.length === 0",
 			"if (!isCompanyWide)",
 			'nextFilters.push([listview.doctype, companyFieldname, "=", company])',
+		):
+			self.assertIn(contract, source)
+
+	def test_live_listview_refresh_is_wrapped_after_erpnext_list_scripts_load(self):
+		source = (APP_ROOT / "public/js/working_branch_document_scope.js").read_text(encoding="utf-8")
+		for contract in (
+			"const nativeRefresh = listview.refresh.bind(listview)",
+			"listview.refresh = function (...args)",
+			"Promise.resolve(apply(listview)).then(() => nativeRefresh(...args))",
+			'frappe.router?.on?.("change", scheduleLiveInstall)',
 		):
 			self.assertIn(contract, source)
 
