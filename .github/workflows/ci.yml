@@ -91,7 +91,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 484566d81c07597bcef7b070893f673aa47f3956
+          ref: 9a9f13801c7f056c271cdb1f55f8f4735e9a7c8d
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -111,7 +111,7 @@ jobs:
           bench get-app \
             --skip-assets \
             "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "484566d81c07597bcef7b070893f673aa47f3956"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "9a9f13801c7f056c271cdb1f55f8f4735e9a7c8d"
 
           bench get-app \
             --skip-assets \
