@@ -33,6 +33,7 @@ ALL_RETAILEDGE_ROLE_NAMES = RETAILEDGE_ROLE_NAMES + RETAILEDGE_COMPATIBILITY_ROL
 # workflows. RetailEdge-owned workflow DocTypes keep their explicit DocType
 # permissions and are deliberately not rewritten here.
 MANAGEMENT_READ_DOCTYPES = (
+	"Company",
 	"Customer",
 	"Supplier",
 	"Item",
