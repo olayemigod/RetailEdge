@@ -46,6 +46,12 @@ async function allowedContexts(page) {
 	);
 }
 
+async function expectNoOpeningPermissionDialog(page) {
+	await expect(
+		page.locator(".modal.show").filter({ hasText: /Insufficient Permission|Opening Entry/i })
+	).toHaveCount(0);
+}
+
 async function switchBranch(page, branch) {
 	const result = await page.evaluate(
 		({ company, nextBranch }) =>
@@ -96,6 +102,41 @@ async function sellingRows(page) {
 	return Array.isArray(result.rows) ? result.rows : [];
 }
 
+async function expenseRegister(page, staleBranch) {
+	return page.evaluate(
+		({ company, branch }) =>
+			new Promise((resolve, reject) => {
+				frappe.call({
+					method: "retailedge.expense_register.get_expense_register",
+					args: {
+						filters: { company, branch, view_mode: "cashier" },
+						page: 1,
+						page_size: 50,
+					},
+					callback: (response) => resolve(response.message || {}),
+					error: (error) => reject(new Error(error?.message || "Could not load Expense Register")),
+				});
+			}),
+		{ company: COMPANY, branch: staleBranch }
+	);
+}
+
+function expenseFixtureName(branch) {
+	return `RE-CE-BROWSER-${branch.replaceAll(" ", "-").toUpperCase()}`;
+}
+
+async function expectExpenseScope(page, selectedBranch, staleBranch) {
+	const result = await expenseRegister(page, staleBranch);
+	const rows = Array.isArray(result.rows) ? result.rows : [];
+	const names = rows.map((row) => row.name);
+	expect(result.scope?.company).toBe(COMPANY);
+	expect(result.scope?.branch).toBe(selectedBranch);
+	expect(rows.length).toBeGreaterThan(0);
+	expect(rows.every((row) => row.branch === selectedBranch)).toBe(true);
+	expect(names).toContain(expenseFixtureName(selectedBranch));
+	expect(names).not.toContain(expenseFixtureName(staleBranch));
+}
+
 async function fixtureSalesInvoices(page) {
 	const rows = await page.evaluate(
 		(prefix) =>
@@ -109,8 +150,8 @@ async function fixtureSalesInvoices(page) {
 						limit_page_length: 20,
 					},
 					callback: (response) => resolve(response.message || []),
-					error: (error) => reject(new Error(error?.message || "Could not load Sales Invoice fixtures")),
-				});
+						error: (error) => reject(new Error(error?.message || "Could not load Sales Invoice fixtures")),
+					});
 			}),
 		SALES_INVOICE_FIXTURE_PREFIX
 	);
@@ -195,6 +236,7 @@ test("Working Branch is a server-enforced document visibility boundary", async (
 		const allowed = await allowedContexts(page);
 		expect(new Set(allowed.branches || [])).toEqual(new Set([LAGOS, IKEJA]));
 		expect(allowed.can_view_all_branches).toBe(false);
+		await expectNoOpeningPermissionDialog(page);
 		const invoiceFixtures = await fixtureSalesInvoices(page);
 		expect(invoiceFixtures[LAGOS]).toBeTruthy();
 		expect(invoiceFixtures[IKEJA]).toBeTruthy();
@@ -203,6 +245,7 @@ test("Working Branch is a server-enforced document visibility boundary", async (
 		const lagosRows = await sellingRows(page);
 		expect(lagosRows.length).toBeGreaterThan(0);
 		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
+		await expectExpenseScope(page, LAGOS, IKEJA);
 		await openSalesInvoiceList(page, LAGOS, [invoiceFixtures[LAGOS]], [invoiceFixtures[IKEJA]]);
 
 		await switchBranch(page, IKEJA);
@@ -210,6 +253,7 @@ test("Working Branch is a server-enforced document visibility boundary", async (
 		const ikejaRows = await sellingRows(page);
 		expect(ikejaRows.length).toBeGreaterThan(0);
 		expect(ikejaRows.every((row) => row.branch === IKEJA)).toBe(true);
+		await expectExpenseScope(page, IKEJA, LAGOS);
 		const ikejaDocument = ikejaRows[0].name;
 		await openSalesInvoiceList(page, IKEJA, [invoiceFixtures[IKEJA]], [invoiceFixtures[LAGOS]]);
 
@@ -247,6 +291,7 @@ test("company-wide users can deliberately broaden from one Branch to All Branche
 		expect(new Set(allowed.branches || [])).toEqual(
 			new Set(["RetailEdge RC3 Lagos", "RetailEdge RC3 Ikeja", "RetailEdge RC3 Abuja"])
 		);
+		await expectNoOpeningPermissionDialog(page);
 		const invoiceFixtures = await fixtureSalesInvoices(page);
 		expect(invoiceFixtures[LAGOS]).toBeTruthy();
 		expect(invoiceFixtures[IKEJA]).toBeTruthy();
