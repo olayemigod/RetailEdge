@@ -165,12 +165,32 @@ def test_professional_selling_prefers_stored_retailedge_branch_attribution():
 	assert "branch_field = _transaction_branch_field(doctype)" in source
 
 
-def test_retailedge_roles_receive_only_minimum_branch_master_visibility():
+def test_retailedge_roles_receive_only_minimum_context_master_visibility():
 	roles = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
 	assert "def _ensure_operational_branch_read()" in roles
+	assert 'MANAGEMENT_READ_DOCTYPES = ("Company",)' in roles
 	assert 'add_permission("Branch", role_name, 0)' in roles
 	assert 'update_permission_property("Branch", role_name, 0, "read", 1)' in roles
 	assert 'update_permission_property("Branch", role_name, 0, "select", 1)' in roles
-	branch_scope = roles[roles.index("def _ensure_operational_branch_read()") : roles.index("def _add_canonical_roles_for_alias_assignments")]
+	branch_scope = roles[
+		roles.index("def _ensure_operational_branch_read()") : roles.index("def _ensure_management_context_read_permissions")
+	]
 	for denied in ('"write", 1', '"create", 1', '"delete", 1', '"import", 1'):
 		assert denied not in branch_scope
+
+
+def test_after_migrate_does_not_regrant_transaction_read_over_merchant_policy():
+	roles = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
+	management_start = roles.index("def _ensure_management_context_read_permissions()")
+	management_end = roles.index("def _add_canonical_roles_for_alias_assignments", management_start)
+	management_scope = roles[management_start:management_end]
+	for doctype in (
+		"Quotation",
+		"Sales Invoice",
+		"Purchase Invoice",
+		"Stock Entry",
+		"Payment Entry",
+	):
+		assert doctype not in management_scope
+	assert "Role Permission Manager" in management_scope
+	assert "If Owner" in management_scope
