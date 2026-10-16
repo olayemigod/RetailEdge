@@ -92,15 +92,15 @@
 		const branchFieldname = branchField(listview);
 		const companyFieldname = companyField(listview);
 		if (!listview?.filter_area || !branchFieldname) {
-			return;
+			return false;
 		}
 		if (!isCompanyWide && !branch) {
-			return;
+			return false;
 		}
 		// Company-wide view is allowed only where the list can retain the active
 		// Company as a hard boundary. Native permissions remain authoritative too.
 		if (isCompanyWide && (!company || !companyFieldname)) {
-			return;
+			return false;
 		}
 
 		const currentFilters = listview.filter_area.get?.() || listview.filters || [];
@@ -117,7 +117,7 @@
 			? companyFilters.length === 0
 			: exactFilter(currentFilters, listview.doctype, companyFieldname, company);
 		if (branchMatches && companyMatches) {
-			return;
+			return false;
 		}
 
 		const preservedFilters = currentFilters.filter(
@@ -135,19 +135,48 @@
 
 		await listview.filter_area.clear(false);
 		await listview.filter_area.set(nextFilters);
+		return true;
 	}
 
 	function install(listview) {
 		if (!listview || listview.__retailedgeWorkingBranchScopeInstalled) {
+			return false;
+		}
+		if (!BRANCH_FIELD_BY_DOCTYPE[listview.doctype] || typeof listview.refresh !== "function") {
+			return false;
+		}
+
+		listview.__retailedgeWorkingBranchScopeInstalled = true;
+		const nativeRefresh = listview.refresh.bind(listview);
+		listview.refresh = function (...args) {
+			return Promise.resolve(apply(listview)).then(() => nativeRefresh(...args));
+		};
+		return true;
+	}
+
+	async function installCurrentListview() {
+		const listview = window.cur_list;
+		if (!listview || !BRANCH_FIELD_BY_DOCTYPE[listview.doctype]) {
 			return;
 		}
-		listview.__retailedgeWorkingBranchScopeInstalled = true;
+		const installed = install(listview);
+		if (!installed) {
+			return;
+		}
+		const changed = await apply(listview);
+		if (changed) {
+			await listview.refresh();
+		}
+	}
 
-		const originalBeforeRefresh = listview.before_refresh?.bind(listview);
-		listview.before_refresh = function () {
-			const nativeRefresh = originalBeforeRefresh ? originalBeforeRefresh() : Promise.resolve();
-			return Promise.resolve(nativeRefresh).then(() => apply(listview));
-		};
+	function scheduleCurrentListviewInstall() {
+		for (const delay of [0, 50, 250, 750]) {
+			window.setTimeout(() => {
+				installCurrentListview().catch((error) => {
+					console.warn("[RetailEdge] Could not apply the Working Branch list scope.", error);
+				});
+			}, delay);
+		}
 	}
 
 	function register(doctype) {
@@ -169,7 +198,13 @@
 		companyWide,
 		apply,
 		install,
+		installCurrentListview,
 	};
 
 	Object.keys(BRANCH_FIELD_BY_DOCTYPE).forEach(register);
+	if (frappe.router?.on) {
+		frappe.router.on("change", scheduleCurrentListviewInstall);
+	}
+	document.addEventListener("edgesuite-context-changed", scheduleCurrentListviewInstall);
+	scheduleCurrentListviewInstall();
 })();
