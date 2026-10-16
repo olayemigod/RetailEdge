@@ -27,9 +27,11 @@ RETAILEDGE_COMPATIBILITY_ROLE_NAMES = tuple(
 )
 ALL_RETAILEDGE_ROLE_NAMES = RETAILEDGE_ROLE_NAMES + RETAILEDGE_COMPATIBILITY_ROLE_NAMES
 
-# These source documents already sit behind RetailEdge management/report
-# capability checks. Product management/audit roles receive read/select/report
-# only; mutation remains governed by the user's native ERPNext roles/workflows.
+# These ERPNext/master source documents already sit behind RetailEdge
+# management/report capability checks. Product management/audit roles receive
+# read/select/report only; mutation remains governed by native ERPNext roles and
+# workflows. RetailEdge-owned workflow DocTypes keep their explicit DocType
+# permissions and are deliberately not rewritten here.
 MANAGEMENT_READ_DOCTYPES = (
 	"Customer",
 	"Supplier",
@@ -51,9 +53,6 @@ MANAGEMENT_READ_DOCTYPES = (
 	"Stock Reconciliation",
 	"Stock Ledger Entry",
 	"Payment Entry",
-	"RetailEdge Cashier Expense",
-	"RetailEdge Daily Sales Audit",
-	"RetailEdge Business Expense",
 )
 
 
@@ -131,7 +130,7 @@ def _ensure_operational_branch_read() -> None:
 
 
 def _ensure_management_read_permissions() -> None:
-	"""Align RetailEdge management/audit report roles with their source reads."""
+	"""Align RetailEdge management/audit report roles with ERPNext source reads."""
 	role_names = tuple(
 		dict.fromkeys(
 			(
