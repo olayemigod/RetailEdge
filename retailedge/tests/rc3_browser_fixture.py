@@ -37,8 +37,9 @@ EXTRA_PERSONAS = {
 		("RetailEdgeBranchManager", "Stock User", "Sales User", "Accounts User"),
 	),
 	"browser-zero-branch@example.com": ("Browser Zero Branch", ("RetailEdgeBranchManager", "Stock User")),
-	"browser-native@example.com": (
-		"Browser Native Advanced",
+	"browser-native@example.com": ("Browser Native Advanced", ("System Manager",)),
+	"browser-global-branch@example.com": (
+		"Browser Global Branch",
 		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
 	),
 }
