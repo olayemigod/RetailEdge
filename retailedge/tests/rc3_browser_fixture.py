@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import sys
-import traceback
-
 import frappe
+from frappe.utils import add_days, nowdate
 
-from retailedge.guided_sales_invoice import _create_simple_sales_invoice_draft
 from retailedge.professional_quotation import create_professional_quotation_draft
 from retailedge.tests.browser_persona_fixture import _ensure_user, seed_browser_personas
 from retailedge.tests.upgrade_validation_fixture import (
@@ -15,6 +12,8 @@ from retailedge.tests.upgrade_validation_fixture import (
 	PRICE_LIST,
 	_ensure_customer,
 	_ensure_item,
+	_first_cost_center,
+	_first_leaf_account,
 )
 
 BRANCHES = (
@@ -196,6 +195,7 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 
 
 def _ensure_branch_sales_invoice(branch_name: str) -> str:
+	"""Seed a deterministic ERPNext draft for list/read-scope acceptance only."""
 	marker = f"RetailEdge browser Working Branch fixture: {branch_name}"
 	existing = frappe.db.get_value(
 		"Sales Invoice",
@@ -209,26 +209,42 @@ def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	)
 	if existing:
 		return str(existing)
-	try:
-		result = _create_simple_sales_invoice_draft(
-			{
-				"company": COMPANY,
-				"branch": branch_name,
-				"customer": CUSTOMER,
-				"price_list": PRICE_LIST,
-				"update_stock": 0,
-				"remarks": marker,
-				"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
-			},
-			allow_update_stock_edit=True,
-		)
-	except Exception:
-		print(
-			f"RetailEdge browser Sales Invoice fixture failed for Branch {branch_name}:\n{traceback.format_exc()}",
-			file=sys.stderr,
-		)
-		raise
-	return str(result["name"])
+
+	company = frappe.get_doc("Company", COMPANY)
+	currency = str(company.default_currency or "NGN")
+	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
+	income = _first_leaf_account(COMPANY, root_type="Income")
+	cost_center = _first_cost_center(COMPANY)
+	invoice = frappe.get_doc(
+		{
+			"doctype": "Sales Invoice",
+			"company": COMPANY,
+			"customer": CUSTOMER,
+			"posting_date": nowdate(),
+			"due_date": add_days(nowdate(), 30),
+			"currency": currency,
+			"conversion_rate": 1,
+			"selling_price_list": PRICE_LIST,
+			"price_list_currency": currency,
+			"plc_conversion_rate": 1,
+			"debit_to": receivable,
+			"remarks": marker,
+			"retailedge_branch": branch_name,
+			"items": [
+				{
+					"item_code": ITEM,
+					"qty": 1,
+					"rate": 1000,
+					"income_account": income,
+					"cost_center": cost_center,
+				}
+			],
+		}
+	)
+	if invoice.meta.has_field("branch"):
+		invoice.branch = branch_name
+	invoice.insert(ignore_permissions=True)
+	return str(invoice.name)
 
 
 def seed_rc3_personas() -> dict:
@@ -279,8 +295,8 @@ def seed_rc3_personas() -> dict:
 				active=False,
 			)
 
-	# Seed real ERPNext drafts through governed RetailEdge paths so browser
-	# acceptance proves both API and native ListView Working Branch visibility.
+	# Seed real ERPNext drafts with explicit Company/Branch/accounting truth so
+	# browser acceptance isolates read/list governance rather than creation UX.
 	_ensure_customer()
 	_ensure_item()
 	branch_quotations = {
