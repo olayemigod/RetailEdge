@@ -16,7 +16,11 @@ from retailedge.business_expense_register import (
 	get_consolidated_expense_export,
 	get_consolidated_expense_register,
 )
-from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operating_context,
+	get_operational_branch_scope,
+)
 from retailedge.reporting_capabilities import require_report_view_access
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
@@ -55,16 +59,21 @@ _BASE_ROW_FIELDS = (
 def get_expense_register_context() -> dict[str, Any]:
 	_assert_expense_read_access()
 	user = frappe.session.user
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	operating = get_operating_context() or {}
+	company = str(
+		operating.get("company") or frappe.defaults.get_user_default("Company") or ""
+	).strip()
+	company_wide = bool(operating.get("company_wide"))
+	branch = "" if company_wide else str(operating.get("branch") or "").strip()
 	if company:
 		_assert_company_read_access(company)
-
-	candidate = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
-		or frappe.defaults.get_user_default("Branch")
-		or ""
-	).strip()
-	branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
+	if not branch and not company_wide:
+		candidate = str(
+			frappe.defaults.get_user_default("RetailEdge Branch")
+			or frappe.defaults.get_user_default("Branch")
+			or ""
+		).strip()
+		branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 	return {
 		"default_filters": {
@@ -80,7 +89,7 @@ def get_expense_register_context() -> dict[str, Any]:
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
-		"branch_name": branch,
+		"branch_name": branch or ("All Branches" if company_wide else ""),
 		"user_name": frappe.db.get_value("User", user, "full_name") or user,
 		"show_cashier": int(_can_view_other_cashiers(user=user)),
 		"consolidated_view_available": int(can_view_consolidated_business_expenses(user=user)),
@@ -106,15 +115,27 @@ def search_expense_register_options(
 	_assert_expense_read_access()
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
-	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(branch or "").strip()
+	operating = get_operating_context() or {}
+	operating_company = str(operating.get("company") or "").strip()
+	operating_branch = str(operating.get("branch") or "").strip()
+	company_wide = bool(operating.get("company_wide"))
+	company = str(operating_company or company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = "" if company_wide else str(operating_branch or branch or "").strip()
 
 	if kind == "company":
+		if operating_company:
+			if txt and txt.lower() not in operating_company.lower():
+				return []
+			return [{"value": operating_company, "label": operating_company}]
 		return _search_companies(txt)
 	if not company:
 		frappe.throw(_("Company is required."), frappe.ValidationError)
 	_assert_company_read_access(company)
 	if kind == "branch":
+		if branch:
+			if txt and txt.lower() not in branch.lower():
+				return []
+			return [{"value": branch, "label": branch}]
 		return _search_branches(
 			txt=txt,
 			company=company,
@@ -141,7 +162,7 @@ def get_expense_register(
 ) -> dict[str, Any]:
 	from retailedge.report_sorting import build_report_order_by, mark_report_columns
 
-	filters = _coerce_filters(filters)
+	filters = _apply_operating_context_filters(_coerce_filters(filters))
 	if _use_consolidated_view(filters):
 		return get_consolidated_expense_register(
 			filters,
@@ -215,7 +236,7 @@ def get_expense_register(
 
 @frappe.whitelist()
 def get_expense_register_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
-	filters = _coerce_filters(filters)
+	filters = _apply_operating_context_filters(_coerce_filters(filters))
 	if _use_consolidated_view(filters):
 		return get_consolidated_expense_export(filters)
 	query_filters = _build_query_filters(filters)
@@ -561,6 +582,22 @@ def _can_view_other_cashiers(user: str | None = None) -> bool:
 	if roles.intersection(get_cashier_roles()):
 		return False
 	return False
+
+
+def _apply_operating_context_filters(filters: frappe._dict) -> frappe._dict:
+	"""Bind Expense Register reads to the current session Working Branch."""
+	resolved = frappe._dict(dict(filters or {}))
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	company_wide = bool(operating.get("company_wide"))
+	if company:
+		resolved["company"] = company
+	if branch:
+		resolved["branch"] = branch
+	elif company_wide:
+		resolved["branch"] = ""
+	return resolved
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
