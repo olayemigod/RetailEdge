@@ -347,7 +347,8 @@
 		const companyWide = Boolean(current.company_wide);
 		const canViewAllBranches = Boolean(current.can_view_all_branches);
 		const optionCount = branches.length + (canViewAllBranches ? 1 : 0);
-		const canSwitch = Boolean(current.can_switch_branch) && optionCount > 1;
+		const hasSelection = Boolean(activeBranch || companyWide);
+		const canSwitch = optionCount > 0 && (Boolean(current.can_switch_branch) || !hasSelection);
 		const trigger = document.createElement("button");
 		trigger.type = "button";
 		trigger.className = "retailedge-topbar-branch-trigger";
@@ -362,7 +363,7 @@
 			</span>
 			<span class="retailedge-topbar-branch-trigger__chevron" aria-hidden="true">▾</span>
 		`;
-		trigger.querySelector("strong").textContent = companyWide ? COMPANY_WIDE_LABEL : activeBranch;
+		trigger.querySelector("strong").textContent = companyWide ? COMPANY_WIDE_LABEL : (activeBranch || "Choose Branch");
 		host.appendChild(trigger);
 
 		let popover = null;
@@ -482,7 +483,7 @@
 		const branches = normalizeBranches(current.branch_options);
 		const activeBranch = String(current.active_branch || "").trim();
 		const companyWide = Boolean(current.company_wide);
-		if (!branches.length || (!activeBranch && !companyWide)) return;
+		if (!branches.length) return;
 
 		const signature = JSON.stringify({
 			activeBranch,
