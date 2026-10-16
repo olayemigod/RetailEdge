@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 
+from retailedge.guided_sales_invoice import _create_simple_sales_invoice_draft
 from retailedge.professional_quotation import create_professional_quotation_draft
 from retailedge.tests.browser_persona_fixture import _ensure_user, seed_browser_personas
 from retailedge.tests.upgrade_validation_fixture import (
@@ -31,10 +32,13 @@ EXTRA_PERSONAS = {
 	),
 	"browser-multi-branch@example.com": (
 		"Browser Multi Branch",
-		("RetailEdgeBranchManager", "Stock User", "Sales User"),
+		("RetailEdgeBranchManager", "Stock User", "Sales User", "Accounts User"),
 	),
 	"browser-zero-branch@example.com": ("Browser Zero Branch", ("RetailEdgeBranchManager", "Stock User")),
-	"browser-native@example.com": ("Browser Native Advanced", ("System Manager",)),
+	"browser-native@example.com": (
+		"Browser Native Advanced",
+		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
+	),
 }
 
 ACTIVE_ASSIGNMENTS = {
@@ -188,6 +192,35 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 	return str(result["name"])
 
 
+def _ensure_branch_sales_invoice(branch_name: str) -> str:
+	marker = f"RetailEdge browser Working Branch fixture: {branch_name}"
+	existing = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"company": COMPANY,
+			"retailedge_branch": branch_name,
+			"remarks": marker,
+		},
+		"name",
+		order_by="creation asc",
+	)
+	if existing:
+		return str(existing)
+	result = _create_simple_sales_invoice_draft(
+		{
+			"company": COMPANY,
+			"branch": branch_name,
+			"customer": CUSTOMER,
+			"price_list": PRICE_LIST,
+			"update_stock": 0,
+			"remarks": marker,
+			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
+		},
+		allow_update_stock_edit=True,
+	)
+	return str(result["name"])
+
+
 def seed_rc3_personas() -> dict:
 	"""Extend the base browser smoke fixture with the full RC3 persona matrix."""
 	base = seed_browser_personas()
@@ -236,12 +269,16 @@ def seed_rc3_personas() -> dict:
 				active=False,
 			)
 
-	# Seed real ERPNext drafts through the governed Professional Selling path so
-	# browser acceptance can prove server-side Working Branch visibility.
+	# Seed real ERPNext drafts through governed RetailEdge paths so browser
+	# acceptance proves both API and native ListView Working Branch visibility.
 	_ensure_customer()
 	_ensure_item()
 	branch_quotations = {
 		branch_name: _ensure_branch_quotation(branch_name)
+		for branch_name in (BRANCHES[0], BRANCHES[1])
+	}
+	branch_sales_invoices = {
+		branch_name: _ensure_branch_sales_invoice(branch_name)
 		for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 
@@ -252,6 +289,7 @@ def seed_rc3_personas() -> dict:
 		"warehouses": warehouses,
 		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
 		"branch_quotations": branch_quotations,
+		"branch_sales_invoices": branch_sales_invoices,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
 			email: [branch for branch, _role, _primary in assignments]
