@@ -188,7 +188,9 @@ class WorkingBranchListScopeContractTests(unittest.TestCase):
 			"const nativeRefresh = listview.refresh.bind(listview)",
 			"listview.refresh = function (...args)",
 			"Promise.resolve(apply(listview)).then(() => nativeRefresh(...args))",
-			'frappe.router?.on?.("change", scheduleLiveInstall)',
+			"function scheduleCurrentListviewInstall()",
+			"for (const delay of [0, 50, 250, 750])",
+			'frappe.router.on("change", scheduleCurrentListviewInstall)',
 		):
 			self.assertIn(contract, source)
 
