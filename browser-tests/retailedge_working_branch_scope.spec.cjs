@@ -6,7 +6,7 @@ const COMPANY = "RetailEdge Upgrade CI";
 const LAGOS = "RetailEdge RC3 Lagos";
 const IKEJA = "RetailEdge RC3 Ikeja";
 const RESTRICTED_USER = "browser-multi-branch@example.com";
-const GLOBAL_USER = "browser-native@example.com";
+const GLOBAL_USER = "browser-global-branch@example.com";
 const SALES_INVOICE_FIXTURE_PREFIX = "RetailEdge browser Working Branch fixture:";
 
 if (!PASSWORD) {
