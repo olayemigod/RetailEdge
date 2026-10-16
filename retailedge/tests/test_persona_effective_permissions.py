@@ -133,22 +133,31 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				{"read": False, "create": False, "write": False, "submit": False, "cancel": False},
 			)
 
-	def test_retailedge_management_roles_have_report_source_read_without_mutation(self):
+	def test_retailedge_management_roles_get_only_context_master_read_by_default(self):
 		users = (
 			"permission-retail-manager@example.com",
 			"permission-branch-manager@example.com",
 			"permission-auditor@example.com",
 		)
+		self.assertEqual(MANAGEMENT_READ_DOCTYPES, ("Company",))
 		for user in users:
 			for doctype in MANAGEMENT_READ_DOCTYPES:
-				if not frappe.db.exists("DocType", doctype):
-					continue
 				with self.subTest(user=user, doctype=doctype):
 					self.assert_permissions(
 						user,
 						doctype,
-						{"read": True, "select": True, "report": True, **MUTATION_PERMISSIONS},
+						{"read": True, "select": True, **MUTATION_PERMISSIONS},
 					)
+
+	def test_retailedge_management_roles_do_not_override_native_transaction_visibility(self):
+		for user in (
+			"permission-retail-manager@example.com",
+			"permission-branch-manager@example.com",
+			"permission-auditor@example.com",
+		):
+			for doctype in ("Quotation", "Sales Invoice", "Purchase Invoice", "Stock Entry"):
+				with self.subTest(user=user, doctype=doctype):
+					self.assert_permissions(user, doctype, {"read": False})
 
 	def test_retailedge_managers_do_not_gain_journal_entry_posting_authority(self):
 		for user in (
