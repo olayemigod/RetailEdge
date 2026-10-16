@@ -177,12 +177,12 @@ async function openSalesInvoiceList(page, branch, expected, excluded = [], { com
 	await expectSalesInvoiceRows(page, { included: expected, excluded });
 }
 
-async function expectStockEntryBranchFilter(page, branch) {
-	await expectListScope(page, "Stock Entry", branch);
-}
-
-async function expectStockEntryCompanyWideScope(page) {
-	await expectListScope(page, "Stock Entry", "", { companyWide: true });
+async function openStockEntryList(page, branch, { companyWide = false } = {}) {
+	await page.goto(`${BASE_URL}/app/stock-entry`, {
+		waitUntil: "domcontentloaded",
+		timeout: 30_000,
+	});
+	await expectListScope(page, "Stock Entry", branch, { companyWide });
 }
 
 test("Working Branch is a server-enforced document visibility boundary", async ({ browser }) => {
@@ -220,15 +220,17 @@ test("Working Branch is a server-enforced document visibility boundary", async (
 		const crossBranchInvoiceRead = await directDocumentRead(page, "Sales Invoice", invoiceFixtures[IKEJA]);
 		expect(crossBranchInvoiceRead.ok).toBe(false);
 
+		// This restricted persona is intentionally kept inside RetailEdge's
+		// product experience for stock operations rather than being granted the
+		// advanced native Stock Entry Desk solely for this acceptance test.
 		await page.goto(`${BASE_URL}/app/stock-entry`, {
 			waitUntil: "domcontentloaded",
 			timeout: 30_000,
 		});
-		await expectStockEntryBranchFilter(page, LAGOS);
-
-		await switchBranch(page, IKEJA);
-		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
-		await expectStockEntryBranchFilter(page, IKEJA);
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
 	} finally {
 		await context.close();
 	}
@@ -254,17 +256,18 @@ test("company-wide users can deliberately broaden from one Branch to All Branche
 		expect(lagosRows.length).toBeGreaterThan(0);
 		expect(lagosRows.every((row) => row.branch === LAGOS)).toBe(true);
 		await openSalesInvoiceList(page, LAGOS, [invoiceFixtures[LAGOS]], [invoiceFixtures[IKEJA]]);
+		await openStockEntryList(page, LAGOS);
 
 		await switchAllBranches(page);
-		await page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+		await openBusinessHub(page);
 		const allRows = await sellingRows(page);
 		const branches = new Set(allRows.map((row) => row.branch).filter(Boolean));
 		expect(branches.has(LAGOS)).toBe(true);
 		expect(branches.has(IKEJA)).toBe(true);
-
 		await expect(page.locator(".retailedge-topbar-branch-trigger strong")).toHaveText("All Branches", {
 			timeout: 20_000,
 		});
+
 		await openSalesInvoiceList(
 			page,
 			"",
@@ -272,12 +275,7 @@ test("company-wide users can deliberately broaden from one Branch to All Branche
 			[],
 			{ companyWide: true }
 		);
-
-		await page.goto(`${BASE_URL}/app/stock-entry`, {
-			waitUntil: "domcontentloaded",
-			timeout: 30_000,
-		});
-		await expectStockEntryCompanyWideScope(page);
+		await openStockEntryList(page, "", { companyWide: true });
 	} finally {
 		await context.close();
 	}
