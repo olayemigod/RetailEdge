@@ -27,6 +27,35 @@ RETAILEDGE_COMPATIBILITY_ROLE_NAMES = tuple(
 )
 ALL_RETAILEDGE_ROLE_NAMES = RETAILEDGE_ROLE_NAMES + RETAILEDGE_COMPATIBILITY_ROLE_NAMES
 
+# These source documents already sit behind RetailEdge management/report
+# capability checks. Product management/audit roles receive read/select/report
+# only; mutation remains governed by the user's native ERPNext roles/workflows.
+MANAGEMENT_READ_DOCTYPES = (
+	"Customer",
+	"Supplier",
+	"Item",
+	"Warehouse",
+	"Price List",
+	"Quotation",
+	"Sales Order",
+	"Delivery Note",
+	"Sales Invoice",
+	"POS Invoice",
+	"Purchase Order",
+	"Purchase Receipt",
+	"Purchase Invoice",
+	"Supplier Quotation",
+	"Request for Quotation",
+	"Material Request",
+	"Stock Entry",
+	"Stock Reconciliation",
+	"Stock Ledger Entry",
+	"Payment Entry",
+	"RetailEdge Cashier Expense",
+	"RetailEdge Daily Sales Audit",
+	"RetailEdge Business Expense",
+)
+
 
 def canonical_retailedge_role(role_name: str | None) -> str | None:
 	if not role_name:
@@ -71,6 +100,7 @@ def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
 		_add_canonical_roles_for_alias_assignments()
 
 	_ensure_operational_branch_read()
+	_ensure_management_read_permissions()
 	_ensure_retailedge_page_role_variants()
 
 
@@ -98,6 +128,34 @@ def _ensure_operational_branch_read() -> None:
 		update_permission_property("Branch", role_name, 0, "read", 1)
 		update_permission_property("Branch", role_name, 0, "select", 1)
 	frappe.clear_cache(doctype="Branch")
+
+
+def _ensure_management_read_permissions() -> None:
+	"""Align RetailEdge management/audit report roles with their source reads."""
+	role_names = tuple(
+		dict.fromkeys(
+			(
+				*retailedge_role_variants("RetailEdgeManager"),
+				*retailedge_role_variants("RetailEdgeBranchManager"),
+				*retailedge_role_variants("RetailEdgeAuditor"),
+			)
+		)
+	)
+	for doctype in MANAGEMENT_READ_DOCTYPES:
+		if not frappe.db.exists("DocType", doctype):
+			continue
+		for role_name in role_names:
+			if not frappe.db.exists("Role", role_name):
+				continue
+			if not frappe.db.exists(
+				"Custom DocPerm",
+				{"parent": doctype, "role": role_name, "permlevel": 0},
+			):
+				add_permission(doctype, role_name, 0)
+			update_permission_property(doctype, role_name, 0, "read", 1)
+			update_permission_property(doctype, role_name, 0, "select", 1)
+			update_permission_property(doctype, role_name, 0, "report", 1)
+		frappe.clear_cache(doctype=doctype)
 
 
 def _add_canonical_roles_for_alias_assignments():
