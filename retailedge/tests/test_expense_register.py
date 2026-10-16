@@ -11,6 +11,7 @@ from retailedge.expense_register import (
 	MAX_EXPORT_ROWS,
 	MAX_LINK_RESULTS,
 	MAX_PAGE_SIZE,
+	_apply_operating_context_filters,
 	_build_query_filters,
 	_can_view_other_cashiers,
 	_get_summary,
@@ -21,6 +22,61 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestExpenseRegister(unittest.TestCase):
+	@patch("retailedge.expense_register.get_operating_context")
+	def test_operating_context_forces_current_working_branch(self, mock_context):
+		mock_context.return_value = {
+			"company": "RetailEdge Consulting",
+			"branch": "Ketu",
+			"company_wide": False,
+		}
+		filters = _apply_operating_context_filters(
+			frappe._dict(company="RetailEdge Consulting", branch="Lagos Island", view_mode="cashier")
+		)
+		self.assertEqual(filters["company"], "RetailEdge Consulting")
+		self.assertEqual(filters["branch"], "Ketu")
+		self.assertEqual(filters["view_mode"], "cashier")
+
+	@patch("retailedge.expense_register.get_operating_context")
+	def test_all_branches_context_clears_expense_branch_filter(self, mock_context):
+		mock_context.return_value = {
+			"company": "RetailEdge Consulting",
+			"branch": "",
+			"company_wide": True,
+		}
+		filters = _apply_operating_context_filters(
+			frappe._dict(company="RetailEdge Consulting", branch="Ketu")
+		)
+		self.assertEqual(filters["company"], "RetailEdge Consulting")
+		self.assertEqual(filters["branch"], "")
+
+	@patch("retailedge.expense_register.get_consolidated_expense_register")
+	@patch("retailedge.expense_register.can_view_consolidated_business_expenses", return_value=True)
+	@patch("retailedge.expense_register.get_operating_context")
+	def test_consolidated_register_receives_working_branch_before_dispatch(
+		self,
+		mock_context,
+		_mock_consolidated_access,
+		mock_consolidated,
+	):
+		mock_context.return_value = {
+			"company": "RetailEdge Consulting",
+			"branch": "Ketu",
+			"company_wide": False,
+		}
+		mock_consolidated.return_value = {"rows": []}
+		get_expense_register(
+			filters={
+				"company": "RetailEdge Consulting",
+				"branch": "Lagos Island",
+				"view_mode": "consolidated",
+			},
+			page=1,
+			page_size=50,
+		)
+		forwarded = mock_consolidated.call_args.args[0]
+		self.assertEqual(forwarded["company"], "RetailEdge Consulting")
+		self.assertEqual(forwarded["branch"], "Ketu")
+
 	@patch("retailedge.expense_register._assert_company_read_access")
 	@patch("retailedge.expense_register._assert_expense_read_access")
 	@patch("retailedge.expense_register.apply_cashier_expense_read_scope")
@@ -75,6 +131,7 @@ class TestExpenseRegister(unittest.TestCase):
 				)
 			)
 
+	@patch("retailedge.expense_register._apply_operating_context_filters", side_effect=lambda filters: filters)
 	@patch("retailedge.expense_register._build_query_filters", return_value={"company": "Demo Company"})
 	@patch("retailedge.expense_register._can_view_other_cashiers", return_value=False)
 	@patch("retailedge.expense_register._get_summary")
@@ -85,6 +142,7 @@ class TestExpenseRegister(unittest.TestCase):
 		mock_summary,
 		_mock_cashier_visibility,
 		_mock_filters,
+		_mock_operating_filters,
 	):
 		mock_summary.return_value = {
 			"count": 1,
@@ -176,6 +234,8 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertIn("limit_page_length=page_size", source)
 		self.assertIn("limit_page_length=MAX_EXPORT_ROWS + 1", source)
 		self.assertIn("apply_cashier_expense_read_scope(", source)
+		self.assertIn("get_operating_context()", source)
+		self.assertIn("_apply_operating_context_filters(_coerce_filters(filters))", source)
 		self.assertIn("get_operational_branch_scope(", source)
 		self.assertNotIn("get_branch_query_filters", source)
 		self.assertNotIn("validate_user_branch_access", source)
