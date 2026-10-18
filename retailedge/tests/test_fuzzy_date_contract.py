@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORTING_ACTIONS = ROOT / "retailedge" / "public" / "js" / "retailedge_reporting_actions.js"
+QUERY_REPORT_SMART_DATE = ROOT / "retailedge" / "public" / "js" / "retailedge_query_report_smart_date.js"
 BUSINESS_HUB = (
 	ROOT
 	/ "retailedge"
@@ -21,24 +22,26 @@ def test_retailedge_installs_one_global_smart_date_policy():
 	assert "installSmartDatePolicy(window.EdgeSuiteUI)" in text
 
 
-def test_retailedge_smart_date_policy_removes_visual_quick_presets():
+def test_retailedge_smart_date_policy_preserves_shared_quick_presets():
 	text = REPORTING_ACTIONS.read_text()
-	assert "showPresets: false" in text
-	assert "presets: []" in text
-	assert "installSmartDateStylePolicy" in text
-	assert "retailedge-smart-date-policy" in text
-	assert ".edge-smart-date__preset-section{display:none!important}" in text
+	query_report = QUERY_REPORT_SMART_DATE.read_text()
+	assert "showPresets: false" not in text
+	assert "presets: []" not in text
+	assert "showPresets: false" not in query_report
+	assert "presets: []" not in query_report
+	assert ".edge-smart-date__preset-section{display:none!important}" not in text
 	assert "May to June 2026" in text
 	assert "last 2 months" in text
 	assert "previous 2 months" in text
 	assert "YTD" in text
 
 
-def test_nested_shared_dashboards_inherit_retailedge_no_preset_policy():
+def test_nested_shared_dashboards_inherit_retailedge_sizing_policy_without_hiding_presets():
 	text = REPORTING_ACTIONS.read_text()
 	assert 'document.createElement("style")' in text
 	assert "document.head.appendChild(style)" in text
 	assert ".edge-smart-date,.edge-smart-date__trigger{min-width:0;max-width:100%}" in text
+	assert ".edge-smart-date__preset-section" not in text
 	assert "installSmartDateStylePolicy();" in text
 
 

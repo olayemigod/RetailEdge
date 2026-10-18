@@ -121,7 +121,6 @@
 		const style = document.createElement("style");
 		style.id = RETAILEDGE_SMART_DATE_STYLE_ID;
 		style.textContent = [
-			".edge-smart-date__preset-section{display:none!important}",
 			".edge-smart-date,.edge-smart-date__trigger{min-width:0;max-width:100%}",
 		].join("");
 		document.head.appendChild(style);
@@ -168,8 +167,6 @@
 					...attrs,
 					label: attrs.label || "Period",
 					placeholder: attrs.placeholder || RETAILEDGE_SMART_DATE_PLACEHOLDER,
-					showPresets: false,
-					presets: [],
 				}, this.$slots);
 			},
 		});
