@@ -6,9 +6,34 @@ const BRANCH = "RetailEdge RC3 Lagos";
 
 async function loginAdministrator(context) {
 	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
-		form: { usr: "Administrator", pwd: "admin" },
+		form: {
+			usr: process.env.RETAILEDGE_PRINTING_USER || "Administrator",
+			pwd: process.env.RETAILEDGE_PRINTING_PASSWORD || process.env.RETAILEDGE_ADMIN_PASSWORD || "admin",
+		},
 	});
-	expect(response.ok(), "Administrator login failed").toBeTruthy();
+	expect(response.ok(), "Printing administrator login failed").toBeTruthy();
+	const operating = await context.request.post(
+		`${BASE_URL}/api/method/retailedge.operating_context.switch_operating_context`,
+		{ form: { company: COMPANY, branch: BRANCH } }
+	);
+	expect(operating.ok(), "Printing fixture context switch failed").toBeTruthy();
+	const selected = (await operating.json()).message;
+	expect(selected.company).toBe(COMPANY);
+	expect(selected.branch).toBe(BRANCH);
+}
+
+async function removePrintingFixture(context, page) {
+	const url = `${BASE_URL}/api/resource/Edge Print Profile/Browser Branch Receipt Profile`;
+	const existing = await context.request.get(url);
+	if (existing.status() === 404) return;
+	expect(existing.ok(), "Unable to inspect printing fixture").toBeTruthy();
+	const profile = (await existing.json()).data;
+	expect(profile.product_key).toBe("retailedge");
+	expect(profile.scope_type).toBe("Branch");
+	expect(profile.scope_value).toBe(BRANCH);
+	const csrf = page ? await page.evaluate(() => window.frappe?.csrf_token || "") : "";
+	const removed = await context.request.delete(url, { headers: { "X-Frappe-CSRF-Token": csrf } });
+	expect(removed.ok(), "Unable to clean printing fixture").toBeTruthy();
 }
 
 async function assertNoAssetOrRuntimeErrors(page, action) {
@@ -133,6 +158,7 @@ test("Document Output menu keeps Devices & Printing in the same virtual-printer 
 test("printing administration pages mount the real RetailEdge EdgeSuite shell", async ({ browser }) => {
 	const context = await browser.newContext({ baseURL: BASE_URL });
 	await loginAdministrator(context);
+	await removePrintingFixture(context);
 	const page = await context.newPage();
 
 	try {
@@ -225,6 +251,10 @@ test("printing administration pages mount the real RetailEdge EdgeSuite shell", 
 		await expect(page.getByText("Not found", { exact: false })).toHaveCount(0);
 		await expect(page.locator(".body-sidebar-container:visible")).toHaveCount(1);
 	} finally {
-		await context.close();
+		try {
+			await removePrintingFixture(context, page);
+		} finally {
+			await context.close();
+		}
 	}
 });

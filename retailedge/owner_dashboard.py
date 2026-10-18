@@ -12,6 +12,7 @@ from retailedge.customer_receivables import get_customer_receivables
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_register import get_expense_register
 from retailedge.profitability_intelligence import get_profitability_summary
+from retailedge.reporting_scope import apply_working_context_to_report_filters
 from retailedge.sales_reporting import get_sales_invoice_register
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
@@ -22,12 +23,24 @@ DEFAULT_PAGE_SIZE = 1
 
 @frappe.whitelist()
 def get_owner_dashboard_context() -> dict[str, Any]:
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(frappe.defaults.get_user_default("RetailEdge Branch") or frappe.defaults.get_user_default("Branch") or "").strip()
+	filters = apply_working_context_to_report_filters(
+		{
+			"company": str(frappe.defaults.get_user_default("Company") or "").strip(),
+			"branch": str(
+				frappe.defaults.get_user_default("RetailEdge Branch")
+				or frappe.defaults.get_user_default("Branch")
+				or ""
+			).strip(),
+			"from_date": str(get_first_day(today())),
+			"to_date": today(),
+		}
+	)
+	company = str(filters.get("company") or "").strip()
+	branch = str(filters.get("branch") or "").strip()
 	capabilities = require_dashboard_action(DASHBOARD_KEY, "view", company=company, branch=branch)
 	return {
 		"dashboard_key": DASHBOARD_KEY,
-		"default_filters": {"company": company, "branch": branch, "from_date": str(get_first_day(today())), "to_date": today()},
+		"default_filters": filters,
 		"tenant_name": company,
 		"branch_name": branch,
 		"user_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
@@ -192,4 +205,4 @@ def _safe_section(label: str, loader: Callable[[], dict[str, Any]], route: str, 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	return frappe._dict(filters or {})
+	return frappe._dict(apply_working_context_to_report_filters(filters or {}))

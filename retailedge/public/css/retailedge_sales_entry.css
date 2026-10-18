@@ -1,0 +1,77 @@
+/* RetailEdge sale-entry composition.
+   EdgeSuite owns fields, child-table behavior, modal behavior and theme tokens.
+   RetailEdge only composes the sales workspace around those shared primitives. */
+
+@media (min-width: 1180px) {
+	body.edge-suite-product-retailedge form.make-sale-form,
+	[data-edge-product="retailedge"] form.make-sale-form,
+	body.edge-suite-product-retailedge .guided-invoice-form,
+	[data-edge-product="retailedge"] .guided-invoice-form {
+		--sales-summary-rail-width: clamp(15.5rem, 18vw, 18rem);
+		position: relative;
+		grid-template-columns: minmax(0, 1fr) var(--sales-summary-rail-width);
+		column-gap: 14px;
+		align-items: start;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > *,
+	[data-edge-product="retailedge"] form.make-sale-form > *,
+	body.edge-suite-product-retailedge .guided-invoice-form > *,
+	[data-edge-product="retailedge"] .guided-invoice-form > * {
+		grid-column: 1;
+		min-width: 0;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail {
+		position: absolute;
+		inset-block: 0;
+		inset-inline-end: 0;
+		width: var(--sales-summary-rail-width);
+		min-width: 0;
+		z-index: 3;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary {
+		position: sticky;
+		top: 1rem;
+		max-height: calc(100vh - 2rem);
+		overflow: auto;
+		overscroll-behavior: contain;
+	}
+
+	body.edge-suite-product-retailedge form.make-sale-form > .make-sale-actions,
+	[data-edge-product="retailedge"] form.make-sale-form > .make-sale-actions {
+		grid-column: 1 / -1;
+	}
+}
+
+/* Shared EdgeChildTable owns responsive table sizing. These guards only keep
+   the composed work area from forcing the page wider than its shell/modal. */
+body.edge-suite-product-retailedge form.make-sale-form .edge-child-table,
+[data-edge-product="retailedge"] form.make-sale-form .edge-child-table,
+body.edge-suite-product-retailedge .guided-invoice-form .edge-child-table,
+[data-edge-product="retailedge"] .guided-invoice-form .edge-child-table {
+	max-width: 100%;
+}
+
+@media (max-width: 1179px) {
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail,
+	body.edge-suite-product-retailedge form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] form.make-sale-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	body.edge-suite-product-retailedge .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary,
+	[data-edge-product="retailedge"] .guided-invoice-form > .sales-commercial-summary-rail > .sales-commercial-summary {
+		position: static;
+		width: auto;
+		max-height: none;
+		overflow: visible;
+	}
+}

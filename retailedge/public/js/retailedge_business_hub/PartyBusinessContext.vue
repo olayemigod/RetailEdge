@@ -70,7 +70,7 @@ export default {
 	watch: {
 		party() { this.loadContext(); },
 		company() { this.loadContext(); },
-		branch() { this.loadContext(); },
+		branch() { if (this.partyType === "Supplier") this.loadContext(); },
 	},
 	mounted() {
 		this.loadContext();
@@ -90,7 +90,7 @@ export default {
 					party_type: this.partyType,
 					party: this.party,
 					company: this.company,
-					branch: this.branch || "",
+					branch: this.partyType === "Supplier" ? (this.branch || "") : "",
 				});
 				if (token !== this.requestToken) return;
 				this.context = result || {};

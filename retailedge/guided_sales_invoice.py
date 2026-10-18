@@ -23,6 +23,18 @@ from retailedge.guided_pricing import (
 	search_allowed_price_lists,
 )
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
+from retailedge.sales_commercial_terms import (
+	apply_sales_commercial_terms,
+	get_sales_commercial_term_capabilities,
+	search_sales_commercial_term_options,
+)
+from retailedge.sales_item_discounts import (
+	MANUAL_DISCOUNT_AMOUNT,
+	MANUAL_DISCOUNT_PERCENTAGE,
+	apply_manual_item_discount,
+	normalise_manual_item_discount,
+	validate_manual_item_discounts_after_pricing,
+)
 from retailedge.utils.settings import get_retailedge_settings
 
 ACTION_KEY = "new-sales-invoice"
@@ -112,8 +124,22 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"customer": "",
 			"price_list": pricing.get("price_list") or "",
 			"update_stock": 1,
+			"coupon_code": "",
+			"tax_category": "",
+			"taxes_and_charges": "",
+			"additional_discount_percentage": 0,
+			"discount_amount": 0,
+			"apply_discount_on": "Grand Total",
 			"remarks": "",
-			"items": [{"item_code": "", "qty": 1, "rate": ""}],
+			"items": [
+				{
+					"item_code": "",
+					"qty": 1,
+					"rate": "",
+					MANUAL_DISCOUNT_PERCENTAGE: 0,
+					MANUAL_DISCOUNT_AMOUNT: 0,
+				}
+			],
 		},
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
@@ -127,6 +153,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"can_override_rate": bool(pricing.get("allow_rate_change", True)),
 			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 			"can_edit_update_stock": allow_update_stock_edit,
+			"commercial_terms": get_sales_commercial_term_capabilities(),
 			"native_form_fallback": True,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS, "max_items": MAX_ITEMS},
@@ -177,20 +204,6 @@ def search_simple_sales_invoice_options(
 			reference_doctype="Sales Invoice Item",
 			link_fieldname="item_code",
 		)
-	if fieldname == "price_list":
-		pricing = resolve_price_list_context(
-			mode="selling",
-			company=company,
-			branch=branch,
-			party=customer,
-			user=frappe.session.user,
-		)
-		query = str(txt or "").strip().lower()
-		return [
-			{"value": name, "label": name}
-			for name in pricing.get("available_price_lists") or []
-			if not query or query in str(name).lower()
-		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_search_filters(company=company, branch=branch, user=frappe.session.user)
 		if filters is None:
@@ -214,6 +227,16 @@ def search_simple_sales_invoice_options(
 			page_length=limit,
 			reference_doctype=SALES_INVOICE_DOCTYPE,
 			link_fieldname="retailedge_branch",
+		)
+	if fieldname in {"coupon_code", "tax_category", "taxes_and_charges"}:
+		term_values = dict(values)
+		term_values["company"] = company
+		term_values["customer"] = customer
+		return search_sales_commercial_term_options(
+			fieldname,
+			txt=txt or "",
+			values=term_values,
+			limit=limit,
 		)
 	frappe.throw(_("Unsupported Simple Sales Invoice search field: {0}").format(fieldname))
 	return []
@@ -310,7 +333,7 @@ def _create_simple_sales_invoice_draft(
 	if branch:
 		doc.branch = branch
 
-	for item in items:
+	for index, item in enumerate(items, start=1):
 		_assert_read_permission("Item", item["item_code"])
 		resolved = resolve_sales_item_pricing(
 			item_code=item["item_code"],
@@ -326,13 +349,14 @@ def _create_simple_sales_invoice_draft(
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
+		rate_locked = not bool(resolved.get("allow_rate_change", True))
 		if resolved_rate is None and manual_rate is None:
 			frappe.throw(
 				_(
 					"No selling price could be resolved for Item {0}. Set an Item Price or Item Standard Rate before saving."
 				).format(item["item_code"])
 			)
-		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
+		if rate_locked:
 			effective_rate = resolved_rate
 		else:
 			effective_rate = manual_rate if manual_rate is not None else resolved_rate
@@ -346,12 +370,24 @@ def _create_simple_sales_invoice_draft(
 		}
 		if warehouse:
 			row["warehouse"] = warehouse
-		doc.append("items", row)
+		child = doc.append("items", row)
+		apply_manual_item_discount(
+			child,
+			item,
+			index=index,
+			rate_locked=rate_locked,
+			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+			price_list_rate=resolved.get("price_list_rate"),
+		)
+
+	apply_sales_commercial_terms(doc, values)
 
 	# The effective Price List is resolved and revalidated by Price List Governance.
-	# ERPNext's pricing engine remains authoritative for item pricing, while browser
-	# input cannot bypass a governed Price List or POS rate lock.
+	# ERPNext's pricing engine remains authoritative for item pricing, commercial
+	# terms and tax calculation. Browser input cannot bypass a governed Price List
+	# or selling-rate lock.
 	doc.insert()
+	validate_manual_item_discounts_after_pricing(doc, items)
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
@@ -361,6 +397,12 @@ def _create_simple_sales_invoice_draft(
 		"company": doc.company,
 		"branch": getattr(doc, "retailedge_branch", None) or branch,
 		"selling_price_list": getattr(doc, "selling_price_list", None) or pricing_context.get("price_list"),
+		"coupon_code": doc.get("coupon_code") or "",
+		"tax_category": doc.get("tax_category") or "",
+		"taxes_and_charges": doc.get("taxes_and_charges") or "",
+		"additional_discount_percentage": flt(doc.get("additional_discount_percentage") or 0),
+		"discount_amount": flt(doc.get("discount_amount") or 0),
+		"apply_discount_on": doc.get("apply_discount_on") or "",
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"route": f"/app/sales-invoice/{doc.name}",
@@ -391,7 +433,12 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 		rate = None if rate_value in (None, "") else flt(rate_value)
 		if rate is not None and rate < 0:
 			frappe.throw(_("Selling Rate on row {0} cannot be negative.").format(index))
-		normalised.append({"item_code": item_code, "qty": qty, "rate": rate})
+		row = {"item_code": item_code, "qty": qty, "rate": rate}
+		discount = normalise_manual_item_discount(item, index=index)
+		if discount["supplied"]:
+			row[MANUAL_DISCOUNT_PERCENTAGE] = discount[MANUAL_DISCOUNT_PERCENTAGE]
+			row[MANUAL_DISCOUNT_AMOUNT] = discount[MANUAL_DISCOUNT_AMOUNT]
+		normalised.append(row)
 	return normalised
 
 

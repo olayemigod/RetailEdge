@@ -110,11 +110,10 @@ def _sales_candidates(fieldname: str, values: dict[str, Any], query: str) -> lis
 			),
 			query,
 		)
-	if fieldname == "price_list":
-		# Price List visibility/selection is governed by the canonical pricing
-		# resolver in guided_sales_invoice. Delegate instead of broad-searching
-		# Price List so Branch Assignment, party/POS/Branch precedence, User
-		# Permission and switch policy remain authoritative.
+	if fieldname in {"price_list", "coupon_code", "tax_category", "taxes_and_charges"}:
+		# These fields have business-specific permission, company, customer,
+		# branch and tax-context rules in the canonical sales search. Delegate
+		# before applying shared ranking so fuzzy search never broadens scope.
 		return guided_sales_invoice.search_simple_sales_invoice_options(
 			fieldname,
 			query,

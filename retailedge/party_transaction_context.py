@@ -202,12 +202,18 @@ def get_party_transaction_context(
 			"party_type": config["party_type"],
 			"party": party,
 			"company": company,
-			"branch": branch,
+			"branch": "" if config["party_type"] == "Customer" else branch,
+			"scope": "Company" if config["party_type"] == "Customer" else "Branch",
 			"reason": _("Your current permissions do not allow invoice context for this party."),
 			"metrics": [],
 		}
 
-	branch, branch_field = _resolve_scope(doctype=config["doctype"], company=company, branch=branch)
+	if config["party_type"] == "Supplier":
+		branch, branch_field = _resolve_scope(doctype=config["doctype"], company=company, branch=branch)
+	else:
+		branch = ""
+		branch_field = None
+
 	filters: dict[str, Any] = {
 		"docstatus": 1,
 		"company": company,
@@ -260,6 +266,7 @@ def get_party_transaction_context(
 		"party": party,
 		"company": company,
 		"branch": branch,
+		"scope": "Company" if config["party_type"] == "Customer" else "Branch",
 		"currency": currency,
 		"metrics": metrics,
 		"open_document_count": outstanding["open_document_count"],
@@ -268,7 +275,11 @@ def get_party_transaction_context(
 		"helper": (
 			_("Open-balance metrics are unavailable because more than {0} open documents require multi-currency conversion.").format(MAX_OPEN_DOCUMENT_ROWS)
 			if outstanding["partial"]
-			else _("Submitted ERPNext invoices; current balances use live outstanding amounts.")
+			else (
+				_("Company-wide submitted ERPNext Sales Invoices; current balances use live outstanding amounts.")
+				if config["party_type"] == "Customer"
+				else _("Submitted ERPNext invoices for this Branch; current balances use live outstanding amounts.")
+			)
 		),
 	}
 

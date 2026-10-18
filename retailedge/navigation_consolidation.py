@@ -80,10 +80,28 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 		return
 
 
+def _load_master_context_quietly() -> dict[str, Any]:
+	"""Build permission-aware navigation without leaking probe messages to Desk.
+
+	The master context intentionally probes many native ERPNext destinations so an
+	inaccessible target can be omitted. Frappe permission probes may append user-facing
+	messages before returning False. Those probe messages are not workflow errors and
+	must not become modal dialogs on unrelated RetailEdge pages.
+
+	Exceptions still propagate; only message-log side effects from capability probes are
+	restored to the caller's prior state.
+	"""
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
+	try:
+		return deepcopy(_get_master_business_hub_context() or {})
+	finally:
+		frappe.local.message_log = previous_messages
+
+
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	"""Return final RetailEdge navigation with shift and printing governance composed."""
-	context = deepcopy(_get_master_business_hub_context() or {})
+	context = _load_master_context_quietly()
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
 	context["navigation_groups"] = navigation_groups
