@@ -160,7 +160,8 @@ class TestPrereportingExpenseRegisterReadScope(unittest.TestCase):
 			get_list.call_args.kwargs["filters"],
 		)
 
-	def test_non_company_search_requires_company_before_master_read(self):
+	@patch.object(register, "get_operating_context", return_value={})
+	def test_non_company_search_requires_company_before_master_read(self, operating_context):
 		with (
 			patch.object(register, "_assert_expense_read_access"),
 			patch.object(register.frappe.defaults, "get_user_default", return_value=""),
