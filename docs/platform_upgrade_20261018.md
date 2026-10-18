@@ -27,7 +27,7 @@ Authenticated HTTP login, ping, current-user, Desk and Business Hub probes passe
 
 EdgeSuite PR #43 adapts supported native controls with feature detection and fallback. The v16 Desk dock is mounted outside the old sidebar; suppress it only while an opted-in EdgeSuite shell owns navigation. Light/dark, keyboard, late mount and native-route restoration regressions cover the fix. No broad redesign or private native component import.
 
-Retail test isolation repairs prevent live merchant context, accounting settings, invoice data and broad database mocks from contaminating test fixtures. Browser seeding now uses the merchant's governed price-list resolution. Printing browser tests accept a supplied administrator password. These changes do not widen production permissions.
+Retail test isolation repairs prevent live merchant context, accounting settings, invoice data and broad database mocks from contaminating test fixtures. Browser seeding now uses the merchant's governed price-list resolution. Printing browser tests accept a supplied privileged test account, switch its fixture context through the normal API and clean only the exact branch-scoped fixture profile using normal permission and CSRF checks. A real Administrator POS shift remains intact; its context-switch block is preserved. These changes do not widen production permissions.
 
 The full Retail suite passed before final base reconciliation: 3,056 tests, 23 skips. Final reconciled-head rerun and the complete 46-case browser matrix remain acceptance gates. Initial browser run passed 44; two printing failures identified the hardcoded administrator password and were corrected before final rerun.
 
