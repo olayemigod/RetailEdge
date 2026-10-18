@@ -42,6 +42,7 @@ class TestSalesDashboard(unittest.TestCase):
 		self.assertEqual(items[0]["metric"], "Net Outstanding")
 		self.assertEqual(items[0]["route"], "/app/sales-invoice-register")
 
+	@patch("retailedge.reporting_scope.get_operating_context", new=lambda: {})
 	@patch("retailedge.sales_dashboard.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.sales_dashboard.get_sales_by_item")
 	@patch("retailedge.sales_dashboard.get_sales_invoice_register")

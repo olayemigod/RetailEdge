@@ -184,12 +184,13 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 	existing = frappe.db.get_value("Quotation", filters, "name", order_by="creation asc")
 	if existing:
 		return str(existing)
+	# Let the existing merchant policy resolve its permitted default Price List.
+	# This fixture exercises branch visibility, not a pricing-policy override.
 	result = create_professional_quotation_draft(
 		{
 			"company": COMPANY,
 			"branch": branch_name,
 			"customer": CUSTOMER,
-			"price_list": PRICE_LIST,
 			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
 		}
 	)

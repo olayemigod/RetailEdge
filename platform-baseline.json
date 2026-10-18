@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "status": "candidate",
+  "manual_retail_local_qa_required": true,
+  "python": "3.14",
+  "node": "24",
+  "apps": {
+    "frappe": {
+      "version": "16.52.0",
+      "tag": "v16.52.0",
+      "sha": "4515014c87ece6cb20ee91d2cfb121c5cbd1ff4a"
+    },
+    "erpnext": {
+      "version": "16.51.1",
+      "tag": "v16.51.1",
+      "sha": "5af6561f5aa48104559692fb4fd82f2580e8d338"
+    },
+    "edgesuite_ui": {
+      "version": "1.1.0",
+      "sha": "4dd9cf699539a25073be3d9430223367179a4eec",
+      "pr": 43
+    },
+    "payments": {
+      "sha": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
+      "scope": "standalone CI",
+      "branch": "version-16"
+    },
+    "pos_next": {
+      "version": "1.17.0",
+      "sha": "0b8b6f3bee1b943f6a4982c8d5e987c9421487da",
+      "scope": "local six-app site"
+    },
+    "processedge_posnext_override": {
+      "version": "0.0.14",
+      "sha": "922fd7ba5d4730afc86bcdc05764e4b4b12208dc",
+      "scope": "local six-app site"
+    }
+  }
+}

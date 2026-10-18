@@ -6,7 +6,7 @@ const BRANCH = "RetailEdge RC3 Lagos";
 
 async function loginAdministrator(context) {
 	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
-		form: { usr: "Administrator", pwd: "admin" },
+		form: { usr: "Administrator", pwd: process.env.RETAILEDGE_ADMIN_PASSWORD || "admin" },
 	});
 	expect(response.ok(), "Administrator login failed").toBeTruthy();
 }

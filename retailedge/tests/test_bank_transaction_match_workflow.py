@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
+from frappe import get_all as native_get_all
 
 from retailedge.bank_transaction_match_workflow import (
 	_candidate_from_revalidated_row,
@@ -2966,7 +2967,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		_mock_first_day,
 		_mock_doctype,
 	):
-		mock_get_all.return_value = [
+		match_rows = [
 			{
 				"name": "RE-BTM-2026-0001",
 				"bank_transaction": "ACC-BTN-0001",
@@ -2978,6 +2979,13 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 				"modified": "2026-05-24 10:00:00",
 			}
 		]
+		# Keep framework metadata and unrelated providers outside this match-row stub.
+		def get_all_for_match(doctype, *args, **kwargs):
+			if doctype == "RetailEdge Bank Transaction Match":
+				return match_rows
+			return native_get_all(doctype, *args, **kwargs)
+
+		mock_get_all.side_effect = get_all_for_match
 		rows = get_bank_transaction_matching_rows(
 			filters={
 				"from_date": "2026-05-01",
@@ -2989,6 +2997,8 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(rows[0]["action_status"], "Already Confirmed")
 		self.assertEqual(rows[0]["decision_status"], "Confirmed")
 		self.assertEqual(rows[0]["match_record"], "RE-BTM-2026-0001")
+		for doctype in ("Account", "Journal Entry"):
+			self.assertTrue(all(row.role for row in frappe.get_meta(doctype).permissions))
 
 
 class BankTransactionMatchStandaloneFormTests(unittest.TestCase):

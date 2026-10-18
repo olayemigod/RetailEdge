@@ -61,6 +61,7 @@ class TestOwnerDashboard(unittest.TestCase):
 		self.assertEqual({item["metric"] for item in items}, {"Posting Blocked", "Overdue", "Negative Stock"})
 		self.assertEqual(next(item for item in items if item["metric"] == "Negative Stock")["tone"], "danger")
 
+	@patch("retailedge.reporting_scope.get_operating_context", new=lambda: {})
 	@patch("retailedge.owner_dashboard.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.owner_dashboard.get_branch_performance_dashboard_data", return_value={"summary": []})
 	@patch("retailedge.owner_dashboard.get_stock_position", return_value={"summary": [], "show_costs": 0})

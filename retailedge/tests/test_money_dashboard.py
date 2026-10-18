@@ -61,6 +61,7 @@ class TestMoneyDashboard(unittest.TestCase):
 		self.assertEqual({item["metric"] for item in items}, {"Overdue", "Over 90 Days"})
 		self.assertEqual(next(item for item in items if item["metric"] == "Over 90 Days")["tone"], "danger")
 
+	@patch("retailedge.reporting_scope.get_operating_context", new=lambda: {})
 	@patch("retailedge.money_dashboard.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.money_dashboard.get_supplier_payables")
 	@patch("retailedge.money_dashboard.get_customer_receivables")
