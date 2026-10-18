@@ -1,6 +1,6 @@
 # Browser USB and 80mm receipt reconciliation
 
-PR #213 is stacked on the proven RetailEdge PR #226 head `3f7baa5ab9706a9f3fce53fca39b57e74025b8a2`. Its exact EdgeSuite dependency is `95c982c21ed13cb453af220f68aaf579d4ae807b` from PR #45, stacked on PR #43. The platform remains Frappe 16.52.0 / ERPNext 16.51.1, with all other immutable app pins retained from the candidate manifest.
+PR #213 is stacked on the proven RetailEdge PR #226 head `3f7baa5ab9706a9f3fce53fca39b57e74025b8a2`. Its exact EdgeSuite dependency is `94f184a51bd37b6162481ea4556168df927f8bb2` from PR #45, stacked on PR #43. The platform remains Frappe 16.52.0 / ERPNext 16.51.1, with all other immutable app pins retained from the candidate manifest.
 
 Reconciliation preserves native permissions, working-Branch scope, the shared information bar/Desk action, responsive SmartDate, adapter/dock boundaries and restored-merchant browser fixtures. The seven merge conflicts were only historical EdgeSuite SHA disagreements; workflow platform pins and USB transport assertions are both preserved. Neither predecessor PR nor any working merchant runtime is changed by reconciliation.
 

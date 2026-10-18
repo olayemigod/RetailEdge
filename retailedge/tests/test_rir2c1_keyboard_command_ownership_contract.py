@@ -35,7 +35,7 @@ class TestRIR2C1KeyboardCommandOwnershipContract(unittest.TestCase):
 
 	def test_candidate_compatibility_freezes_shared_keyboard_guard_contract(self):
 		workflow = CANDIDATE_WORKFLOW.read_text()
-		self.assertIn("95c982c21ed13cb453af220f68aaf579d4ae807b", workflow)
+		self.assertIn("94f184a51bd37b6162481ea4556168df927f8bb2", workflow)
 		for required in (
 			"edgeui_ctrl_k_guard.js",
 			"edgeui_ctrl_s_guard.js",
