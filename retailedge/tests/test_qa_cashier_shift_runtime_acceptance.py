@@ -332,7 +332,7 @@ class TestShiftReconciliationRealDataAcceptance(IntegrationTestCase):
 				"to_date": nowdate(),
 			},
 		)
-		rows = {row.get("audit"): row for row in result.get("rows") or []}
+		rows = {row.get("daily_sales_audit"): row for row in result.get("rows") or []}
 		self.assertEqual(set(rows), {balanced, short, over})
 
 		self.assertEqual(rows[balanced]["included_cashier_expenses"], 100)
