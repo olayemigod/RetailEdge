@@ -55,13 +55,27 @@ class TestQARuntimeSupplierStockAcceptance(IntegrationTestCase):
 
 	@classmethod
 	def _ensure_stock_entry_type(cls) -> None:
+		if frappe.db.get_value(
+			"Stock Entry Type",
+			{"purpose": "Material Receipt", "is_standard": 1},
+			"name",
+		):
+			return
 		if frappe.db.exists("Stock Entry Type", "Material Receipt"):
+			frappe.db.set_value(
+				"Stock Entry Type",
+				"Material Receipt",
+				"is_standard",
+				1,
+				update_modified=False,
+			)
 			return
 		frappe.get_doc(
 			{
 				"doctype": "Stock Entry Type",
 				"name": "Material Receipt",
 				"purpose": "Material Receipt",
+				"is_standard": 1,
 			}
 		).insert()
 
