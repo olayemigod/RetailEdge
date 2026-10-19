@@ -24,6 +24,9 @@ PRESERVED_SHIFT_WORKFLOW_TARGETS = {
 	"daily-sales-audit",
 	"expense-review",
 }
+SALES_GROUP_KEY = "sales"
+MAKE_SALE_TARGET = "make-sale"
+PROFESSIONAL_SELLING_TARGET = "professional-selling"
 
 
 def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]) -> None:
@@ -80,6 +83,35 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 		return
 
 
+def _prioritize_sales_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Keep Make Sale as the first visible Sales operation when it is permitted.
+
+	Master Experience promotes Transaction Workspace, Make Sale and Professional Selling
+	before task-frequency reclassification. Transaction Workspace is then intentionally
+	hidden as a duplicate, which can leave Professional Selling ahead of Make Sale because
+	both promotions insert beside the same temporary anchor. Final composition owns the
+	customer-facing order, so normalize only the already-permitted Sales items here.
+	"""
+	for group in navigation_groups:
+		if group.get("key") != SALES_GROUP_KEY:
+			continue
+
+		items = list(group.get("items") or [])
+		make_sale = next((item for item in items if item.get("target") == MAKE_SALE_TARGET), None)
+		if make_sale is None:
+			return
+
+		group["items"] = [
+			make_sale,
+			*[
+				item
+				for item in items
+				if item is not make_sale
+			],
+		]
+		return
+
+
 def _load_master_context_quietly() -> dict[str, Any]:
 	"""Build permission-aware navigation without leaking probe messages to Desk.
 
@@ -100,12 +132,13 @@ def _load_master_context_quietly() -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return final RetailEdge navigation with shift and printing governance composed."""
+	"""Return final RetailEdge navigation with review, sales-order and printing governance composed."""
 	context = _load_master_context_quietly()
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
+	_prioritize_sales_navigation(navigation_groups)
 	context["navigation_groups"] = navigation_groups
 	# Printing normalization is presentation/navigation-only. It runs last so the
-	# final Business Hub keeps the current consolidated review model while shared
-	# Devices & Printing remains a queryless internal Page route.
+	# final Business Hub keeps the current consolidated review and Sales ordering model
+	# while shared Devices & Printing remains a queryless internal Page route.
 	return normalize_printing_navigation(context)

@@ -110,7 +110,7 @@ class TestTransactionEntryPreference(unittest.TestCase):
 		):
 			self.assertIn(contract, selling)
 		for contract in (
-			"Open Make Sale Page",
+			"Continue in Make Sale",
 			"openMakeSalePage",
 			'"open-page"',
 		):

@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Sales Invoice"
-		subtitle="Create a new draft invoice, invoice a submitted source document, or prepare a Return / Credit Note without forcing a rigid selling path."
+		subtitle="Create a new draft invoice, invoice a submitted sales document, or prepare a Return / Credit Note from one guided workspace."
 		size="xl"
 		@close="requestClose"
 	>
@@ -49,10 +49,14 @@
 					@update:modelValue="setCustomer"
 				/>
 
-				<label class="selling-field">
-					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
-				</label>
+				<EdgeInput
+					:modelValue="values.posting_date"
+					id="professional-sales-invoice-posting-date"
+					label="Posting Date"
+					type="date"
+					required
+					@update:modelValue="postingDateChanged"
+				/>
 
 				<EdgeLinkField
 					:modelValue="values.branch"
@@ -85,9 +89,9 @@
 
 				<EdgeLinkField
 					:modelValue="values.shipping_rule"
-					label="Shipping Rule"
+					label="Delivery Charge Rule"
 					placeholder="Optional delivery charge rule"
-					description="Delivery charges are calculated from the selected Selling Shipping Rule."
+					description="Delivery charges follow the selected Shipping Rule when the draft is saved."
 					:searcher="searchShippingRule"
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
@@ -112,22 +116,29 @@
 						<div><span>Available Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.available_redemption_value || 0 }}</strong></div>
 					</div>
 					<p v-if="loyaltyStatus.from_date || loyaltyStatus.to_date" class="selling-form-hint">Programme validity: {{ formatDate(loyaltyStatus.from_date, "No start limit") }} – {{ formatDate(loyaltyStatus.to_date, "No end limit") }}</p>
-					<label class="selling-field">
-						<span>Points to Redeem</span>
-						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
-					</label>
+					<EdgeInput
+						:modelValue="values.loyalty_points"
+						id="professional-sales-invoice-loyalty-points"
+						label="Points to Redeem"
+						type="number"
+						min="0"
+						step="1"
+						:max="loyaltyStatus.available_points || 0"
+						placeholder="0"
+						@update:modelValue="setLoyaltyPoints"
+					/>
 					<p class="selling-form-hint">Estimated redemption: {{ loyaltyRedemptionLabel }}. Available points and the final invoice value are revalidated before saving the draft.</p>
 				</template>
 				<p v-else class="selling-form-hint">{{ loyaltyStatus.message || "No Loyalty Program is assigned to this Customer." }}</p>
 			</section>
 
-			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="!canEditUpdateStock || loadingContext" />
-				<span>
-					<strong>Update Stock</strong>
-					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings." }}</small>
-				</span>
-			</label>
+			<EdgeCheckbox
+				:modelValue="Boolean(values.update_stock)"
+				label="Update Stock"
+				:description="canEditUpdateStock ? 'Post stock movement when the invoice is eventually submitted.' : 'Update Stock is required by the current sales settings.'"
+				:disabled="!canEditUpdateStock || loadingContext"
+				@update:modelValue="setUpdateStock"
+			/>
 
 			<EdgeChildTable
 				:field="itemTableField"
@@ -142,23 +153,42 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">Selling prices are resolved again before saving. Delivery charges follow the selected Shipping Rule.</p>
+			<SalesCommercialTermsControls
+				:values="values"
+				:capabilities="commercialTermCapabilities"
+				:preview="commercialPreview"
+				:searcher="searchCommercialTerm"
+				:disabled="saving || previewLoading"
+				@change="updateCommercialTerms"
+			/>
 
-			<label class="selling-field selling-field--wide">
-				<span>Remarks</span>
-				<textarea v-model="values.remarks" class="form-control" rows="3" placeholder="Optional invoice note"></textarea>
-			</label>
+			<SalesCommercialSummary
+				:preview="commercialPreview"
+				:loading="previewLoading"
+				:error="previewError"
+			/>
+
+			<p v-if="commercialFinalizationNote" class="selling-form-hint">{{ commercialFinalizationNote }}</p>
+			<p class="selling-form-hint">Selling prices, discounts and taxes are resolved again before saving. Delivery charges follow the selected Shipping Rule.</p>
+
+			<EdgeTextarea
+				v-model="values.remarks"
+				id="professional-sales-invoice-remarks"
+				label="Remarks"
+				rows="3"
+				placeholder="Optional invoice note"
+			/>
 		</form>
 
 		<template #footer>
 			<div class="selling-form-footer">
 				<div class="selling-form-footer-actions">
-					<button v-if="mode === 'new'" type="button" class="edge-button" :disabled="saving" @click="openMakeSalePage">Open Make Sale Page</button>
+					<button v-if="mode === 'new'" type="button" class="edge-button" :disabled="saving" @click="openMakeSalePage">Continue in Make Sale</button>
 					<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open Sales Invoice</button>
 				</div>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
-					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode !== 'new' && !sourceDocument)" @click="saveDraft">{{ saving ? "Saving..." : saveLabel }}</button>
+					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode !== 'new' && !sourceDocument) || (mode === 'new' && commercialPreviewBlocked)" @click="saveDraft">{{ saving ? "Saving..." : saveLabel }}</button>
 				</div>
 			</div>
 		</template>
@@ -167,12 +197,15 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
+import SalesCommercialTermsControls from "../selling/SalesCommercialTermsControls.vue";
 import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
 const GUIDED_CONTEXT = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
+const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
 const SOURCE_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_sources";
 const LOYALTY_STATUS = "retailedge.loyalty_rewards.get_customer_loyalty_status";
@@ -194,6 +227,12 @@ function initialValues(context = {}) {
 		shipping_rule: "",
 		loyalty_points: 0,
 		update_stock: 1,
+		coupon_code: "",
+		tax_category: "",
+		taxes_and_charges: "",
+		additional_discount_percentage: 0,
+		discount_amount: 0,
+		apply_discount_on: "Grand Total",
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -201,7 +240,17 @@ function initialValues(context = {}) {
 
 export default {
 	name: "ProfessionalSalesInvoiceDialog",
-	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
+	components: {
+		EdgeModal: runtime.EdgeModal,
+		EdgeLinkField: runtime.EdgeLinkField,
+		EdgeInput: runtime.EdgeInput,
+		EdgeTextarea: runtime.EdgeTextarea,
+		EdgeCheckbox: runtime.EdgeCheckbox,
+		EdgeChildTable: runtime.EdgeChildTable,
+		CustomerCreditSummary,
+		SalesCommercialSummary,
+		SalesCommercialTermsControls,
+	},
 	props: {
 		open: { type: Boolean, default: false },
 		context: { type: Object, default: () => ({}) },
@@ -222,6 +271,12 @@ export default {
 			loyaltyToken: 0,
 			loyaltyLoading: false,
 			loyaltyStatus: {},
+			previewLoading: false,
+			previewError: "",
+			previewToken: 0,
+			previewTimer: null,
+			previewAppliedSignature: "",
+			commercialPreview: null,
 			values: initialValues(this.context),
 			modes: [
 				{ key: "new", label: "New Invoice" },
@@ -233,8 +288,11 @@ export default {
 			itemTableField: { label: "Items", description: "Add the products or services to invoice." },
 			itemColumns: [
 				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
+				{ fieldname: "uom", label: "UOM", fieldtype: "Data", read_only: 1 },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
 				{ fieldname: "rate", label: "Selling Rate", fieldtype: "Currency", placeholder: "Auto price" },
+				{ fieldname: "discount_percentage", label: "Discount %", fieldtype: "Float", read_only: 1 },
+				{ fieldname: "amount", label: "Amount", fieldtype: "Currency", read_only: 1 },
 			],
 		};
 	},
@@ -248,8 +306,74 @@ export default {
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
 		},
 		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
+		requiresBranchSelection() { return Boolean(this.guidedContext?.capabilities?.requires_branch_selection); },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
+		commercialTermCapabilities() {
+			return this.commercialPreview?.commercial_term_capabilities
+				|| this.guidedContext?.capabilities?.commercial_terms
+				|| {};
+		},
+		populatedItemCount() {
+			return (this.values.items || []).filter((row) => row?.item_code).length;
+		},
+		transactionContextReady() {
+			if (!this.values.update_stock) return true;
+			if (this.requiresBranchSelection && !this.values.branch) return false;
+			return Boolean(this.values.warehouse);
+		},
+		commercialPreviewRequired() {
+			return Boolean(
+				this.open
+				&& this.mode === "new"
+				&& this.values.company
+				&& this.values.customer
+				&& this.populatedItemCount
+				&& this.transactionContextReady
+			);
+		},
+		commercialPreviewSignature() {
+			return JSON.stringify({
+				mode: this.mode,
+				company: this.values.company || "",
+				branch: this.values.branch || "",
+				warehouse: this.values.warehouse || "",
+				customer: this.values.customer || "",
+				price_list: this.values.price_list || "",
+				posting_date: this.values.posting_date || "",
+				update_stock: Number(this.values.update_stock || 0),
+				shipping_rule: this.values.shipping_rule || "",
+				coupon_code: this.values.coupon_code || "",
+				tax_category: this.values.tax_category || "",
+				taxes_and_charges: this.values.taxes_and_charges || "",
+				additional_discount_percentage: Number(this.values.additional_discount_percentage || 0),
+				discount_amount: Number(this.values.discount_amount || 0),
+				apply_discount_on: this.values.apply_discount_on || "Grand Total",
+				items: (this.values.items || [])
+					.filter((row) => row?.item_code)
+					.map((row) => ({
+						item_code: row.item_code,
+						qty: Number(row.qty || 0),
+						rate: row.rate === "" ? "" : Number(row.rate || 0),
+					})),
+			});
+		},
+		commercialPreviewBlocked() {
+			if (this.mode !== "new") return false;
+			if (!this.commercialPreviewRequired) return true;
+			return Boolean(
+				this.previewLoading
+				|| this.previewError
+				|| !this.commercialPreview
+				|| this.previewAppliedSignature !== this.commercialPreviewSignature
+			);
+		},
+		commercialFinalizationNote() {
+			const notes = [];
+			if (this.values.shipping_rule) notes.push("The selected delivery charge is applied when the draft is saved and is not included in this live discount/tax preview.");
+			if (Number(this.values.loyalty_points || 0) > 0) notes.push("Loyalty redemption is revalidated and applied when the draft is saved.");
+			return notes.join(" ");
+		},
 		sourceLabel() {
 			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note", return: "Submitted Sales Invoice" }[this.mode] || "Source Document";
 		},
@@ -282,9 +406,21 @@ export default {
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
 				this.saveError = "";
+				this.invalidateCommercialPreview();
 				await this.loadGuidedContext();
+			} else {
+				this.invalidateCommercialPreview();
 			}
 		},
+		commercialPreviewSignature(next, previous) {
+			if (next === previous || !this.open || this.mode !== "new") return;
+			this.invalidateCommercialPreview();
+			this.queueCommercialPreview();
+		},
+	},
+	beforeUnmount() {
+		if (this.previewTimer) window.clearTimeout(this.previewTimer);
+		this.previewToken += 1;
 	},
 	methods: {
 		openMakeSalePage() {
@@ -317,7 +453,14 @@ export default {
 			}
 		},
 		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
-		setMode(mode) { if (!this.saving) { this.mode = mode; this.sourceDocument = ""; this.saveError = ""; } },
+		setMode(mode) {
+			if (this.saving) return;
+			this.mode = mode;
+			this.sourceDocument = "";
+			this.saveError = "";
+			this.invalidateCommercialPreview();
+			if (mode === "new") this.queueCommercialPreview(0);
+		},
 		requestClose() { if (!this.saving) this.$emit("close"); },
 		searchOptions(fieldname, query) {
 			return callMethod(GUIDED_SEARCH, { fieldname, txt: query || "", values: this.values }).then((rows) => Array.isArray(rows) ? rows : []);
@@ -326,6 +469,8 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		searchCommercialTerm(fieldname, query) { return this.searchOptions(fieldname, query); },
+		updateCommercialTerms(patch) { this.values = { ...this.values, ...(patch || {}) }; },
 		applyRatePermission(pricing = this.pricingContext || {}) {
 			const readOnly = pricing?.allow_rate_change === false;
 			this.itemColumns = this.itemColumns.map((column) =>
@@ -354,15 +499,24 @@ export default {
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
 			if (changed) {
-				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+				this.values.coupon_code = "";
+				this.values.tax_category = "";
+				this.values.taxes_and_charges = "";
+				this.values.items = this.values.items.map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
 		},
-		postingDateChanged() {
+		postingDateChanged(next) {
+			const value = next || "";
+			if (this.values.posting_date === value) return;
+			this.values.posting_date = value;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
+			this.refreshAllItemPricing();
 		},
+		setLoyaltyPoints(next) { this.values.loyalty_points = Math.max(0, Number(next || 0)); },
+		setUpdateStock(next) { this.values.update_stock = next ? 1 : 0; },
 		async loadLoyaltyStatus() {
 			if (!this.values.customer) return;
 			const token = ++this.loyaltyToken;
@@ -390,7 +544,7 @@ export default {
 		async setBranch(next) {
 			this.values.branch = next || "";
 			this.values.warehouse = "";
-			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "", uom: "", discount_percentage: "", amount: "" }));
 			if (!this.values.company) return;
 			if (!this.values.branch) {
 				try {
@@ -433,12 +587,22 @@ export default {
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
 			const changed = [];
+			let rateOnlyChanged = false;
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) changed.push(index);
-				return { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				const itemChanged = row.item_code !== prior.item_code;
+				const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);
+				const rateChanged = String(row.rate ?? "") !== String(prior.rate ?? "");
+				if (row.item_code && (itemChanged || quantityChanged)) {
+					changed.push(index);
+					return { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
+				}
+				if (row.item_code && rateChanged) rateOnlyChanged = true;
+				return { ...row };
 			});
-			changed.forEach((index) => this.refreshItemPricing(index));
+			this.invalidateCommercialPreview();
+			for (const index of changed) this.refreshItemPricing(index);
+			if (!changed.length || rateOnlyChanged) this.queueCommercialPreview();
 		},
 		async refreshItemPricing(index) {
 			const row = this.values.items[index];
@@ -448,17 +612,100 @@ export default {
 			try {
 				const pricing = await callMethod(GUIDED_PRICING, { item_code: row.item_code, values: { ...this.values, qty: row.qty } });
 				if (this.pricingTokens[index] !== token) return;
-				this.values.items[index] = { ...this.values.items[index], rate: pricing.rate ?? "" };
+				this.values.items[index] = { ...this.values.items[index], rate: pricing.rate ?? "", uom: "", discount_percentage: "", amount: "" };
 				this.values.items = [...this.values.items];
 				this.pricingContext = { ...(this.pricingContext || {}), ...(pricing || {}) }; this.applyRatePermission(this.pricingContext);
 				if (pricing?.price_list && (pricing?.locked || !this.values.price_list)) this.values.price_list = pricing.price_list;
+				this.queueCommercialPreview();
 			} catch (error) {
-				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+				if (this.pricingTokens[index] === token) {
+					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+					this.invalidateCommercialPreview();
+				}
 			}
 		},
-		refreshAllItemPricing() { this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); }); },
+		refreshAllItemPricing() {
+			this.invalidateCommercialPreview();
+			let pending = 0;
+			this.values.items.forEach((row, index) => {
+				if (!row.item_code) return;
+				pending += 1;
+				this.values.items[index] = { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
+				this.refreshItemPricing(index);
+			});
+			if (!pending) this.queueCommercialPreview();
+		},
+		invalidateCommercialPreview() {
+			if (this.previewTimer) {
+				window.clearTimeout(this.previewTimer);
+				this.previewTimer = null;
+			}
+			this.previewToken += 1;
+			this.previewLoading = false;
+			this.previewError = "";
+			this.previewAppliedSignature = "";
+			this.commercialPreview = null;
+		},
+		queueCommercialPreview(delay = 120) {
+			if (this.previewTimer) window.clearTimeout(this.previewTimer);
+			this.previewAppliedSignature = "";
+			this.previewError = "";
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				this.commercialPreview = null;
+				return;
+			}
+			this.previewLoading = true;
+			this.previewTimer = window.setTimeout(() => {
+				this.previewTimer = null;
+				this.refreshCommercialPreview();
+			}, Math.max(0, Number(delay || 0)));
+		},
+		async refreshCommercialPreview() {
+			if (!this.commercialPreviewRequired) {
+				this.previewLoading = false;
+				return;
+			}
+			const signature = this.commercialPreviewSignature;
+			const token = ++this.previewToken;
+			this.previewLoading = true;
+			this.previewError = "";
+			try {
+				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, { values: this.values }, "POST");
+				if (token !== this.previewToken || signature !== this.commercialPreviewSignature) return;
+				this.commercialPreview = result || null;
+				this.previewAppliedSignature = signature;
+				this.applyCommercialPreviewItems(result?.items || []);
+			} catch (error) {
+				if (token !== this.previewToken) return;
+				this.commercialPreview = null;
+				this.previewAppliedSignature = "";
+				this.previewError = errorMessage(error, "Check the Customer, items, pricing, discount or tax setup and try again.");
+			} finally {
+				if (token === this.previewToken) this.previewLoading = false;
+			}
+		},
+		applyCommercialPreviewItems(items) {
+			const rows = (items || []).filter((row) => !row?.is_free_item);
+			let cursor = 0;
+			this.values.items = (this.values.items || []).map((row) => {
+				if (!row?.item_code) return { ...row };
+				const previewRow = rows[cursor++] || {};
+				return {
+					...row,
+					uom: previewRow.uom || "",
+					discount_percentage: Number(previewRow.discount_percentage || 0),
+					amount: Number(previewRow.amount || 0),
+				};
+			});
+		},
 		async saveDraft() {
 			if (this.saving) return;
+			if (this.mode === "new" && this.commercialPreviewBlocked) {
+				this.saveError = this.previewError || "Wait for the current invoice total to finish updating before saving.";
+				this.queueCommercialPreview(0);
+				return;
+			}
 			this.saving = true;
 			this.saveError = "";
 			try {
@@ -492,12 +739,8 @@ export default {
 .loyalty-summary > div { display: grid; gap: 0.2rem; }
 .selling-form-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 .selling-form-context > div { display: grid; gap: 0.2rem; }
-.selling-form-context span, .selling-form-hint, .guided-check-field small { color: var(--text-muted); font-size: 0.8rem; }
+.selling-form-context span, .selling-form-hint { color: var(--text-muted); font-size: 0.8rem; }
 .selling-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; }
-.selling-field { display: grid; gap: 0.35rem; }
-.selling-field--wide { grid-column: 1 / -1; }
-.guided-check-field { display: flex; align-items: flex-start; gap: 0.65rem; }
-.guided-check-field span { display: grid; gap: 0.2rem; }
 .selling-form-footer { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .selling-form-footer-actions { display: flex; gap: 0.5rem; }
 .selling-form-error { padding: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--red-300, #f1aeb5); border-radius: 0.5rem; }

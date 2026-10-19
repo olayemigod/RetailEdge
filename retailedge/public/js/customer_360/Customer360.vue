@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="customer-360-fallback">
 		<strong>Customer 360 could not start.</strong>
-		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
+		<span>Refresh the page. If the problem continues, contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -20,7 +20,7 @@
 				<div>
 					<p class="customer-360-eyebrow">Customer Intelligence</p>
 					<h2>Customer 360</h2>
-					<p>Understand one customer from submitted ERPNext sales, current receivables and profitability evidence.</p>
+					<p>Understand one customer through sales history, current receivables and profitability.</p>
 				</div>
 			</header>
 
@@ -37,11 +37,6 @@
 					dateOrder="DMY"
 					@resolved="onSmartDateResolved"
 				/>
-				<div class="customer-360-filter-action">
-					<button class="edge-primary-button" type="button" :disabled="loading || !filters.company || !filters.customer" @click="fetchData">
-						{{ loading ? "Loading…" : "Load Customer" }}
-					</button>
-				</div>
 			</div>
 
 			<EdgeErrorState v-if="metadataError" title="Customer 360 could not start" :message="metadataError" @retry="fetchMetadata" />
@@ -51,9 +46,16 @@
 			<EdgeEmptyState
 				v-else-if="!filters.customer"
 				title="Select a customer"
-				description="Choose a Company, optional Branch and Customer to load Customer 360."
+				description="Choose a Company, optional Branch and Customer to view Customer 360."
 			/>
-			<div v-else-if="data.customer" class="customer-360-content">
+			<EdgeEmptyState
+				v-else-if="!data.customer"
+				title="Ready to load customer"
+				description="Review the selected filters, then load Customer 360."
+				actionLabel="Load Customer"
+				@action="fetchData"
+			/>
+			<div v-else class="customer-360-content">
 				<section class="customer-profile-card">
 					<div>
 						<p class="customer-360-eyebrow">Customer</p>
@@ -89,7 +91,7 @@
 							<div><dt>Open invoices</dt><dd>{{ valueOrDash(data.receivables.open_invoice_count) }}</dd></div>
 							<div><dt>Balance date</dt><dd>{{ formatDate(data.receivables.balance_date) }}</dd></div>
 						</dl>
-						<small>Receivables are current ERPNext outstanding balances, not reconstructed historical balances at the report end date.</small>
+						<small>Receivables show the customer's current outstanding balance; they are not reconstructed as of the selected period end date.</small>
 					</article>
 				</section>
 
@@ -164,7 +166,7 @@ export default {
 				{ label: "Current Outstanding", value: this.formatCurrency(period.current_outstanding) },
 			];
 			if (Number(this.data.show_profitability)) {
-				metrics.push({ label: "Transactional Gross Profit", value: this.formatCurrency(period.gross_profit) });
+				metrics.push({ label: "Gross Profit", value: this.formatCurrency(period.gross_profit) });
 				metrics.push({ label: "Gross Margin", value: period.gross_margin_percent == null ? "—" : `${Number(period.gross_margin_percent).toFixed(1)}%` });
 			}
 			return metrics;
@@ -249,7 +251,7 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); },
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.clearCustomer(); },
 		onBranchSelected(option) { this.filters.branch = option?.value || ""; this.clearCustomer(); }, clearBranch() { this.filters.branch = ""; this.clearCustomer(); },
-		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.customerLabel = option?.label || this.filters.customer; }, clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.data = {}; this.dataError = ""; },
+		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.customerLabel = option?.label || this.filters.customer; this.data = {}; this.dataError = ""; }, clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.data = {}; this.dataError = ""; },
 		async fetchData() {
 			if (!this.filters.company || !this.filters.customer) return;
 			this.loading = true; this.dataError = "";
@@ -278,7 +280,6 @@ export default {
 .customer-360-eyebrow { margin: 0 0 0.25rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .customer-360-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end; }
 .customer-360-period-filter { min-width: 0; width: 100%; }
-.customer-360-filter-action { display: flex; align-items: end; min-height: 56px; }
 .customer-360-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
 .customer-360-metric { padding: 0.9rem; display: grid; gap: 0.3rem; }
 .customer-360-metric span { font-size: 0.78rem; opacity: 0.75; }
