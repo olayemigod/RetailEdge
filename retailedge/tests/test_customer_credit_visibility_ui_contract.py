@@ -35,7 +35,9 @@ class TestCustomerCreditVisibilityUIContract(TestCase):
 			self.assertEqual(source.count("<CustomerCreditSummary"), 1)
 			self.assertIn(':customer="values.customer"', source)
 			self.assertIn(':company="values.company"', source)
-			self.assertIn("CustomerCreditSummary }", source)
+			components_start = source.index("components:")
+			props_start = source.index("\n\tprops:", components_start)
+			self.assertIn("CustomerCreditSummary", source[components_start:props_start])
 
 		# Existing native source-document conversion paths remain present and are not
 		# replaced by RetailEdge credit logic.
