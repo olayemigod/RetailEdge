@@ -56,6 +56,13 @@
 					<p class="invoice-completion-hint">Taxes, totals, source quantity limits and accounting checks are recalculated when the draft is saved.</p>
 				</section>
 
+				<SalesCommercialSummary
+					v-if="preview.can_edit && !completedResult"
+					:preview="commercialPreview"
+					:loading="commercialPreviewLoading"
+					:error="commercialPreviewError"
+				/>
+
 				<div v-if="preview.source_name" class="invoice-source-note">
 					<span>Source</span>
 					<strong>{{ preview.source_type }} {{ preview.source_name }}</strong>
@@ -173,8 +180,10 @@
 
 <script>
 import { confirmAboveEdgeModal } from "../retailedge_business_hub/guidedEntryUtils";
+import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
 
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
+const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
@@ -206,6 +215,7 @@ export default {
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
 		EdgeInput: runtimeComponents().EdgeInput,
 		EdgeLinkField: runtimeComponents().EdgeLinkField,
+		SalesCommercialSummary,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -231,6 +241,11 @@ export default {
 			pricingTokens: {},
 			completedResult: null,
 			outputDetails: null,
+			commercialPreview: null,
+			commercialPreviewLoading: false,
+			commercialPreviewError: "",
+			commercialPreviewToken: 0,
+			commercialPreviewTimer: null,
 		};
 	},
 	computed: {
@@ -293,6 +308,18 @@ export default {
 				if (this.open) this.loadPreview();
 			},
 		},
+		draftPostingDate() {
+			this.queueCommercialPreview();
+		},
+		draftItems: {
+			deep: true,
+			handler() {
+				this.queueCommercialPreview();
+			},
+		},
+	},
+	beforeUnmount() {
+		if (this.commercialPreviewTimer) window.clearTimeout(this.commercialPreviewTimer);
 	},
 	methods: {
 		canRemoveDraftItem(index) {
@@ -314,6 +341,50 @@ export default {
 			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
 			this.pricingTokens = {};
 		},
+		commercialPreviewValues() {
+			return {
+				posting_date: this.draftPostingDate || this.preview?.posting_date || "",
+				items: (this.draftItems || []).map((row) => ({
+					name: row.name || "",
+					item_code: row.item_code || "",
+					qty: Number(row.qty || 0),
+					rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate),
+					warehouse: row.warehouse || "",
+				})),
+			};
+		},
+		queueCommercialPreview() {
+			if (!this.open || !this.preview?.can_edit || !this.document?.name) return;
+			if (this.commercialPreviewTimer) window.clearTimeout(this.commercialPreviewTimer);
+			this.commercialPreviewTimer = window.setTimeout(() => {
+				this.commercialPreviewTimer = null;
+				this.loadCommercialPreview();
+			}, 180);
+		},
+		async loadCommercialPreview() {
+			if (!this.open || !this.preview?.can_edit || !this.document?.name) {
+				this.commercialPreview = null;
+				this.commercialPreviewError = "";
+				return;
+			}
+			const token = ++this.commercialPreviewToken;
+			this.commercialPreviewLoading = true;
+			this.commercialPreviewError = "";
+			try {
+				const result = await callMethod(COMMERCIAL_PREVIEW_METHOD, {
+					document_name: this.document.name,
+					values: this.commercialPreviewValues(),
+				}, "POST");
+				if (token !== this.commercialPreviewToken) return;
+				this.commercialPreview = result || null;
+			} catch (error) {
+				if (token !== this.commercialPreviewToken) return;
+				this.commercialPreview = null;
+				this.commercialPreviewError = errorMessage(error, "Unable to calculate the current sale totals.");
+			} finally {
+				if (token === this.commercialPreviewToken) this.commercialPreviewLoading = false;
+			}
+		},
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
 			this.loading = true;
@@ -323,13 +394,20 @@ export default {
 				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name, source_mode: this.sourceMode || "standard" }));
 				if (Number(this.preview?.docstatus || 0) === 0) {
 					this.completedResult = null;
+					await this.loadCommercialPreview();
 				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.commercialPreview = null;
+					this.commercialPreviewError = "";
 					this.completedResult = await this.decorateCompletedResult(this.preview);
 				} else {
+					this.commercialPreview = null;
+					this.commercialPreviewError = "";
 					this.completedResult = null;
 				}
 			} catch (error) {
 				this.applyPreview(null);
+				this.commercialPreview = null;
+				this.commercialPreviewError = "";
 				this.error = errorMessage(error, "Unable to review this Sales Invoice.");
 			} finally {
 				this.loading = false;
@@ -456,6 +534,7 @@ export default {
 					},
 				}, "POST");
 				this.applyPreview(result);
+				await this.loadCommercialPreview();
 				this.$emit("changed", result);
 				frappe.show_alert({ message: __("Draft Sales Invoice updated"), indicator: "green" });
 			} catch (error) {
@@ -481,6 +560,8 @@ export default {
 				}, "POST");
 				this.$emit("changed", result);
 				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name, source_mode: this.sourceMode || "standard" });
+				this.commercialPreview = null;
+				this.commercialPreviewError = "";
 				this.completedResult = await this.decorateCompletedResult(submitted);
 				this.$emit("completed", this.completedResult);
 			} catch (error) {
@@ -505,6 +586,8 @@ export default {
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
 					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name, source_mode: this.sourceMode || "standard" });
+					this.commercialPreview = null;
+					this.commercialPreviewError = "";
 					this.completedResult = await this.decorateCompletedResult(submitted);
 					this.$emit("completed", this.completedResult);
 					return;
