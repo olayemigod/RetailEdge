@@ -88,12 +88,14 @@ def test_professional_sales_invoice_dialog_uses_business_copy_and_preserves_acco
 	assert "Frappe Workflow" not in text
 	assert "Advanced: Open in ERPNext" not in text
 	assert "Advanced: Open Sales Invoice" in text
-	assert "prepare a Return / Credit Note without forcing a rigid selling path" in text
-	assert "Delivery charges are calculated from the selected Selling Shipping Rule." in text
+	assert "invoice a submitted sales document, or prepare a Return / Credit Note from one guided workspace" in text
+	assert "Delivery charges follow the selected Shipping Rule when the draft is saved." in text
 	assert "Checking current Loyalty Points..." in text
 	assert "Available points and the final invoice value are revalidated before saving the draft." in text
 	assert "Any configured approval workflow is respected; no refund or payment record is created automatically." in text
 	assert "This workflow creates a new Sales Invoice draft only." in text
+	assert "Continue in Make Sale" in text
+	assert "live discount/tax preview" in text
 
 	# All source conversion, return, pricing and permission contracts remain unchanged.
 	assert 'v-if="canUseNativeDesk"' in text
