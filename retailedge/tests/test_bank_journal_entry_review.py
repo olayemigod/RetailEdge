@@ -10,6 +10,15 @@ from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_
 
 
 class JournalEntryBankMatchReviewTests(unittest.TestCase):
+	def setUp(self):
+		super().setUp()
+		meta_patcher = patch(
+			"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.get_meta"
+		)
+		self.get_meta = meta_patcher.start()
+		self.addCleanup(meta_patcher.stop)
+		self.get_meta.return_value.has_field.return_value = False
+
 	def test_journal_entry_is_supported_review_type(self):
 		self.assertIn("Journal Entry", SUPPORTED_REVIEW_DOCUMENT_TYPES)
 

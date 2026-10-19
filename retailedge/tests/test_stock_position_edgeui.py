@@ -75,6 +75,7 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 	def test_restricted_assigned_branch_does_not_require_duplicate_native_branch_permission(self):
 		filters = stock_position.frappe._dict(company="Scope Co", branch="Branch A")
 		with (
+			patch.object(stock_position, "require_report_view_access") as require_report_view_access,
 			patch.object(
 				stock_position,
 				"get_operational_branch_scope",
@@ -86,6 +87,7 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		):
 			stock_position._assert_report_access(filters)
 
+		require_report_view_access.assert_called_once_with("stock-position")
 		self.assertEqual(assert_named_read.call_args_list, [call("Company", "Scope Co")])
 
 	def test_restricted_explicit_branch_outside_assignments_fails_closed(self):
