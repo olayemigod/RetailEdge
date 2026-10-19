@@ -355,6 +355,7 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(mock_snapshot.call_args.kwargs["expense_name"], "RE-CE-0001")
 		self.assertEqual(doc.available_shift_cash_after_expense, 750)
 
+	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", new=_Settings)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log"
 	)

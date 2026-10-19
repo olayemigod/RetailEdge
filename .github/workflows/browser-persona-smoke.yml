@@ -86,7 +86,7 @@ jobs:
 
       - name: Create clean Frappe v16 bench
         run: |
-          bench init             --frappe-branch version-16             --python "$(command -v python)"             --skip-assets             --skip-redis-config-generation             frappe-bench
+          bench init             --frappe-branch v16.52.0             --python "$(command -v python)"             --skip-assets             --skip-redis-config-generation             frappe-bench
 
           cd frappe-bench
           bench set-config -g db_host 127.0.0.1
@@ -98,19 +98,28 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 9a9f13801c7f056c271cdb1f55f8f4735e9a7c8d
+          ref: 749b74ce974f7983a79ba33f8943184c6376869a
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
       - name: Fetch application set
         working-directory: frappe-bench
         run: |
-          bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
-          bench get-app --branch develop --skip-assets https://github.com/frappe/payments.git
+          bench get-app --branch v16.51.1 --skip-assets https://github.com/frappe/erpnext.git
+          bench get-app --branch version-16 --skip-assets https://github.com/frappe/payments.git
+          git -C apps/payments checkout cca07d9f9392e2ea0e521c5975151db9e4b6c321
+          bench setup requirements --python payments
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "9a9f13801c7f056c271cdb1f55f8f4735e9a7c8d"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "749b74ce974f7983a79ba33f8943184c6376869a"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
           test "$(git -C apps/retailedge rev-parse HEAD)" = "$RETAILEDGE_CANDIDATE_SHA"
+
+      - name: Verify immutable platform candidate
+        working-directory: frappe-bench
+        run: |
+          uv pip install --python env/bin/python -e 'apps/frappe[test]' -e apps/erpnext -e apps/payments -e apps/edgesuite_ui -e apps/retailedge
+          uv pip check --python env/bin/python
+          python "$GITHUB_WORKSPACE/scripts/verify-platform-baseline.py" --bench . --include-payments
 
       - name: Create browser QA site
         working-directory: frappe-bench
@@ -186,6 +195,7 @@ jobs:
           npx playwright test \
             browser-tests/retailedge_mvp_smoke.spec.cjs \
             browser-tests/retailedge_rc3_acceptance.spec.cjs \
+            browser-tests/retailedge_working_branch_scope.spec.cjs \
             browser-tests/retailedge_printing_shell.spec.cjs \
             browser-tests/retailedge_navigation_collapse.spec.cjs \
             --config=browser-tests/playwright.config.cjs

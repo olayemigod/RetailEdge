@@ -1,152 +1,152 @@
-# Phase 2 — Operating Branch Switcher
+# Operating Company and Branch Governance
 
 ## Business goal
 
-Give each RetailEdge user an explicit **Operating Company** and **Operating Branch** context so new work starts in the correct branch without changing historical document truth.
+RetailEdge gives each user an explicit **Operating Company** and **Working Branch** so daily work starts in the correct branch and document visibility follows the branch the user is currently operating. Users with genuine company-wide authority may deliberately choose **All Branches** for a Company-wide management view.
 
-The operating context is a user/session convenience and control layer. It is not a new accounting dimension, stock ledger, document owner, or replacement for ERPNext Company/Branch/Warehouse fields.
+The context does not create a new accounting dimension and never rewrites historical Company, Branch, Warehouse or accounting truth.
 
-## Product layer
+## Permission model
 
-Phase 2 belongs in RetailEdge today because RetailEdge needs the operating context immediately for guided sales, purchases, payments, stock and POS workflows. The implementation must remain compatible with the long-term CoreEdge context service and keep existing CoreEdge/user-default/Branch Profile resolution as fallback.
+RetailEdge composes with Frappe/ERPNext permissions rather than replacing them.
+
+The effective visibility order is:
+
+1. ERPNext/Frappe role permissions determine whether the user can read/create/write/submit the DocType at all.
+2. Native User Permissions, `If Owner`, Workflow rules and document sharing continue to apply.
+3. RetailEdge Branch Setup defines the valid Company→Branch universe.
+4. Branch Assignment limits the Branches a restricted RetailEdge user may operate.
+5. An explicitly selected Working Branch further narrows branch-attributed transaction reads to that one Company/Branch.
+6. **All Branches** removes the Working Branch narrowing only for a user whose server-side scope is unrestricted, and it remains restricted to the selected Company.
+
+RetailEdge permission hooks are subtractive only. They may deny a row that native permissions would otherwise allow; they never grant a document that ERPNext/Frappe denies.
+
+### Same-Branch user isolation
+
+A company may also choose that two users in the same Branch must not see each other's transactions. Use native ERPNext/Frappe permission configuration for this requirement:
+
+- Role Permission Manager `If Owner` for roles whose users should see only documents they own;
+- User Permissions for additional Link-based restrictions such as Branch, Customer or other governed masters;
+- document sharing for a deliberate per-document exception.
+
+RetailEdge custom lists must use permission-aware Frappe queries so these native restrictions remain effective. RetailEdge does not add a parallel `own transactions only` setting.
 
 ## Core contracts
 
-1. Existing submitted or draft documents retain their stored Company, Branch, Warehouse, POS Profile and accounting values.
-2. The Operating Branch guides **new** guided drafts/defaults only when the caller has not made an explicit valid selection.
-3. Explicit Warehouse/Stock Location remains authoritative when supplied.
-4. Branch selection is validated server-side for:
-   - Company read permission;
-   - Branch read permission;
-   - Company/Branch association where Branch has a Company field;
-   - active/not-disabled Branch state where supported;
-   - RetailEdge/CoreEdge/User Permission branch restrictions;
-   - enabled Branch Setup membership where Branch Users are configured for a non-global user.
-5. Allowed Company/Branch options are permission-aware and bounded; do not preload unrelated masters.
-6. Branch Profile remains the source of RetailEdge operational defaults such as POS Profile, stock locations, cost centres and payment accounts.
-7. Existing branch resolvers remain fallback/historical resolvers and are not deleted.
-8. A context switch must not silently rewrite an open document.
-9. An active POSNext shift or ERPNext POS Opening Entry blocks switching to a different Company/Branch server-side.
-10. Unsaved browser-only POS/cart/payment state uses a client guard extension point; provider-specific cart integration is not falsely claimed by this phase.
-11. Broad full-form, POS Profile, report and dashboard default activation belongs to **Phase 3 — Branch defaults & operational context activation**.
+1. Existing submitted or draft documents retain stored Company, Branch, Warehouse, POS Profile and accounting values.
+2. Branch Setup is the Company→Branch binding authority. A Branch Assignment cannot make an unconfigured Company/Branch pair valid.
+3. Optional Branch Setup defaults such as POS Profile, Warehouse, cost centre and payment accounts may be blank without hiding the configured Branch.
+4. Explicit Working Branch selection is validated server-side and persisted as an explicit session context.
+5. For RetailEdge-attributed ERPNext transactions, stored `retailedge_branch` is the authoritative branch field for Working Branch visibility.
+6. RetailEdge branch-owned documents use their own stored `branch` field where applicable.
+7. Selecting a Working Branch is a server-enforced read boundary, not merely a client ListView filter.
+8. Direct document access must match the same Branch boundary as list/API queries; a hidden cross-branch row may not be reopened by URL or API.
+9. All Branches is explicit Company-wide scope, not an empty-Branch bypass.
+10. Branch-dependent creation, POS, stock and posting workflows still require a concrete valid Branch where the underlying transaction requires one.
+11. An active POSNext shift or ERPNext POS Opening Entry can block a cross-branch or All Branches switch.
+12. Current context guides new work only; it never mutates existing document attribution.
 
-## Delivery slices
+## Operating context service
 
-### 2A — Operating context service — implemented
+The operating context service provides:
 
-- `retailedge/operating_context.py`
-- Session-scoped cache keyed by user + Frappe session id.
-- 12-hour TTL; clearable without changing Frappe User Defaults.
-- APIs:
-  - `get_operating_context`
-  - `get_allowed_operating_contexts`
-  - `switch_operating_context`
-  - `clear_operating_context`
-- Existing user/CoreEdge/default resolver used only when no valid session override exists.
-- Company, Branch, branch/company association and disabled state are validated server-side.
-- Non-global users are additionally constrained by configured Branch Setup membership when available.
-- Previewing another Company's Branch options does not mutate or clear the active context.
-- Clearing a session override resolves the fallback first and applies the same POS switch-safety gate before changing context.
+- `get_operating_context`
+- `get_allowed_operating_contexts`
+- `switch_operating_context`
+- `switch_company_wide_context`
+- `clear_operating_context`
 
-### 2B — Guided-entry integration — implemented
+The session override is cached for a bounded period and revalidated when read. Fallback/default context is retained for compatibility, but server transaction read narrowing begins only from an explicit session selection or from authoritative Branch Assignment restrictions. A fallback/default alone does not silently remove native ERPNext visibility from users who have not adopted RetailEdge Branch Assignment governance.
 
-- `guided_entry_context.resolve_branch_warehouse_selection` consumes Operating Branch only when Branch and Stock Location are both absent.
-- Explicit Company/Branch/Stock Location selections continue to win.
-- Branch Profile resolves the correct stock-location preference for sales, purchases, source, target or default use.
-- Internal ERPNext `Warehouse` identities and fields remain unchanged.
+## Working Branch transaction visibility
 
-### 2C — Shell switcher and POS protection — implemented for Phase 2
+Representative branch-attributed transactions include:
 
-- Dedicated `Operating Context` Page under RetailEdge Home.
-- Current Operating Company/Branch flows into the existing EdgeSuite product profile through the canonical Business Hub context.
-- Company → Branch selection cascades using bounded permission-aware server options.
-- Successful switch invalidates the existing Business Hub context cache and refreshes the product menu.
-- Server-side switch blockers cover:
-  - POSNext `POS Opening Shift`;
-  - ERPNext `POS Opening Entry`.
-- Client-side `window.retailedgeOperatingContextGuard.getBlocker()` extension point is available for browser-only unsaved cart/payment state. The actual provider-specific cart guard is deferred until the POS integration phase where that state is owned.
+- Quotation
+- Sales Order
+- Delivery Note
+- Sales Invoice / POS Invoice
+- Purchase Order / Purchase Receipt / Purchase Invoice
+- Supplier Quotation / Request for Quotation
+- Payment Entry / Payment Request
+- Material Request
+- Stock Entry / Stock Reconciliation
 
-### 2D — Phase 2 hardening/audit — current gate
+For these documents:
 
-- Audit branch/company isolation, fallback behavior, cache/session lifecycle, Page visibility, switch safety and multi-app coexistence.
-- Lock safety findings with regression tests.
-- Run fresh exact-head Linters and clean Frappe v16 CI.
-- Defer manual/browser QA until predecessor QA/promotion reaches this stacked PR.
+- selected Ketu → Company + `retailedge_branch = Ketu`;
+- selected Lagos Island → Company + `retailedge_branch = Lagos Island`;
+- All Branches → selected Company only;
+- restricted user without an explicit switch → active Branch Assignment Company/Branch pairs;
+- unrestricted/native-only user without an explicit switch → no additional RetailEdge query condition.
 
-## Deferred to Phase 3 — Branch defaults & operational context activation
+The server condition is composed with native permission processing. `frappe.get_list` remains the normal query path for custom product lists so `If Owner`, User Permissions and sharing remain effective.
 
-Phase 3 will consume the trusted Phase 2 Operating Context more broadly. It should cover, where appropriate:
+## Professional Selling correction
 
-- full-form new-document defaults;
-- branch-specific POS Profile activation and related operational defaults;
-- report/dashboard default filters while still allowing authorized users to broaden scope;
-- additional branch-aware operational pages and workflows;
-- migration/backward-compatibility review for the wider activation layer.
+Professional Selling must resolve transaction branch identity by preferring `retailedge_branch` when that field exists, matching Professional Purchasing and the transaction-attribution layer. Generic/native Branch candidates are fallback only.
 
-Phase 2 does **not** turn Operating Branch into a hard historical-document filter or a competing source of document truth.
+This prevents a Ketu Working Branch from returning a Lagos Island transaction merely because another Branch-like field is empty, stale or semantically different.
 
-## Out of scope
+## Branch master visibility
 
-- No Company/Branch field rewrite on existing documents.
-- No new accounting dimension.
-- No parallel Warehouse/Stock Location DocType.
-- No Branch rename or internal ERPNext field rename.
-- No automatic submission or posting.
-- No CoreEdge package requirement for standalone RetailEdge.
-- No broad report enforcement that prevents authorized users from broadening scope.
-- No claim that unsaved POSNext/ERPNext browser carts are detected until the owning POS integration supplies the guard.
+RetailEdge operational roles require enough native permission to resolve a Branch master used by Branch Assignment and the selector. RetailEdge therefore grants its operational roles only:
+
+- Branch Read
+- Branch Select
+
+It does not grant Branch Create, Write, Delete, Import or permission administration. User Permissions and Branch Assignment still determine which Branches may actually be operated.
+
+## Client behavior
+
+The shell and native ListView continue to reflect the active context for clarity:
+
+- selected Branch adds/replaces the visible Company/Branch filters;
+- All Branches removes the visible Branch filter while retaining Company;
+- unrelated user filters such as Status or Date are preserved.
+
+These UI filters are not the security boundary; the server permission layer is authoritative.
 
 ## Security and accounting safety
 
-- No `ignore_permissions`.
-- No manual database commit.
-- No submitted-document mutation.
-- Company remains a hard accounting boundary.
-- ERPNext Warehouse remains stock truth.
-- Branch Profile only supplies defaults; ERPNext document validation remains authoritative.
-- Client-side filtering/guards never replace server-side validation.
-- Clearing or previewing context cannot be used to bypass branch/POS safety.
+- No ERPNext/Frappe core modification.
+- No permission bypass.
+- No submitted-document rewrite.
+- No fabricated Branch in All Branches mode.
+- No cross-Company meaning for All Branches.
+- No current Working Branch rewrite of historical documents.
+- No custom own-document permission system when native `If Owner`/User Permission/sharing already provide it.
+- Ambiguous or missing Branch attribution fails closed for Branch Assignment/session-restricted existing transactions.
 
-## Tests required
+## Automated acceptance
 
-### Unit/static contract
+Required regression coverage includes:
 
-- session key and expiry behavior;
-- permission-aware Company/Branch queries;
-- disabled/wrong-company/unauthorized Branch rejection;
-- Branch Setup membership restriction;
-- fallback resolver preservation;
-- safe default-context restore;
-- explicit selection precedence;
-- Branch Profile default projection;
-- POSNext and ERPNext POS switch blockers;
-- no broad `get_all`, `ignore_permissions`, manual commit or accounting-document mutation.
+- explicit Working Branch generates server Company+Branch conditions;
+- All Branches retains Company and removes only Branch narrowing;
+- Branch Assignment limits users without an explicit switch;
+- users without Branch Assignment retain native ERPNext behavior;
+- direct cross-Branch document access is denied under an explicit Working Branch;
+- Professional Selling prefers stored `retailedge_branch`;
+- custom selling lists use `frappe.get_list`, preserving native permission behavior;
+- RetailEdge roles receive only minimum Branch Read/Select;
+- restricted multi-Branch persona cannot activate All Branches;
+- browser acceptance seeds one governed selling document in two Branches and proves Branch A cannot fetch/open Branch B while selected;
+- unrestricted persona can deliberately broaden from one Branch to All Branches and see both within the same Company.
 
-### Integration
+## Manual QA
 
-- switch then new guided Sales Invoice resolves branch sales stock location;
-- switch then Purchase Invoice resolves receiving stock location;
-- switch then Stock Transfer resolves source/target defaults correctly;
-- invalid branch/company combination blocked;
-- unauthorized branch blocked;
-- Branch Setup-unassigned branch blocked where Branch Users are configured;
-- clear context restores configured fallback only when switch-safe;
-- multi-company user switches only to permitted company/branch combinations;
-- active POSNext/ERPNext POS session allows same-context use but blocks cross-context switch.
+Validate at minimum:
 
-### Manual browser QA
+1. Global manager: Ketu shows only Ketu transactions; All Branches shows all authorized Branches in the Company; Lagos Island shows only Lagos Island.
+2. Multi-Branch restricted user: only assigned Branches appear; All Branches does not appear; selected Branch limits lists and direct document access.
+3. Single-Branch user: only that Branch is available and cross-Branch URL/API access fails.
+4. Cashier persona: only permitted Branch/cashier surfaces remain visible.
+5. Configure a QA role with native `If Owner` on a representative transaction DocType: two users in the same Branch see only their own documents.
+6. Share one document explicitly and verify the configured native sharing exception without broadening the rest of the Branch.
+7. Existing historical documents retain stored Branch/Company/accounting values after all context switches.
+8. Active POS work blocks unsafe context changes.
 
-- current company/branch visible in shell;
-- Company → Branch cascade;
-- invalid dependent Branch clears on Company change;
-- switch refreshes guided-create defaults without reload surprises;
-- existing open document remains unchanged;
-- branch-specific guided stock-location defaults are respected;
-- active POS session blocks cross-branch switching;
-- client guard behaves correctly once an owning POS integration provides browser-state evidence;
-- mobile/responsive picker behavior;
-- multi-app shell remains stable.
+## Closure
 
-## Phase closure
-
-Phase 2 implementation may be automated/audited while predecessor browser QA is pending. It remains a stacked Draft PR. Before Phase 2 manual QA/promotion, reconcile against the promoted/moved predecessor if needed and require fresh exact-head automated validation.
+This work is complete only after the exact reconciled candidate passes Linters, full CI, Upgrade Validation, EdgeSuite compatibility, Browser Persona Smoke, and the required manual permission/Branch QA. A prior green SHA is invalid after any permission-scope change.

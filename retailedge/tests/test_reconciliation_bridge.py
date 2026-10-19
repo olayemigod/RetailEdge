@@ -57,6 +57,11 @@ from retailedge.reconciliation_bridge import (
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _missing_fixture_invoice(_invoice_name):
+	# These cases model unavailable evidence, even on populated merchant clones.
+	raise frappe.DoesNotExistError
+
+
 class ReconciliationBridgeTests(unittest.TestCase):
 	def _ready_payment_entry_match(self, **overrides):
 		row = {
@@ -1013,6 +1018,7 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertEqual(target["erpnext_target_name"], "ACC-PAY-2026-00012")
 		self.assertIn("Payment Entry ACC-PAY-2026-00012", target["recommended_action"])
 
+	@patch("retailedge.reconciliation_bridge._sales_invoice_payment_rows", new=_missing_fixture_invoice)
 	@patch("retailedge.reconciliation_bridge.get_payment_entries_for_sales_invoice", return_value=[])
 	def test_invoice_payment_row_without_voucher_is_reported_as_missing_target(self, _mock_refs):
 		target = resolve_reconciliation_target(
@@ -1027,6 +1033,7 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertEqual(target["target_status"], TARGET_MISSING)
 		self.assertIn("missing", target["blocking_reason"].lower())
 
+	@patch("retailedge.reconciliation_bridge._sales_invoice_payment_rows", new=_missing_fixture_invoice)
 	@patch(
 		"retailedge.reconciliation_bridge.get_payment_entries_for_sales_invoice",
 		return_value=[
@@ -1219,6 +1226,7 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		)
 		self.assertEqual(payload["status"], PREFLIGHT_EXCEPTION)
 
+	@patch("retailedge.reconciliation_bridge._sales_invoice_payment_rows", new=_missing_fixture_invoice)
 	def test_invoice_payment_row_preflight_stays_target_ambiguous(self):
 		with patch(
 			"retailedge.reconciliation_bridge.get_payment_entries_for_sales_invoice",

@@ -12,6 +12,7 @@ from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_budget_api import get_expense_budget_insight
 from retailedge.expense_period_context import get_expense_period_context
 from retailedge.expense_register import get_expense_register_context, get_expense_register_export
+from retailedge.reporting_scope import apply_working_context_to_report_filters
 
 DASHBOARD_KEY = "expense-overview"
 TOP_LIMIT = 10
@@ -292,4 +293,4 @@ def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	return frappe._dict(filters or {})
+	return frappe._dict(apply_working_context_to_report_filters(filters or {}))

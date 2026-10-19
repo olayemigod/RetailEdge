@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 
 from retailedge.operating_context import (
+	can_use_company_wide_branch_view,
 	get_allowed_operating_branches,
 	get_allowed_operating_contexts,
 	get_operating_context,
@@ -291,6 +292,7 @@ def get_shell_identity() -> dict[str, Any]:
 	company = _clean(current.get("company"))
 	profile = resolve_company_profile(company)
 	branches = get_allowed_operating_branches(company=company) if company else []
+	can_view_all_branches = can_use_company_wide_branch_view(company=company) if company else False
 	return {
 		"product_code": "retailedge",
 		"product_name": "ProcessEdge Retail",
@@ -303,7 +305,9 @@ def get_shell_identity() -> dict[str, Any]:
 		"tenant_subtitle": "Business workspace",
 		"active_company": company,
 		"active_branch": _clean(current.get("branch")),
+		"company_wide": bool(current.get("company_wide")),
 		"branch_options": list(branches),
-		"can_switch_branch": len(branches) > 1,
+		"can_view_all_branches": can_view_all_branches,
+		"can_switch_branch": len(branches) + (1 if can_view_all_branches else 0) > 1,
 		"company_profile": profile,
 	}

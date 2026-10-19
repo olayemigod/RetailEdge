@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 
 from retailedge.branch_context import user_has_global_branch_access
-from retailedge.operating_context import get_operational_branch_scope
+from retailedge.operating_context import get_operating_context, get_operational_branch_scope
 
 CASHIER_EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
@@ -12,6 +12,11 @@ _EQUALITY_OPERATORS = {"=", "=="}
 
 def apply_cashier_expense_read_scope(filters, *, user: str | None = None):
 	"""Apply permission-aware Company/Branch scope to Cashier Expense read filters.
+
+	The user's current Working Branch is the focused read boundary. Branch
+	Assignment/User Permission remains the maximum authority, while an explicit
+	All Branches operating context is the only state that removes the Branch
+	predicate. Client filters cannot silently broaden or replace that context.
 
 	Dictionary filters remain dictionaries. Supported Frappe list filters remain
 	lists so existing callers keep their query shape, but Company/Branch predicates
@@ -37,7 +42,12 @@ def apply_cashier_expense_read_scope(filters, *, user: str | None = None):
 def _scope_dict_filters(filters: dict, *, user: str):
 	company = _clean_scalar_filter(filters.get("company"), fieldname="Company")
 	branch = _clean_scalar_filter(filters.get("branch"), fieldname="Branch")
-	company = company or str(frappe.defaults.get_user_default("Company") or "").strip()
+	working = _current_working_scope(user=user)
+	if working:
+		company = working["company"]
+		branch = "" if working["company_wide"] else working["branch"]
+	else:
+		company = company or str(frappe.defaults.get_user_default("Company") or "").strip()
 
 	if not company:
 		if user_has_global_branch_access(user=user):
@@ -49,6 +59,8 @@ def _scope_dict_filters(filters: dict, *, user: str):
 		)
 
 	filters["company"] = company
+	if working and working["company_wide"]:
+		filters.pop("branch", None)
 	_scope_branch_filter(filters, company=company, branch=branch, user=user)
 	return filters
 
@@ -56,7 +68,13 @@ def _scope_dict_filters(filters: dict, *, user: str):
 def _scope_list_filters(filters: list, *, user: str):
 	company = _extract_list_equality(filters, "company")
 	branch = _extract_list_equality(filters, "branch")
-	company = company or str(frappe.defaults.get_user_default("Company") or "").strip()
+	working = _current_working_scope(user=user)
+	if working:
+		company = working["company"]
+		branch = "" if working["company_wide"] else working["branch"]
+		filters = _remove_scope_filters(filters, {"company", "branch"})
+	else:
+		company = company or str(frappe.defaults.get_user_default("Company") or "").strip()
 
 	if not company:
 		if user_has_global_branch_access(user=user):
@@ -76,6 +94,8 @@ def _scope_list_filters(filters: list, *, user: str):
 	if branch:
 		if restricted and branch not in allowed_branches:
 			_throw_branch_denied(branch)
+		if not _has_list_filter(filters, "branch"):
+			filters.append([CASHIER_EXPENSE_DOCTYPE, "branch", "=", branch])
 		return filters
 
 	if not restricted:
@@ -108,6 +128,43 @@ def _scope_branch_filter(filters: dict, *, company: str, branch: str, user: str)
 		filters["branch"] = ["in", allowed_branches]
 	else:
 		filters["branch"] = NO_BRANCH_SCOPE_SENTINEL
+
+
+def _current_working_scope(*, user: str) -> dict[str, object]:
+	"""Return current-session read focus without replacing another user's scope."""
+	current_user = getattr(getattr(frappe, "session", None), "user", "")
+	if not current_user or user != current_user:
+		return {}
+	try:
+		context = get_operating_context() or {}
+	except Exception:
+		return {}
+	company = str(context.get("company") or "").strip()
+	branch = str(context.get("branch") or "").strip()
+	company_wide = bool(context.get("company_wide"))
+	if not company:
+		return {}
+	if not branch and not company_wide:
+		return {}
+	return {
+		"company": company,
+		"branch": branch,
+		"company_wide": company_wide,
+	}
+
+
+def _remove_scope_filters(filters: list, fieldnames: set[str]) -> list:
+	result = []
+	for row in filters:
+		parsed = _parse_list_filter(row)
+		if not parsed:
+			result.append(row)
+			continue
+		doctype, fieldname, _operator, _value = parsed
+		if fieldname in fieldnames and (not doctype or doctype == CASHIER_EXPENSE_DOCTYPE):
+			continue
+		result.append(row)
+	return result
 
 
 def _extract_list_equality(filters: list, fieldname: str) -> str:

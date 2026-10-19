@@ -8,7 +8,45 @@ from frappe import _
 from retailedge.branch_assignment import has_branch_assignments
 from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access
 from retailedge.branch_profile import get_user_branch_profiles
-from retailedge.operating_context import get_allowed_operating_branches, validate_operating_branch
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operating_context,
+	validate_operating_branch,
+)
+
+
+def apply_working_context_to_report_filters(
+	filters: dict[str, Any] | frappe._dict | None,
+	*,
+	user: str | None = None,
+) -> dict[str, Any]:
+	"""Overlay the current Working Company/Branch onto report filters.
+
+	Permission/assignment scope remains the maximum authority. The selected
+	Working Branch is the current focused read scope and cannot be broadened or
+	replaced by stale client filters. An explicit All Branches operating context
+	is the only state that removes the Branch predicate.
+	"""
+	resolved = dict(filters or {})
+	user = user or frappe.session.user
+	current_user = getattr(getattr(frappe, "session", None), "user", "")
+	if not current_user or user != current_user:
+		return resolved
+	try:
+		operating = get_operating_context() or {}
+	except Exception:
+		return resolved
+
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	company_wide = bool(operating.get("company_wide"))
+	if company:
+		resolved["company"] = company
+	if branch:
+		resolved["branch"] = branch
+	elif company_wide:
+		resolved["branch"] = ""
+	return resolved
 
 
 def get_report_branch_scope(company: str, *, user: str | None = None) -> dict[str, Any]:
@@ -82,8 +120,12 @@ def validate_report_scope(
 ) -> dict[str, Any]:
 	"""Validate Company/Branch report scope without trusting client filters."""
 	user = user or frappe.session.user
-	company = str(company or "").strip()
-	branch = str(branch or "").strip()
+	focused = apply_working_context_to_report_filters(
+		{"company": company, "branch": branch},
+		user=user,
+	)
+	company = str(focused.get("company") or "").strip()
+	branch = str(focused.get("branch") or "").strip()
 	if not company:
 		return {
 			"company": "",
@@ -135,8 +177,8 @@ def constrain_report_filters(
 	user: str | None = None,
 	require_branch_when_restricted: bool = True,
 ) -> dict[str, Any]:
-	"""Return a copied filter set after authoritative report-scope validation."""
-	resolved = dict(filters or {})
+	"""Return filters after Working Context and authoritative scope validation."""
+	resolved = apply_working_context_to_report_filters(filters, user=user)
 	company = str(resolved.get("company") or "").strip()
 	branch = str(resolved.get("branch") or "").strip()
 	validated = validate_report_scope(
@@ -149,6 +191,8 @@ def constrain_report_filters(
 		resolved["company"] = company
 	if branch:
 		resolved["branch"] = validated["branch"]
+	else:
+		resolved["branch"] = ""
 	return resolved
 
 

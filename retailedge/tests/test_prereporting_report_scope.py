@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge import operating_report_defaults, reporting_actions, stock_accounting_integrity
+from retailedge import operating_report_defaults, reporting_actions, reporting_scope, stock_accounting_integrity
 from retailedge.reporting_scope import (
 	assert_company_wide_report_scope,
 	get_report_branch_scope,
@@ -15,6 +15,52 @@ from retailedge.reporting_scope import (
 
 
 class RetailEdgePreReportingReportScopeTests(unittest.TestCase):
+	def test_current_working_branch_overrides_stale_report_branch(self):
+		user = frappe.session.user
+		with patch.object(
+			reporting_scope,
+			"get_operating_context",
+			return_value={
+				"company": "RetailEdge Consulting",
+				"branch": "Ketu",
+				"company_wide": False,
+			},
+		):
+			filters = reporting_scope.apply_working_context_to_report_filters(
+				{"company": "RetailEdge Consulting", "branch": "Lagos Island", "status": "Paid"},
+				user=user,
+			)
+		self.assertEqual(filters["company"], "RetailEdge Consulting")
+		self.assertEqual(filters["branch"], "Ketu")
+		self.assertEqual(filters["status"], "Paid")
+
+	def test_company_wide_context_is_explicit_report_broadening_state(self):
+		user = frappe.session.user
+		with patch.object(
+			reporting_scope,
+			"get_operating_context",
+			return_value={
+				"company": "RetailEdge Consulting",
+				"branch": "",
+				"company_wide": True,
+			},
+		):
+			filters = reporting_scope.apply_working_context_to_report_filters(
+				{"company": "RetailEdge Consulting", "branch": "Ketu"},
+				user=user,
+			)
+		self.assertEqual(filters["company"], "RetailEdge Consulting")
+		self.assertEqual(filters["branch"], "")
+
+	def test_another_users_scope_is_not_replaced_by_current_session_context(self):
+		with patch.object(reporting_scope, "get_operating_context") as current:
+			filters = reporting_scope.apply_working_context_to_report_filters(
+				{"company": "PISONMART", "branch": "Lagos"},
+				user="another-user@example.com",
+			)
+		self.assertEqual(filters, {"company": "PISONMART", "branch": "Lagos"})
+		current.assert_not_called()
+
 	def test_branch_assignment_history_uses_operating_context_allowed_branches(self):
 		with (
 			patch("retailedge.reporting_scope.user_has_global_branch_access", return_value=False),

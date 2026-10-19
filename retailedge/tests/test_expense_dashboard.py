@@ -53,6 +53,7 @@ class TestExpenseDashboard(unittest.TestCase):
 		self.assertIn("Spend increased materially versus the previous equal period", labels)
 		self.assertIn("One expense category represents at least half of spending", labels)
 
+	@patch("retailedge.reporting_scope.get_operating_context", new=lambda: {})
 	@patch("retailedge.expense_dashboard._account_context", return_value=[])
 	@patch("retailedge.expense_dashboard.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.expense_dashboard.get_expense_register_export")

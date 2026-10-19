@@ -1,0 +1,66 @@
+--- a/pos_next/api/test_customers.py
++++ b/pos_next/api/test_customers.py
+@@ -15,7 +15,7 @@
+ class TestCustomersAPI(unittest.TestCase):
+ 	@patch("pos_next.api.customers.frappe.logger")
+ 	@patch("pos_next.api.customers.frappe.get_all")
+-	@patch("pos_next.api.customers.frappe.db")
++	@patch("pos_next.api.customers.frappe.db", new_callable=Mock)
+ 	def test_get_customers_applies_search_term_filters(self, mock_db, mock_get_all, mock_logger):
+ 		mock_logger.return_value = Mock()
+ 		mock_get_all.return_value = []
+@@ -35,7 +35,7 @@
+ 			],
+ 		)
+ 
+-	@patch("pos_next.api.customers.frappe.db")
++	@patch("pos_next.api.customers.frappe.db", new_callable=Mock)
+ 	def test_get_default_loyalty_program_from_settings_uses_explicit_pos_profile(self, mock_db):
+ 		mock_db.get_value.return_value = "LOYALTY-A"
+ 
+--- a/pos_next/pos_next/doctype/pos_coupon/test_pos_coupon.py
++++ b/pos_next/pos_next/doctype/pos_coupon/test_pos_coupon.py
+@@ -11,7 +11,7 @@
+ 
+ class TestPOSCoupon(unittest.TestCase):
+ 	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.get_meta")
+-	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.db")
++	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.db", new_callable=Mock)
+ 	def test_one_use_coupon_counts_sales_invoice_and_pos_invoice(self, mock_db, mock_get_meta):
+ 		def table_exists(doctype):
+ 			return doctype in {"Sales Invoice", "POS Invoice"}
+@@ -37,7 +37,7 @@
+ 		)
+ 
+ 	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.get_meta")
+-	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.db")
++	@patch("pos_next.pos_next.doctype.pos_coupon.pos_coupon.frappe.db", new_callable=Mock)
+ 	def test_one_use_coupon_skips_doctypes_without_coupon_field(self, mock_db, mock_get_meta):
+ 		mock_db.table_exists.return_value = True
+ 		mock_db.count.return_value = 4
+--- a/pos_next/pos_next/utils/tests/test_pos_closing_print.py
++++ b/pos_next/pos_next/utils/tests/test_pos_closing_print.py
+@@ -6,6 +6,7 @@
+ 
+ from pos_next.pos_next.utils.pos_closing_print import (
+ 	_collect_parent_targets,
++	_fetch_items_for_targets,
+ 	get_items_sold,
+ )
+ 
+@@ -70,8 +71,14 @@
+ 
+ 	@patch("pos_next.pos_next.utils.pos_closing_print._fetch_items_for_targets")
+ 	def test_get_items_sold_returns_empty_when_no_transactions(self, mock_fetch):
++		mock_fetch.return_value = []
+ 		doc = {"pos_transactions": []}
+ 		result = get_items_sold(doc)
+ 
+ 		self.assertEqual(result, [])
+-		mock_fetch.assert_not_called()
++		mock_fetch.assert_called_once_with(set())
++
++	@patch("pos_next.pos_next.utils.pos_closing_print.frappe.qb.from_")
++	def test_empty_targets_do_not_construct_an_items_query(self, mock_query):
++		self.assertEqual(_fetch_items_for_targets(set()), [])
++		mock_query.assert_not_called()

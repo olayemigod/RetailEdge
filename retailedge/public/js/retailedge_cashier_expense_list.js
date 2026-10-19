@@ -1,5 +1,6 @@
 frappe.listview_settings["RetailEdge Cashier Expense"] = {
 	onload(listview) {
+		window.retailedge?.workingBranchDocumentScope?.install?.(listview);
 		if (listview.page && listview.page.set_title) {
 			listview.page.set_title(__("Cashier Expenses"));
 		}
