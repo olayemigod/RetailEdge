@@ -67,8 +67,12 @@ async function expectBusinessHubBranch(context, branch) {
 	}).toBe(branch);
 }
 
+function workingBranchSwitcher(page) {
+	return page.locator('[aria-label="Working branch"]:visible').first();
+}
+
 async function chooseWorkingBranch(page, branch) {
-	const switcher = page.locator('[aria-label="Working branch"]');
+	const switcher = workingBranchSwitcher(page);
 	await expect(switcher).toBeVisible();
 	const trigger = switcher.locator("button").first();
 	await expect(trigger).toBeEnabled();
@@ -85,7 +89,7 @@ test("multi-Branch Business Hub switches working Branch and preserves it through
 	const { context, page } = await newPersona(browser, MULTI_BRANCH);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
-		const switcher = page.locator('[aria-label="Working branch"]');
+		const switcher = workingBranchSwitcher(page);
 		await expect(switcher).toContainText(LAGOS);
 		await expectOperatingBranch(context, LAGOS);
 
@@ -104,14 +108,14 @@ test("multi-Branch Business Hub switches working Branch and preserves it through
 			state: "visible",
 			timeout: 20_000,
 		});
-		await expect(page.locator('[aria-label="Working branch"]')).toContainText(IKEJA);
+		await expect(switcher).toContainText(IKEJA);
 
 		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
 			state: "visible",
 			timeout: 20_000,
 		});
-		await expect(page.locator('[aria-label="Working branch"]')).toContainText(IKEJA);
+		await expect(switcher).toContainText(IKEJA);
 		await expectOperatingBranch(context, IKEJA);
 
 		await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
@@ -119,7 +123,7 @@ test("multi-Branch Business Hub switches working Branch and preserves it through
 			state: "visible",
 			timeout: 20_000,
 		});
-		await expect(page.locator('[aria-label="Working branch"]')).toContainText(IKEJA);
+		await expect(switcher).toContainText(IKEJA);
 
 		// Restore the deterministic fixture state for later persona tests and reruns.
 		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
@@ -130,7 +134,7 @@ test("multi-Branch Business Hub switches working Branch and preserves it through
 		await chooseWorkingBranch(page, LAGOS);
 		await expectOperatingBranch(context, LAGOS);
 		await expectBusinessHubBranch(context, LAGOS);
-		await expect(page.locator('[aria-label="Working branch"]')).toContainText(LAGOS);
+		await expect(switcher).toContainText(LAGOS);
 	} finally {
 		await context.close().catch(() => {});
 	}
