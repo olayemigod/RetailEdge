@@ -7,6 +7,7 @@ from frappe.utils import cint, flt, getdate
 from retailedge.branch_context import has_doctype
 from retailedge.cash_deposit_audit import get_submitted_deposit_totals
 from retailedge.cash_shift_verification_read_scope import resolve_cash_shift_verification_read_scope
+from retailedge.pos_runtime import get_pos_runtime_capabilities
 
 
 def execute(filters=None):
@@ -26,6 +27,7 @@ def validate_filters(filters):
 
 
 def get_columns():
+	runtime = get_pos_runtime_capabilities()
 	return [
 		{
 			"label": _("Company"),
@@ -47,14 +49,14 @@ def get_columns():
 			"label": _("Opening Shift"),
 			"fieldname": "opening_shift",
 			"fieldtype": "Link",
-			"options": "POS Opening Shift",
+			"options": runtime.opening_doctype,
 			"width": 160,
 		},
 		{
 			"label": _("Closing Shift"),
 			"fieldname": "closing_shift",
 			"fieldtype": "Link",
-			"options": "POS Closing Shift",
+			"options": runtime.closing_doctype,
 			"width": 160,
 		},
 		{"label": _("Shift Date"), "fieldname": "shift_date", "fieldtype": "Date", "width": 100},
