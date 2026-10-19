@@ -246,6 +246,7 @@ export default {
 			commercialPreviewError: "",
 			commercialPreviewToken: 0,
 			commercialPreviewTimer: null,
+			commercialPreviewAppliedSignature: "",
 		};
 	},
 	computed: {
@@ -320,6 +321,7 @@ export default {
 	},
 	beforeUnmount() {
 		if (this.commercialPreviewTimer) window.clearTimeout(this.commercialPreviewTimer);
+		this.commercialPreviewToken += 1;
 	},
 	methods: {
 		canRemoveDraftItem(index) {
@@ -353,20 +355,41 @@ export default {
 				})),
 			};
 		},
+		commercialPreviewSignature() {
+			return JSON.stringify({
+				document_name: this.document?.name || "",
+				values: this.commercialPreviewValues(),
+			});
+		},
 		queueCommercialPreview() {
 			if (!this.open || !this.preview?.can_edit || !this.document?.name) return;
 			if (this.commercialPreviewTimer) window.clearTimeout(this.commercialPreviewTimer);
+			// Invalidate any in-flight response immediately when draft inputs change.
+			// The next request starts after the debounce, but old totals must never paint
+			// during that window.
+			this.commercialPreviewToken += 1;
+			this.commercialPreviewAppliedSignature = "";
+			this.commercialPreviewError = "";
+			this.commercialPreviewLoading = true;
 			this.commercialPreviewTimer = window.setTimeout(() => {
 				this.commercialPreviewTimer = null;
 				this.loadCommercialPreview();
 			}, 180);
 		},
 		async loadCommercialPreview() {
+			if (this.commercialPreviewTimer) {
+				window.clearTimeout(this.commercialPreviewTimer);
+				this.commercialPreviewTimer = null;
+			}
 			if (!this.open || !this.preview?.can_edit || !this.document?.name) {
+				this.commercialPreviewToken += 1;
 				this.commercialPreview = null;
+				this.commercialPreviewLoading = false;
 				this.commercialPreviewError = "";
+				this.commercialPreviewAppliedSignature = "";
 				return;
 			}
+			const signature = this.commercialPreviewSignature();
 			const token = ++this.commercialPreviewToken;
 			this.commercialPreviewLoading = true;
 			this.commercialPreviewError = "";
@@ -375,11 +398,13 @@ export default {
 					document_name: this.document.name,
 					values: this.commercialPreviewValues(),
 				}, "POST");
-				if (token !== this.commercialPreviewToken) return;
+				if (token !== this.commercialPreviewToken || signature !== this.commercialPreviewSignature()) return;
 				this.commercialPreview = result || null;
+				this.commercialPreviewAppliedSignature = signature;
 			} catch (error) {
 				if (token !== this.commercialPreviewToken) return;
 				this.commercialPreview = null;
+				this.commercialPreviewAppliedSignature = "";
 				this.commercialPreviewError = errorMessage(error, "Unable to calculate the current sale totals.");
 			} finally {
 				if (token === this.commercialPreviewToken) this.commercialPreviewLoading = false;
@@ -396,18 +421,27 @@ export default {
 					this.completedResult = null;
 					await this.loadCommercialPreview();
 				} else if (Number(this.preview?.docstatus || 0) === 1) {
+					this.commercialPreviewToken += 1;
 					this.commercialPreview = null;
+					this.commercialPreviewLoading = false;
 					this.commercialPreviewError = "";
+					this.commercialPreviewAppliedSignature = "";
 					this.completedResult = await this.decorateCompletedResult(this.preview);
 				} else {
+					this.commercialPreviewToken += 1;
 					this.commercialPreview = null;
+					this.commercialPreviewLoading = false;
 					this.commercialPreviewError = "";
+					this.commercialPreviewAppliedSignature = "";
 					this.completedResult = null;
 				}
 			} catch (error) {
 				this.applyPreview(null);
+				this.commercialPreviewToken += 1;
 				this.commercialPreview = null;
+				this.commercialPreviewLoading = false;
 				this.commercialPreviewError = "";
+				this.commercialPreviewAppliedSignature = "";
 				this.error = errorMessage(error, "Unable to review this Sales Invoice.");
 			} finally {
 				this.loading = false;
@@ -560,8 +594,11 @@ export default {
 				}, "POST");
 				this.$emit("changed", result);
 				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name, source_mode: this.sourceMode || "standard" });
+				this.commercialPreviewToken += 1;
 				this.commercialPreview = null;
+				this.commercialPreviewLoading = false;
 				this.commercialPreviewError = "";
+				this.commercialPreviewAppliedSignature = "";
 				this.completedResult = await this.decorateCompletedResult(submitted);
 				this.$emit("completed", this.completedResult);
 			} catch (error) {
@@ -586,8 +623,11 @@ export default {
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
 					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name, source_mode: this.sourceMode || "standard" });
+					this.commercialPreviewToken += 1;
 					this.commercialPreview = null;
+					this.commercialPreviewLoading = false;
 					this.commercialPreviewError = "";
+					this.commercialPreviewAppliedSignature = "";
 					this.completedResult = await this.decorateCompletedResult(submitted);
 					this.$emit("completed", this.completedResult);
 					return;
