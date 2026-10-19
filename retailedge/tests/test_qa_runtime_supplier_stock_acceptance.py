@@ -39,6 +39,7 @@ class TestQARuntimeSupplierStockAcceptance(IntegrationTestCase):
 		_ensure_transaction_masters()
 		_ensure_item()
 		cls._ensure_supplier_group()
+		cls._ensure_stock_entry_type()
 		cls._ensure_stock_item()
 		cls.stock_warehouse = cls._first_stock_warehouse()
 
@@ -51,6 +52,18 @@ class TestQARuntimeSupplierStockAcceptance(IntegrationTestCase):
 			SUPPLIER_GROUP,
 			"parent_supplier_group",
 		)
+
+	@classmethod
+	def _ensure_stock_entry_type(cls) -> None:
+		if frappe.db.exists("Stock Entry Type", "Material Receipt"):
+			return
+		frappe.get_doc(
+			{
+				"doctype": "Stock Entry Type",
+				"name": "Material Receipt",
+				"purpose": "Material Receipt",
+			}
+		).insert()
 
 	@classmethod
 	def _ensure_stock_item(cls) -> None:
