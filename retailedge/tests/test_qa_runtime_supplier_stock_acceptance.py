@@ -18,6 +18,7 @@ from retailedge.tests.upgrade_validation_fixture import (
 	_ensure_fiscal_year,
 	_ensure_item,
 	_ensure_transaction_masters,
+	_ensure_tree_master,
 	_first_cost_center,
 	_first_leaf_account,
 )
@@ -43,19 +44,13 @@ class TestQARuntimeSupplierStockAcceptance(IntegrationTestCase):
 
 	@classmethod
 	def _ensure_supplier_group(cls) -> None:
-		if frappe.db.exists("Supplier Group", SUPPLIER_GROUP):
-			return
-		parent = frappe.db.get_value("Supplier Group", {"is_group": 1}, "name")
-		if not parent:
-			frappe.throw("RetailEdge QA requires an ERPNext Supplier Group root.")
-		frappe.get_doc(
-			{
-				"doctype": "Supplier Group",
-				"supplier_group_name": SUPPLIER_GROUP,
-				"parent_supplier_group": parent,
-				"is_group": 0,
-			}
-		).insert()
+		_ensure_tree_master(
+			"Supplier Group",
+			"supplier_group_name",
+			"All Supplier Groups",
+			SUPPLIER_GROUP,
+			"parent_supplier_group",
+		)
 
 	@classmethod
 	def _ensure_stock_item(cls) -> None:
