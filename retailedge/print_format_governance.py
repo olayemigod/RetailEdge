@@ -39,6 +39,37 @@ _RECEIPT_FOOTER_ROW = '<div class="receipt-footer">Thank you for your business.<
 _RECEIPT_GOVERNED_FOOTER = '''{% if receipt.get("show_footer") and receipt.get("footer_message") and receipt.get("show_footer_separator") %}<div class="receipt-rule"></div>{% endif %}
 	{% if receipt.get("show_footer") and receipt.get("footer_message") %}<div class="receipt-footer">{{ receipt.get("footer_message") }}</div>{% endif %}'''
 
+# Physical QA on an 80mm XP-80C proved the managed receipt readable overall but
+# the item table was too small at 7.4pt. These exact selector-level replacements
+# intentionally apply only to the 80mm stylesheet after the 58mm stylesheet has
+# already been derived by professional_print_formats at module import time.
+_RECEIPT_80_CSS_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+	(
+		".pe-receipt{width:76mm;margin:0 auto;color:#111;font-family:Arial,sans-serif;font-size:8pt;line-height:1.18}",
+		".pe-receipt{width:76mm;margin:0 auto;color:#111;font-family:Arial,sans-serif;font-size:8.5pt;line-height:1.2}",
+	),
+	(
+		".receipt-address{font-size:7pt;margin-top:.4mm}",
+		".receipt-address{font-size:7.5pt;margin-top:.4mm}",
+	),
+	(
+		".receipt-items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.4pt}",
+		".receipt-items{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}",
+	),
+	(
+		".receipt-items th,.receipt-items td{padding:.7mm .6mm;vertical-align:top;border-bottom:1px dotted #aaa}",
+		".receipt-items th,.receipt-items td{padding:.8mm .4mm;line-height:1.22;vertical-align:top;border-bottom:1px dotted #aaa}",
+	),
+	(
+		".receipt-items th{font-weight:700;text-align:left}",
+		".receipt-items th{font-size:8pt;font-weight:700;text-align:left}",
+	),
+	(
+		".receipt-footer{text-align:center;margin-top:1.5mm;font-size:7pt}",
+		".receipt-footer{text-align:center;margin-top:1.5mm;font-size:7.5pt}",
+	),
+)
+
 
 def _govern_document_html(html: str) -> str:
 	result = str(html or "")
@@ -77,6 +108,17 @@ def _govern_receipt_html(html: str) -> str:
 	return result
 
 
+def _govern_receipt_80_css(css: str) -> str:
+	"""Improve customer-facing 80mm readability without changing 58mm output."""
+	result = str(css or "")
+	for old, new in _RECEIPT_80_CSS_REPLACEMENTS:
+		if new in result:
+			continue
+		if old in result:
+			result = result.replace(old, new, 1)
+	return result
+
+
 def sync_governed_pedge_print_formats() -> dict[str, Any]:
 	"""Synchronise managed PEdge formats with shared print-output governance.
 
@@ -85,7 +127,10 @@ def sync_governed_pedge_print_formats() -> dict[str, Any]:
 	Receipt status, payment method, amount-in-words visibility/labels, footer separator
 	and footer message come from merchant settings while their business values remain
 	transaction-derived. Managed receipt item values continue to use ERPNext net values.
+	The 80mm stylesheet receives a readability-only typography adjustment; 58mm remains
+	unchanged because its stylesheet is a separate value by the time this function runs.
 	"""
 	managed_formats._DOCUMENT_HTML = _govern_document_html(managed_formats._DOCUMENT_HTML)
 	managed_formats._RECEIPT_HTML = _govern_receipt_html(managed_formats._RECEIPT_HTML)
+	managed_formats._RECEIPT_CSS_80 = _govern_receipt_80_css(managed_formats._RECEIPT_CSS_80)
 	return managed_formats.ensure_retailedge_professional_print_formats()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GOVERNED_EDGESUITE_SHA = "749b74ce974f7983a79ba33f8943184c6376869a"
+GOVERNED_EDGESUITE_SHA = "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7"
 OLD_EDGESUITE_SHA = "fb44c72f817751cf7983bf3b69cd9e5f376159c4"
 OLD_EDGESUITE_BRANCH = "agent/reporting-standard-v1"
 
