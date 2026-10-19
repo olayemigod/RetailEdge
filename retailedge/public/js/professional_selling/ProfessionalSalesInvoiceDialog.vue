@@ -91,7 +91,7 @@
 					:modelValue="values.shipping_rule"
 					label="Delivery Charge Rule"
 					placeholder="Optional delivery charge rule"
-					description="Delivery charges follow the selected ERPNext Shipping Rule when the draft is saved."
+					description="Delivery charges follow the selected Shipping Rule when the draft is saved."
 					:searcher="searchShippingRule"
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
@@ -169,7 +169,7 @@
 			/>
 
 			<p v-if="commercialFinalizationNote" class="selling-form-hint">{{ commercialFinalizationNote }}</p>
-			<p class="selling-form-hint">Selling prices, discounts and taxes are resolved again by ERPNext before saving. Delivery charges follow the selected Shipping Rule.</p>
+			<p class="selling-form-hint">Selling prices, discounts and taxes are resolved again before saving. Delivery charges follow the selected Shipping Rule.</p>
 
 			<EdgeTextarea
 				v-model="values.remarks"
@@ -370,7 +370,7 @@ export default {
 		},
 		commercialFinalizationNote() {
 			const notes = [];
-			if (this.values.shipping_rule) notes.push("The selected delivery charge is applied by ERPNext when the draft is saved and is not included in this live discount/tax preview.");
+			if (this.values.shipping_rule) notes.push("The selected delivery charge is applied when the draft is saved and is not included in this live discount/tax preview.");
 			if (Number(this.values.loyalty_points || 0) > 0) notes.push("Loyalty redemption is revalidated and applied when the draft is saved.");
 			return notes.join(" ");
 		},
@@ -587,19 +587,22 @@ export default {
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
 			const changed = [];
+			let rateOnlyChanged = false;
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) changed.push(index);
-				return {
-					item_code: row.item_code || "",
-					qty: row.qty || 1,
-					rate: row.rate ?? "",
-					uom: row.uom || "",
-					discount_percentage: row.discount_percentage ?? "",
-					amount: row.amount ?? "",
-				};
+				const itemChanged = row.item_code !== prior.item_code;
+				const quantityChanged = Number(row.qty || 1) !== Number(prior.qty || 1);
+				const rateChanged = String(row.rate ?? "") !== String(prior.rate ?? "");
+				if (row.item_code && (itemChanged || quantityChanged)) {
+					changed.push(index);
+					return { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
+				}
+				if (row.item_code && rateChanged) rateOnlyChanged = true;
+				return { ...row };
 			});
-			changed.forEach((index) => this.refreshItemPricing(index));
+			this.invalidateCommercialPreview();
+			for (const index of changed) this.refreshItemPricing(index);
+			if (!changed.length || rateOnlyChanged) this.queueCommercialPreview();
 		},
 		async refreshItemPricing(index) {
 			const row = this.values.items[index];
@@ -613,11 +616,25 @@ export default {
 				this.values.items = [...this.values.items];
 				this.pricingContext = { ...(this.pricingContext || {}), ...(pricing || {}) }; this.applyRatePermission(this.pricingContext);
 				if (pricing?.price_list && (pricing?.locked || !this.values.price_list)) this.values.price_list = pricing.price_list;
+				this.queueCommercialPreview();
 			} catch (error) {
-				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+				if (this.pricingTokens[index] === token) {
+					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+					this.invalidateCommercialPreview();
+				}
 			}
 		},
-		refreshAllItemPricing() { this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); }); },
+		refreshAllItemPricing() {
+			this.invalidateCommercialPreview();
+			let pending = 0;
+			this.values.items.forEach((row, index) => {
+				if (!row.item_code) return;
+				pending += 1;
+				this.values.items[index] = { ...row, rate: "", uom: "", discount_percentage: "", amount: "" };
+				this.refreshItemPricing(index);
+			});
+			if (!pending) this.queueCommercialPreview();
+		},
 		invalidateCommercialPreview() {
 			if (this.previewTimer) {
 				window.clearTimeout(this.previewTimer);
