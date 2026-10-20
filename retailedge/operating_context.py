@@ -26,6 +26,7 @@ from retailedge.branch_profile import (
 	resolve_branch_pos_requirement,
 	user_has_pos_profile_assignment,
 )
+from retailedge.user_readiness import SETUP_INCOMPLETE_MESSAGE, get_retailedge_user_readiness
 
 OPERATING_CONTEXT_TTL_SECONDS = 12 * 60 * 60
 OPERATING_CONTEXT_CACHE_PREFIX = "retailedge:operating-context"
@@ -104,6 +105,7 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 		if selected_company
 		else False
 	)
+	readiness = _get_scope_readiness(company=selected_company, user=user) if selected_company else get_retailedge_user_readiness(user=user)
 	return {
 		"companies": companies,
 		"branches": branches,
@@ -114,6 +116,7 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 		"can_view_all_branches": can_view_all_branches,
 		"can_switch_branch": len(branches) + (1 if can_view_all_branches else 0) > 1,
 		"switch_blockers": _get_switch_blockers(user=user),
+		"readiness": readiness,
 	}
 
 
@@ -247,14 +250,19 @@ def can_use_company_wide_branch_view(company: str, user: str | None = None) -> b
 		return False
 
 
+def _get_scope_readiness(*, company: str, user: str) -> dict[str, Any]:
+	"""Keep global-manager landing readiness separate from global operational scope."""
+	readiness_company = "" if user_has_global_branch_access(user=user) else _clean(company)
+	return get_retailedge_user_readiness(user=user, company=readiness_company)
+
+
 def get_operational_branch_scope(company: str, user: str | None = None) -> dict[str, Any]:
 	"""Return explicit unrestricted/restricted Branch scope for operational writes.
 
-	Branch Assignment history is authoritative when it exists. Legacy User
-	Permission, default Branch and Branch Profile restrictions remain the
-	compatibility fallback for users who have not migrated to Branch Assignment.
-	Unlike the legacy empty-list convention, a restricted user with no active
-	Branch is represented explicitly and must never be treated as unrestricted.
+	Branch Assignment history is authoritative when it exists. RetailEdge-role users
+	must additionally pass the explicit user-readiness contract before legacy empty
+	restrictions can ever be interpreted as unrestricted. Global RetailEdge managers
+	still retain their legitimate global Branch scope after readiness is established.
 	"""
 	company = _clean(company)
 	user = user or frappe.session.user
@@ -266,6 +274,15 @@ def get_operational_branch_scope(company: str, user: str | None = None) -> dict[
 			"source": "no_company",
 		}
 	has_global_access = user_has_global_branch_access(user=user)
+	readiness = _get_scope_readiness(company=company, user=user)
+	if readiness.get("applicable") and not readiness.get("ready"):
+		return {
+			"company": company,
+			"restricted": True,
+			"allowed_branches": [],
+			"source": "user_readiness",
+			"readiness_message": readiness.get("message") or SETUP_INCOMPLETE_MESSAGE,
+		}
 	if has_global_access:
 		return {
 			"company": company,
@@ -319,6 +336,8 @@ def resolve_operational_branch(
 
 	scope = get_operational_branch_scope(company, user=user)
 	allowed = scope["allowed_branches"]
+	if scope.get("source") == "user_readiness":
+		frappe.throw(scope.get("readiness_message") or SETUP_INCOMPLETE_MESSAGE, frappe.PermissionError)
 	if branch:
 		if scope["restricted"] and branch not in allowed:
 			frappe.throw(
@@ -362,6 +381,13 @@ def validate_operating_branch(
 		result = {"allowed": False, "company": company, "branch": branch, "reason": "missing_context"}
 		if throw:
 			frappe.throw(_("Company and Branch are required."))
+		return result
+
+	readiness = _get_scope_readiness(company=company, user=user)
+	if readiness.get("applicable") and not readiness.get("ready"):
+		result = {"allowed": False, "company": company, "branch": branch, "reason": "setup_incomplete"}
+		if throw:
+			frappe.throw(readiness.get("message") or SETUP_INCOMPLETE_MESSAGE, frappe.PermissionError)
 		return result
 
 	try:
@@ -710,6 +736,10 @@ def _allowed_companies(*, user: str) -> list[str]:
 def _allowed_branches(*, company: str, user: str) -> list[str]:
 	company = _clean(company)
 	if not company:
+		return []
+
+	readiness = _get_scope_readiness(company=company, user=user)
+	if readiness.get("applicable") and not readiness.get("ready"):
 		return []
 
 	filters: dict[str, Any] = {}
