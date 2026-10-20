@@ -86,7 +86,12 @@ jobs:
 
       - name: Create clean Frappe v16 bench
         run: |
-          bench init             --frappe-branch v16.52.0             --python "$(command -v python)"             --skip-assets             --skip-redis-config-generation             frappe-bench
+          bench init \
+            --frappe-branch v16.52.0 \
+            --python "$(command -v python)" \
+            --skip-assets \
+            --skip-redis-config-generation \
+            frappe-bench
 
           cd frappe-bench
           bench set-config -g db_host 127.0.0.1
@@ -124,7 +129,11 @@ jobs:
       - name: Create browser QA site
         working-directory: frappe-bench
         run: |
-          bench new-site retail-browser.localhost             --db-host 127.0.0.1             --mariadb-root-password root             --admin-password admin             --no-mariadb-socket
+          bench new-site retail-browser.localhost \
+            --db-host 127.0.0.1 \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
 
           bench --site retail-browser.localhost install-app payments
           bench --site retail-browser.localhost install-app erpnext
@@ -196,6 +205,7 @@ jobs:
             browser-tests/retailedge_mvp_smoke.spec.cjs \
             browser-tests/retailedge_rc3_acceptance.spec.cjs \
             browser-tests/retailedge_working_branch_scope.spec.cjs \
+            browser-tests/retailedge_user_readiness.spec.cjs \
             browser-tests/retailedge_printing_shell.spec.cjs \
             browser-tests/retailedge_navigation_collapse.spec.cjs \
             browser-tests/retailedge_shell_date_consumer.spec.cjs \

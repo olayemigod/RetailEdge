@@ -11,7 +11,11 @@ class RetailEdgeBusinessHubMountContractTests(unittest.TestCase):
 		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
 
 		self.assertIn("const app = window.EdgeSuiteUI.createEdgeApp(RetailEdgeBusinessHub);", bundle)
-		self.assertIn("app.mount(target);", bundle)
+		self.assertIn("target.append(readinessTarget, hubTarget);", bundle)
+		self.assertIn("readinessApp.mount(readinessTarget);", bundle)
+		self.assertIn("app.mount(hubTarget);", bundle)
+		self.assertIn("readinessApp.unmount();", bundle)
+		self.assertIn("originalUnmount();", bundle)
 		self.assertIn("return app;", bundle)
 		self.assertNotIn("createEdgeApp(RetailEdgeBusinessHub, target)", bundle)
 

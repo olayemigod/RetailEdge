@@ -15,15 +15,22 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("def _operating_document_filters", source)
 		self.assertIn("get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)", source)
 		self.assertIn("resolve_operational_branch(", source)
-		self.assertIn("filters = _operating_document_filters(doctype, company=company, branch=branch)", source)
+		self.assertIn(
+			"filters = _operating_document_filters(doctype, company=company, branch=branch)", source
+		)
 		self.assertIn("frappe.get_list(\n\t\tdoctype,\n\t\tfilters=filters,", source)
 
 	def test_sales_invoice_recent_list_and_source_search_are_context_scoped(self):
 		source = self.read("professional_sales_invoice.py")
 		self.assertIn("_operating_document_filters", source)
-		self.assertIn('filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)', source)
+		self.assertIn(
+			'filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)', source
+		)
 		self.assertIn("company, branch, _warehouse = _validate_context(values)", source)
-		self.assertIn('filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))', source)
+		self.assertIn(
+			'filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))',
+			source,
+		)
 		self.assertIn("_validate_source_context(source, source_label=source_doctype)", source)
 
 	def test_advance_discovery_never_silently_spans_companies(self):
@@ -31,7 +38,9 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("def _resolve_advance_scope", source)
 		self.assertIn("get_operating_context()", source)
 		self.assertIn('frappe.defaults.get_user_default("Company")', source)
-		self.assertIn('frappe.throw(_("Choose an Operating Company before viewing customer advances."))', source)
+		self.assertIn(
+			'frappe.throw(_("Choose an Operating Company before viewing customer advances."))', source
+		)
 		self.assertIn('"company": company,', source)
 		self.assertIn("company, branch = _resolve_advance_scope(company, branch)", source)
 		self.assertIn("resolve_operational_branch(", source)
@@ -50,11 +59,18 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		source = self.read("guided_payment.py")
 		self.assertIn("BRANCH_FIELD_CANDIDATES", source)
 		self.assertIn("get_first_existing_field", source)
-		self.assertIn('branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)', source)
+		self.assertIn(
+			"branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)", source
+		)
 		self.assertIn("filters[branch_field] = branch", source)
-		self.assertIn('reference_branch = str(row.get(branch_field) or "").strip() if branch_field else ""', source)
+		self.assertIn(
+			'reference_branch = str(row.get(branch_field) or "").strip() if branch_field else ""', source
+		)
 		self.assertIn("resolve_operational_branch(", source)
-		self.assertIn("payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)", source)
+		self.assertIn(
+			"payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)",
+			source,
+		)
 		self.assertIn("doc.set(payment_branch_field, branch)", source)
 		self.assertNotIn("same RetailEdge Branch", source)
 
@@ -63,7 +79,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn('_assert_read("Company", doc.company)', source)
 		self.assertIn('if cost_center and not _can_read("Cost Center", cost_center):', source)
 		self.assertIn('cost_center = ""', source)
-		self.assertIn("frappe.has_permission(doctype, \"create\")", source)
+		self.assertIn('frappe.has_permission(doctype, "create")', source)
 		self.assertIn("Purchasing, stock, Budget and accounting controls remain in force", source)
 		self.assertNotIn("RetailEdge does not maintain a generic project expense", source)
 
@@ -91,6 +107,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 
 	def test_cashier_company_visibility_is_minimum_read_only_permission(self):
 		patch_source = self.read("patches/ensure_retailedge_cashier_company_read.py")
+		hooks = self.read("hooks.py")
 		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
 		fixture = self.read("tests/browser_persona_fixture.py")
 
@@ -108,6 +125,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 			self.assertNotIn(forbidden, patch_source)
 		self.assertNotIn('"Journal Entry"', patch_source)
 		self.assertIn("retailedge.patches.ensure_retailedge_cashier_company_read", patches)
+		self.assertIn("retailedge.patches.ensure_retailedge_cashier_company_read.execute", hooks)
 		self.assertIn(
 			'"browser-cashier@example.com": ("Browser Cashier", ("RetailEdgeCashier",)),',
 			fixture,
@@ -130,7 +148,9 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 				'frappe.new_doc("GL Entry")',
 				'frappe.new_doc("Stock Ledger Entry")',
 			):
-				self.assertNotIn(forbidden, source, msg=f"{relative} contains unsafe accounting write {forbidden}")
+				self.assertNotIn(
+					forbidden, source, msg=f"{relative} contains unsafe accounting write {forbidden}"
+				)
 
 	def test_runtime_errors_and_policies_do_not_expose_product_branding(self):
 		conversion = self.read("quotation_invoice_conversion.py")
@@ -139,7 +159,9 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		guided_payment = self.read("guided_payment.py")
 		project_operations = self.read("project_operations.py")
 		project_routing = self.read("project_expense_routing.py")
-		visible_sources = conversion + project_receipts + advanced + guided_payment + project_operations + project_routing
+		visible_sources = (
+			conversion + project_receipts + advanced + guided_payment + project_operations + project_routing
+		)
 		for visible_error in (
 			"RetailEdge direct Quotation to Sales Invoice tracking",
 			"RetailEdge could not complete",

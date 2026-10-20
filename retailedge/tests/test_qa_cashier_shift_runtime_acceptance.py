@@ -11,6 +11,7 @@ from frappe.utils import nowdate
 
 from retailedge.cashier_expense_accounting import post_cashier_expense_to_accounts
 from retailedge.managed_review_reports import run_review_report
+from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
 from retailedge.tests.browser_persona_fixture import _ensure_user
 from retailedge.tests.rc3_browser_fixture import (
 	_ensure_assignment,
@@ -25,6 +26,7 @@ from retailedge.tests.upgrade_validation_fixture import (
 	_first_cost_center,
 	_first_leaf_account,
 )
+from retailedge.user_readiness import get_retailedge_user_readiness
 
 BRANCH = "RetailEdge QA Cashier Closure"
 CASHIER = "qa-cashier-closure@example.com"
@@ -81,6 +83,8 @@ class TestCashierExpensePermissionDeferralAcceptance(IntegrationTestCase):
 		_ensure_user(POSTER, "QA Cashier Poster", ("RetailEdgeManager", "Accounts Manager"))
 		_ensure_assignment(CASHIER, BRANCH, "Cashier", is_primary=True, active=True)
 		_ensure_assignment(POSTER, BRANCH, "Manager", is_primary=True, active=True)
+		# Match the migration hook even when this class runs in isolation.
+		ensure_cashier_company_read()
 
 		cls.expense_account = _first_leaf_account(COMPANY, root_type="Expense")
 		cls.cash_account = _first_leaf_account(COMPANY, root_type="Asset", account_type="Cash")
@@ -115,6 +119,10 @@ class TestCashierExpensePermissionDeferralAcceptance(IntegrationTestCase):
 
 	def _make_cashier_expense(self):
 		frappe.set_user(CASHIER)
+		readiness = get_retailedge_user_readiness(user=CASHIER, company=COMPANY)
+		self.assertTrue(readiness["ready"], readiness["message"])
+		self.assertTrue(frappe.has_permission("Company", "read", doc=COMPANY))
+		self.assertFalse(frappe.has_permission("Company", "write", doc=COMPANY))
 		self.assertTrue(frappe.has_permission("RetailEdge Cashier Expense", "create"))
 		self.assertTrue(frappe.has_permission("RetailEdge Cashier Expense", "submit"))
 		self.assertFalse(frappe.has_permission("Journal Entry", "create"))
