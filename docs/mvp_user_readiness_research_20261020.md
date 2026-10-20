@@ -104,3 +104,13 @@ At minimum this slice must cover:
 - incomplete-user reconciliation without mutations;
 - browser acceptance for a ready user and an intentionally incomplete user;
 - exact-head CI, linters, upgrade validation, EdgeSuite compatibility, theme, and Browser Persona gates before merge/release promotion.
+
+## PR #235 CI continuation
+
+Failed head `370fb674adafafdadc6b93058f2b7d2708e02663`, run `39429028480`, job `118649243662` exposed missing native Company read for the cashier acceptance persona. The same defect removes the ready cashier's Home navigation in the browser gate. Frappe's pinned `v16.52.0` `frappe/installer.py` defaults `install_app(..., set_as_patched=True)` and records application patches complete without executing them. RetailEdge already owns an idempotent cashier Company read/select repair, but unlike the management and Stock Manager repairs it was absent from `after_migrate`.
+
+Reuse that existing repair in the migration hook after role creation. Do not weaken readiness, add accounting authority, or create Branch Assignments/User Permissions. The isolated cashier acceptance setup also invokes the same repair, verifies readiness and Company read without write, and retains its negative Journal Entry authority assertions. A negative readiness regression proves that an assignment cannot substitute for native Company read.
+
+Two source contracts also became stale when readiness added a sibling Vue mount and server-owned repair labels. Assert the separate notice/hub mount targets and teardown, and test the server repair key/label independently of the Vue binding. Existing browser acceptance exercises the actual label and ready/incomplete-user behavior.
+
+Primary framework source: https://github.com/frappe/frappe/blob/v16.52.0/frappe/installer.py

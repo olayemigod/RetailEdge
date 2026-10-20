@@ -8,7 +8,6 @@ import frappe
 
 from retailedge import operating_context, user_readiness
 
-
 USER = "cashier@example.com"
 COMPANY = "RetailEdge Consulting"
 BRANCH = "Ketu"
@@ -61,7 +60,9 @@ class TestUserReadiness(unittest.TestCase):
 		return_value=[assignment(company="Another Company", branch="Another Branch")],
 	)
 	@patch("retailedge.user_readiness.frappe.db.get_value", return_value=user_values())
-	def test_assignment_in_other_company_does_not_satisfy_selected_company(self, _get_value, _assignments, _roles):
+	def test_assignment_in_other_company_does_not_satisfy_selected_company(
+		self, _get_value, _assignments, _roles
+	):
 		result = user_readiness.get_retailedge_user_readiness(user=USER, company=COMPANY)
 		self.assertFalse(result["ready"])
 		self.assertEqual(result["reasons"][0]["code"], "missing_company_assignment")
@@ -198,7 +199,8 @@ class TestUserReadiness(unittest.TestCase):
 			"User access readiness",
 			"get_retailedge_user_readiness_reconciliation",
 			"Include ready users",
-			"Assign Company and Branch",
+			"row.repair_action.label",
+			"repairReadiness(row)",
 			"loadReadiness",
 		):
 			self.assertIn(contract, assignments_source)
@@ -209,6 +211,23 @@ class TestUserReadiness(unittest.TestCase):
 			'"branch-assignments"',
 		):
 			self.assertIn(contract, navigation_source)
+
+	def test_assignment_repair_label_comes_from_server_contract(self):
+		result = user_readiness._base_result(user=USER, company=COMPANY)
+		user_readiness._block(result, "missing_branch_assignment", "Choose a Branch.", "assign_branch")
+		self.assertEqual(
+			user_readiness._first_repair_action(result),
+			{"key": "assign_branch", "label": "Assign Company and Branch"},
+		)
+
+	@patch("retailedge.user_readiness._has_document_read", return_value=False)
+	@patch("retailedge.user_readiness.frappe.db.get_value")
+	def test_assignment_cannot_replace_native_company_read_permission(self, get_value, document_read):
+		get_value.return_value = frappe._dict(name="RE-BP-00001", default_pos_profile="")
+		result = user_readiness._base_result(user=USER, company=COMPANY)
+		self.assertFalse(user_readiness._validate_assignment(row=assignment(), user=USER, result=result))
+		self.assertEqual(result["reasons"][0]["code"], "company_permission_missing")
+		document_read.assert_called_once_with("Company", COMPANY, user=USER)
 
 
 if __name__ == "__main__":
