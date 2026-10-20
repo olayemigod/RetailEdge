@@ -13,8 +13,8 @@ from retailedge.sales_commercial_preview import (
 	_prepare_preview_document,
 	_preview_item_rows,
 	_serialize_preview,
-	_validate_manual_invoice_discount_against_promotions,
 )
+from retailedge.sales_commercial_promotion_guard import validate_manual_document_discount_against_promotions
 from retailedge.sales_commercial_terms import (
 	SALES_INVOICE_DOCTYPE,
 	SUPPORTED_SALES_COMMERCIAL_DOCTYPES,
@@ -88,7 +88,11 @@ def get_sales_document_commercial_preview(
 	apply_sales_commercial_terms(doc, values)
 	_prepare_preview_document(doc)
 	validate_manual_item_discounts_after_pricing(doc, items)
-	_validate_manual_invoice_discount_against_promotions(doc, values)
+	validate_manual_document_discount_against_promotions(
+		doc,
+		values,
+		document_label=doctype,
+	)
 
 	preview = _serialize_preview(doc, branch=branch, pricing_context=pricing_context)
 	preview["doctype"] = doctype
