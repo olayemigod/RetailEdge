@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -223,6 +224,15 @@ class TestUserReadiness(unittest.TestCase):
 	def test_browser_gate_discovers_user_readiness_acceptance(self):
 		config = (APP_ROOT.parent / "browser-tests" / "playwright.config.cjs").read_text(encoding="utf-8")
 		self.assertIn("|user_readiness|", config)
+
+	def test_readiness_assignment_and_complete_population_ui_state(self):
+		result = subprocess.run(
+			["node", "--test", str(APP_ROOT / "tests" / "branch_assignments_state.cjs")],
+			capture_output=True,
+			text=True,
+			check=False,
+		)
+		self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 	@patch("retailedge.user_readiness._has_document_read", return_value=False)
 	@patch("retailedge.user_readiness.frappe.db.get_value")

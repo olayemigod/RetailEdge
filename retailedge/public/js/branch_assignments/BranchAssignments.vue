@@ -31,7 +31,7 @@
 					</div>
 					<div class="summary-actions">
 						<button type="button" class="edge-button edge-button--secondary" @click="openBranchSetup">Branch Setup</button>
-						<button v-if="canCreate" type="button" class="edge-button edge-button--primary" @click="openAssign">Assign User</button>
+						<button v-if="canCreate" type="button" class="edge-button edge-button--primary" @click="openAssign()">Assign User</button>
 					</div>
 				</section>
 
@@ -43,8 +43,8 @@
 							<p>RetailEdge roles do not create Branch access automatically. Incomplete users remain unchanged until an administrator explicitly repairs their setup.</p>
 						</div>
 						<div class="summary-actions">
-							<label class="readiness-toggle"><input v-model="includeReadyUsers" type="checkbox" @change="loadReadiness" /><span>Include ready users</span></label>
-							<button type="button" class="edge-button edge-button--secondary" :disabled="readinessLoading" @click="loadReadiness">{{ readinessLoading ? "Refreshing…" : "Refresh" }}</button>
+							<label class="readiness-toggle"><input v-model="includeReadyUsers" type="checkbox" :disabled="readinessLoading" @change="loadReadiness()" /><span>Include ready users</span></label>
+							<button type="button" class="edge-button edge-button--secondary" :disabled="readinessLoading" @click="loadReadiness()">{{ readinessLoading ? "Refreshing…" : "Refresh" }}</button>
 						</div>
 					</div>
 					<div class="readiness-counts">
@@ -70,6 +70,10 @@
 								<tr v-if="!readinessRows.length"><td colspan="5" class="empty-cell">{{ includeReadyUsers ? "No RetailEdge users match this readiness view." : "No incomplete RetailEdge users found." }}</td></tr>
 							</tbody>
 						</table>
+					</div>
+					<div v-if="readinessLoaded && !readinessError" class="summary-actions">
+						<span>{{ readinessRows.length }} of {{ readinessTotal }} users</span>
+						<button v-if="readinessHasMore" type="button" class="edge-button edge-button--secondary" :disabled="readinessLoading" @click="loadReadiness({ append: true })">{{ readinessLoading ? "Loading…" : "Load More Users" }}</button>
 					</div>
 				</section>
 
@@ -171,7 +175,7 @@ function extractServerMessage(error, fallback) {
 	return fallback;
 }
 function priceListRows(values = []) { return (values || []).map((row) => ({ price_list: typeof row === "string" ? row : (row?.price_list || "") })).filter((row) => row.price_list); }
-function blankAssign(user = "") { return { user, company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, allowed_price_lists: [], transfer_reason: "", notes: "" }; }
+function blankAssign(user = "") { return { user: typeof user === "string" ? user : "", company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, allowed_price_lists: [], transfer_reason: "", notes: "" }; }
 function blankTransfer(row = {}) { return { company: row.company || "", branch: "", effective_date: frappe.datetime.get_today(), branch_role: row.branch_role || "Other", allowed_price_lists: priceListRows(row.allowed_price_lists), reason: "", notes: "" }; }
 
 export default {
@@ -182,7 +186,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", assignments: [], canCreate: false, canWrite: false,
 			filters: { user: "", company: "", branch: "", status: "" }, sortKey: "effective_from", sortDirection: "desc", userName: "", menuItems: [], canUseNativeDesk: false,
 			assignOpen: false, transferOpen: false, priceListsOpen: false, saving: false, assignError: "", transferError: "", priceListsError: "", assign: blankAssign(), transfer: blankTransfer(), transferRow: {}, priceListRow: {}, priceListRows: [], roles: ROLES,
-			readinessRows: [], readinessLoading: false, readinessLoaded: false, readinessError: "", includeReadyUsers: false, readinessSummary: { ready_count: 0, incomplete_count: 0, can_repair: false },
+			readinessRows: [], readinessLoading: false, readinessLoaded: false, readinessError: "", includeReadyUsers: false, readinessTotal: 0, readinessHasMore: false, readinessSummary: { ready_count: 0, incomplete_count: 0, can_repair: false },
 			priceListTableField: { label: "Allowed Price Lists", description: "Price Lists available to this user in the assigned Branch." },
 			priceListColumns: [{ fieldname: "price_list", label: "Price List", fieldtype: "Link", placeholder: "Search Price List" }],
 			columns: [{ key: "user", label: "User" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" }, { key: "branch_role", label: "Role" }, { key: "allowed_price_lists", label: "Price Lists" }, { key: "effective_from", label: "From" }, { key: "effective_to", label: "To" }, { key: "status", label: "Status" }],
@@ -197,7 +201,24 @@ export default {
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); },
 		async loadAssignments() { if (this.loading) return; this.loading = true; this.error = ""; try { const data = await callMethod(CONTEXT_METHOD, { filters: this.filters }); this.assignments = Array.isArray(data.assignments) ? data.assignments : []; this.canCreate = Boolean(data.can_create); this.canWrite = Boolean(data.can_write); this.userName = this.userName || data.user_name || ""; this.loaded = true; } catch (error) { this.error = extractServerMessage(error, __("Branch Assignment history could not be loaded.")); } finally { this.loading = false; } },
-		async loadReadiness() { if (this.readinessLoading) return; this.readinessLoading = true; this.readinessError = ""; try { const data = await callMethod(READINESS_METHOD, { include_ready: this.includeReadyUsers ? 1 : 0, start: 0, page_length: 100 }); this.readinessRows = Array.isArray(data.rows) ? data.rows : []; this.readinessSummary = { ready_count: Number(data.ready_count || 0), incomplete_count: Number(data.incomplete_count || 0), can_repair: Boolean(data.can_repair) }; this.readinessLoaded = true; } catch (error) { this.readinessError = extractServerMessage(error, __("User access readiness could not be loaded.")); } finally { this.readinessLoading = false; } },
+		async loadReadiness({ append = false } = {}) {
+			if (this.readinessLoading) return;
+			this.readinessLoading = true;
+			this.readinessError = "";
+			try {
+				const data = await callMethod(READINESS_METHOD, { include_ready: this.includeReadyUsers ? 1 : 0, start: append ? this.readinessRows.length : 0, page_length: 100 });
+				const rows = Array.isArray(data.rows) ? data.rows : [];
+				this.readinessRows = append ? [...this.readinessRows, ...rows] : rows;
+				this.readinessTotal = Number(data.total || 0);
+				this.readinessHasMore = Boolean(data.has_more);
+				this.readinessSummary = { ready_count: Number(data.ready_count || 0), incomplete_count: Number(data.incomplete_count || 0), can_repair: Boolean(data.can_repair) };
+				this.readinessLoaded = true;
+			} catch (error) {
+				this.readinessError = extractServerMessage(error, __("User access readiness could not be loaded."));
+			} finally {
+				this.readinessLoading = false;
+			}
+		},
 		async repairReadiness(row) { const key = row?.repair_action?.key || ""; if (key === "assign_branch" && this.readinessSummary.can_repair) { this.openAssign(row.user); return; } if (key === "open_branch_setup" || key === "configure_pos_profile") { this.openBranchSetup(); return; } if (["set_primary_branch", "review_assignment"].includes(key)) { this.filters.user = row.user || ""; await this.loadAssignments(); return; } if (["review_permissions", "review_user"].includes(key) && this.canUseNativeDesk && row?.user) { window.open(`/app/user/${encodeURIComponent(row.user)}`, "_blank", "noopener,noreferrer"); return; } frappe.show_alert({ message: __("Ask a System Manager to complete this user's access setup."), indicator: "orange" }); },
 		clearFilters() { this.filters = { user: "", company: "", branch: "", status: "" }; this.loadAssignments(); },
 		setFilterCompany(value) { this.filters.company = value || ""; this.filters.branch = ""; },
