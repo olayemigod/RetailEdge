@@ -27,6 +27,8 @@ PRESERVED_SHIFT_WORKFLOW_TARGETS = {
 SALES_GROUP_KEY = "sales"
 MAKE_SALE_TARGET = "make-sale"
 PROFESSIONAL_SELLING_TARGET = "professional-selling"
+LEGACY_SALES_FORECAST_TARGET = "sales-forecast"
+RETAILEDGE_SALES_FORECAST_TARGET = "retailedge-sales-forecast"
 
 
 def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]) -> None:
@@ -112,6 +114,14 @@ def _prioritize_sales_navigation(navigation_groups: list[dict[str, Any]]) -> Non
 		return
 
 
+def _normalize_sales_forecast_route(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use the RetailEdge Page route without shadowing ERPNext's Sales Forecast DocType."""
+	for group in navigation_groups:
+		for item in group.get("items") or []:
+			if item.get("target_type") == "Page" and item.get("target") == LEGACY_SALES_FORECAST_TARGET:
+				item["target"] = RETAILEDGE_SALES_FORECAST_TARGET
+
+
 def _load_master_context_quietly() -> dict[str, Any]:
 	"""Build permission-aware navigation without leaking probe messages to Desk.
 
@@ -137,6 +147,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
 	_prioritize_sales_navigation(navigation_groups)
+	_normalize_sales_forecast_route(navigation_groups)
 	context["navigation_groups"] = navigation_groups
 	# Printing normalization is presentation/navigation-only. It runs last so the
 	# final Business Hub keeps the current consolidated review and Sales ordering model
