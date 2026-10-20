@@ -90,10 +90,10 @@ test("old audit: Sales User Customer 360 completes real API aggregation without 
 		await openProductPage(page, "customer-360", "Customer 360");
 		await assertMultiColumnGrid(page.locator(".customer-360-filter-grid").first());
 
-		const response = await context.request.post(
+		const response = await context.request.get(
 			`${BASE_URL}/api/method/retailedge.customer_360.get_customer_360`,
 			{
-				form: {
+				params: {
 					filters: JSON.stringify({
 						company: COMPANY,
 						customer: CUSTOMER,
@@ -161,7 +161,7 @@ test("old audit: Cashier remains denied Supplier Document Review", async ({ brow
 test("old audit: Sales Forecast opens Forecasting & Planning in the same tab with governed guidance", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
-		await openProductPage(page, "sales-forecast", "Sales Forecast");
+		await openProductPage(page, "retailedge-sales-forecast", "Sales Forecast");
 		const originalPageCount = context.pages().length;
 		await page.getByRole("button", { name: "Planning Workspace", exact: true }).click();
 		await page.getByRole("heading", { name: "Forecasting & Planning", exact: true }).first().waitFor({
