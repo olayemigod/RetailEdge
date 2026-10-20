@@ -67,7 +67,8 @@ class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
 		):
 			self.assertIn(label, vue)
 		self.assertIn("Draft preparation never posts accounting", vue)
-		self.assertIn("ERPNext\'s Purchase Invoice submit lifecycle", vue)
+		self.assertIn("standard Purchase Invoice submission flow", vue)
+		self.assertNotIn("ERPNext's Purchase Invoice submit lifecycle", vue)
 		self.assertNotIn(".submit()", vue)
 
 	def test_page_roles_are_internal_buying_and_accounts_only(self):
