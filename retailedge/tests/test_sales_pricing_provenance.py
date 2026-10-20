@@ -201,16 +201,18 @@ class TestSalesPricingProvenance(unittest.TestCase):
 			"Item promotions",
 			"Rate adjustments",
 			"Line discounts",
-			"Invoice promotion",
-			"Invoice discount",
-			"Before invoice",
+			"invoiceAdjustmentLabel",
+			"grandTotalBeforeAdjustmentLabel",
 		):
 			self.assertIn(wording, summary)
+		self.assertIn('documentLabel: { type: String, default: "Invoice" }', summary)
+		self.assertIn('const prefix = this.documentLabel === "Invoice" ? "Invoice" : this.documentLabel', summary)
 		self.assertNotIn("Price adjustment", summary)
 		self.assertNotIn("Selling rate adjustments", summary)
 		self.assertIn("Automatic invoice promotion", terms)
-		self.assertIn('label="Invoice discount"', terms)
-		self.assertIn('label: "No invoice discount"', terms)
+		self.assertIn(':label="discountFieldLabel"', terms)
+		self.assertIn('label: this.documentLabel === "Invoice" ? "No invoice discount"', terms)
+		self.assertIn('discountFieldLabel()', terms)
 		self.assertNotIn('label="Additional discount"', terms)
 		self.assertNotIn("activeTermCount", terms)
 		for source in (make_sale, quick_sale):
