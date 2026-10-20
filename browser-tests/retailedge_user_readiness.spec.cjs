@@ -137,8 +137,9 @@ test("setup administrator can discover the incomplete historical user without ba
 			timeout: 25_000,
 		});
 		await expect(page.getByText("User access readiness", { exact: true })).toBeVisible();
-		await expect(page.getByText(INCOMPLETE_USER, { exact: true })).toBeVisible();
-		await expect(page.getByRole("button", { name: "Assign Company and Branch", exact: true })).toBeVisible();
+		const incompleteRow = page.locator(".readiness-table tbody tr").filter({ hasText: INCOMPLETE_USER });
+		await expect(incompleteRow).toBeVisible();
+		await expect(incompleteRow.getByRole("button", { name: "Assign Company and Branch", exact: true })).toBeVisible();
 
 		const stillIncomplete = await apiGet(context, "retailedge.user_readiness.get_retailedge_user_readiness_reconciliation", {
 			include_ready: 0,

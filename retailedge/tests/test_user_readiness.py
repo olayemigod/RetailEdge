@@ -220,6 +220,10 @@ class TestUserReadiness(unittest.TestCase):
 			{"key": "assign_branch", "label": "Assign Company and Branch"},
 		)
 
+	def test_browser_gate_discovers_user_readiness_acceptance(self):
+		config = (APP_ROOT.parent / "browser-tests" / "playwright.config.cjs").read_text(encoding="utf-8")
+		self.assertIn("|user_readiness|", config)
+
 	@patch("retailedge.user_readiness._has_document_read", return_value=False)
 	@patch("retailedge.user_readiness.frappe.db.get_value")
 	def test_assignment_cannot_replace_native_company_read_permission(self, get_value, document_read):

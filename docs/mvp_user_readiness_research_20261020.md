@@ -114,3 +114,5 @@ Reuse that existing repair in the migration hook after role creation. Do not wea
 Two source contracts also became stale when readiness added a sibling Vue mount and server-owned repair labels. Assert the separate notice/hub mount targets and teardown, and test the server repair key/label independently of the Vue binding. Existing browser acceptance exercises the actual label and ready/incomplete-user behavior.
 
 Primary framework source: https://github.com/frappe/frappe/blob/v16.52.0/frappe/installer.py
+
+The first browser continuation passed 54 existing cases but its Playwright `testMatch` excluded `user_readiness`, despite the workflow naming that file. Include the readiness spec in discovery and verify that all three readiness journeys appear in the executed run. Scope the administrator's repair assertions to the intended incomplete user's row, since other incomplete users and assignment history are valid simultaneous page content.
