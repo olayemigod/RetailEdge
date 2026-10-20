@@ -20,6 +20,11 @@ except ImportError:
 
 
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
+SUPPORTED_SALES_COMMERCIAL_DOCTYPES = {
+	SALES_INVOICE_DOCTYPE,
+	"Quotation",
+	"Sales Order",
+}
 COUPON_DOCTYPE = "Coupon Code"
 TAX_CATEGORY_DOCTYPE = "Tax Category"
 TAX_TEMPLATE_DOCTYPE = "Sales Taxes and Charges Template"
@@ -27,14 +32,25 @@ MAX_SEARCH_RESULTS = 20
 ALLOWED_DISCOUNT_TARGETS = {"Grand Total", "Net Total"}
 
 
-def get_sales_commercial_term_capabilities(doc=None) -> dict[str, bool]:
-	"""Return ERPNext-permission-backed commercial term capabilities."""
+def _normalise_sales_document_type(document_type: str | None) -> str:
+	doctype = str(document_type or SALES_INVOICE_DOCTYPE).strip() or SALES_INVOICE_DOCTYPE
+	if doctype not in SUPPORTED_SALES_COMMERCIAL_DOCTYPES:
+		frappe.throw(_("Commercial terms are not supported for {0}.").format(doctype), frappe.ValidationError)
+	return doctype
+
+
+def get_sales_commercial_term_capabilities(
+	doc=None,
+	document_type: str = SALES_INVOICE_DOCTYPE,
+) -> dict[str, bool]:
+	"""Return ERPNext-permission-backed commercial capabilities for one sales DocType."""
+	doctype = _normalise_sales_document_type(getattr(doc, "doctype", None) or document_type)
 	if doc is None:
-		can_edit = bool(frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"))
+		can_edit = bool(frappe.has_permission(doctype, "create"))
 	else:
 		can_edit = bool(
 			cint(doc.docstatus) == 0
-			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+			and frappe.has_permission(doctype, "write", doc=doc)
 		)
 	return {
 		"can_edit_additional_discount": can_edit,
@@ -46,8 +62,8 @@ def get_sales_commercial_term_capabilities(doc=None) -> dict[str, bool]:
 
 @frappe.whitelist()
 def get_sales_commercial_edit_context(name: str) -> dict[str, Any]:
-	"""Return the exact saved draft terms a permitted Make Sale user may edit."""
-	doc = _assert_invoice_term_search_access(name)
+	"""Return the exact saved Sales Invoice draft terms a permitted Make Sale user may edit."""
+	doc = _assert_sales_term_search_access(name, SALES_INVOICE_DOCTYPE)
 	if doc is None:
 		frappe.throw(_("Sales Invoice is required."), frappe.ValidationError)
 	return {
@@ -65,13 +81,15 @@ def search_sales_commercial_term_options(
 	txt: str = "",
 	values: dict | str | None = None,
 	limit: int = MAX_SEARCH_RESULTS,
+	document_type: str = SALES_INVOICE_DOCTYPE,
 ) -> list[dict[str, Any]]:
-	"""Search only the ERPNext commercial masters the current user may select."""
+	"""Search only commercial masters the user may select for the target sales DocType."""
 	values = _coerce_values(values)
-	doc = _assert_invoice_term_search_access(values.get("document_name"))
+	doctype = _normalise_sales_document_type(document_type)
+	doc = _assert_sales_term_search_access(values.get("document_name"), doctype)
 	if doc is not None:
 		values["company"] = str(doc.get("company") or "").strip()
-		values["customer"] = str(doc.get("customer") or "").strip()
+		values["customer"] = str(doc.get("customer") or doc.get("party_name") or "").strip()
 		if "tax_category" not in values:
 			values["tax_category"] = str(doc.get("tax_category") or "").strip()
 	limit = max(1, min(cint(limit) or MAX_SEARCH_RESULTS, MAX_SEARCH_RESULTS))
@@ -85,7 +103,7 @@ def search_sales_commercial_term_options(
 			query,
 			filters={"disabled": 0},
 			page_length=limit,
-			reference_doctype=SALES_INVOICE_DOCTYPE,
+			reference_doctype=doctype,
 			link_fieldname="tax_category",
 		)
 
@@ -100,6 +118,7 @@ def search_sales_commercial_term_options(
 			company=company,
 			tax_category=str(values.get("tax_category") or "").strip(),
 			limit=limit,
+			reference_doctype=doctype,
 		)
 
 	if fieldname == "coupon_code":
@@ -118,10 +137,8 @@ def normalise_sales_commercial_terms(values: dict | str | None) -> dict[str, Any
 
 	if "coupon_code" in values:
 		result["coupon_code"] = str(values.get("coupon_code") or "").strip()
-
 	if "tax_category" in values:
 		result["tax_category"] = str(values.get("tax_category") or "").strip()
-
 	if "taxes_and_charges" in values:
 		result["taxes_and_charges"] = str(values.get("taxes_and_charges") or "").strip()
 
@@ -129,7 +146,6 @@ def normalise_sales_commercial_terms(values: dict | str | None) -> dict[str, Any
 	amount_present = "discount_amount" in values
 	percentage = flt(values.get("additional_discount_percentage") or 0) if percentage_present else None
 	amount = flt(values.get("discount_amount") or 0) if amount_present else None
-
 	if percentage is not None:
 		if percentage < 0 or percentage > 100:
 			frappe.throw(_("Additional Discount % must be between 0 and 100."), frappe.ValidationError)
@@ -149,18 +165,18 @@ def normalise_sales_commercial_terms(values: dict | str | None) -> dict[str, Any
 		if apply_on and apply_on not in ALLOWED_DISCOUNT_TARGETS:
 			frappe.throw(_("Choose Net Total or Grand Total for the additional discount."), frappe.ValidationError)
 		result["apply_discount_on"] = apply_on
-
 	return result
 
 
 def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, Any]:
-	"""Apply bounded ERPNext Sales Invoice commercial terms in memory.
+	"""Apply bounded native ERPNext commercial terms to a supported sales document in memory.
 
 	A blank tax-template input means "automatic": the current/default ERPNext
 	tax resolution is preserved unless Tax Category itself changes. A category
 	change clears the prior template and tax rows so ERPNext can resolve the new
 	tax treatment rather than retaining a stale category/template combination.
 	"""
+	_normalise_sales_document_type(getattr(doc, "doctype", None) or SALES_INVOICE_DOCTYPE)
 	terms = normalise_sales_commercial_terms(values)
 	if not terms:
 		return sales_commercial_terms_from_doc(doc)
@@ -202,11 +218,9 @@ def apply_sales_commercial_terms(doc, values: dict | str | None) -> dict[str, An
 		if terms["discount_amount"]:
 			doc.set("additional_discount_percentage", 0)
 	if "apply_discount_on" in terms:
-		apply_on = terms["apply_discount_on"] or "Grand Total"
-		doc.set("apply_discount_on", apply_on)
+		doc.set("apply_discount_on", terms["apply_discount_on"] or "Grand Total")
 	elif (percentage_supplied or amount_supplied) and not doc.get("apply_discount_on"):
 		doc.set("apply_discount_on", "Grand Total")
-
 	return sales_commercial_terms_from_doc(doc)
 
 
@@ -237,7 +251,7 @@ def _validate_sales_tax_template(doc, name: str) -> None:
 		name,
 		["company", "disabled", "tax_category"],
 		as_dict=True,
-	)
+	) or {}
 	if not row:
 		frappe.throw(_("Sales Taxes and Charges Template {0} does not exist.").format(name))
 	if cint(row.get("disabled")):
@@ -267,6 +281,7 @@ def _search_sales_tax_templates(
 	company: str,
 	tax_category: str,
 	limit: int,
+	reference_doctype: str = SALES_INVOICE_DOCTYPE,
 ) -> list[dict[str, Any]]:
 	base_filters: dict[str, Any] = {"company": company, "disabled": 0}
 	if not tax_category:
@@ -275,7 +290,7 @@ def _search_sales_tax_templates(
 			query,
 			filters=base_filters,
 			page_length=limit,
-			reference_doctype=SALES_INVOICE_DOCTYPE,
+			reference_doctype=reference_doctype,
 			link_fieldname="taxes_and_charges",
 		)
 
@@ -288,7 +303,7 @@ def _search_sales_tax_templates(
 			query,
 			filters=filters,
 			page_length=limit,
-			reference_doctype=SALES_INVOICE_DOCTYPE,
+			reference_doctype=reference_doctype,
 			link_fieldname="taxes_and_charges",
 		):
 			value = str(row.get("value") or row.get("name") or "").strip() if isinstance(row, dict) else str(row or "").strip()
@@ -346,40 +361,36 @@ def _search_coupon_codes(query: str, *, values: dict[str, Any], limit: int) -> l
 	return result
 
 
-def _assert_invoice_term_search_access(document_name: Any):
+def _assert_sales_term_search_access(document_name: Any, document_type: str):
+	doctype = _normalise_sales_document_type(document_type)
 	name = str(document_name or "").strip()
 	if not name:
-		if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "create"):
-			frappe.throw(_("You do not have permission to prepare a Sales Invoice."), frappe.PermissionError)
+		if not frappe.has_permission(doctype, "create"):
+			frappe.throw(_("You do not have permission to prepare a {0}.").format(doctype), frappe.PermissionError)
 		return None
-	if not frappe.db.exists(SALES_INVOICE_DOCTYPE, name):
-		frappe.throw(_("Sales Invoice {0} does not exist.").format(name))
-	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
+	if not frappe.db.exists(doctype, name):
+		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
+	doc = frappe.get_doc(doctype, name)
 	if cint(doc.docstatus) != 0:
-		frappe.throw(_("Only draft Sales Invoices can change commercial terms."), frappe.ValidationError)
-	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "read", doc=doc) or not frappe.has_permission(
-		SALES_INVOICE_DOCTYPE,
-		"write",
-		doc=doc,
-	):
-		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+		frappe.throw(_("Only draft {0} documents can change commercial terms.").format(doctype), frappe.ValidationError)
+	if not frappe.has_permission(doctype, "read", doc=doc) or not frappe.has_permission(doctype, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this {0}.").format(doctype), frappe.PermissionError)
 	return doc
 
 
+def _assert_invoice_term_search_access(document_name: Any):
+	"""Backward-compatible Sales Invoice access helper for existing Make Sale callers/tests."""
+	return _assert_sales_term_search_access(document_name, SALES_INVOICE_DOCTYPE)
+
+
 def _can_select(doctype: str) -> bool:
-	return bool(
-		frappe.has_permission(doctype, "select")
-		or frappe.has_permission(doctype, "read")
-	)
+	return bool(frappe.has_permission(doctype, "select") or frappe.has_permission(doctype, "read"))
 
 
 def _assert_select_permission(doctype: str, name: str) -> None:
 	if not name or not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
-	if not (
-		frappe.has_permission(doctype, "select", doc=name)
-		or frappe.has_permission(doctype, "read", doc=name)
-	):
+	if not (frappe.has_permission(doctype, "select", doc=name) or frappe.has_permission(doctype, "read", doc=name)):
 		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
 
 
