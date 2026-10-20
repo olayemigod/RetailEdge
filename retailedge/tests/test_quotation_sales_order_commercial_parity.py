@@ -8,6 +8,7 @@ QUOTATION = ROOT / "professional_quotation.py"
 SALES_ORDER = ROOT / "professional_sales_order.py"
 PREVIEW = ROOT / "sales_document_commercial_preview.py"
 TERMS = ROOT / "sales_commercial_terms.py"
+PROMOTION_GUARD = ROOT / "sales_commercial_promotion_guard.py"
 QUOTATION_UI = ROOT / "public/js/professional_selling/ProfessionalQuotationDialog.vue"
 SALES_ORDER_UI = ROOT / "public/js/professional_selling/ProfessionalSalesOrderDialog.vue"
 PANEL = ROOT / "public/js/professional_selling/ProfessionalSalesCommercialPanel.vue"
@@ -47,7 +48,7 @@ def test_generic_preview_is_persistence_free_and_delegates_calculation_to_erpnex
 		"apply_manual_item_discount",
 		"apply_sales_commercial_terms(doc, values)",
 		"validate_manual_item_discounts_after_pricing",
-		"_validate_manual_invoice_discount_against_promotions",
+		"validate_manual_document_discount_against_promotions",
 		'preview["document_total"] = preview.get("invoice_total")',
 	):
 		assert contract in text
@@ -61,6 +62,21 @@ def test_generic_preview_is_persistence_free_and_delegates_calculation_to_erpnex
 		assert forbidden not in text
 
 
+def test_shared_promotion_guard_is_document_neutral_and_cycle_free():
+	text = read(PROMOTION_GUARD)
+	for contract in (
+		"transaction_promotion_names",
+		"validate_manual_document_discount_against_promotions",
+		"additional_discount_percentage",
+		"discount_amount",
+		"document_label",
+	):
+		assert contract in text
+	assert "sales_commercial_preview" not in text
+	assert "professional_quotation" not in text
+	assert "professional_sales_order" not in text
+
+
 def test_quotation_save_uses_same_commercial_helpers_before_native_draft_insert():
 	text = read(QUOTATION)
 	for contract in (
@@ -68,12 +84,14 @@ def test_quotation_save_uses_same_commercial_helpers_before_native_draft_insert(
 		"apply_manual_item_discount",
 		"apply_sales_commercial_terms(doc, values)",
 		"validate_manual_item_discounts_after_pricing(doc, items)",
-		"_validate_manual_invoice_discount_against_promotions(doc, values)",
+		"validate_manual_document_discount_against_promotions",
+		'document_label="Quotation"',
 		"sales_commercial_terms_from_doc(doc)",
 		"get_sales_commercial_term_capabilities(doc)",
 	):
 		assert contract in text
 	assert text.index("apply_sales_commercial_terms(doc, values)") < text.index("doc.insert()")
+	assert "sales_commercial_preview import" not in text
 	assert "doc.submit()" not in text
 	assert "frappe.db.commit" not in text
 
@@ -84,12 +102,14 @@ def test_standalone_sales_order_uses_same_commercial_helpers_but_native_quotatio
 		"apply_manual_item_discount",
 		"apply_sales_commercial_terms(doc, values)",
 		"validate_manual_item_discounts_after_pricing(doc, items)",
-		"_validate_manual_invoice_discount_against_promotions(doc, values)",
+		"validate_manual_document_discount_against_promotions",
+		'document_label="Sales Order"',
 		"target = erpnext_make_sales_order(source.name)",
 		"accepted commercial terms",
 	):
 		assert contract in text
 	assert text.index("apply_sales_commercial_terms(doc, values)") < text.index("doc.insert()")
+	assert "sales_commercial_preview import" not in text
 	mapping_start = text.index("def create_sales_order_from_quotation")
 	mapping_text = text[mapping_start:]
 	assert "apply_sales_commercial_terms(target" not in mapping_text
