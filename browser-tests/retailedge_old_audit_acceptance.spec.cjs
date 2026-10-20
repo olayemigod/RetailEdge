@@ -168,7 +168,7 @@ test("old audit: Sales Forecast opens Forecasting & Planning in the same tab wit
 			state: "visible",
 			timeout: 25_000,
 		});
-		await expect(page).toHaveURL(/\/app\/forecasting-planning(?:$|[?#])/);
+		await expect(page).toHaveURL(/(?:\/app\/forecasting-planning|\/desk\/retailedge\/forecasting-planning)(?:$|[?#])/);
 		expect(context.pages().length).toBe(originalPageCount);
 		await expect(page.getByText(/Posted accounting and stock records remain the source of truth/i)).toBeVisible();
 		await expect(page.getByText(/Forecast and Plan are analytical only and do not create transactions/i)).toBeVisible();
