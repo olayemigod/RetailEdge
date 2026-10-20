@@ -145,6 +145,13 @@ test("setup administrator can discover the incomplete historical user without ba
 		const incompleteRow = page.locator(".readiness-table tbody tr").filter({ hasText: INCOMPLETE_USER });
 		await expect(incompleteRow).toBeVisible();
 		await expect(incompleteRow.getByRole("button", { name: "Assign Company and Branch", exact: true })).toBeVisible();
+		await incompleteRow.getByRole("button", { name: "Assign Company and Branch", exact: true }).click();
+		const assignDialog = page.getByRole("dialog", { name: "Assign User to Branch", exact: true });
+		await expect(assignDialog.getByPlaceholder("Choose system user", { exact: true })).toHaveValue(INCOMPLETE_USER);
+		await assignDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+		await page.getByRole("button", { name: "Assign User", exact: true }).click();
+		await expect(assignDialog.getByPlaceholder("Choose system user", { exact: true })).toHaveValue("");
+		await assignDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
 		const stillIncomplete = await apiGet(context, "retailedge.user_readiness.get_retailedge_user_readiness_reconciliation", {
 			include_ready: 0,
