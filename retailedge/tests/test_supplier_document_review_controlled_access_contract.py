@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ACCESS = ROOT / "supplier_document_review_access.py"
 HOOKS = ROOT / "hooks.py"
+SUPPLIER_REVIEW_UI = ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue"
 
 
 def test_supplier_review_read_endpoints_use_controlled_access_override():
@@ -19,6 +20,30 @@ def test_supplier_review_read_endpoints_use_controlled_access_override():
 		'"retailedge.supplier_document_review.search_supplier_document_review_options": '
 		'"retailedge.supplier_document_review_access.search_supplier_document_review_options"'
 	) in text
+
+
+def test_supplier_review_ui_uses_get_for_read_only_endpoints_and_post_for_mutations():
+	text = SUPPLIER_REVIEW_UI.read_text(encoding="utf-8")
+
+	assert "const READ_METHODS = new Set([" in text
+	for method in (
+		"retailedge.supplier_document_review.get_supplier_document_review_context",
+		"retailedge.supplier_document_review.search_supplier_document_review_options",
+		"retailedge.supplier_document_review.get_supplier_document_purchase_invoice_review",
+	):
+		assert f'"{method}"' in text
+	assert 'type: READ_METHODS.has(method) ? "GET" : "POST"' in text
+
+	read_methods_block = text.split("const READ_METHODS = new Set([", 1)[1].split("]);", 1)[0]
+	for mutation in (
+		"retailedge.supplier_document_extraction.record_manual_extraction",
+		"retailedge.supplier_document_extraction.record_extraction_review",
+		"retailedge.supplier_document_review.review_supplier_document_intake",
+		"retailedge.supplier_document_review.prepare_draft_purchase_invoice",
+		"retailedge.supplier_document_review.apply_supplier_document_purchase_invoice_workflow_action",
+		"retailedge.supplier_document_review.submit_supplier_document_purchase_invoice",
+	):
+		assert mutation not in read_methods_block
 
 
 def test_supplier_review_write_actions_are_not_overridden():
