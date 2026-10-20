@@ -19,7 +19,7 @@ from retailedge.professional_selling import (
 	_validate_context,
 	_validate_stored_operational_branch,
 )
-from retailedge.sales_commercial_preview import _validate_manual_invoice_discount_against_promotions
+from retailedge.sales_commercial_promotion_guard import validate_manual_document_discount_against_promotions
 from retailedge.sales_commercial_terms import (
 	apply_sales_commercial_terms,
 	get_sales_commercial_term_capabilities,
@@ -232,7 +232,11 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 	# Draft-only. ERPNext owns pricing, promotions, tax, totals and validation.
 	doc.insert()
 	validate_manual_item_discounts_after_pricing(doc, items)
-	_validate_manual_invoice_discount_against_promotions(doc, values)
+	validate_manual_document_discount_against_promotions(
+		doc,
+		values,
+		document_label="Sales Order",
+	)
 	_apply_shipping_rule_to_draft(doc)
 	return _sales_order_response(doc, branch=branch)
 
