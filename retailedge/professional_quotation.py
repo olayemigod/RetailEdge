@@ -8,6 +8,19 @@ from frappe.utils import flt, getdate, nowdate
 
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.professional_selling import _assert_read, _coerce_values, _permission, _validate_context
+from retailedge.sales_commercial_preview import _validate_manual_invoice_discount_against_promotions
+from retailedge.sales_commercial_terms import (
+	apply_sales_commercial_terms,
+	get_sales_commercial_term_capabilities,
+	sales_commercial_terms_from_doc,
+)
+from retailedge.sales_item_discounts import (
+	MANUAL_DISCOUNT_AMOUNT,
+	MANUAL_DISCOUNT_PERCENTAGE,
+	apply_manual_item_discount,
+	normalise_manual_item_discount,
+	validate_manual_item_discounts_after_pricing,
+)
 from retailedge.transaction_branch_attribution import apply_transaction_branch_attribution
 
 
@@ -36,7 +49,12 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 		rate = None if rate_value in (None, "") else flt(rate_value)
 		if rate is not None and rate < 0:
 			frappe.throw(_("Selling Rate on row {0} cannot be negative.").format(index))
-		normalised.append({"item_code": item_code, "qty": qty, "rate": rate})
+		row = {"item_code": item_code, "qty": qty, "rate": rate}
+		discount = normalise_manual_item_discount(item, index=index)
+		if discount["supplied"]:
+			row[MANUAL_DISCOUNT_PERCENTAGE] = discount[MANUAL_DISCOUNT_PERCENTAGE]
+			row[MANUAL_DISCOUNT_AMOUNT] = discount[MANUAL_DISCOUNT_AMOUNT]
+		normalised.append(row)
 	return normalised
 
 
@@ -73,12 +91,7 @@ def _set_quotation_branch(doc, branch: str) -> None:
 
 @frappe.whitelist(methods=["POST"])
 def create_professional_quotation_draft(values: dict | str | None = None) -> dict[str, Any]:
-	"""Create a Customer Quotation draft without bypassing ERPNext controls.
-
-	The effective Price List and item rates are resolved again on the server.
-	Shipping charges, when requested, are applied by ERPNext's native
-	``apply_shipping_rule`` implementation. This endpoint never submits.
-	"""
+	"""Create a Customer Quotation draft through native ERPNext commercial controls."""
 	if not _permission("Quotation", "create"):
 		frappe.throw(_("You do not have permission to create Quotation."), frappe.PermissionError)
 
@@ -124,7 +137,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		doc.terms = str(values.get("terms") or "").strip()
 	_set_quotation_branch(doc, branch)
 
-	for item in items:
+	for index, item in enumerate(items, start=1):
 		_assert_read("Item", item["item_code"])
 		resolved = resolve_sales_item_pricing(
 			item_code=item["item_code"],
@@ -140,23 +153,34 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
+		rate_locked = not bool(resolved.get("allow_rate_change", True))
 		if resolved_rate is None and manual_rate is None:
 			frappe.throw(
 				_("No selling price could be resolved for Item {0}. Set an Item Price or Standard Rate before saving.").format(item["item_code"])
 			)
-		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
-			effective_rate = resolved_rate
-		else:
-			effective_rate = manual_rate if manual_rate is not None else resolved_rate
+		effective_rate = resolved_rate if rate_locked else (
+			manual_rate if manual_rate is not None else resolved_rate
+		)
 		if effective_rate is None:
 			frappe.throw(_("Selling Rate is required for Item {0}.").format(item["item_code"]))
 		row = {"item_code": item["item_code"], "qty": item["qty"], "rate": effective_rate}
 		if warehouse:
 			row["warehouse"] = warehouse
-		doc.append("items", row)
+		child = doc.append("items", row)
+		apply_manual_item_discount(
+			child,
+			item,
+			index=index,
+			rate_locked=rate_locked,
+			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+			price_list_rate=resolved.get("price_list_rate"),
+		)
 
-	# Draft-only. ERPNext validation/pricing remains authoritative on insert.
+	apply_sales_commercial_terms(doc, values)
+	# Draft-only. ERPNext validation/pricing/tax calculation remains authoritative.
 	doc.insert()
+	validate_manual_item_discounts_after_pricing(doc, items)
+	_validate_manual_invoice_discount_against_promotions(doc, values)
 	if shipping_rule:
 		# Use ERPNext's native Shipping Rule implementation; do not calculate or
 		# maintain a RetailEdge delivery-charge row/ledger.
@@ -172,7 +196,12 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		"branch": doc.get("branch") or doc.get("retailedge_branch") or branch,
 		"selling_price_list": getattr(doc, "selling_price_list", None) or pricing_context.get("price_list"),
 		"shipping_rule": getattr(doc, "shipping_rule", None) or "",
+		"commercial_terms": sales_commercial_terms_from_doc(doc),
+		"commercial_term_capabilities": get_sales_commercial_term_capabilities(doc),
+		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0),
+		"discount_amount": flt(doc.get("discount_amount") or 0),
 		"grand_total": doc.grand_total,
+		"rounded_total": flt(doc.get("rounded_total") or 0),
 		"currency": doc.currency,
 		"route": f"/app/quotation/{doc.name}",
 	}
