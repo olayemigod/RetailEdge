@@ -9,6 +9,7 @@ from retailedge.master_experience import (
 	get_retailedge_business_hub_context as _get_master_business_hub_context,
 )
 from retailedge.printing_navigation import normalize_printing_navigation
+from retailedge.user_readiness import get_retailedge_user_readiness
 
 
 SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
@@ -29,6 +30,12 @@ MAKE_SALE_TARGET = "make-sale"
 PROFESSIONAL_SELLING_TARGET = "professional-selling"
 LEGACY_SALES_FORECAST_TARGET = "sales-forecast"
 RETAILEDGE_SALES_FORECAST_TARGET = "retailedge-sales-forecast"
+READINESS_REPAIR_TARGETS = {
+	"operating-context",
+	"branch-assignments",
+	"branch-setup",
+	"retailedge-setup",
+}
 
 
 def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]) -> None:
@@ -122,6 +129,35 @@ def _normalize_sales_forecast_route(navigation_groups: list[dict[str, Any]]) -> 
 				item["target"] = RETAILEDGE_SALES_FORECAST_TARGET
 
 
+def _apply_user_readiness(context: dict[str, Any]) -> None:
+	"""Fail closed in everyday navigation while preserving explicit setup repair routes."""
+	readiness = get_retailedge_user_readiness(user=frappe.session.user)
+	context["readiness"] = readiness
+	context.setdefault("feature_flags", {})["user_readiness_stage"] = "active"
+	context.setdefault("context", {})["user_readiness_status"] = readiness.get("status") or ""
+	context["context"]["user_readiness_message"] = readiness.get("message") or ""
+	if not readiness.get("applicable") or readiness.get("ready"):
+		return
+
+	# Incomplete product users never receive transaction shortcuts. Navigation is
+	# reduced to already-permitted repair/context pages; this does not grant access
+	# to any setup Page the caller could not already open.
+	context["quick_actions"] = []
+	filtered_groups: list[dict[str, Any]] = []
+	for group in context.get("navigation_groups") or []:
+		items = [
+			item
+			for item in group.get("items") or []
+			if item.get("target_type") == "Page" and item.get("target") in READINESS_REPAIR_TARGETS
+		]
+		if not items:
+			continue
+		filtered_group = deepcopy(group)
+		filtered_group["items"] = items
+		filtered_groups.append(filtered_group)
+	context["navigation_groups"] = filtered_groups
+
+
 def _load_master_context_quietly() -> dict[str, Any]:
 	"""Build permission-aware navigation without leaking probe messages to Desk.
 
@@ -142,13 +178,14 @@ def _load_master_context_quietly() -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return final RetailEdge navigation with review, sales-order and printing governance composed."""
+	"""Return final RetailEdge navigation with review, sales-order, readiness and printing governance composed."""
 	context = _load_master_context_quietly()
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
 	_prioritize_sales_navigation(navigation_groups)
 	_normalize_sales_forecast_route(navigation_groups)
 	context["navigation_groups"] = navigation_groups
+	_apply_user_readiness(context)
 	# Printing normalization is presentation/navigation-only. It runs last so the
 	# final Business Hub keeps the current consolidated review and Sales ordering model
 	# while shared Devices & Printing remains a queryless internal Page route.
