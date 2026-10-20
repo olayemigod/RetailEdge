@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="New Quotation"
-		subtitle="Prepare a customer quotation using governed pricing, Shipping Rules and the current Operating Context."
+		subtitle="Prepare a customer quotation using governed pricing, discounts, tax and the current Operating Context."
 		size="xl"
 		@close="requestClose"
 	>
@@ -28,15 +28,23 @@
 					@update:modelValue="setCustomer"
 				/>
 
-				<label class="selling-field">
-					<span>Quotation Date <b>*</b></span>
-					<input v-model="values.transaction_date" class="form-control" type="date" required />
-				</label>
+				<EdgeInput
+					:modelValue="values.transaction_date"
+					id="professional-quotation-date"
+					label="Quotation Date"
+					type="date"
+					required
+					@update:modelValue="setTransactionDate"
+				/>
 
-				<label class="selling-field">
-					<span>Valid Till</span>
-					<input v-model="values.valid_till" class="form-control" type="date" :min="values.transaction_date || undefined" />
-				</label>
+				<EdgeInput
+					:modelValue="values.valid_till"
+					id="professional-quotation-valid-till"
+					label="Valid Till"
+					type="date"
+					:min="values.transaction_date || undefined"
+					@update:modelValue="values.valid_till = $event || ''"
+				/>
 
 				<EdgeLinkField
 					:modelValue="values.branch"
@@ -89,14 +97,26 @@
 				@update:rows="updateItems"
 			/>
 
+			<ProfessionalSalesCommercialPanel
+				:values="values"
+				documentType="Quotation"
+				documentLabel="Quotation"
+				:disabled="saving"
+				@change="updateCommercialTerms"
+				@state="updateCommercialState"
+			/>
+
 			<p class="selling-form-hint">
-				Rates are resolved again on the server. Delivery charges are calculated from the selected Shipping Rule when the draft is saved.
+				Selling prices, line discounts, promotions and taxes are resolved again before the draft is saved.
 			</p>
 
-			<label class="selling-field selling-field--wide">
-				<span>Terms / Notes</span>
-				<textarea v-model="values.terms" class="form-control" rows="3" placeholder="Optional quotation terms or customer note"></textarea>
-			</label>
+			<EdgeTextarea
+				v-model="values.terms"
+				id="professional-quotation-terms"
+				label="Terms / Notes"
+				rows="3"
+				placeholder="Optional quotation terms or customer note"
+			/>
 		</form>
 
 		<template #footer>
@@ -104,7 +124,7 @@
 				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Quotation')">Advanced: Open Quotation</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
-					<button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="saveDraft">{{ saving ? "Saving..." : "Save Draft" }}</button>
+					<button type="button" class="edge-button edge-button--primary" :disabled="saving || commercialState.blocked" @click="saveDraft">{{ saving ? "Saving..." : "Save Draft" }}</button>
 				</div>
 			</div>
 		</template>
@@ -113,6 +133,14 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import ProfessionalSalesCommercialPanel from "./ProfessionalSalesCommercialPanel.vue";
+import {
+	MANUAL_MODE,
+	MANUAL_VALUE,
+	clearLockedManualDiscounts,
+	normaliseManualDiscountRows,
+	withManualDiscountEditorColumns,
+} from "../selling/manualDiscountEditor";
 
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 const PRICING_METHOD = "retailedge.professional_selling.get_professional_selling_item_pricing";
@@ -131,6 +159,12 @@ function initialValues(context = {}) {
 		transaction_date: context.today || "",
 		valid_till: "",
 		shipping_rule: "",
+		coupon_code: "",
+		tax_category: "",
+		taxes_and_charges: "",
+		additional_discount_percentage: 0,
+		discount_amount: 0,
+		apply_discount_on: "Grand Total",
 		terms: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -141,7 +175,10 @@ export default {
 	components: {
 		EdgeModal: runtime.EdgeModal,
 		EdgeLinkField: runtime.EdgeLinkField,
+		EdgeInput: runtime.EdgeInput,
+		EdgeTextarea: runtime.EdgeTextarea,
 		EdgeChildTable: runtime.EdgeChildTable,
+		ProfessionalSalesCommercialPanel,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -156,13 +193,14 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingContext: { ...(this.context.pricing || {}) },
+			commercialState: { blocked: true, loading: false, error: "", preview: null },
 			values: initialValues(this.context),
 			itemTableField: { label: "Items", description: "Add the products or services included in this quotation." },
-			itemColumns: [
+			itemColumns: withManualDiscountEditorColumns([
 				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
 				{ fieldname: "rate", label: "Selling Rate", fieldtype: "Currency", placeholder: "Auto price" },
-			],
+			]),
 		};
 	},
 	computed: {
@@ -175,15 +213,14 @@ export default {
 			if (next) {
 				this.pricingContext = { ...(this.context.pricing || {}) };
 				this.values = initialValues(this.context);
+				this.commercialState = { blocked: true, loading: false, error: "", preview: null };
 				this.applyRatePermission(this.pricingContext);
 				this.saveError = "";
 			}
 		},
 	},
 	methods: {
-		requestClose() {
-			if (!this.saving) this.$emit("close");
-		},
+		requestClose() { if (!this.saving) this.$emit("close"); },
 		searchOptions(fieldname, query) {
 			return callMethod(SEARCH_METHOD, {
 				document: DOCUMENT,
@@ -196,27 +233,55 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
+		updateCommercialTerms(patch) { this.values = { ...this.values, ...(patch || {}) }; },
+		updateCommercialState(state) { this.commercialState = { ...this.commercialState, ...(state || {}) }; },
 		applyRatePermission(pricing = this.pricingContext || {}) {
 			const readOnly = pricing?.allow_rate_change === false;
 			this.itemColumns = this.itemColumns.map((column) =>
-				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+				["rate", MANUAL_MODE, MANUAL_VALUE].includes(column.fieldname)
+					? { ...column, read_only: readOnly ? 1 : 0 }
+					: column
 			);
+			if (readOnly) this.values.items = clearLockedManualDiscounts(this.values.items || []);
 		},
-		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; this.applyRatePermission(pricing || {}); if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
-		async setPriceList(next) { if (this.pricingContext?.locked) return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Selling Price List."); } },
-		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
-		searchLineLink(column, query) {
-			return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]);
+		async refreshPriceListContext({ preserveSelection = false } = {}) {
+			const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" });
+			this.pricingContext = pricing || {};
+			this.applyRatePermission(pricing || {});
+			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
 		},
+		async setPriceList(next) {
+			if (this.pricingContext?.locked) return;
+			this.values.price_list = next || "";
+			try {
+				await this.refreshPriceListContext({ preserveSelection: true });
+				this.refreshAllItemPricing();
+			} catch (error) {
+				this.values.price_list = "";
+				this.saveError = errorMessage(error, "Unable to use the selected Selling Price List.");
+			}
+		},
+		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createCustomer(query) { return quickCreateCustomer(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		setTransactionDate(next) {
+			const value = next || "";
+			if (value === this.values.transaction_date) return;
+			this.values.transaction_date = value;
+			if (this.values.valid_till && value && this.values.valid_till < value) this.values.valid_till = value;
+			this.refreshAllItemPricing();
+		},
 		setCustomer(next) {
 			const value = next || "";
 			const changed = this.values.customer !== value;
 			this.values.customer = value;
 			if (changed) {
+				this.values.coupon_code = "";
+				this.values.tax_category = "";
+				this.values.taxes_and_charges = "";
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
@@ -268,8 +333,9 @@ export default {
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
+			const rows = normaliseManualDiscountRows(nextRows || [], previous);
 			const changed = [];
-			this.values.items = (nextRows || []).map((row, index) => {
+			this.values.items = rows.map((row, index) => {
 				const prior = previous[index] || {};
 				if (row.item_code && row.item_code !== prior.item_code) {
 					changed.push(index);
@@ -292,7 +358,8 @@ export default {
 				});
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
-				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) }; this.applyRatePermission(this.pricingContext);
+				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) };
+				this.applyRatePermission(this.pricingContext);
 				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
@@ -309,6 +376,10 @@ export default {
 		},
 		async saveDraft() {
 			if (this.saving) return;
+			if (this.commercialState.blocked) {
+				this.saveError = this.commercialState.error || "Wait for the current quotation total to finish updating before saving.";
+				return;
+			}
 			this.saving = true;
 			this.saveError = "";
 			try {
@@ -328,10 +399,8 @@ export default {
 .selling-form { display: grid; gap: 18px; }
 .selling-form-context { display: flex; flex-wrap: wrap; gap: 10px; }
 .selling-form-context > div { display: grid; gap: 2px; min-width: 180px; padding: 9px 12px; border: 1px solid var(--edge-border, #e5e7eb); border-radius: 8px; background: var(--edge-surface-muted, #f8fafc); }
-.selling-form-context span, .selling-field > span { font-size: 0.78rem; color: var(--edge-text-muted, #667085); }
+.selling-form-context span { font-size: 0.78rem; color: var(--edge-text-muted, #667085); }
 .selling-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.selling-field { display: grid; gap: 6px; }
-.selling-field--wide { grid-column: 1 / -1; }
 .selling-form-error { padding: 10px 12px; border-radius: 8px; background: var(--red-50, #fef2f2); color: var(--red-700, #b91c1c); border: 1px solid var(--red-200, #fecaca); }
 .selling-form-hint { margin: 0; color: var(--edge-text-muted, #667085); font-size: 0.84rem; }
 .selling-form-footer, .selling-form-footer-actions { display: flex; align-items: center; gap: 10px; }

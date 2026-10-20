@@ -332,22 +332,23 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 
 	@patch("retailedge.sales_commercial_terms.search_link")
 	@patch("retailedge.sales_commercial_terms._can_select", return_value=True)
-	@patch("retailedge.sales_commercial_terms._assert_invoice_term_search_access", return_value=None)
+	@patch("retailedge.sales_commercial_terms._assert_sales_term_search_access", return_value=None)
 	def test_tax_category_search_is_permission_aware_and_enabled_only(
 		self,
-		_mock_access,
+		mock_access,
 		_mock_select,
 		mock_search,
 	):
 		mock_search.return_value = [{"value": "Retail Tax"}]
 		result = search_sales_commercial_term_options("tax_category", txt="ret", values={})
 		self.assertEqual(result, [{"value": "Retail Tax"}])
+		mock_access.assert_called_once_with(None, "Sales Invoice")
 		self.assertEqual(mock_search.call_args.kwargs["filters"], {"disabled": 0})
 		self.assertEqual(mock_search.call_args.kwargs["link_fieldname"], "tax_category")
 
 	@patch("retailedge.sales_commercial_terms._search_sales_tax_templates")
 	@patch("retailedge.sales_commercial_terms._can_select", return_value=True)
-	@patch("retailedge.sales_commercial_terms._assert_invoice_term_search_access")
+	@patch("retailedge.sales_commercial_terms._assert_sales_term_search_access")
 	def test_saved_draft_template_search_respects_pending_tax_category(
 		self,
 		mock_access,
@@ -364,6 +365,7 @@ class TestSalesItemDiscountTaxCategory(unittest.TestCase):
 			"taxes_and_charges",
 			values={"document_name": "SINV-001", "tax_category": "Pending Category"},
 		)
+		mock_access.assert_called_once_with("SINV-001", "Sales Invoice")
 		self.assertEqual(mock_search_templates.call_args.kwargs["tax_category"], "Pending Category")
 		self.assertEqual(mock_search_templates.call_args.kwargs["company"], "RetailEdge Consulting")
 

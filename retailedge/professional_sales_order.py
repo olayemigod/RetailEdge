@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import getdate, nowdate
+from frappe.utils import flt, getdate, nowdate
 
 from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpnext_make_sales_order
 
@@ -18,6 +18,16 @@ from retailedge.professional_selling import (
 	_permission,
 	_validate_context,
 	_validate_stored_operational_branch,
+)
+from retailedge.sales_commercial_promotion_guard import validate_manual_document_discount_against_promotions
+from retailedge.sales_commercial_terms import (
+	apply_sales_commercial_terms,
+	get_sales_commercial_term_capabilities,
+	sales_commercial_terms_from_doc,
+)
+from retailedge.sales_item_discounts import (
+	apply_manual_item_discount,
+	validate_manual_item_discounts_after_pricing,
 )
 
 
@@ -129,7 +139,7 @@ def _apply_shipping_rule_to_draft(doc) -> None:
 
 @frappe.whitelist(methods=["POST"])
 def create_professional_sales_order_draft(values: dict | str | None = None) -> dict[str, Any]:
-	"""Create a standalone ERPNext Sales Order draft using server-authoritative pricing."""
+	"""Create a standalone ERPNext Sales Order draft through governed commercial controls."""
 	if not _permission("Sales Order", "create"):
 		frappe.throw(_("You do not have permission to create Sales Order."), frappe.PermissionError)
 
@@ -176,7 +186,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		doc.terms = str(values.get("terms") or "").strip()
 	_set_branch_if_supported(doc, branch)
 
-	for item in items:
+	for index, item in enumerate(items, start=1):
 		_assert_read("Item", item["item_code"])
 		resolved = resolve_sales_item_pricing(
 			item_code=item["item_code"],
@@ -192,12 +202,12 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
+		rate_locked = not bool(resolved.get("allow_rate_change", True))
 		if resolved_rate is None and manual_rate is None:
 			frappe.throw(_("No selling price could be resolved for Item {0}.").format(item["item_code"]))
-		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
-			effective_rate = resolved_rate
-		else:
-			effective_rate = manual_rate if manual_rate is not None else resolved_rate
+		effective_rate = resolved_rate if rate_locked else (
+			manual_rate if manual_rate is not None else resolved_rate
+		)
 		if effective_rate is None:
 			frappe.throw(_("Selling Rate is required for Item {0}.").format(item["item_code"]))
 		row = {
@@ -208,17 +218,32 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		}
 		if warehouse:
 			row["warehouse"] = warehouse
-		doc.append("items", row)
+		child = doc.append("items", row)
+		apply_manual_item_discount(
+			child,
+			item,
+			index=index,
+			rate_locked=rate_locked,
+			lock_reason=str(resolved.get("rate_change_lock_reason") or "").strip(),
+			price_list_rate=resolved.get("price_list_rate"),
+		)
 
-	# Draft-only. Normal ERPNext validation runs on insert.
+	apply_sales_commercial_terms(doc, values)
+	# Draft-only. ERPNext owns pricing, promotions, tax, totals and validation.
 	doc.insert()
+	validate_manual_item_discounts_after_pricing(doc, items)
+	validate_manual_document_discount_against_promotions(
+		doc,
+		values,
+		document_label="Sales Order",
+	)
 	_apply_shipping_rule_to_draft(doc)
 	return _sales_order_response(doc, branch=branch)
 
 
 @frappe.whitelist(methods=["POST"])
 def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
-	"""Map one submitted Customer Quotation to a new Sales Order draft using ERPNext's native mapper."""
+	"""Map one submitted Customer Quotation to a Sales Order draft using ERPNext's native mapper."""
 	if not _permission("Sales Order", "create"):
 		frappe.throw(_("You do not have permission to create Sales Order."), frappe.PermissionError)
 	quotation = str(quotation or "").strip()
@@ -229,8 +254,9 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 	if str(source.get("quotation_to") or "") != "Customer":
 		frappe.throw(_("Only Customer Quotations can be converted to Sales Orders in Professional Selling."))
 
-	# ERPNext owns source-to-target field/item mapping, ordered-quantity checks and
-	# expired-quotation policy. The submitted source is never changed here.
+	# ERPNext owns source-to-target field/item mapping, accepted commercial terms,
+	# ordered-quantity checks and expired-quotation policy. The submitted source is
+	# never changed here and is not repriced through the new-order editor.
 	_lock_quotation(source.name)
 	existing = _existing_draft_sales_order_for_quotation(source.name)
 	if existing:
@@ -266,7 +292,6 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 	_preserve_source_quotation_context(source, target)
 	_company, branch = _assert_mapped_sales_order_context(target)
 
-	# The mapper may carry the source Shipping Rule. Validate it again before insert.
 	if target.get("shipping_rule"):
 		_validate_shipping_rule(target.shipping_rule, company=target.company)
 
@@ -288,7 +313,12 @@ def _sales_order_response(doc, *, branch: str = "", source_quotation: str = "") 
 		"branch": doc.get("branch") or doc.get("retailedge_branch") or branch,
 		"selling_price_list": doc.get("selling_price_list") or "",
 		"shipping_rule": doc.get("shipping_rule") or "",
+		"commercial_terms": sales_commercial_terms_from_doc(doc),
+		"commercial_term_capabilities": get_sales_commercial_term_capabilities(doc),
+		"total_taxes_and_charges": flt(doc.get("total_taxes_and_charges") or 0),
+		"discount_amount": flt(doc.get("discount_amount") or 0),
 		"grand_total": doc.grand_total,
+		"rounded_total": flt(doc.get("rounded_total") or 0),
 		"currency": doc.currency,
 		"source_quotation": source_quotation,
 		"route": f"/app/sales-order/{doc.name}",

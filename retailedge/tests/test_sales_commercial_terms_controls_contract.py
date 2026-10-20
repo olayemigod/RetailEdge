@@ -18,7 +18,7 @@ class TestSalesCommercialTermsControlsContract(unittest.TestCase):
 
 		# The selected mode must have local UI state. Deriving it only from a
 		# non-zero discount makes Percentage / Fixed amount immediately collapse
-		# back to No invoice discount before the operator can enter a value.
+		# back to the document's no-discount option before the operator can enter a value.
 		self.assertIn("selectedDiscountMode", source)
 		self.assertIn("discountModeFromValues", source)
 		self.assertIn("this.selectedDiscountMode = next", source)
@@ -26,10 +26,11 @@ class TestSalesCommercialTermsControlsContract(unittest.TestCase):
 		self.assertIn('this.selectedDiscountMode = "amount"', source)
 
 		# Zero-value mode selection is editing intent only; it is not an applied
-		# invoice discount until a real percentage or amount is entered.
+		# document discount until a real percentage or amount is entered.
 		self.assertIn('Number(values.additional_discount_percentage || 0) > 0', source)
 		self.assertIn('Number(values.discount_amount || 0) > 0', source)
-		self.assertIn('label: "No invoice discount"', source)
+		self.assertIn('documentLabel: { type: String, default: "Invoice" }', source)
+		self.assertIn('label: this.documentLabel === "Invoice" ? "No invoice discount"', source)
 
 	def test_tax_helper_import_supports_older_erpnext_v16_upgrade_baselines(self):
 		source = (APP_ROOT / "sales_commercial_terms.py").read_text(encoding="utf-8")

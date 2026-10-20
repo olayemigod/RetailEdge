@@ -2,23 +2,23 @@
 	<details class="sales-commercial-terms" :open="openByDefault">
 		<summary>
 			<span>
-				<strong>Invoice discount &amp; tax</strong>
-				<small>Optional invoice discount and tax choices. Automatic promotions are applied by pricing rules.</small>
+				<strong>{{ termsHeading }}</strong>
+				<small>{{ termsHelp }}</small>
 			</span>
 		</summary>
 
 		<div class="sales-commercial-terms__body">
 			<div v-if="invoicePromotionActive" class="automatic-promotion" role="status">
-				<span>Automatic invoice promotion</span>
+				<span>{{ automaticPromotionTitle }}</span>
 				<strong>{{ invoicePromotionLabel }}</strong>
-				<small>Manual invoice discount is unavailable while this promotion applies.</small>
+				<small>{{ automaticPromotionHelp }}</small>
 			</div>
 
 			<div v-else-if="capabilities.can_edit_additional_discount" class="sales-commercial-terms__grid">
 				<EdgeDropdown
 					:modelValue="discountMode"
 					:options="discountModeOptions"
-					label="Invoice discount"
+					:label="discountFieldLabel"
 					:disabled="disabled"
 					@update:modelValue="setDiscountMode"
 				/>
@@ -131,6 +131,7 @@ export default {
 		searcher: { type: Function, required: true },
 		disabled: { type: Boolean, default: false },
 		openByDefault: { type: Boolean, default: false },
+		documentLabel: { type: String, default: "Invoice" },
 	},
 	emits: ["change"],
 	data() {
@@ -139,12 +140,30 @@ export default {
 		};
 	},
 	computed: {
+		documentNoun() {
+			return String(this.documentLabel || "Invoice").trim().toLowerCase() || "invoice";
+		},
+		termsHeading() {
+			return this.documentLabel === "Invoice" ? "Invoice discount & tax" : `${this.documentLabel} discount & tax`;
+		},
+		termsHelp() {
+			return `Optional ${this.documentNoun} discount and tax choices. Automatic promotions are applied by pricing rules.`;
+		},
+		automaticPromotionTitle() {
+			return this.documentLabel === "Invoice" ? "Automatic invoice promotion" : `Automatic ${this.documentNoun} promotion`;
+		},
+		automaticPromotionHelp() {
+			return `Manual ${this.documentNoun} discount is unavailable while this promotion applies.`;
+		},
+		discountFieldLabel() {
+			return this.documentLabel === "Invoice" ? "Invoice discount" : `${this.documentLabel} discount`;
+		},
 		discountMode() {
 			return this.selectedDiscountMode;
 		},
 		discountModeOptions() {
 			return [
-				{ value: "none", label: "No invoice discount" },
+				{ value: "none", label: this.documentLabel === "Invoice" ? "No invoice discount" : `No ${this.documentNoun} discount` },
 				{ value: "percentage", label: "Percentage" },
 				{ value: "amount", label: "Fixed amount" },
 			];

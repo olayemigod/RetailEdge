@@ -1,16 +1,16 @@
 <template>
-	<section class="sales-commercial-summary-rail" aria-live="polite" aria-label="Sale summary">
+	<section class="sales-commercial-summary-rail" aria-live="polite" :aria-label="summaryKicker">
 		<div class="edge-panel sales-commercial-summary">
 			<div class="sales-commercial-summary__header">
 				<div>
-					<span>Sale summary</span>
-					<strong>{{ preview ? "Current invoice value" : "Invoice value" }}</strong>
+					<span>{{ summaryKicker }}</span>
+					<strong>{{ currentValueLabel }}</strong>
 				</div>
 				<small v-if="loading">Updating total…</small>
 			</div>
 
 			<div v-if="error" class="sales-commercial-summary__error" role="alert">
-				<strong>Unable to calculate this sale</strong>
+				<strong>{{ calculationErrorLabel }}</strong>
 				<span>{{ error }}</span>
 			</div>
 
@@ -92,8 +92,8 @@
 						<strong :class="amountClass(preview.rounding_adjustment)">{{ formatSignedMoney(preview.rounding_adjustment) }}</strong>
 					</div>
 					<div class="sales-commercial-summary__total">
-						<span>Invoice Total</span>
-						<strong>{{ formatMoney(preview.invoice_total) }}</strong>
+						<span>{{ totalLabel }}</span>
+						<strong>{{ formatMoney(preview.document_total ?? preview.invoice_total) }}</strong>
 					</div>
 				</div>
 
@@ -150,9 +150,7 @@
 				</details>
 			</template>
 
-			<p v-else class="sales-commercial-summary__empty">
-				Add a Customer and sale item to see the subtotal, tax and invoice total before saving.
-			</p>
+			<p v-else class="sales-commercial-summary__empty">{{ emptyMessage }}</p>
 		</div>
 	</section>
 </template>
@@ -164,8 +162,29 @@ export default {
 		preview: { type: Object, default: null },
 		loading: { type: Boolean, default: false },
 		error: { type: String, default: "" },
+		documentLabel: { type: String, default: "Invoice" },
 	},
 	computed: {
+		documentNoun() {
+			return String(this.documentLabel || "Invoice").trim().toLowerCase() || "invoice";
+		},
+		summaryKicker() {
+			return this.documentLabel === "Invoice" ? "Sale summary" : `${this.documentLabel} summary`;
+		},
+		currentValueLabel() {
+			if (this.documentLabel === "Invoice") return this.preview ? "Current invoice value" : "Invoice value";
+			return this.preview ? `Current ${this.documentNoun} value` : `${this.documentLabel} value`;
+		},
+		calculationErrorLabel() {
+			return this.documentLabel === "Invoice" ? "Unable to calculate this sale" : `Unable to calculate this ${this.documentNoun}`;
+		},
+		totalLabel() {
+			return this.documentLabel === "Invoice" ? "Invoice Total" : `${this.documentLabel} Total`;
+		},
+		emptyMessage() {
+			if (this.documentLabel === "Invoice") return "Add a Customer and sale item to see the subtotal, tax and invoice total before saving.";
+			return `Add a Customer and item to see the subtotal, tax and ${this.documentNoun} total before saving.`;
+		},
 		hasItemPricingEffects() {
 			return Boolean(
 				Number(this.preview?.item_promotion_total || 0) ||
@@ -192,12 +211,14 @@ export default {
 			return this.preview?.invoice_adjustment_kind === "promotion" ? "promotion" : "discount";
 		},
 		invoiceAdjustmentLabel() {
-			const label = this.preview?.invoice_adjustment_kind === "promotion" ? "Invoice promotion" : "Invoice discount";
+			const adjustment = this.preview?.invoice_adjustment_kind === "promotion" ? "promotion" : "discount";
+			const prefix = this.documentLabel === "Invoice" ? "Invoice" : this.documentLabel;
 			const percentage = Number(this.preview?.invoice_adjustment_percentage || 0);
+			const label = `${prefix} ${adjustment}`;
 			return percentage ? `${label} ${this.formatPercent(percentage)}` : label;
 		},
 		grandTotalBeforeAdjustmentLabel() {
-			return `Before invoice ${this.invoiceAdjustmentNoun}`;
+			return `Before ${this.documentNoun} ${this.invoiceAdjustmentNoun}`;
 		},
 		netAfterAdjustmentLabel() {
 			return `Net after ${this.invoiceAdjustmentNoun}`;
@@ -209,10 +230,16 @@ export default {
 		},
 		promotionSummary() {
 			const item = Number(this.preview?.item_promotion_total || 0) > 0;
-			const invoice = this.preview?.invoice_adjustment_kind === "promotion";
-			if (item && invoice) return "Item and invoice promotions are included in the calculation below.";
+			const documentPromotion = this.preview?.invoice_adjustment_kind === "promotion";
+			if (item && documentPromotion) {
+				return this.documentLabel === "Invoice"
+					? "Item and invoice promotions are included in the calculation below."
+					: `Item and ${this.documentNoun} promotions are included in the calculation below.`;
+			}
 			if (item) return "Item promotion is included in the item pricing below.";
-			return "Invoice promotion is included in the calculation below.";
+			return this.documentLabel === "Invoice"
+				? "Invoice promotion is included in the calculation below."
+				: `${this.documentLabel} promotion is included in the calculation below.`;
 		},
 		pricingBreakdownItems() {
 			return (this.preview?.items || []).filter((item) =>
@@ -262,11 +289,9 @@ export default {
 			let label = String(tax?.description || "Tax").trim() || "Tax";
 			const rate = Number(tax?.rate || 0);
 			if (!rate) return label;
-
 			const configuredRate = this.formatPercent(rate);
 			const atRate = /(@\s*)-?\d+(?:\.\d+)?\s*%?\s*$/i;
 			if (atRate.test(label)) return label.replace(atRate, `$1${configuredRate}`);
-
 			const trailingPercentage = /-?\d+(?:\.\d+)?\s*%\s*$/;
 			if (trailingPercentage.test(label)) return label.replace(trailingPercentage, configuredRate);
 			if (!this.taxDescriptionIncludesRate(label, rate)) label += ` ${configuredRate}`;
@@ -299,9 +324,7 @@ export default {
 </script>
 
 <style scoped>
-.sales-commercial-summary-rail {
-	min-width: 0;
-}
+.sales-commercial-summary-rail { min-width: 0; }
 .sales-commercial-summary {
 	display: grid;
 	gap: 7px;
@@ -319,10 +342,7 @@ export default {
 	justify-content: space-between;
 	gap: 8px;
 }
-.sales-commercial-summary__header > div {
-	display: grid;
-	gap: 1px;
-}
+.sales-commercial-summary__header > div { display: grid; gap: 1px; }
 .sales-commercial-summary__header span,
 .sales-commercial-summary__header small,
 .sales-commercial-summary__rows span,
@@ -342,10 +362,7 @@ export default {
 	text-transform: uppercase;
 	letter-spacing: .05em;
 }
-.sales-commercial-summary__header strong {
-	font-size: .9rem;
-	line-height: 1.2;
-}
+.sales-commercial-summary__header strong { font-size: .9rem; line-height: 1.2; }
 .sales-commercial-summary__promotions {
 	display: grid;
 	gap: 1px;
@@ -354,100 +371,33 @@ export default {
 	border-radius: 8px;
 	background: var(--edge-color-success-subtle, #ecfdf3);
 }
-.sales-commercial-summary__promotions strong {
-	font-size: .76rem;
-	color: var(--edge-color-success, #067647);
-}
-.sales-commercial-summary__promotions span {
-	font-size: .7rem;
-	line-height: 1.2;
-	color: var(--edge-color-ink-600, #475467);
-}
-.sales-commercial-summary__rows {
-	display: grid;
-	gap: 4px;
-}
-.sales-commercial-summary__rows span {
-	font-size: .76rem;
-	font-weight: 500;
-	line-height: 1.2;
-}
-.sales-commercial-summary__rows strong {
-	font-size: .78rem;
-	font-weight: 700;
-	line-height: 1.2;
-	white-space: nowrap;
-}
-.sales-commercial-summary__negative-amount {
-	color: var(--edge-color-danger, #d92d20) !important;
-}
-.sales-commercial-summary__positive-amount {
-	color: var(--edge-color-success, #067647) !important;
-}
+.sales-commercial-summary__promotions strong { font-size: .76rem; color: var(--edge-color-success, #067647); }
+.sales-commercial-summary__promotions span { font-size: .7rem; line-height: 1.2; color: var(--edge-color-ink-600, #475467); }
+.sales-commercial-summary__rows { display: grid; gap: 4px; }
+.sales-commercial-summary__rows span { font-size: .76rem; font-weight: 500; line-height: 1.2; }
+.sales-commercial-summary__rows strong { font-size: .78rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.sales-commercial-summary__negative-amount { color: var(--edge-color-danger, #d92d20) !important; }
+.sales-commercial-summary__positive-amount { color: var(--edge-color-success, #067647) !important; }
 .sales-commercial-summary__total {
 	margin-top: 2px;
 	padding-top: 7px;
 	border-top: 1px solid var(--edge-color-border, var(--edge-border, #e5e7eb));
 }
-.sales-commercial-summary__total span {
-	font-size: .82rem;
-	font-weight: 600;
-}
-.sales-commercial-summary__total strong {
-	font-size: 1.02rem;
-	font-weight: 700;
-}
-.sales-commercial-summary__final-tax {
-	padding-top: 2px;
-	font-size: .72rem;
-	line-height: 1.2;
-}
-.sales-commercial-summary__final-tax span {
-	font-weight: 500;
-}
-.sales-commercial-summary__final-tax strong {
-	font-size: .74rem;
-	font-weight: 650;
-	white-space: nowrap;
-}
-.sales-commercial-summary__context {
-	display: flex;
-	gap: 4px 10px;
-	flex-wrap: wrap;
-	font-size: .7rem;
-	line-height: 1.2;
-}
+.sales-commercial-summary__total span { font-size: .82rem; font-weight: 600; }
+.sales-commercial-summary__total strong { font-size: 1.02rem; font-weight: 700; }
+.sales-commercial-summary__final-tax { padding-top: 2px; font-size: .72rem; line-height: 1.2; }
+.sales-commercial-summary__final-tax span { font-weight: 500; }
+.sales-commercial-summary__final-tax strong { font-size: .74rem; font-weight: 650; white-space: nowrap; }
+.sales-commercial-summary__context { display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: .7rem; line-height: 1.2; }
 .sales-commercial-summary__taxes,
-.sales-commercial-summary__breakdown {
-	padding-top: 0;
-}
+.sales-commercial-summary__breakdown { padding-top: 0; }
 .sales-commercial-summary__taxes summary,
-.sales-commercial-summary__breakdown summary {
-	cursor: pointer;
-	font-size: .72rem;
-	font-weight: 600;
-	line-height: 1.2;
-}
-.sales-commercial-summary__tax-item {
-	padding: 4px 0 0;
-	font-size: .72rem;
-}
-.sales-commercial-summary__tax-row {
-	line-height: 1.2;
-}
-.sales-commercial-summary__tax-row > span {
-	min-width: 0;
-	font-weight: 500;
-}
-.sales-commercial-summary__tax-row > strong {
-	font-size: .74rem;
-	font-weight: 650;
-	white-space: nowrap;
-}
-.sales-commercial-summary__tax-row small {
-	font-size: .68rem;
-	font-weight: 400;
-}
+.sales-commercial-summary__breakdown summary { cursor: pointer; font-size: .72rem; font-weight: 600; line-height: 1.2; }
+.sales-commercial-summary__tax-item { padding: 4px 0 0; font-size: .72rem; }
+.sales-commercial-summary__tax-row { line-height: 1.2; }
+.sales-commercial-summary__tax-row > span { min-width: 0; font-weight: 500; }
+.sales-commercial-summary__tax-row > strong { font-size: .74rem; font-weight: 650; white-space: nowrap; }
+.sales-commercial-summary__tax-row small { font-size: .68rem; font-weight: 400; }
 .sales-commercial-summary__tax-history {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -457,11 +407,7 @@ export default {
 	line-height: 1.2;
 	color: var(--edge-color-ink-500, var(--edge-text-muted, #667085));
 }
-.sales-commercial-summary__tax-history strong {
-	font-size: .69rem;
-	font-weight: 600;
-	white-space: nowrap;
-}
+.sales-commercial-summary__tax-history strong { font-size: .69rem; font-weight: 600; white-space: nowrap; }
 .sales-commercial-summary__breakdown-item {
 	display: grid;
 	gap: 1px;
@@ -470,17 +416,10 @@ export default {
 	font-size: .72rem;
 	line-height: 1.2;
 }
-.sales-commercial-summary__breakdown-item:last-child {
-	border-bottom: 0;
-}
-.sales-commercial-summary__breakdown-item strong {
-	font-size: .74rem;
-	font-weight: 650;
-}
+.sales-commercial-summary__breakdown-item:last-child { border-bottom: 0; }
+.sales-commercial-summary__breakdown-item strong { font-size: .74rem; font-weight: 650; }
 .sales-commercial-summary__breakdown-item span,
-.sales-commercial-summary__breakdown-item small {
-	font-weight: 400;
-}
+.sales-commercial-summary__breakdown-item small { font-weight: 400; }
 .sales-commercial-summary__error {
 	display: grid;
 	gap: 3px;
@@ -490,10 +429,7 @@ export default {
 	color: var(--edge-color-danger, #b42318);
 	background: var(--edge-color-danger-subtle, #fef3f2);
 }
-.sales-commercial-summary__empty {
-	margin: 0;
-	font-size: .76rem;
-}
+.sales-commercial-summary__empty { margin: 0; font-size: .76rem; }
 :global(:root[data-edge-appearance="dark"]) .sales-commercial-summary {
 	background: var(--edge-color-surface);
 	border-color: var(--edge-color-border);

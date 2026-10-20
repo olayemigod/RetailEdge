@@ -143,7 +143,11 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			source = path.read_text(encoding="utf-8")
 			self.assertIn("applyRatePermission", source, path.name)
 			self.assertIn("allow_rate_change", source, path.name)
-			self.assertIn('column.fieldname === "rate"', source, path.name)
+			self.assertTrue(
+				'column.fieldname === "rate"' in source
+				or '["rate", MANUAL_MODE, MANUAL_VALUE].includes(column.fieldname)' in source,
+				path.name,
+			)
 			self.assertIn("read_only", source, path.name)
 
 	def test_server_creation_paths_revalidate_selected_price_list(self):
@@ -218,7 +222,9 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 	def test_conversion_flows_do_not_reprice_accepted_source_documents(self):
 		order_dialog = (APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesOrderDialog.vue").read_text(encoding="utf-8")
 		invoice_dialog = (APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesInvoiceDialog.vue").read_text(encoding="utf-8")
-		self.assertIn('v-if="mode === \'new\'"', order_dialog)
+		self.assertIn('v-if="mode === \'quotation\'"', order_dialog)
+		self.assertIn('<form v-else class="selling-form"', order_dialog)
+		self.assertIn("preserving its accepted commercial terms", order_dialog)
 		self.assertIn('v-if="mode === \'new\'"', invoice_dialog)
 		invoice_backend = (APP_ROOT / "professional_sales_invoice.py").read_text(encoding="utf-8")
 		self.assertIn("_copy_quotation_commercial_terms", invoice_backend)

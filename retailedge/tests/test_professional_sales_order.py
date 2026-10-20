@@ -88,7 +88,8 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 			"ignore_permissions=True",
 		):
 			self.assertNotIn(forbidden, source)
-		self.assertIn("The submitted source is never changed here.", source)
+		self.assertIn("never changed here", source)
+		self.assertIn("is not repriced through the new-order editor", source)
 
 	def test_mapped_order_checks_operating_company_and_branch(self):
 		source = self.read("professional_sales_order.py")
