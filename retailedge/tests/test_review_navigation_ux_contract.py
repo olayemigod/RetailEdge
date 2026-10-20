@@ -19,13 +19,15 @@ def test_unmatched_bank_reviews_expose_inline_apply_filters_without_backend_cont
 	assert "cashier: this.filters.cashier" not in text
 
 
-def test_reports_centre_opens_sales_forecast_in_a_new_tab_only():
+def test_reports_centre_opens_retailedge_sales_forecast_in_a_new_tab_only():
 	text = REPORTS_CENTRE.read_text(encoding="utf-8")
 
-	assert 'const NEW_TAB_PAGE_TARGETS = new Set(["sales-forecast"]);' in text
-	assert 'if (NEW_TAB_PAGE_TARGETS.has(item.target)) {' in text
+	assert '"sales-forecast": "retailedge-sales-forecast"' in text
+	assert 'const NEW_TAB_PAGE_TARGETS = new Set(["retailedge-sales-forecast"]);' in text
+	assert "const target = pageTarget(item);" in text
+	assert "if (NEW_TAB_PAGE_TARGETS.has(target)) {" in text
 	assert 'window.open(route, "_blank", "noopener,noreferrer");' in text
-	new_tab_block = text.split('if (NEW_TAB_PAGE_TARGETS.has(item.target)) {', 1)[1].split('return;', 1)[0]
+	new_tab_block = text.split("if (NEW_TAB_PAGE_TARGETS.has(target)) {", 1)[1].split("return;", 1)[0]
 	assert "retailedgeSetReportRouteHandoff" not in new_tab_block
 	assert "frappe.set_route" not in new_tab_block
-	assert "frappe.set_route(item.target);" in text
+	assert "frappe.set_route(target);" in text
