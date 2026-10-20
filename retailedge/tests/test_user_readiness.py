@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
 
-from retailedge import user_readiness
+from retailedge import operating_context, user_readiness
 
 
 USER = "cashier@example.com"
 COMPANY = "RetailEdge Consulting"
 BRANCH = "Ketu"
+APP_ROOT = Path(__file__).resolve().parents[1]
+BRANCH_ASSIGNMENTS_VUE = APP_ROOT / "public" / "js" / "branch_assignments" / "BranchAssignments.vue"
+NAVIGATION = APP_ROOT / "navigation_consolidation.py"
 
 
 def user_values():
@@ -142,6 +146,37 @@ class TestUserReadiness(unittest.TestCase):
 		self.assertFalse(ready)
 		self.assertEqual(result["reasons"][0]["code"], "pos_profile_not_assigned")
 
+	@patch("retailedge.operating_context.user_has_global_branch_access", return_value=False)
+	@patch(
+		"retailedge.operating_context.get_retailedge_user_readiness",
+		return_value={"applicable": True, "ready": False, "message": "Assign Company and Branch."},
+	)
+	def test_operational_scope_is_restricted_zero_when_readiness_is_incomplete(self, _readiness, _global):
+		scope = operating_context.get_operational_branch_scope(COMPANY, user=USER)
+		self.assertTrue(scope["restricted"])
+		self.assertEqual(scope["allowed_branches"], [])
+		self.assertEqual(scope["source"], "user_readiness")
+
+	@patch("retailedge.operating_context.user_has_global_branch_access", return_value=True)
+	@patch(
+		"retailedge.operating_context.get_retailedge_user_readiness",
+		return_value={"applicable": True, "ready": True, "message": ""},
+	)
+	def test_ready_global_manager_remains_global_after_landing_readiness(self, mock_readiness, _global):
+		scope = operating_context.get_operational_branch_scope("Another Company", user=USER)
+		self.assertFalse(scope["restricted"])
+		self.assertEqual(scope["source"], "global")
+		mock_readiness.assert_called_with(user=USER, company="")
+
+	@patch(
+		"retailedge.operating_context._get_scope_readiness",
+		return_value={"applicable": True, "ready": False, "message": "Assign Company and Branch."},
+	)
+	def test_branch_validation_returns_setup_incomplete_before_branch_fallback(self, _readiness):
+		result = operating_context.validate_operating_branch(COMPANY, BRANCH, user=USER, throw=False)
+		self.assertFalse(result["allowed"])
+		self.assertEqual(result["reason"], "setup_incomplete")
+
 	def test_reconciliation_contract_is_read_only(self):
 		source = open(user_readiness.__file__, encoding="utf-8").read()
 		self.assertIn("get_retailedge_user_readiness_reconciliation", source)
@@ -155,6 +190,25 @@ class TestUserReadiness(unittest.TestCase):
 			"create_branch_assignment(",
 		):
 			self.assertNotIn(forbidden, source)
+
+	def test_edgesuite_reconciliation_and_fail_closed_navigation_contract(self):
+		assignments_source = BRANCH_ASSIGNMENTS_VUE.read_text(encoding="utf-8")
+		navigation_source = NAVIGATION.read_text(encoding="utf-8")
+		for contract in (
+			"User access readiness",
+			"get_retailedge_user_readiness_reconciliation",
+			"Include ready users",
+			"Assign Company and Branch",
+			"loadReadiness",
+		):
+			self.assertIn(contract, assignments_source)
+		for contract in (
+			"_apply_user_readiness",
+			'context["quick_actions"] = []',
+			"READINESS_REPAIR_TARGETS",
+			'"branch-assignments"',
+		):
+			self.assertIn(contract, navigation_source)
 
 
 if __name__ == "__main__":
