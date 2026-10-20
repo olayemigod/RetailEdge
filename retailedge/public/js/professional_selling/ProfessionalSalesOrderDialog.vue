@@ -50,15 +50,24 @@
 					@update:modelValue="setCustomer"
 				/>
 
-				<label class="selling-field">
-					<span>Order Date <b>*</b></span>
-					<input v-model="values.transaction_date" class="form-control" type="date" required />
-				</label>
+				<EdgeInput
+					:modelValue="values.transaction_date"
+					id="professional-sales-order-date"
+					label="Order Date"
+					type="date"
+					required
+					@update:modelValue="setTransactionDate"
+				/>
 
-				<label class="selling-field">
-					<span>Delivery Date <b>*</b></span>
-					<input v-model="values.delivery_date" class="form-control" type="date" :min="values.transaction_date || undefined" required />
-				</label>
+				<EdgeInput
+					:modelValue="values.delivery_date"
+					id="professional-sales-order-delivery-date"
+					label="Delivery Date"
+					type="date"
+					:min="values.transaction_date || undefined"
+					required
+					@update:modelValue="values.delivery_date = $event || ''"
+				/>
 
 				<EdgeLinkField
 					:modelValue="values.branch"
@@ -69,7 +78,6 @@
 				/>
 
 				<EdgeLinkField
-					v-if="mode === 'new'"
 					:modelValue="values.price_list"
 					label="Selling Price List"
 					placeholder="Select assigned Price List"
@@ -98,10 +106,12 @@
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
 
-				<label class="selling-field">
-					<span>Customer Purchase Order</span>
-					<input v-model="values.po_no" class="form-control" type="text" placeholder="Optional customer PO reference" />
-				</label>
+				<EdgeInput
+					v-model="values.po_no"
+					id="professional-sales-order-po"
+					label="Customer Purchase Order"
+					placeholder="Optional customer PO reference"
+				/>
 			</div>
 
 			<CustomerCreditSummary :customer="values.customer" :company="values.company" />
@@ -119,12 +129,24 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">Rates are resolved again before saving. Shipping charges are calculated from the selected Shipping Rule.</p>
+			<ProfessionalSalesCommercialPanel
+				:values="values"
+				documentType="Sales Order"
+				documentLabel="Sales Order"
+				:disabled="saving"
+				@change="updateCommercialTerms"
+				@state="updateCommercialState"
+			/>
 
-			<label class="selling-field selling-field--wide">
-				<span>Terms / Notes</span>
-				<textarea v-model="values.terms" class="form-control" rows="3" placeholder="Optional order terms or customer note"></textarea>
-			</label>
+			<p class="selling-form-hint">Selling prices, line discounts, promotions and taxes are resolved again before the draft is saved.</p>
+
+			<EdgeTextarea
+				v-model="values.terms"
+				id="professional-sales-order-terms"
+				label="Terms / Notes"
+				rows="3"
+				placeholder="Optional order terms or customer note"
+			/>
 		</form>
 
 		<template #footer>
@@ -132,7 +154,12 @@
 				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Advanced: Open Sales Order</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
-					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode === 'quotation' && !sourceQuotation)" @click="saveDraft">{{ saving ? "Saving..." : mode === 'quotation' ? "Create Draft from Quotation" : "Save Draft" }}</button>
+					<button
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="saving || (mode === 'quotation' && !sourceQuotation) || (mode === 'new' && commercialState.blocked)"
+						@click="saveDraft"
+					>{{ saving ? "Saving..." : mode === 'quotation' ? "Create Draft from Quotation" : "Save Draft" }}</button>
 				</div>
 			</div>
 		</template>
@@ -141,7 +168,15 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import {
+	MANUAL_MODE,
+	MANUAL_VALUE,
+	clearLockedManualDiscounts,
+	normaliseManualDiscountRows,
+	withManualDiscountEditorColumns,
+} from "../selling/manualDiscountEditor";
 import CustomerCreditSummary from "./CustomerCreditSummary.vue";
+import ProfessionalSalesCommercialPanel from "./ProfessionalSalesCommercialPanel.vue";
 
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 const SOURCE_METHOD = "retailedge.professional_selling_sources.search_professional_selling_sources";
@@ -163,6 +198,12 @@ function initialValues(context = {}) {
 		transaction_date: today,
 		delivery_date: today,
 		shipping_rule: "",
+		coupon_code: "",
+		tax_category: "",
+		taxes_and_charges: "",
+		additional_discount_percentage: 0,
+		discount_amount: 0,
+		apply_discount_on: "Grand Total",
 		po_no: "",
 		terms: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -171,7 +212,15 @@ function initialValues(context = {}) {
 
 export default {
 	name: "ProfessionalSalesOrderDialog",
-	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
+	components: {
+		EdgeModal: runtime.EdgeModal,
+		EdgeLinkField: runtime.EdgeLinkField,
+		EdgeInput: runtime.EdgeInput,
+		EdgeTextarea: runtime.EdgeTextarea,
+		EdgeChildTable: runtime.EdgeChildTable,
+		CustomerCreditSummary,
+		ProfessionalSalesCommercialPanel,
+	},
 	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) }, canUseNativeDesk: { type: Boolean, default: false } },
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -183,13 +232,14 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingContext: { ...(this.context.pricing || {}) },
+			commercialState: { blocked: true, loading: false, error: "", preview: null },
 			values: initialValues(this.context),
 			itemTableField: { label: "Items", description: "Add the products or services included in this order." },
-			itemColumns: [
+			itemColumns: withManualDiscountEditorColumns([
 				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
 				{ fieldname: "rate", label: "Selling Rate", fieldtype: "Currency", placeholder: "Auto price" },
-			],
+			]),
 		};
 	},
 	computed: {
@@ -203,6 +253,7 @@ export default {
 				this.mode = "new";
 				this.sourceQuotation = "";
 				this.pricingContext = { ...(this.context.pricing || {}) };
+				this.commercialState = { blocked: true, loading: false, error: "", preview: null };
 				this.values = initialValues(this.context);
 				this.applyRatePermission(this.pricingContext);
 				this.saveError = "";
@@ -210,7 +261,12 @@ export default {
 		},
 	},
 	methods: {
-		setMode(mode) { if (!this.saving) { this.mode = mode; this.saveError = ""; } },
+		setMode(mode) {
+			if (this.saving) return;
+			this.mode = mode;
+			this.saveError = "";
+			this.commercialState = { blocked: mode === "new", loading: false, error: "", preview: null };
+		},
 		requestClose() { if (!this.saving) this.$emit("close"); },
 		searchOptions(fieldname, query) {
 			return callMethod(SEARCH_METHOD, { document: DOCUMENT, fieldname, txt: query || "", values: this.values })
@@ -224,25 +280,55 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
+		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
+		updateCommercialTerms(patch) { this.values = { ...this.values, ...(patch || {}) }; },
+		updateCommercialState(state) { this.commercialState = { ...this.commercialState, ...(state || {}) }; },
 		applyRatePermission(pricing = this.pricingContext || {}) {
 			const readOnly = pricing?.allow_rate_change === false;
 			this.itemColumns = this.itemColumns.map((column) =>
-				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+				["rate", MANUAL_MODE, MANUAL_VALUE].includes(column.fieldname)
+					? { ...column, read_only: readOnly ? 1 : 0 }
+					: column
 			);
+			if (readOnly) this.values.items = clearLockedManualDiscounts(this.values.items || []);
 		},
-		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; this.applyRatePermission(pricing || {}); if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
-		async setPriceList(next) { if (this.pricingContext?.locked || this.mode !== "new") return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Selling Price List."); } },
-		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
+		async refreshPriceListContext({ preserveSelection = false } = {}) {
+			const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" });
+			this.pricingContext = pricing || {};
+			this.applyRatePermission(pricing || {});
+			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
+		},
+		async setPriceList(next) {
+			if (this.pricingContext?.locked || this.mode !== "new") return;
+			this.values.price_list = next || "";
+			try {
+				await this.refreshPriceListContext({ preserveSelection: true });
+				this.refreshAllItemPricing();
+			} catch (error) {
+				this.values.price_list = "";
+				this.saveError = errorMessage(error, "Unable to use the selected Selling Price List.");
+			}
+		},
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createCustomer(query) { return quickCreateCustomer(query); },
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		setTransactionDate(next) {
+			const value = next || "";
+			if (value === this.values.transaction_date) return;
+			this.values.transaction_date = value;
+			if (this.values.delivery_date && value && this.values.delivery_date < value) this.values.delivery_date = value;
+			this.refreshAllItemPricing();
+		},
 		setCustomer(next) {
 			const value = next || "";
 			const changed = this.values.customer !== value;
 			this.values.customer = value;
 			if (changed) {
+				this.values.coupon_code = "";
+				this.values.tax_category = "";
+				this.values.taxes_and_charges = "";
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
@@ -294,8 +380,9 @@ export default {
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
+			const rows = normaliseManualDiscountRows(nextRows || [], previous);
 			const changed = [];
-			this.values.items = (nextRows || []).map((row, index) => {
+			this.values.items = rows.map((row, index) => {
 				const prior = previous[index] || {};
 				if (row.item_code && row.item_code !== prior.item_code) {
 					changed.push(index);
@@ -314,7 +401,8 @@ export default {
 				const result = await callMethod(PRICING_METHOD, { document: DOCUMENT, item_code: row.item_code, values: { ...this.values, qty: row.qty || 1 } });
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
-				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) }; this.applyRatePermission(this.pricingContext);
+				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) };
+				this.applyRatePermission(this.pricingContext);
 				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
@@ -331,6 +419,10 @@ export default {
 		},
 		async saveDraft() {
 			if (this.saving) return;
+			if (this.mode === "new" && this.commercialState.blocked) {
+				this.saveError = this.commercialState.error || "Wait for the current Sales Order total to finish updating before saving.";
+				return;
+			}
 			this.saving = true;
 			this.saveError = "";
 			try {
@@ -353,10 +445,8 @@ export default {
 .source-order-panel, .selling-form { display: grid; gap: 18px; }
 .selling-form-context { display: flex; flex-wrap: wrap; gap: 10px; }
 .selling-form-context > div { display: grid; gap: 2px; min-width: 180px; padding: 9px 12px; border: 1px solid var(--edge-border, #e5e7eb); border-radius: 8px; background: var(--edge-surface-muted, #f8fafc); }
-.selling-form-context span, .selling-field > span { font-size: 0.78rem; color: var(--edge-text-muted, #667085); }
+.selling-form-context span { font-size: 0.78rem; color: var(--edge-text-muted, #667085); }
 .selling-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.selling-field { display: grid; gap: 6px; }
-.selling-field--wide { grid-column: 1 / -1; }
 .selling-form-error { margin-bottom: 1rem; padding: 10px 12px; border-radius: 8px; background: var(--red-50, #fef2f2); color: var(--red-700, #b91c1c); border: 1px solid var(--red-200, #fecaca); }
 .selling-form-hint { margin: 0; color: var(--edge-text-muted, #667085); font-size: 0.84rem; }
 .selling-form-footer, .selling-form-footer-actions { display: flex; align-items: center; gap: 10px; }
