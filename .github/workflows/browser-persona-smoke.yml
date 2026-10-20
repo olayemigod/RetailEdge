@@ -199,6 +199,7 @@ jobs:
             browser-tests/retailedge_printing_shell.spec.cjs \
             browser-tests/retailedge_navigation_collapse.spec.cjs \
             browser-tests/retailedge_shell_date_consumer.spec.cjs \
+            browser-tests/retailedge_old_audit_acceptance.spec.cjs \
             --config=browser-tests/playwright.config.cjs
 
       - name: Preserve browser QA evidence

@@ -108,7 +108,10 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLoadingState",
 	"EdgeErrorState",
 ];
-const NEW_TAB_PAGE_TARGETS = new Set(["sales-forecast"]);
+const PAGE_TARGET_ALIASES = {
+	"sales-forecast": "retailedge-sales-forecast",
+};
+const NEW_TAB_PAGE_TARGETS = new Set(["retailedge-sales-forecast"]);
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -130,6 +133,11 @@ function normalizeSearch(value) {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, " ")
 		.trim();
+}
+
+function pageTarget(item) {
+	const target = String(item?.target || "");
+	return PAGE_TARGET_ALIASES[target] || target;
 }
 
 export default {
@@ -179,7 +187,7 @@ export default {
 		const components = runtimeComponents();
 		const missing = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		if (missing.length) {
-			this.error = `Required EdgeSuite UI components are unavailable: ${missing.join(", ")}`;
+			this.error = "Reports Centre could not start. Refresh the page or contact your administrator.";
 			this.loading = false;
 		}
 	},
@@ -215,7 +223,7 @@ export default {
 			}));
 		},
 		routeForItem(item) {
-			if (item.target_type === "Page") return `/app/${item.target}`;
+			if (item.target_type === "Page") return `/app/${pageTarget(item)}`;
 			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
 			if (item.target_type === "DocType") {
 				return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`;
@@ -228,7 +236,7 @@ export default {
 				.find((candidate) => candidate.route === route);
 			if (!item) return;
 			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
-			if (item.target_type === "Page") frappe.set_route(item.target);
+			if (item.target_type === "Page") frappe.set_route(pageTarget(item));
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
 			else if (item.target_type === "URL" && item.target) window.location.assign(item.target);
@@ -236,8 +244,9 @@ export default {
 		openReport(item) {
 			if (!item?.target) return;
 			if (item.target_type === "Page") {
-				const route = `/app/${item.target}`;
-				if (NEW_TAB_PAGE_TARGETS.has(item.target)) {
+				const target = pageTarget(item);
+				const route = `/app/${target}`;
+				if (NEW_TAB_PAGE_TARGETS.has(target)) {
 					window.open(route, "_blank", "noopener,noreferrer");
 					return;
 				}
@@ -245,7 +254,7 @@ export default {
 					company: this.context.company || "",
 					branch: this.context.branch || "",
 				});
-				frappe.set_route(item.target);
+				frappe.set_route(target);
 				return;
 			}
 			if (item.target_type === "Report" && this.canUseNativeDesk) {

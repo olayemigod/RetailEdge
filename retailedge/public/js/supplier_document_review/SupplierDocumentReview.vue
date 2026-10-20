@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Supplier Document Review"
 			eyebrow="Suppliers & Payables"
-			subtitle="Review private supplier invoices, approve advisory extraction evidence, prepare ERPNext Purchase Invoice drafts from the authoritative Purchase Order, and submit reconciled standard drafts through ERPNext."
+			subtitle="Review supplier invoices, confirm extracted evidence, prepare Purchase Invoice drafts from approved Purchase Orders, and complete them through the standard approval and posting flow."
 			:summary="summaryCards"
 			:loading="loading"
 			:error="error"
@@ -66,7 +66,7 @@
 										<span v-else>Not recorded</span>
 									</td>
 									<td class="num">{{ formatMoney(row.extracted_total, row.extracted_currency || row.purchase_order_currency) }}</td>
-									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoiceReview(row)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Review the ERPNext PO-mapped invoice here before submission</small></td>
+									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoiceReview(row)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Review the Purchase Order-mapped invoice here before submission</small></td>
 									<td class="supplier-review-row-actions">
 										<button v-if="row.intake_review_status === 'Pending Review'" class="edge-button edge-button--compact" type="button" @click="setIntakeStatus(row, 'In Review')">Start Review</button>
 										<button v-if="!row.extraction && !isIntakeFinal(row)" class="edge-button edge-button--compact" type="button" @click="openExtractionModal(row)">Record Extraction</button>
@@ -80,7 +80,7 @@
 										</template>
 										<button v-if="row.ready_for_draft_purchase_invoice" class="edge-button edge-button--primary edge-button--compact" type="button" @click="prepareDraft(row)">Prepare Draft PI</button>
 										<button v-if="row.purchase_invoice" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoiceReview(row)">Review PI</button>
-										<button v-if="row.purchase_invoice && canUseNativeDesk" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoice(row.purchase_invoice)">Advanced: Open in ERPNext</button>
+										<button v-if="row.purchase_invoice && canUseNativeDesk" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoice(row.purchase_invoice)">Advanced: Open Purchase Invoice</button>
 									</td>
 								</tr>
 							</tbody>
@@ -91,7 +91,7 @@
 				<EdgeDashboardSection
 					v-if="invoiceReviewLoading || invoiceReviewError || invoiceReview"
 					title="Purchase Invoice Review"
-					description="Review the exact ERPNext Purchase Order-mapped draft before standard submission."
+					description="Review the exact Purchase Order-mapped draft before standard submission."
 					span="2"
 				>
 					<div v-if="invoiceReviewLoading" class="supplier-review-invoice-review">Loading Purchase Invoice review…</div>
@@ -104,12 +104,12 @@
 							<div><span>Extracted Total</span><strong>{{ formatMoney(invoiceReview.extracted_total, invoiceReview.extracted_currency || invoiceReview.currency) }}</strong></div>
 							<div><span>Difference</span><strong>{{ formatMoney(invoiceReview.total_difference, invoiceReview.currency) }}</strong></div>
 							<div><span>Status</span><strong>{{ invoiceReview.docstatus === 1 ? "Submitted" : (invoiceReview.status || "Draft") }}</strong></div>
-							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Workflow</span><strong>{{ invoiceReview.workflow_readiness.workflow || "Purchase Invoice Workflow" }}</strong></div>
-							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Workflow State</span><strong>{{ invoiceReview.workflow_readiness.current_state || "Not set" }}</strong></div>
+							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Approval Workflow</span><strong>{{ invoiceReview.workflow_readiness.workflow || "Purchase Invoice Approval" }}</strong></div>
+							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Approval State</span><strong>{{ invoiceReview.workflow_readiness.current_state || "Not set" }}</strong></div>
 						</div>
 						<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'" class="supplier-review-safety">
 							<strong>{{ invoiceReview.workflow_readiness.message }}</strong>
-							<span>Only actions currently permitted by Frappe Workflow are available here. Workflow state is not assigned directly by this page.</span>
+							<span>Only actions currently permitted by the configured approval workflow are available here. Approval state is never changed directly by this page.</span>
 						</div>
 						<div v-if="invoiceReview.blockers && invoiceReview.blockers.some((row) => row.key !== 'workflow')" class="supplier-review-error">
 							<strong>Standard completion is blocked.</strong>
@@ -123,7 +123,7 @@
 						</div>
 						<div class="supplier-review-invoice-actions">
 							<button class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="closeInvoiceReview">Close</button>
-							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="openPurchaseInvoice(invoiceReview.purchase_invoice)">Advanced: Open in ERPNext</button>
+							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="openPurchaseInvoice(invoiceReview.purchase_invoice)">Advanced: Open Purchase Invoice</button>
 							<button
 								v-for="action in (invoiceReview.workflow_eligible ? (invoiceReview.workflow_readiness?.available_actions || []) : [])"
 								:key="action.action"
@@ -138,13 +138,13 @@
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection
-					title="Accounting safety"
-					description="Draft preparation remains draft-only; standard submission uses ERPNext's normal Purchase Invoice lifecycle."
+					title="Posting safety"
+					description="Draft preparation remains draft-only; final submission follows the standard Purchase Invoice lifecycle."
 					span="2"
 				>
 					<div class="supplier-review-safety">
 						<strong>Extraction values are review evidence only.</strong>
-						<span>Purchase Invoice items, quantities, rates, taxes and Purchase Order links come from ERPNext's native Purchase Order mapper. Draft preparation never posts accounting. Standard submission is available only after the mapped draft reconciles to accepted extraction evidence and uses ERPNext's Purchase Invoice submit lifecycle; this workspace never creates Payment Entries, GL Entries or Stock Ledger Entries directly.</span>
+						<span>Purchase Invoice items, quantities, rates, taxes and Purchase Order links come from the approved Purchase Order. Draft preparation never posts accounting. Final submission is available only after the mapped draft reconciles to accepted extraction evidence and follows the standard Purchase Invoice submission flow; this workspace never writes accounting or stock ledgers directly.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -175,8 +175,13 @@
 
 <script>
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField", "EdgeDropdown"];
+const READ_METHODS = new Set([
+	"retailedge.supplier_document_review.get_supplier_document_review_context",
+	"retailedge.supplier_document_review.search_supplier_document_review_options",
+	"retailedge.supplier_document_review.get_supplier_document_purchase_invoice_review",
+]);
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
-function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
+function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, type: READ_METHODS.has(method) ? "GET" : "POST", callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 
 export default {
@@ -295,7 +300,7 @@ export default {
 		async prepareDraft(row) {
 			try {
 				const result = await callMethod("retailedge.supplier_document_review.prepare_draft_purchase_invoice", { extraction_name: row.extraction });
-				frappe.show_alert({ message: result.created ? __("Draft Purchase Invoice prepared from ERPNext Purchase Order.") : __("Existing Purchase Invoice handoff reopened."), indicator: "green" });
+				frappe.show_alert({ message: result.created ? __("Draft Purchase Invoice prepared from Purchase Order.") : __("Existing Purchase Invoice handoff reopened."), indicator: "green" });
 				await this.loadRows();
 				if (result.purchase_invoice) await this.openPurchaseInvoiceReview({ extraction: row.extraction });
 			} catch (error) { this.error = errorMessage(error, "Purchase Invoice draft could not be prepared."); }
@@ -323,7 +328,7 @@ export default {
 					expected_workflow_state: this.invoiceReview.workflow_readiness?.current_state || "",
 				});
 				frappe.show_alert({
-					message: Number(result.docstatus || 0) === 1 ? __("Purchase Invoice submitted through Frappe Workflow.") : __(`Purchase Invoice workflow action ${action.action} applied.`),
+					message: Number(result.docstatus || 0) === 1 ? __("Purchase Invoice submitted through approval workflow.") : __(`Purchase Invoice workflow action ${action.action} applied.`),
 					indicator: "green",
 				});
 				await this.loadRows();
@@ -342,7 +347,7 @@ export default {
 					extraction_name: extraction,
 					expected_purchase_invoice_modified: this.invoiceReview.purchase_invoice_modified,
 				});
-				frappe.show_alert({ message: __("Purchase Invoice submitted through ERPNext."), indicator: "green" });
+				frappe.show_alert({ message: __("Purchase Invoice submitted."), indicator: "green" });
 				await this.loadRows();
 				await this.openPurchaseInvoiceReview({ extraction });
 				return result;
