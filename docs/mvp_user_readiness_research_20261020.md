@@ -116,3 +116,5 @@ Two source contracts also became stale when readiness added a sibling Vue mount 
 Primary framework source: https://github.com/frappe/frappe/blob/v16.52.0/frappe/installer.py
 
 The first browser continuation passed 54 existing cases but its Playwright `testMatch` excluded `user_readiness`, despite the workflow naming that file. Include the readiness spec in discovery and verify that all three readiness journeys appear in the executed run. Scope the administrator's repair assertions to the intended incomplete user's row, since other incomplete users and assignment history are valid simultaneous page content.
+
+The enabled acceptance then confirmed that expired-only assignment history denies an explicitly requested Company with HTTP 403 in `get_allowed_operating_contexts`, before Branch enumeration. Preserve that existing governance: test the explicit denial separately from the unselected switcher's empty Company/Branch lists and incomplete-readiness guidance. Do not change production access rules to satisfy an incorrect HTTP 200 expectation.

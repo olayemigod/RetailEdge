@@ -87,10 +87,15 @@ test("intentionally incomplete RetailEdge user fails closed with actionable guid
 		expect(readiness.payload.message.reasons.map((reason) => reason.code)).toContain("missing_company_assignment");
 		expect(readiness.payload.message.message).toMatch(/assign.*active Branch|Company and Branch/i);
 
-		const contexts = await apiGet(context, "retailedge.operating_context.get_allowed_operating_contexts", {
+		const deniedContexts = await apiGet(context, "retailedge.operating_context.get_allowed_operating_contexts", {
 			company: COMPANY,
 		});
+		expect(deniedContexts.response.status(), deniedContexts.text).toBe(403);
+		expect(deniedContexts.payload.exc_type).toBe("PermissionError");
+
+		const contexts = await apiGet(context, "retailedge.operating_context.get_allowed_operating_contexts");
 		expect(contexts.response.ok(), contexts.text).toBeTruthy();
+		expect(contexts.payload.message.companies).toEqual([]);
 		expect(contexts.payload.message.branches).toEqual([]);
 		expect(contexts.payload.message.readiness.ready).toBe(false);
 
