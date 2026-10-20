@@ -8,7 +8,7 @@ from frappe.utils import flt, getdate, nowdate
 
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.professional_selling import _assert_read, _coerce_values, _permission, _validate_context
-from retailedge.sales_commercial_preview import _validate_manual_invoice_discount_against_promotions
+from retailedge.sales_commercial_promotion_guard import validate_manual_document_discount_against_promotions
 from retailedge.sales_commercial_terms import (
 	apply_sales_commercial_terms,
 	get_sales_commercial_term_capabilities,
@@ -180,7 +180,11 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 	# Draft-only. ERPNext validation/pricing/tax calculation remains authoritative.
 	doc.insert()
 	validate_manual_item_discounts_after_pricing(doc, items)
-	_validate_manual_invoice_discount_against_promotions(doc, values)
+	validate_manual_document_discount_against_promotions(
+		doc,
+		values,
+		document_label="Quotation",
+	)
 	if shipping_rule:
 		# Use ERPNext's native Shipping Rule implementation; do not calculate or
 		# maintain a RetailEdge delivery-charge row/ledger.
