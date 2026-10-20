@@ -11,7 +11,7 @@
 		:branchName="branchName || filters.branch"
 		:userName="userName"
 		:menuItems="menuItems"
-		activeRoute="/app/sales-forecast"
+		activeRoute="/app/retailedge-sales-forecast"
 		:hideNativeSidebar="true"
 		@navigate="handleNavigation"
 	>
@@ -57,7 +57,7 @@
 				<span>Forecast starts: {{ formatDate(scope.forecast_start) }}</span>
 				<span>{{ metadata.history_policy || "Completed calendar months only." }}</span>
 				<span>{{ forecastMethod }}</span>
-				<span>{{ metadata.profit_truth || "ERPNext Profit & Loss remains financial profit truth." }}</span>
+				<span>{{ metadata.profit_truth || "Posted Profit & Loss remains the financial profit reference." }}</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -89,7 +89,7 @@ export default {
 			const labels = { company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse" };
 			return Object.entries(labels).map(([key, label]) => ({ label, value: this.filters[key] })).filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);
 		},
-		exportMetadata() { return [ { label: "Sales Truth", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice" }, { label: "History Policy", value: this.metadata.history_policy || "Completed months" }, { label: "Forecast Method", value: this.metadata.forecast_engine?.method || "Deterministic baseline" }, { label: "Accounting Mutation", value: "None" } ]; },
+		exportMetadata() { return [ { label: "Sales Basis", value: this.metadata.sales_truth || "Submitted Sales Invoices" }, { label: "History Policy", value: this.metadata.history_policy || "Completed months" }, { label: "Forecast Method", value: this.metadata.forecast_engine?.method || "Deterministic baseline" }, { label: "Accounting Changes", value: "None" } ]; },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
@@ -106,7 +106,7 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
-			} catch (error) { this.error = errorMessage(error, "Failed to load Sales Forecast controls."); }
+			} catch (error) { this.error = errorMessage(error, "Sales Forecast controls could not be loaded."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
