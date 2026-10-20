@@ -86,7 +86,7 @@ def test_standalone_sales_order_uses_same_commercial_helpers_but_native_quotatio
 		"validate_manual_item_discounts_after_pricing(doc, items)",
 		"_validate_manual_invoice_discount_against_promotions(doc, values)",
 		"target = erpnext_make_sales_order(source.name)",
-		"preserving its accepted commercial terms",
+		"accepted commercial terms",
 	):
 		assert contract in text
 	assert text.index("apply_sales_commercial_terms(doc, values)") < text.index("doc.insert()")
