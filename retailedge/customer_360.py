@@ -132,7 +132,7 @@ def _get_latest_purchase_date(filters: frappe._dict, customer: str) -> str | Non
 	rows = frappe.get_list(
 		"Sales Invoice",
 		filters=query_filters,
-		fields=["max(posting_date) as latest_purchase_date"],
+		fields=[{"MAX": "posting_date", "as": "latest_purchase_date"}],
 		limit=1,
 	)
 	if not rows or not rows[0].get("latest_purchase_date"):
