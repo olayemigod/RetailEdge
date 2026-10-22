@@ -78,7 +78,7 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 				page_dir = APP_ROOT / "retailedge" / "page" / directory
 				js = (page_dir / f"{directory}.js").read_text(encoding="utf-8")
 				page_json = (page_dir / f"{directory}.json").read_text(encoding="utf-8")
-				self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', js)
+				self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', js)
 				self.assertIn('const INVENTORY_INSIGHTS_ASSET = "inventory_insights.bundle.js"', js)
 				self.assertIn(f'const INSIGHT_VIEW = "{view}"', js)
 				self.assertIn("mountInventoryInsightView", js)

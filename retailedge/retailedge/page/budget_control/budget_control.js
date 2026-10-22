@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const WORKSPACE_ASSET = "native_visual_workspaces.bundle.js";
 const PAGE_ROUTE = "budget-control";
 const PAGE_TITLE = "Budgeting & Cost Control";

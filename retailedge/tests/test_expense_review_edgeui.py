@@ -64,7 +64,7 @@ def test_expense_review_page_is_available_as_preview_but_not_promoted_to_primary
 	navigation = _read(NAVIGATION)
 	assert 'const PAGE_ROUTE = "expense-review"' in page_js
 	assert 'expense_review.bundle.js' in page_js
-	assert 'edgeui.bundle.js' in page_js
+	assert 'edgesuite_ui.bundle.js' in page_js
 	assert '"page_name": "expense-review"' in page_json
 	assert '"RetailEdge Cashier Expense Review"' in navigation
 	assert '"target": "expense-review"' not in navigation

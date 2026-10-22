@@ -13,7 +13,7 @@ class TestProjectOperationsUIContract(TestCase):
 		page_js = (page_dir / "project_operations.js").read_text()
 		self.assertIn('"page_name": "project-operations"', page_json)
 		self.assertIn('"standard": "Yes"', page_json)
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page_js)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page_js)
 		self.assertIn('const PROJECT_ASSET = "project_operations.bundle.js"', page_js)
 		self.assertIn("window.mountProjectOperationsPage", page_js)
 

@@ -276,7 +276,7 @@ class TestStockMovementHistory(unittest.TestCase):
 		)
 		with open(js_path, encoding="utf-8") as handle:
 			content = handle.read()
-		self.assertNotIn("edgeui.bundle.js", content)
+		self.assertNotIn("edgesuite_ui.bundle.js", content)
 		self.assertNotIn("window.EdgeUI", content)
 		self.assertNotIn("Vue", content)
 

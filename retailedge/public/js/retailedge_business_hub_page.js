@@ -2,7 +2,7 @@
 	"use strict";
 
 	const PAGE_NAME = "retailedge-business-hub";
-	const RUNTIME_ASSET = "edgeui.bundle.js";
+	const RUNTIME_ASSET = "edgesuite_ui.bundle.js";
 const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
 	const PRODUCT_STYLE_ID = "retailedge-business-hub-vue-style";

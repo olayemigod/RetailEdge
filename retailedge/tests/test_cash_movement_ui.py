@@ -24,7 +24,7 @@ class TestCashMovementUI(unittest.TestCase):
 			APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.js"
 		).read_text()
 		bundle = (APP_ROOT / "public" / "js" / "cash_movement.bundle.js").read_text()
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page)
 		self.assertIn('const CASH_MOVEMENT_ASSET = "cash_movement.bundle.js"', page)
 		self.assertIn("hideNativePageSidebar", page)
 		self.assertIn("window.mountCashMovement", page)

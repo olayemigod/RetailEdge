@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const DASHBOARD_ASSET = "owner_dashboard.bundle.js";
 const PAGE_ROUTE = "owner-dashboard";
 const PAGE_TITLE = "Financial Dashboard";

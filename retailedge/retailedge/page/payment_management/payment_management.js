@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 const PAYMENT_ASSET = "payment_management.bundle.js";
 const PAGE_ROUTE = "payment-management";

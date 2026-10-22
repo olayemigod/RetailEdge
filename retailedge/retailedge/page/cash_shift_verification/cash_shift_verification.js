@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const REPORTING_ASSET = "cash_shift_verification.bundle.js";
 const PAGE_ROUTE = "cash-shift-verification";
 const PAGE_TITLE = "Cash Shift Verification";

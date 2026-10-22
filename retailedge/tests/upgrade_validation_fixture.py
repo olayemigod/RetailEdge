@@ -287,6 +287,7 @@ def _ledger_snapshot(invoice: str) -> dict:
 
 def seed_upgrade_fixture() -> dict:
 	"""Create representative setup + submitted accounting truth on the frozen pre-MVP baseline."""
+	frappe.db.set_default("currency", "NGN")
 	company = _ensure_company()
 	_ensure_fiscal_year(COMPANY)
 	_ensure_transaction_masters()

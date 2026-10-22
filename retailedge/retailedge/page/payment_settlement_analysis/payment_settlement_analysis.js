@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const ANALYSIS_ASSET = "payment_settlement_analysis.bundle.js";
 const PAGE_ROUTE = "payment-settlement-analysis";
 const PAGE_TITLE = "Payment & Settlement Analysis";

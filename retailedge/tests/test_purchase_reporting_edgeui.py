@@ -132,7 +132,7 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 			SUPPLIER_PAYABLES_PAGE / "supplier_payables.js",
 		):
 			loader = self.read(path)
-			self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', loader)
+			self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', loader)
 			self.assertIn('const PURCHASE_REPORTING_ASSET = "purchase_reporting.bundle.js"', loader)
 			self.assertIn("window.mountPurchaseReportingPage", loader)
 			self.assertIn("hideNativePageSidebar", loader)

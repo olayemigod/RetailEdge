@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const REVIEW_ASSET = "supplier_document_review.bundle.js";
 const PAGE_ROUTE = "supplier-document-review";
 const PAGE_TITLE = "Supplier Document Review";

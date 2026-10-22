@@ -63,7 +63,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertNotIn("window.EdgeUI", component)
-		for contract in ("edgeui.bundle.js", "professional_selling.bundle.js"):
+		for contract in ("edgesuite_ui.bundle.js", "professional_selling.bundle.js"):
 			self.assertIn(contract, loader)
 		self.assertIn("createEdgeApp", bundle)
 		self.assertIn("const edgeUI = window.EdgeSuiteUI;", bundle)

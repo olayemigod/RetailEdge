@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const BUSINESS_EXPENSE_ASSET = "business_expenses.bundle.js";
 const PAGE_ROUTE = "business-expenses";
 

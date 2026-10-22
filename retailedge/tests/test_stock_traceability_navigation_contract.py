@@ -47,7 +47,7 @@ class TestStockTraceabilityNavigationContract(unittest.TestCase):
 		page_dir = APP_ROOT / "retailedge" / "page" / "stock_traceability_control"
 		self.assertTrue((page_dir / "stock_traceability_control.json").exists())
 		page = (page_dir / "stock_traceability_control.js").read_text()
-		self.assertIn('"edgeui.bundle.js"', page)
+		self.assertIn('"edgesuite_ui.bundle.js"', page)
 		self.assertIn('"native_visual_workspaces.bundle.js"', page)
 		self.assertIn('"stock-traceability"', page)
 		self.assertIn("mountNativeERPNextWorkspace", page)

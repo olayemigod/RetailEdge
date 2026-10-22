@@ -243,11 +243,11 @@ test("printing administration pages mount the real RetailEdge EdgeSuite shell", 
 		await expect(page.locator(".edge-printing-simulator .edge-status-badge")).toHaveText("Off");
 		expect(await page.evaluate(() => window.sessionStorage.getItem("edgesuite.printing.virtual_printer.v1"))).toBeNull();
 
-		await page.goto(`${BASE_URL}/desk/sales-invoice`, {
+		await page.goto(`${BASE_URL}/app/user`, {
 			waitUntil: "domcontentloaded",
 			timeout: 30_000,
 		});
-		await page.waitForURL(/\/(?:app|desk)\/sales-invoice(?:\?|$)/, { timeout: 25_000 });
+		await page.waitForURL(/\/(?:app|desk)\/user(?:\?|$)/, { timeout: 25_000 });
 		await expect(page.getByText("Not found", { exact: false })).toHaveCount(0);
 		await expect(page.locator(".body-sidebar-container:visible")).toHaveCount(1);
 	} finally {

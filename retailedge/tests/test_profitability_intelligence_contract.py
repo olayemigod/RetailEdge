@@ -29,7 +29,7 @@ def test_owner_dashboard_contains_profitability_section_and_attention():
 def test_profitability_page_uses_edgesuite_runtime_and_no_raw_html_injection():
 	page = Path("retailedge/retailedge/page/profitability_intelligence/profitability_intelligence.js").read_text()
 	component = Path("retailedge/public/js/profitability_intelligence/ProfitabilityIntelligence.vue").read_text()
-	assert 'edgeui.bundle.js' in page
+	assert 'edgesuite_ui.bundle.js' in page
 	assert "mountProfitabilityIntelligence" in page
 	assert "EdgeAppShell" in component
 	assert "EdgeDashboardShell" in component

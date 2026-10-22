@@ -39,7 +39,7 @@ class RetailEdgeCustomerReceivablesEdgeUITests(unittest.TestCase):
 
 	def test_loader_uses_canonical_edgesuite_runtime(self):
 		source = (PAGE / "customer_receivables.js").read_text()
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', source)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', source)
 		self.assertIn('const RECEIVABLES_ASSET = "customer_receivables.bundle.js"', source)
 		self.assertIn("window.EdgeSuiteUI", source)
 		self.assertNotIn("window.EdgeUI", source)

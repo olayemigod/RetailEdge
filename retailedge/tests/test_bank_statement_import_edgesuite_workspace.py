@@ -28,7 +28,7 @@ def test_bank_statement_imports_is_edgesuite_page_not_native_everyday_entry():
 def test_page_bootstraps_edgesuite_runtime_and_product_bundle():
     source = PAGE_JS.read_text(encoding="utf-8")
     for expected in (
-        'EDGEUI_ASSET = "edgeui.bundle.js"',
+        'EDGEUI_ASSET = "edgesuite_ui.bundle.js"',
         'STATEMENT_ASSET = "bank_statement_imports.bundle.js"',
         'PAGE_ROUTE = "bank-statement-imports"',
         "hideNativePageSidebar",

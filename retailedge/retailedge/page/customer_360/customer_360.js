@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const CUSTOMER_360_ASSET = "customer_360.bundle.js";
 const PAGE_ROUTE = "customer-360";
 const PAGE_TITLE = "Customer 360";

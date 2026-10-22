@@ -191,6 +191,7 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 			"company": COMPANY,
 			"branch": branch_name,
 			"customer": CUSTOMER,
+			"price_list": PRICE_LIST,
 			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
 		}
 	)
