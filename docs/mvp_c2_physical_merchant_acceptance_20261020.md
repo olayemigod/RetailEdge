@@ -12,7 +12,7 @@ Authoritative starting point:
 - This is the merge commit for PR #236.
 - Frappe: `16.52.0`
 - ERPNext: `16.51.1`
-- EdgeSuite UI: `1.1.0` at `4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7`
+- EdgeSuite UI: `1.1.0` at `d50920b005da8dcf1bd1e35c1c88be8afedecfbf`
 - Python: `3.14`
 - Node: `24`
 
