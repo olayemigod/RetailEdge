@@ -31,8 +31,8 @@
       "scope": "local six-app site"
     },
     "processedge_posnext_override": {
-      "version": "0.0.14",
-      "sha": "922fd7ba5d4730afc86bcdc05764e4b4b12208dc",
+      "version": "0.0.15",
+      "sha": "61a5fb9b92d8b9f4bb003c408474811f62deef3b",
       "scope": "local six-app site"
     }
   }
