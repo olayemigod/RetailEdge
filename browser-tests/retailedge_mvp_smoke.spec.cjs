@@ -21,7 +21,9 @@ async function login(context, user) {
 	});
 	expect(response.ok(), `login failed for ${user}`).toBeTruthy();
 	const payload = await response.json();
-	expect(String(payload.message || "")).toMatch(/Logged In/i);
+	// Frappe returns "No App" after a successful login when a System User has
+	// deliberately been given no module access. That is the expected no-access fixture.
+	expect(String(payload.message || "")).toMatch(/Logged In|No App/i);
 }
 
 async function routeDiagnostic(page, route) {
@@ -365,7 +367,7 @@ test("System Manager sees the Back to Desk advanced action", async ({ browser })
 	const { context, page } = await newPersona(browser, USERS.native);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await expect(page.getByRole("link", { name: "Back to Desk  Advanced ERPNext", exact: true })).toBeVisible();
+		await expect(page.getByRole("link", { name: "Back to Desk — Advanced ERPNext", exact: true })).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}

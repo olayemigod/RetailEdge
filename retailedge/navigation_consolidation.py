@@ -184,8 +184,13 @@ def _require_retailedge_shell_access() -> None:
 		frappe.throw(_("You do not have access to RetailEdge."), frappe.PermissionError)
 
 	page_names = frappe.get_all("Page", filters={"module": "RetailEdge"}, pluck="name")
-	if not any(frappe.get_doc("Page", page_name).is_permitted() for page_name in page_names):
-		frappe.throw(_("You do not have access to RetailEdge."), frappe.PermissionError)
+	for page_name in page_names:
+		page = frappe.get_doc("Page", page_name)
+		# A roleless Page is available to every System User in Frappe. It may be an
+		# internal/legacy route, so it cannot establish product-shell membership.
+		if page.get("roles") and page.is_permitted():
+			return
+	frappe.throw(_("You do not have access to RetailEdge."), frappe.PermissionError)
 
 
 @frappe.whitelist()
