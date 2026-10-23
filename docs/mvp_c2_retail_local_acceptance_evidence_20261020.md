@@ -1,6 +1,6 @@
 # RetailEdge MVP-C2 — `retail.local` acceptance evidence
 
-Status: **PENDING — NOT YET EXECUTED**
+Status: **AUTOMATED GREEN — MANUAL `retail.local` ACCEPTANCE PENDING**
 
 This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acceptance_20261020.md`. A pending row is not a pass.
 
@@ -11,8 +11,9 @@ This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acce
 | Starting `version-16` SHA | `00e85a98c4d15ebab003af784326d04bdf51f51e` |
 | PR #236 merge | confirmed |
 | Acceptance PR | #238 |
-| RetailEdge deployed SHA | PENDING |
-| EdgeSuite UI deployed SHA | PENDING |
+| PR #238 exact candidate SHA | `44df381c563d41e24be697acbffed50645f3b17f` |
+| RetailEdge deployed SHA | PENDING local verification |
+| EdgeSuite UI deployed SHA | PENDING local verification |
 | Frappe version | expected `16.52.0`; verify on site |
 | ERPNext version | expected `16.51.1`; verify on site |
 | POSNext version/SHA | PENDING verification |
@@ -25,19 +26,19 @@ Do not place passwords, API credentials, encryption keys, customer secrets or se
 
 ## Automated-candidate evidence
 
-PR #236 completed exact-head automated validation before merge and remains the merged User Readiness foundation. PR #238 is now the single RetailEdge MVP-C2 runtime/persona/onboarding closure candidate; it contains runtime, role-consolidation, and canonical cashier POS permission code changes, so all required hosted gates must pass on the same exact PR #238 head used for local acceptance.
+PR #236 completed exact-head automated validation before merge and remains the merged User Readiness foundation. PR #238 is now the single RetailEdge MVP-C2 runtime/persona/onboarding closure candidate; it contains runtime, role-consolidation, and canonical cashier POS permission code changes.
 
-The earlier PR #238 head `6e475a111204efed4ae90966e4f2d3c2f932fe0a` passed CI, Linters, Upgrade Validation, EdgeSuite UI Candidate Compatibility, and Browser Persona Smoke. That evidence is historical only after later candidate changes. The current exact PR #238 head must be recorded here only after its replacement workflows complete.
+The exact PR #238 candidate `44df381c563d41e24be697acbffed50645f3b17f` passed all five required hosted gates. This is the only automated candidate evidence valid for the remaining local acceptance unless the branch changes again.
 
-| Gate | PR #238 result |
+| Gate | PR #238 exact-head result |
 | --- | --- |
-| CI | PENDING exact-head rerun |
-| Linters / security | PENDING exact-head rerun |
-| Upgrade Validation | PENDING exact-head rerun |
-| EdgeSuite UI Candidate Compatibility | PENDING exact-head rerun |
-| Browser Persona | PENDING exact-head rerun |
+| CI | PASS — run #5470 |
+| Linters / security | PASS — run #5329 |
+| Upgrade Validation | PASS — run #2495 |
+| EdgeSuite UI Candidate Compatibility | PASS — run #3585 |
+| Browser Persona | PASS — run #2596 |
 
-Any runtime-code or migration correction discovered during manual acceptance creates a new exact candidate and invalidates reliance on the previous code-head evidence for affected gates.
+Any runtime-code, migration, or evidence change that moves the candidate head requires replacement exact-head validation before that new head can be accepted.
 
 ## Physical / merchant acceptance
 
@@ -99,7 +100,7 @@ At least one supported merchant path must pass:
 
 ## Acceptance decision
 
-Current decision: **NOT ACCEPTED — manual `retail.local` evidence is still pending.**
+Current decision: **NOT ACCEPTED — automated exact-head validation is green, but manual `retail.local` evidence is still pending.**
 
 Promote this to PASS only when all required rows have passed on one exact deployed candidate, no release-blocking defect remains, and at least one supported 1.0 printing path has been physically accepted.
 
