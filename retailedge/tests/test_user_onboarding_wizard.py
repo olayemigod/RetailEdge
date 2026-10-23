@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
-from retailedge import user_onboarding
+from retailedge import user_onboarding, user_readiness
 
 
 USER = "cashier@example.com"
@@ -60,7 +60,10 @@ class TestUserOnboardingWizard(unittest.TestCase):
 	@patch("retailedge.user_onboarding._assert_assignment_create")
 	@patch("retailedge.user_onboarding.get_active_branch_assignments")
 	def test_matching_active_assignment_is_reused_without_create_permission(
-		self, mock_assignments, mock_assert_create, mock_create
+		self,
+		mock_assignments,
+		mock_assert_create,
+		mock_create,
 	):
 		mock_assignments.return_value = [frappe._dict(name="RE-BA-0001", company=COMPANY, branch=BRANCH)]
 		name, created = user_onboarding._ensure_branch_assignment(user=USER, values=payload())
@@ -72,7 +75,12 @@ class TestUserOnboardingWizard(unittest.TestCase):
 	@patch("retailedge.user_onboarding.create_branch_assignment")
 	@patch("retailedge.user_onboarding._assert_assignment_create")
 	@patch("retailedge.user_onboarding.get_active_branch_assignments")
-	def test_different_active_branch_blocks_silent_transfer(self, mock_assignments, mock_assert_create, mock_create):
+	def test_different_active_branch_blocks_silent_transfer(
+		self,
+		mock_assignments,
+		mock_assert_create,
+		mock_create,
+	):
 		mock_assignments.return_value = [frappe._dict(name="RE-BA-0001", company=COMPANY, branch="Ikeja")]
 		with self.assertRaises(frappe.ValidationError):
 			user_onboarding._ensure_branch_assignment(user=USER, values=payload())
@@ -94,11 +102,47 @@ class TestUserOnboardingWizard(unittest.TestCase):
 		self.assertFalse(result["changed"])
 		mock_get_doc.assert_not_called()
 
+	@patch("retailedge.user_readiness._has_document_read", return_value=True)
+	@patch("retailedge.user_readiness.frappe.get_all")
+	@patch("retailedge.user_readiness.frappe.db.get_value")
+	@patch("retailedge.user_readiness.frappe.db.exists")
+	def test_shared_branch_pos_is_ready_even_if_user_is_restricted_on_another_profile(
+		self,
+		mock_exists,
+		mock_get_value,
+		mock_get_all,
+		_document_read,
+	):
+		def exists(doctype, filters=None):
+			if doctype == "DocType":
+				return True
+			if doctype == "POS Profile User" and filters and filters.get("parent") == "POS-KETU":
+				return False
+			return True
+
+		mock_exists.side_effect = exists
+		mock_get_all.return_value = [frappe._dict(parent="POS-IKEJA")]
+		mock_get_value.return_value = frappe._dict(company=COMPANY, disabled=0)
+		result = user_readiness._base_result(user=USER, company=COMPANY)
+		result["applicable"] = True
+		ready = user_readiness._validate_pos_readiness(
+			user=USER,
+			company=COMPANY,
+			branch=BRANCH,
+			default_pos_profile="POS-KETU",
+			result=result,
+		)
+		self.assertTrue(ready)
+		self.assertEqual(result["reasons"], [])
+
 	@patch("retailedge.user_onboarding.frappe.get_doc")
 	@patch("retailedge.user_onboarding.frappe.has_permission")
 	@patch("retailedge.user_onboarding.get_exact_branch_profile")
 	def test_non_pos_branch_review_does_not_require_pos_profile_read(
-		self, mock_branch_profile, mock_has_permission, mock_get_doc
+		self,
+		mock_branch_profile,
+		mock_has_permission,
+		mock_get_doc,
 	):
 		mock_branch_profile.return_value = frappe._dict(name="RE-BP-0001", default_pos_profile="POS-KETU")
 
@@ -163,7 +207,12 @@ class TestUserOnboardingWizard(unittest.TestCase):
 	@patch("retailedge.user_onboarding._resolve_or_create_user")
 	@patch("retailedge.user_onboarding._profile_summary")
 	@patch("retailedge.user_onboarding._assert_onboarding_read")
-	def test_pos_requirement_is_validated_before_any_user_write(self, _assert_read, mock_profile, mock_resolve_user):
+	def test_pos_requirement_is_validated_before_any_user_write(
+		self,
+		_assert_read,
+		mock_profile,
+		mock_resolve_user,
+	):
 		mock_profile.return_value = {
 			"configured": True,
 			"default_pos_profile": "POS-KETU",
@@ -208,9 +257,12 @@ class TestUserOnboardingWizard(unittest.TestCase):
 
 	def test_company_change_clears_dependent_branch(self):
 		source = WIZARD_VUE.read_text(encoding="utf-8")
-		self.assertIn('this.form.company = next;', source)
+		self.assertIn("this.form.company = next;", source)
 		self.assertIn('this.form.branch = "";', source)
-		self.assertIn('searchBranch(query) { return this.search("branch", query, { company: this.form.company }); }', source)
+		self.assertIn(
+			'searchBranch(query) { return this.search("branch", query, { company: this.form.company }); }',
+			source,
+		)
 
 
 if __name__ == "__main__":
