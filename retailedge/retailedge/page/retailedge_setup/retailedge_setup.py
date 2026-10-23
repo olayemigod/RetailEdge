@@ -23,6 +23,17 @@ SETUP_RESOURCES = (
 		"icon": "building",
 	},
 	{
+		"key": "user-onboarding",
+		"label": "User Onboarding",
+		"description": "Guide a new or existing User through RetailEdge access, Branch assignment and readiness checks.",
+		"doctype": "User",
+		"manager": "user-onboarding",
+		"action_label": "Start Onboarding",
+		"hide_create_action": True,
+		"singleton": False,
+		"icon": "users",
+	},
+	{
 		"key": "branch-assignments",
 		"label": "Branch Assignments",
 		"description": "Assign users to Branches with effective dates and preserve transfer history between locations.",
@@ -109,6 +120,7 @@ def get_setup_context() -> dict:
 		resource["can_create"] = bool(
 			not definition["singleton"]
 			and not definition.get("page")
+			and not definition.get("hide_create_action")
 			and _has_permission(doctype, "create")
 		)
 		if definition["singleton"]:
