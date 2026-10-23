@@ -10,13 +10,13 @@ This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acce
 | --- | --- |
 | Starting `version-16` SHA | `00e85a98c4d15ebab003af784326d04bdf51f51e` |
 | PR #236 merge | confirmed |
-| Acceptance PR | #237 |
+| Acceptance PR | #238 |
 | RetailEdge deployed SHA | PENDING |
 | EdgeSuite UI deployed SHA | PENDING |
 | Frappe version | expected `16.52.0`; verify on site |
 | ERPNext version | expected `16.51.1`; verify on site |
 | POSNext version/SHA | PENDING verification |
-| ProcessEdge POSNext Override version/SHA | PENDING verification |
+| ProcessEdge POSNext Extension version/SHA | PENDING verification |
 | Site | `retail.local` |
 | Acceptance date | PENDING |
 | Operator | PENDING |
@@ -25,18 +25,19 @@ Do not place passwords, API credentials, encryption keys, customer secrets or se
 
 ## Automated-candidate evidence
 
-PR #236 completed exact-head automated validation before merge. PR #237 is documentation-only but must still keep its own relevant repository checks green before merge.
+PR #236 completed exact-head automated validation before merge and remains the merged User Readiness foundation. PR #238 is now the single RetailEdge MVP-C2 runtime/persona/onboarding closure candidate; it contains runtime, role-consolidation, and canonical cashier POS permission code changes, so all required hosted gates must pass on the same exact PR #238 head used for local acceptance.
 
-| Gate | PR #237 result |
+The earlier PR #238 head `6e475a111204efed4ae90966e4f2d3c2f932fe0a` passed CI, Linters, Upgrade Validation, EdgeSuite UI Candidate Compatibility, and Browser Persona Smoke. That evidence is historical only after later candidate changes. The current exact PR #238 head must be recorded here only after its replacement workflows complete.
+
+| Gate | PR #238 result |
 | --- | --- |
-| CI | PENDING |
-| Linters / security | PENDING |
-| Upgrade Validation | PENDING |
-| EdgeSuite UI Candidate Compatibility | PENDING |
-| Theme compatibility | path-dependent / verify if run |
-| Browser Persona | path-dependent / PR #236 code evidence remains authoritative unless runtime code changes |
+| CI | PENDING exact-head rerun |
+| Linters / security | PENDING exact-head rerun |
+| Upgrade Validation | PENDING exact-head rerun |
+| EdgeSuite UI Candidate Compatibility | PENDING exact-head rerun |
+| Browser Persona | PENDING exact-head rerun |
 
-Any runtime-code correction discovered during manual acceptance creates a new exact candidate and invalidates reliance on the previous code-head evidence for affected gates.
+Any runtime-code or migration correction discovered during manual acceptance creates a new exact candidate and invalidates reliance on the previous code-head evidence for affected gates.
 
 ## Physical / merchant acceptance
 
@@ -93,7 +94,8 @@ At least one supported merchant path must pass:
 
 | ID | Case | Severity | Description | Corrective PR/SHA | Retest result |
 | --- | --- | --- | --- | --- | --- |
-| — | — | — | None recorded yet; acceptance not executed | — | — |
+| C2-001 | Cashier / Start POS | Release blocker | Canonical cashier lacked `Account` read/select and POS Opening/Closing Shift operational permissions; PR #238 now carries a bounded canonical-role migration bridge. | PR #238 | PENDING local retest |
+| C2-002 | Start POS session handoff | Release blocker | POSNext 1.17.0 could redirect a valid Frappe session to `/pos/account/login` after a non-auth logged-user startup failure; ProcessEdge POSNext Extension PR #24 carries the bounded compatibility bridge. | Extension PR #24 | PENDING local retest |
 
 ## Acceptance decision
 
