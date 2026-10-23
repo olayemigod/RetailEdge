@@ -1,6 +1,6 @@
 # RetailEdge MVP-C2 — `retail.local` acceptance evidence
 
-Status: **AUTOMATED GREEN — MANUAL `retail.local` ACCEPTANCE PENDING**
+Status: **EXACT-HEAD REVALIDATION REQUIRED — MANUAL `retail.local` ACCEPTANCE PENDING**
 
 This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acceptance_20261020.md`. A pending row is not a pass.
 
@@ -11,13 +11,14 @@ This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acce
 | Starting `version-16` SHA | `00e85a98c4d15ebab003af784326d04bdf51f51e` |
 | PR #236 merge | confirmed |
 | Acceptance PR | #238 |
-| PR #238 exact candidate SHA | `44df381c563d41e24be697acbffed50645f3b17f` |
+| Current PR head | read from PR #238 at acceptance; do not copy an older SHA |
+| Last fully green runtime SHA | `44df381c563d41e24be697acbffed50645f3b17f` |
 | RetailEdge deployed SHA | PENDING local verification |
 | EdgeSuite UI deployed SHA | PENDING local verification |
 | Frappe version | expected `16.52.0`; verify on site |
 | ERPNext version | expected `16.51.1`; verify on site |
-| POSNext version/SHA | PENDING verification |
-| ProcessEdge POSNext Extension version/SHA | PENDING verification |
+| POSNext version/SHA | `1.17.0` / `0b8b6f3bee1b943f6a4982c8d5e987c9421487da`; verify on site |
+| ProcessEdge POSNext Extension version/SHA | `0.0.15` / `61a5fb9b92d8b9f4bb003c408474811f62deef3b`; verify on site |
 | Site | `retail.local` |
 | Acceptance date | PENDING |
 | Operator | PENDING |
@@ -26,11 +27,11 @@ Do not place passwords, API credentials, encryption keys, customer secrets or se
 
 ## Automated-candidate evidence
 
-PR #236 completed exact-head automated validation before merge and remains the merged User Readiness foundation. PR #238 is now the single RetailEdge MVP-C2 runtime/persona/onboarding closure candidate; it contains runtime, role-consolidation, and canonical cashier POS permission code changes.
+PR #236 completed exact-head automated validation before merge and remains the merged User Readiness foundation. PR #238 is now the single RetailEdge MVP-C2 runtime/persona/onboarding closure candidate; it contains runtime, role-consolidation, canonical cashier POS permissions, and the governed local POSNext dependency pin.
 
-The exact PR #238 candidate `44df381c563d41e24be697acbffed50645f3b17f` passed all five required hosted gates. This is the only automated candidate evidence valid for the remaining local acceptance unless the branch changes again.
+Runtime SHA `44df381c563d41e24be697acbffed50645f3b17f` passed all five required hosted gates:
 
-| Gate | PR #238 exact-head result |
+| Gate | Last fully green runtime result |
 | --- | --- |
 | CI | PASS — run #5470 |
 | Linters / security | PASS — run #5329 |
@@ -38,7 +39,17 @@ The exact PR #238 candidate `44df381c563d41e24be697acbffed50645f3b17f` passed al
 | EdgeSuite UI Candidate Compatibility | PASS — run #3585 |
 | Browser Persona | PASS — run #2596 |
 
-Any runtime-code, migration, or evidence change that moves the candidate head requires replacement exact-head validation before that new head can be accepted.
+After that green runtime run, the acceptance evidence was recorded and the candidate baseline was corrected from ProcessEdge POSNext Extension `0.0.14` / `922fd7ba5d4730afc86bcdc05764e4b4b12208dc` to the required authenticated-session compatibility dependency `0.0.15` / `61a5fb9b92d8b9f4bb003c408474811f62deef3b`. Because the baseline pin is part of the candidate contract, the current PR head must pass the full exact-head gate set again before local acceptance can begin.
+
+| Gate | Current PR #238 head |
+| --- | --- |
+| CI | PENDING replacement exact-head run |
+| Linters / security | PENDING replacement exact-head run |
+| Upgrade Validation | PENDING replacement exact-head run |
+| EdgeSuite UI Candidate Compatibility | PENDING replacement exact-head run |
+| Browser Persona | PENDING replacement exact-head run |
+
+Any runtime-code, migration, baseline, or evidence change that moves the candidate head requires replacement exact-head validation before that new head can be accepted.
 
 ## Physical / merchant acceptance
 
@@ -97,10 +108,11 @@ At least one supported merchant path must pass:
 | --- | --- | --- | --- | --- | --- |
 | C2-001 | Cashier / Start POS | Release blocker | Canonical cashier lacked `Account` read/select and POS Opening/Closing Shift operational permissions; PR #238 now carries a bounded canonical-role migration bridge. | PR #238 | PENDING local retest |
 | C2-002 | Start POS session handoff | Release blocker | POSNext 1.17.0 could redirect a valid Frappe session to `/pos/account/login` after a non-auth logged-user startup failure; ProcessEdge POSNext Extension PR #24 carries the bounded compatibility bridge. | Extension PR #24 | PENDING local retest |
+| C2-003 | Candidate baseline | Release blocker | PR #238 still pinned ProcessEdge POSNext Extension 0.0.14 even though C2-002 requires 0.0.15. The candidate baseline is now corrected to 0.0.15 / `61a5fb9b92d8b9f4bb003c408474811f62deef3b`. | PR #238 | PENDING exact-head + local verification |
 
 ## Acceptance decision
 
-Current decision: **NOT ACCEPTED — automated exact-head validation is green, but manual `retail.local` evidence is still pending.**
+Current decision: **NOT ACCEPTED — the baseline now matches the required POS runtime dependency, but replacement exact-head validation and manual `retail.local` evidence are pending.**
 
 Promote this to PASS only when all required rows have passed on one exact deployed candidate, no release-blocking defect remains, and at least one supported 1.0 printing path has been physically accepted.
 
