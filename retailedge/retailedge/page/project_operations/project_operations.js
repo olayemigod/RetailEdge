@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const PROJECT_ASSET = "project_operations.bundle.js";
 const PAGE_ROUTE = "project-operations";
 const PAGE_TITLE = "Project Operations";

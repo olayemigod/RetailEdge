@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const PURCHASE_REPORTING_ASSET = "purchase_reporting.bundle.js";
 const PAGE_ROUTE = "purchase-analysis";
 const REPORT_TYPE = "purchase_analysis";

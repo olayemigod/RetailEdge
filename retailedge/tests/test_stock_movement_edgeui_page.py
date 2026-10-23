@@ -113,7 +113,7 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 	def test_edgesuite_loader_uses_canonical_runtime_and_visible_failure(self):
 		loader = self.read(PAGE_ROOT / "stock_movement_history.js")
 		for contract in (
-			'const EDGEUI_ASSET = "edgeui.bundle.js"',
+			'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"',
 			'const STOCK_MOVEMENT_ASSET = "stock_movement_history.bundle.js"',
 			"await requireAsync(EDGEUI_ASSET)",
 			"window.EdgeSuiteUI?.components",

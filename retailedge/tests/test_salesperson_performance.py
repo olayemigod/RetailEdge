@@ -68,14 +68,14 @@ class TestSalespersonPerformance(FrappeTestCase):
 		for role in (
 			"System Manager",
 			"Accounts Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
 		):
 			self.assertIn(role, roles)
 
 	def test_loader_uses_current_edgesuite_runtime_before_product_bundle(self):
 		content = self._read_page_js()
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', content)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', content)
 		self.assertIn('const DASHBOARD_ASSET = "salesperson_performance.bundle.js"', content)
 		edgeui_call = content.find("await requireAsync(EDGEUI_ASSET)")
 		product_call = content.find("await requireAsync(DASHBOARD_ASSET)")
@@ -120,7 +120,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		content = self._read_page_js()
 		self.assertNotIn("edgeui.bundle.css", content)
 		self.assertNotIn("salesperson_performance.bundle.css", content)
-		self.assertIn("edgeui.bundle.js", content)
+		self.assertIn("edgesuite_ui.bundle.js", content)
 		self.assertIn("salesperson_performance.bundle.js", content)
 
 	def test_edgeui_not_copied(self):

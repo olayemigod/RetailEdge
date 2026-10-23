@@ -14,19 +14,17 @@ EXPORT_SETTING = "enable_reporting_export"
 
 _MANAGER_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
-_BRANCH_MANAGER_ROLES = {"RetailEdge Branch Manager", "RetailEdgeBranchManager"}
+_BRANCH_MANAGER_ROLES = {"RetailEdgeBranchManager"}
 _SALES_MANAGER_ROLES = {"Sales Manager"}
 _STOCK_MANAGER_ROLES = {"Stock Manager"}
 _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
 _PURCHASE_MANAGER_ROLES = {"Purchase Manager"}
 _PURCHASE_USER_ROLES = {"Purchase User"}
-_CASHIER_ROLES = {"RetailEdge Cashier", "RetailEdgeCashier"}
+_CASHIER_ROLES = {"RetailEdgeCashier"}
 
 
 @dataclass(frozen=True)

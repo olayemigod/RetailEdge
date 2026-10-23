@@ -46,9 +46,9 @@ class TestActionCenterShell(unittest.TestCase):
 		page = json.loads(page_path.read_text(encoding="utf-8"))
 		roles = {row["role"] for row in page.get("roles") or []}
 		self.assertIn("System Manager", roles)
-		self.assertIn("RetailEdge Manager", roles)
-		self.assertIn("RetailEdge Branch Manager", roles)
-		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("RetailEdgeManager", roles)
+		self.assertIn("RetailEdgeBranchManager", roles)
+		self.assertIn("RetailEdgeAuditor", roles)
 		self.assertIn("Accounts Manager", roles)
 		self.assertIn("Stock Manager", roles)
 		self.assertNotIn("Sales User", roles)
@@ -57,7 +57,7 @@ class TestActionCenterShell(unittest.TestCase):
 
 	@patch("retailedge.edgesuite_ui._can_open_target", return_value=True)
 	def test_edgesuite_navigation_promotes_action_center_only_for_allowed_roles(self, _can_open):
-		manager_groups = edgesuite_ui._get_permitted_navigation_groups({"RetailEdge Manager"})
+		manager_groups = edgesuite_ui._get_permitted_navigation_groups({"RetailEdgeManager"})
 		manager_items = [item for group in manager_groups for item in group.get("items") or []]
 		self.assertTrue(any(item.get("target") == "action-center" for item in manager_items))
 

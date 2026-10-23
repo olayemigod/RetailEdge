@@ -90,8 +90,8 @@ NATIVE_EXECUTION_DOCTYPES = {"Payment Entry", "Journal Entry", "Sales Invoice"}
 DEFAULT_RECONCILIATION_EXECUTION_ROLES = (
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
+
 )
 
 ERPNext_NATIVE_RECONCILIATION_METHOD = (

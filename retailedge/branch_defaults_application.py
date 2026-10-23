@@ -21,10 +21,10 @@ PURCHASE_DOCTYPES = {"Purchase Order", "Purchase Receipt", "Purchase Invoice"}
 DEFAULT_APPLICATION_MANAGER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 WAREHOUSE_CONTEXT_FIELDS = (
 	"warehouse",

@@ -12,12 +12,10 @@ from retailedge.utils.settings import RETAILEDGE_SETTINGS_DOCTYPE
 
 _MANAGER_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
-_BRANCH_MANAGER_ROLES = {"RetailEdge Branch Manager", "RetailEdgeBranchManager"}
+_BRANCH_MANAGER_ROLES = {"RetailEdgeBranchManager"}
 _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
 

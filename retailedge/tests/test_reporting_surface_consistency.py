@@ -58,7 +58,7 @@ def test_reporting_page_loaders_keep_edgesuite_as_the_single_shell():
 		page_dir = PAGE_ROOT / page_name
 		loader = _read(page_dir / f"{page_name}.js")
 		page_json = _read(page_dir / f"{page_name}.json")
-		assert 'edgeui.bundle.js' in loader
+		assert 'edgesuite_ui.bundle.js' in loader
 		assert surface.bundle in loader
 		assert "hideNativePageSidebar" in loader
 		assert f'"page_name": "{surface.route}"' in page_json

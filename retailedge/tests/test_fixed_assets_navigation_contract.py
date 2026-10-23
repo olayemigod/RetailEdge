@@ -37,7 +37,7 @@ class TestFixedAssetsNavigationContract(TestCase):
 		page_dir = APP_ROOT / "retailedge" / "page" / "assets_control"
 		self.assertTrue((page_dir / "assets_control.json").exists())
 		page = (page_dir / "assets_control.js").read_text()
-		self.assertIn('"edgeui.bundle.js"', page)
+		self.assertIn('"edgesuite_ui.bundle.js"', page)
 		self.assertIn('"native_visual_workspaces.bundle.js"', page)
 		self.assertIn('"assets"', page)
 		self.assertIn("mountNativeERPNextWorkspace", page)

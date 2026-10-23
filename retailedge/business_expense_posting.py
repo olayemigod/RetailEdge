@@ -26,10 +26,10 @@ BUSINESS_EXPENSE_POSTING_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
+
 }
 
 

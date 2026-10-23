@@ -43,10 +43,9 @@ def _ensure_user(email: str, first_name: str, roles: tuple[str, ...]) -> None:
 			}
 		).insert(ignore_permissions=True)
 
-	existing_roles = {row.role for row in (user.roles or [])}
-	for role in roles:
-		if role not in existing_roles:
-			user.append("roles", {"role": role})
+	# Browser personas are role-exact so stale or legacy assignments cannot
+	# make negative access assertions pass for the wrong reason.
+	user.set("roles", [{"role": role} for role in dict.fromkeys(roles)])
 	user.enabled = 1
 	user.user_type = "System User"
 	user.save(ignore_permissions=True)
@@ -56,7 +55,7 @@ def _ensure_user(email: str, first_name: str, roles: tuple[str, ...]) -> None:
 
 def seed_browser_personas() -> dict:
 	"""Seed deterministic users for the release browser smoke gate."""
-	ensure_retailedge_roles(migrate_alias_assignments=True)
+	ensure_retailedge_roles()
 	_ensure_company()
 	_ensure_fiscal_year(COMPANY)
 	_ensure_transaction_masters()

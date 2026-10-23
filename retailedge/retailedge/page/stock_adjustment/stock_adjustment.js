@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const PAGE_ASSET = "stock_adjustment.bundle.js";
 const PAGE_ROUTE = "stock-adjustment";
 const PAGE_TITLE = "Stock Adjustment";

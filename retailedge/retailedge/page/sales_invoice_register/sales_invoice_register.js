@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const SALES_REPORTING_ASSET = "sales_reporting.bundle.js";
 const PAGE_ROUTE = "sales-invoice-register";
 const REPORT_TYPE = "sales_invoice_register";

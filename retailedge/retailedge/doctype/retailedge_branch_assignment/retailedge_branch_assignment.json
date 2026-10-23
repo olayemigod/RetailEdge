@@ -143,64 +143,11 @@
  "name": "RetailEdge Branch Assignment",
  "owner": "Administrator",
  "permissions": [
-  {
-   "create": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdge Manager",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdgeManager",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdge Branch Manager"
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdgeBranchManager"
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdge Auditor"
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "RetailEdgeAuditor"
-  },
-  {
-   "read": 1,
-   "report": 1,
-   "role": "Accounts Manager"
-  }
+  {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdgeManager","share":1,"write":1},
+  {"read":1,"report":1,"role":"RetailEdgeBranchManager"},
+  {"read":1,"report":1,"role":"RetailEdgeAuditor"},
+  {"read":1,"report":1,"role":"Accounts Manager"}
  ],
  "search_fields": "user,company,branch,branch_role",
  "sort_field": "effective_from",

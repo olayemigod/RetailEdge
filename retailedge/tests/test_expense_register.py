@@ -200,9 +200,9 @@ class TestExpenseRegister(unittest.TestCase):
 
 	@patch("retailedge.expense_register.frappe.get_roles")
 	def test_cashier_only_role_does_not_receive_other_cashier_visibility(self, mock_roles):
-		mock_roles.return_value = ["RetailEdge Cashier"]
+		mock_roles.return_value = ["RetailEdgeCashier"]
 		self.assertFalse(_can_view_other_cashiers("cashier@example.com"))
-		mock_roles.return_value = ["RetailEdge Branch Manager"]
+		mock_roles.return_value = ["RetailEdgeBranchManager"]
 		self.assertTrue(_can_view_other_cashiers("manager@example.com"))
 
 	@patch("retailedge.expense_register.can_view_consolidated_business_expenses", return_value=True)
@@ -290,7 +290,7 @@ class TestExpenseRegister(unittest.TestCase):
 
 	def test_page_uses_single_edgesuite_shell(self):
 		page = (APP_ROOT / "retailedge" / "page" / "expense_register" / "expense_register.js").read_text()
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page)
 		self.assertIn('const EXPENSE_REGISTER_ASSET = "expense_register.bundle.js"', page)
 		self.assertIn("hideNativePageSidebar", page)
 		self.assertIn("window.mountExpenseRegister", page)

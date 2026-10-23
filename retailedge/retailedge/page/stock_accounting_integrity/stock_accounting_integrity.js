@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const INTEGRITY_ASSET = "stock_accounting_integrity.bundle.js";
 const PAGE_ROUTE = "stock-accounting-integrity";
 const PAGE_TITLE = "Stock & Accounting Integrity";

@@ -15,12 +15,12 @@ INVOICE_PAYMENT_AUDIT_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 PAYMENT_AUDIT_STATUSES = (
 	"Credit",

@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const RECEIVABLES_ASSET = "customer_receivables.bundle.js";
 const PAGE_ROUTE = "customer-receivables";
 const PAGE_TITLE = "Customer Receivables";

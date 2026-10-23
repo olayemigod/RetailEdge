@@ -43,7 +43,7 @@ class TestPricingPromotionsNavigationContract(TestCase):
 		page_dir = APP_ROOT / "retailedge" / "page" / "pricing_promotions_control"
 		self.assertTrue((page_dir / "pricing_promotions_control.json").exists())
 		page = (page_dir / "pricing_promotions_control.js").read_text()
-		self.assertIn('"edgeui.bundle.js"', page)
+		self.assertIn('"edgesuite_ui.bundle.js"', page)
 		self.assertIn('"pricing_promotions_workspace.bundle.js"', page)
 		self.assertIn("mountPricingPromotionsWorkspace", page)
 		self.assertNotIn("window.EdgeUI", page)

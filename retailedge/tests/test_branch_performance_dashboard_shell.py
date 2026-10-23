@@ -77,7 +77,7 @@ def test_dashboard_uses_edgesuite_dashboard_shell_without_reimplementing_busines
 def test_dashboard_page_mounts_shared_edgesuite_runtime():
 	page = PAGE.read_text()
 	bundle = BUNDLE.read_text()
-	assert 'const EDGEUI_ASSET = "edgeui.bundle.js"' in page
+	assert 'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"' in page
 	assert 'const DASHBOARD_ASSET = "branch_performance_dashboard.bundle.js"' in page
 	assert "hideNativePageSidebar" in page
 	assert "window.mountBranchPerformanceDashboard" in page

@@ -18,7 +18,7 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn('"standard": "Yes"', page_json)
 		self.assertIn('"role": "Purchase Manager"', page_json)
 		self.assertIn('"role": "Purchase User"', page_json)
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page_js)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page_js)
 		self.assertIn('const PURCHASING_ASSET = "professional_purchasing.bundle.js"', page_js)
 		self.assertIn("window.EdgeSuiteUI?.components", page_js)
 		self.assertIn("window.mountRetailEdgeProfessionalPurchasing", page_js)

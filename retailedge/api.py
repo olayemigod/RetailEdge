@@ -388,21 +388,21 @@ from retailedge.transaction_branch_attribution import (
 TRANSACTION_BRANCH_ATTRIBUTION_MANAGER_ROLES = (
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 )
 RETAILEDGE_VERIFICATION_ROLES = (
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 )
 
 
@@ -1333,8 +1333,8 @@ def _assert_can_prepare_edgepay_posting():
 	allowed_roles = {
 		"System Manager",
 		"Accounts Manager",
-		"RetailEdge Manager",
 		"RetailEdgeManager",
+
 		"Accounts User",
 	}
 	if not user_roles.intersection(allowed_roles):

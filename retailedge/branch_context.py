@@ -26,8 +26,8 @@ DATE_FIELD_CANDIDATES = [
 GLOBAL_BRANCH_ACCESS_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
+
 }
 SUPPORTED_RETAILEDGE_BRANCH_DOCTYPES = (
 	"RetailEdge Cashier Expense",

@@ -823,15 +823,15 @@ class PosClosingShiftHookTests(unittest.TestCase):
 class CashierExpenseServiceTests(unittest.TestCase):
 	def test_reviewer_roles_include_spaced_and_compact_names(self):
 		roles = get_reviewer_roles()
-		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("RetailEdgeAuditor", roles)
 		self.assertIn("RetailEdgeAuditor", roles)
 
 	def test_cashier_roles_include_spaced_and_compact_names(self):
 		roles = get_cashier_roles()
-		self.assertIn("RetailEdge Cashier", roles)
+		self.assertIn("RetailEdgeCashier", roles)
 		self.assertIn("RetailEdgeCashier", roles)
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	def test_user_is_reviewer(self, _mock_roles):
 		self.assertTrue(user_is_reviewer("auditor@example.com"))
 
@@ -860,7 +860,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["expense_status"], "Submitted")
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_approve_moves_submitted_to_pending_ledger(self, mock_get_doc, _mock_roles, mock_log):
@@ -881,7 +881,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.db.set_value")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_approve_normalises_stale_submitted_docstatus(
@@ -910,7 +910,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reject_moves_submitted_to_rejected(self, mock_get_doc, _mock_roles, mock_log):
@@ -930,7 +930,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reopen_moves_rejected_back_to_submitted(self, mock_get_doc, _mock_roles, mock_log):
@@ -959,7 +959,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			approve_cashier_expense("RE-CE-0100")
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_cancelled_expense_cannot_be_approved_rejected_or_reopened(self, mock_get_doc, _mock_roles):
@@ -974,7 +974,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			reopen_cashier_expense("RE-CE-0101")
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reopen_moves_pending_ledger_back_to_submitted(self, mock_get_doc, _mock_roles):

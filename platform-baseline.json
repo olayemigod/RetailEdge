@@ -17,8 +17,8 @@
     },
     "edgesuite_ui": {
       "version": "1.1.0",
-      "sha": "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7",
-      "pr": 43
+      "sha": "d50920b005da8dcf1bd1e35c1c88be8afedecfbf",
+      "pr": 52
     },
     "payments": {
       "sha": "cca07d9f9392e2ea0e521c5975151db9e4b6c321",
@@ -31,8 +31,8 @@
       "scope": "local six-app site"
     },
     "processedge_posnext_override": {
-      "version": "0.0.14",
-      "sha": "922fd7ba5d4730afc86bcdc05764e4b4b12208dc",
+      "version": "0.0.15",
+      "sha": "61a5fb9b92d8b9f4bb003c408474811f62deef3b",
       "scope": "local six-app site"
     }
   }

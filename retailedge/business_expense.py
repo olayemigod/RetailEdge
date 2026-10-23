@@ -39,21 +39,21 @@ BUSINESS_EXPENSE_READ_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 
 BUSINESS_EXPENSE_REVIEWER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
+
 }
 
 BUSINESS_EXPENSE_ALLOWED_PROCESSES = {

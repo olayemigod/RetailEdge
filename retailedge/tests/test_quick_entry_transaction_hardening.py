@@ -52,7 +52,7 @@ def test_long_transaction_entry_pages_are_real_edgesuite_pages():
 		for contract in ("EdgeAppShell", "EdgePageLayout", "EdgePageHeader", f'activeRoute="/app/{route}"'):
 			assert contract in component
 		assert "<EdgeModal" not in component
-		assert "edgeui.bundle.js" in loader
+		assert "edgesuite_ui.bundle.js" in loader
 		assert "createEdgeApp" in bundle
 		assert "window.EdgeSuiteUI" in bundle
 		assert "window.EdgeUI" not in bundle

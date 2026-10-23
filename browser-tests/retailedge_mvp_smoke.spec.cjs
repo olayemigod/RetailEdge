@@ -10,6 +10,9 @@ const USERS = {
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
 	purchasing: "browser-purchasing@example.com",
+	auditor: "browser-auditor@example.com",
+	noAccess: "browser-no-access@example.com",
+	native: "browser-native@example.com",
 };
 
 async function login(context, user) {
@@ -18,7 +21,9 @@ async function login(context, user) {
 	});
 	expect(response.ok(), `login failed for ${user}`).toBeTruthy();
 	const payload = await response.json();
-	expect(String(payload.message || "")).toMatch(/Logged In/i);
+	// Frappe returns "No App" after a successful login when a System User has
+	// deliberately been given no module access. That is the expected no-access fixture.
+	expect(String(payload.message || "")).toMatch(/Logged In|No App/i);
 }
 
 async function routeDiagnostic(page, route) {
@@ -145,7 +150,7 @@ test("RetailEdge cashier cannot open Shift Reconciliation", async ({ browser }) 
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -255,7 +260,7 @@ test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ br
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -278,7 +283,7 @@ test("canonical RetailEdge cashier reaches Business Hub but not banking control 
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -316,6 +321,53 @@ test("Business Hub remains usable at narrow mobile width", async ({ browser }) =
 			() => Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)
 		);
 		expect(overflow).toBeLessThanOrEqual(4);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge auditor reaches governed reports but not operational Business Hub", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.auditor);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+		await page.goto(BASE_URL + "/app/retailedge-business-hub", {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		await expect(page.getByRole("heading", { name: "Business Hub", exact: true })).toHaveCount(0);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("user without RetailEdge access is denied Page and direct context API access", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.noAccess);
+	try {
+		const response = await context.request.get(
+			BASE_URL + "/api/method/retailedge.navigation_consolidation.get_retailedge_business_hub_context"
+		);
+		expect(response.status()).toBe(403);
+		await page.goto(BASE_URL + "/app/reports-centre", {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		await expect(page.getByRole("heading", { name: "Reports Centre", exact: true })).toHaveCount(0);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("System Manager sees the Back to Desk advanced action", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.native);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+		await expect(page.getByRole("link", { name: "Back to Desk — Advanced ERPNext", exact: true })).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}

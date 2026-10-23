@@ -49,7 +49,7 @@ def test_financial_dashboard_uses_shared_signature_component_and_downloads():
 def test_financial_dashboard_page_mounts_current_edgesuite_runtime_and_cached_refresh():
 	page = PAGE.read_text()
 	bundle = BUNDLE.read_text()
-	assert 'const EDGEUI_ASSET = "edgeui.bundle.js"' in page
+	assert 'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"' in page
 	assert 'const DASHBOARD_ASSET = "owner_dashboard.bundle.js"' in page
 	assert 'const PAGE_TITLE = "Financial Dashboard"' in page
 	assert "window.mountOwnerDashboard" in page
