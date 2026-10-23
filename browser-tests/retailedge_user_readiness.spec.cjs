@@ -163,3 +163,51 @@ test("setup administrator can discover the incomplete historical user without ba
 		await context.close();
 	}
 });
+
+test("setup administrator can enter the governed user onboarding wizard without mutating the user", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context, SETUP_ADMIN);
+	const page = await context.newPage();
+	try {
+		const before = await apiGet(
+			context,
+			"retailedge.user_readiness.get_retailedge_user_readiness_reconciliation",
+			{ include_ready: 0, page_length: 100 }
+		);
+		expect(before.response.ok(), before.text).toBeTruthy();
+		expect(before.payload.message.rows.some((candidate) => candidate.user === INCOMPLETE_USER)).toBe(true);
+
+		await page.goto(`${BASE_URL}/app/retailedge-setup`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.getByRole("heading", { name: "Setup", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 25_000,
+		});
+		await page.getByRole("button", { name: "Start Onboarding", exact: true }).click();
+		await expect(page.getByRole("heading", { name: "User Onboarding", exact: true })).toBeVisible();
+		for (const step of ["Person", "Access", "Location", "Point of Sale", "Review"]) {
+			await expect(page.getByRole("button", { name: new RegExp(step) }).first()).toBeVisible();
+		}
+
+		const userField = page.getByPlaceholder("Search enabled System Users", { exact: true });
+		await userField.fill(INCOMPLETE_USER);
+		const option = page.getByRole("option").filter({ hasText: INCOMPLETE_USER }).first();
+		await expect(option).toBeVisible();
+		await option.click();
+		await expect(page.getByText(INCOMPLETE_USER, { exact: true }).first()).toBeVisible();
+		await page.getByRole("button", { name: "Continue", exact: true }).click();
+		await expect(page.getByText("Business document permissions stay in ERPNext.", { exact: true })).toBeVisible();
+
+		const after = await apiGet(
+			context,
+			"retailedge.user_readiness.get_retailedge_user_readiness_reconciliation",
+			{ include_ready: 0, page_length: 100 }
+		);
+		expect(after.response.ok(), after.text).toBeTruthy();
+		expect(after.payload.message.rows.some((candidate) => candidate.user === INCOMPLETE_USER)).toBe(true);
+	} finally {
+		await context.close();
+	}
+});
