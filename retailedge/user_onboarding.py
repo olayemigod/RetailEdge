@@ -325,8 +325,14 @@ def complete_user_onboarding(payload=None) -> dict[str, Any]:
 	_assert_onboarding_read()
 	values = _parse_payload(payload)
 
-	# Validate the exact Company -> Branch mapping before the first write.
-	branch_context = _profile_summary(company=values["company"], branch=values["branch"], user="")
+	# Validate the exact Company -> Branch mapping and any required POS mutation
+	# authority before the first onboarding write.
+	selected_user = str(values.get("user") or "").strip() if values["mode"] == "existing" else ""
+	branch_context = _profile_summary(
+		company=values["company"],
+		branch=values["branch"],
+		user=selected_user,
+	)
 	if not branch_context.get("configured"):
 		frappe.throw(branch_context.get("message") or _("Branch Setup is required before onboarding can continue."))
 	if values["requires_pos"]:
@@ -334,6 +340,14 @@ def complete_user_onboarding(payload=None) -> dict[str, Any]:
 			frappe.throw(_("Configure a default POS Profile in Branch Setup before assigning POS access."))
 		if not branch_context.get("pos_required_supported"):
 			frappe.throw(branch_context.get("pos_message") or _("The Branch POS Profile is disabled or belongs to another Company."))
+		pos_change_needed = branch_context.get("pos_access_mode") == "restricted" and not (
+			branch_context.get("pos_assigned") and branch_context.get("pos_default")
+		)
+		if pos_change_needed and not branch_context.get("can_manage_pos_profile"):
+			frappe.throw(
+				_("You do not have permission to update the Branch POS Profile required for this User."),
+				frappe.PermissionError,
+			)
 
 	user_doc, created_user = _resolve_or_create_user(values)
 	role_added = _ensure_retailedge_role(user_doc, values["role"])
