@@ -379,7 +379,7 @@ def verify_upgrade_fixture() -> dict:
 	assert flt(invoice.outstanding_amount, 2) == flt(before["outstanding_amount"], 2)
 	assert after_ledger == before["ledger"]
 	assert frappe.db.exists("DocType", "RetailEdge Settings")
-	assert frappe.db.exists("Role", "RetailEdge Manager")
+	assert frappe.db.exists("Role", "RetailEdgeManager")
 
 	legacy_pricing = before["legacy_pricing"]
 	selling_precedence = str(

@@ -32,12 +32,12 @@ _CONSOLIDATED_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 
 _ACCOUNTING_VOUCHER_TYPES = {

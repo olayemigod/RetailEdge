@@ -25,10 +25,10 @@ MAX_INVOICE_SCAN_ROWS = 2000
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
 CONTROLLED_COMPANY_WIDE_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 	"Sales Manager",
 }
 

@@ -12,9 +12,7 @@
  "page_name": "professional-selling",
  "roles": [
   {"role": "System Manager"},
-  {"role": "RetailEdge Manager"},
   {"role": "RetailEdgeManager"},
-  {"role": "RetailEdge Branch Manager"},
   {"role": "RetailEdgeBranchManager"},
   {"role": "Sales Manager"},
   {"role": "Sales User"},

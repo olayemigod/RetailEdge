@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 import frappe
+from frappe import _
 
 from retailedge.master_experience import (
 	get_retailedge_business_hub_context as _get_master_business_hub_context,
@@ -176,9 +177,21 @@ def _load_master_context_quietly() -> dict[str, Any]:
 		frappe.local.message_log = previous_messages
 
 
+def _require_retailedge_shell_access() -> None:
+	"""Require access to at least one RetailEdge Page before returning shared shell context."""
+	user = frappe.session.user
+	if not user or user == "Guest":
+		frappe.throw(_("You do not have access to RetailEdge."), frappe.PermissionError)
+
+	page_names = frappe.get_all("Page", filters={"module": "RetailEdge"}, pluck="name")
+	if not any(frappe.get_doc("Page", page_name).is_permitted() for page_name in page_names):
+		frappe.throw(_("You do not have access to RetailEdge."), frappe.PermissionError)
+
+
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return final RetailEdge navigation with review, sales-order, readiness and printing governance composed."""
+	"""Return permission-filtered shared RetailEdge shell and navigation context."""
+	_require_retailedge_shell_access()
 	context = _load_master_context_quietly()
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)

@@ -14,7 +14,7 @@ def test_global_branch_authority_roles_receive_minimum_branch_master_access():
 
 	branch_scope = source[
 		source.index("def _ensure_operational_branch_read()") :
-		source.index("def _add_canonical_roles_for_alias_assignments")
+		len(source)
 	]
 	for denied in ('"write", 1', '"create", 1', '"delete", 1', '"import", 1'):
 		assert denied not in branch_scope

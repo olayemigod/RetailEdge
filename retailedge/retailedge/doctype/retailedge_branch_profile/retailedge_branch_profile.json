@@ -287,54 +287,12 @@
  "name": "RetailEdge Branch Profile",
  "owner": "Administrator",
  "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  },
-  {
-   "create": 1,
-   "read": 1,
-   "role": "RetailEdge Manager",
-   "write": 1
-  },
-  {
-   "create": 1,
-   "read": 1,
-   "role": "RetailEdgeManager",
-   "write": 1
-  },
-  {
-   "read": 1,
-   "role": "RetailEdge Branch Manager"
-  },
-  {
-   "read": 1,
-   "role": "RetailEdgeBranchManager"
-  },
-  {
-   "read": 1,
-   "role": "RetailEdge Auditor"
-  },
-  {
-   "read": 1,
-   "role": "RetailEdgeAuditor"
-  },
-  {
-   "read": 1,
-   "role": "Accounts Manager"
-  },
-  {
-   "read": 1,
-   "role": "Accounts User"
-  }
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"read":1,"role":"RetailEdgeManager","write":1},
+  {"read":1,"role":"RetailEdgeBranchManager"},
+  {"read":1,"role":"RetailEdgeAuditor"},
+  {"read":1,"role":"Accounts Manager"},
+  {"read":1,"role":"Accounts User"}
  ],
  "search_fields": "profile_name,company,branch",
  "sort_field": "modified",

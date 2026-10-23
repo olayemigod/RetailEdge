@@ -112,7 +112,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		fixture = self.read("tests/browser_persona_fixture.py")
 
 		self.assertIn('"RetailEdgeCashier"', patch_source)
-		self.assertIn('"RetailEdge Cashier"', patch_source)
+		self.assertIn('"RetailEdgeCashier"', patch_source)
 		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "read", 1)', patch_source)
 		self.assertIn('update_permission_property(DOCTYPE, role, PERMLEVEL, "select", 1)', patch_source)
 		for forbidden in (

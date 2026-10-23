@@ -41,7 +41,7 @@ def test_expense_category_permissions_allow_governed_manager_maintenance():
 	meta_path = ROOT / "retailedge/doctype/retailedge_expense_category/retailedge_expense_category.json"
 	meta = json.loads(meta_path.read_text(encoding="utf-8"))
 	by_role = {row["role"]: row for row in meta.get("permissions", [])}
-	for role in ("RetailEdge Manager", "RetailEdgeManager", "Accounts Manager"):
+	for role in ("RetailEdgeManager",  "Accounts Manager"):
 		assert by_role[role].get("read") == 1
 		assert by_role[role].get("create") == 1
 		assert by_role[role].get("write") == 1

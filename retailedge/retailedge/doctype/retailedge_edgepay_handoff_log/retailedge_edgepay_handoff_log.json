@@ -112,7 +112,7 @@
   {
    "create": 1,
    "read": 1,
-   "role": "RetailEdge Manager",
+   "role": "RetailEdgeManager",
    "write": 1
   }
  ],

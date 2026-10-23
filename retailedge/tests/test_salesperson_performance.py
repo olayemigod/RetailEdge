@@ -68,8 +68,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		for role in (
 			"System Manager",
 			"Accounts Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
 		):
 			self.assertIn(role, roles)
 

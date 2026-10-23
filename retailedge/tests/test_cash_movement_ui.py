@@ -13,10 +13,10 @@ class TestCashMovementUI(unittest.TestCase):
 		path = APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.json"
 		data = json.loads(path.read_text())
 		roles = {row["role"] for row in data["roles"]}
-		self.assertIn("RetailEdge Branch Manager", roles)
-		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("RetailEdgeBranchManager", roles)
+		self.assertIn("RetailEdgeAuditor", roles)
 		self.assertIn("Accounts Manager", roles)
-		self.assertNotIn("RetailEdge Cashier", roles)
+		self.assertNotIn("RetailEdgeCashier", roles)
 		self.assertNotIn("RetailEdgeCashier", roles)
 
 	def test_page_mounts_only_one_edgesuite_shell(self):

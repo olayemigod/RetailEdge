@@ -156,9 +156,9 @@ class TestPaymentSettlementAnalysis(FrappeTestCase):
 		patches = PATCHES.read_text(encoding="utf-8")
 		for role in (
 			"RetailEdgeManager",
-			"RetailEdge Manager",
+
 			"RetailEdgeBranchManager",
-			"RetailEdge Branch Manager",
+
 		):
 			self.assertIn(role, patch)
 		for allowed in (

@@ -81,7 +81,7 @@ def test_company_profile_keeps_erpnext_accounting_truth_and_uses_owner_managed_o
 
     assert '"role":"RetailEdgeManager"' in definition
     assert '"write":1' in definition
-    assert '"role":"RetailEdge Branch Manager"' in definition
+    assert '"role":"RetailEdgeBranchManager"' in definition
 
 
 def test_company_profile_is_in_retailedge_home_navigation_and_context():

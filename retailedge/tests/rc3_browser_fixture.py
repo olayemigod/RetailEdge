@@ -39,6 +39,8 @@ EXTRA_PERSONAS = {
 	),
 	"browser-zero-branch@example.com": ("Browser Zero Branch", ("RetailEdgeBranchManager", "Stock User")),
 	"browser-native@example.com": ("Browser Native Advanced", ("System Manager",)),
+	"browser-auditor@example.com": ("Browser Auditor", ("RetailEdgeAuditor",)),
+	"browser-no-access@example.com": ("Browser No Access", ()),
 	"browser-global-branch@example.com": (
 		"Browser Global Branch",
 		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
@@ -55,6 +57,7 @@ ACTIVE_ASSIGNMENTS = {
 	"browser-stock-manager@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-purchasing@example.com": (("RetailEdge RC3 Lagos", "Purchasing", 1),),
 	"browser-sales@example.com": (("RetailEdge RC3 Lagos", "Sales", 1),),
+	"browser-auditor@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),
 	"browser-one-branch@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-multi-branch@example.com": (
 		("RetailEdge RC3 Lagos", "Stock", 1),

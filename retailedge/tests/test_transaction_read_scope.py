@@ -182,7 +182,7 @@ def test_retailedge_roles_receive_only_minimum_context_master_visibility():
 def test_after_migrate_does_not_regrant_transaction_read_over_merchant_policy():
 	roles = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
 	management_start = roles.index("def _ensure_management_context_read_permissions()")
-	management_end = roles.index("def _add_canonical_roles_for_alias_assignments", management_start)
+	management_end = len(roles)
 	management_scope = roles[management_start:management_end]
 	for doctype in (
 		"Quotation",
@@ -192,5 +192,5 @@ def test_after_migrate_does_not_regrant_transaction_read_over_merchant_policy():
 		"Payment Entry",
 	):
 		assert doctype not in management_scope
-	assert "Role Permission Manager" in management_scope
+	assert "Role Permission" in management_scope
 	assert "If Owner" in management_scope

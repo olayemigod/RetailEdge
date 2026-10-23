@@ -309,12 +309,12 @@ function has_daily_sales_audit_reviewer_role() {
 		"System Manager",
 		"Accounts Manager",
 		"Accounts User",
-		"RetailEdge Manager",
 		"RetailEdgeManager",
-		"RetailEdge Branch Manager",
+
 		"RetailEdgeBranchManager",
-		"RetailEdge Auditor",
+
 		"RetailEdgeAuditor",
+
 	].some((role) => roles.has(role));
 }
 

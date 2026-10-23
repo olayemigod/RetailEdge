@@ -14,11 +14,8 @@
     {"role": "System Manager"},
     {"role": "Sales User"},
     {"role": "Sales Manager"},
-    {"role": "RetailEdge Manager"},
     {"role": "RetailEdgeManager"},
-    {"role": "RetailEdge Branch Manager"},
     {"role": "RetailEdgeBranchManager"},
-    {"role": "RetailEdge Auditor"},
     {"role": "RetailEdgeAuditor"}
   ],
   "script": null,

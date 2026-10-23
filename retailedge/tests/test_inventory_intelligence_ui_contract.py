@@ -87,9 +87,9 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 			"System Manager",
 			"Stock User",
 			"Stock Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
-			"RetailEdge Auditor",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
+			"RetailEdgeAuditor",
 		):
 			self.assertIn(role, page_json)
 

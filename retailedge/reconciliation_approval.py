@@ -17,8 +17,8 @@ APPROVAL_INVALIDATED = "Invalidated"
 DEFAULT_APPROVAL_ROLES = (
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
+
 )
 
 

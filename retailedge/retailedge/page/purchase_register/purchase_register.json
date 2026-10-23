@@ -16,11 +16,8 @@
     {"role": "Purchase Manager"},
     {"role": "Accounts User"},
     {"role": "Accounts Manager"},
-    {"role": "RetailEdge Manager"},
     {"role": "RetailEdgeManager"},
-    {"role": "RetailEdge Branch Manager"},
     {"role": "RetailEdgeBranchManager"},
-    {"role": "RetailEdge Auditor"},
     {"role": "RetailEdgeAuditor"}
   ],
   "script": null,

@@ -187,7 +187,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		data = json.loads(path.read_text())
 		self.assertEqual(data["name"], "retailedge-business-hub")
 		self.assertEqual(data["standard"], "Yes")
-		self.assertIn("RetailEdge Manager", {row["role"] for row in data["roles"]})
+		self.assertIn("RetailEdgeManager", {row["role"] for row in data["roles"]})
 
 	def test_retailedge_requires_standalone_edgesuite_ui_app(self):
 		hooks = (APP_ROOT / "hooks.py").read_text()

@@ -137,8 +137,8 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 		page = self.read("retailedge/page/professional_purchasing/professional_purchasing.json")
 		for role in ("System Manager", "Purchase User", "Purchase Manager", "Accounts User", "Accounts Manager"):
 			self.assertIn(role, page)
-		self.assertNotIn("RetailEdge Branch Manager", page)
-		self.assertNotIn("RetailEdge Manager", page)
+		self.assertNotIn("RetailEdgeBranchManager", page)
+		self.assertNotIn("RetailEdgeManager", page)
 
 
 if __name__ == "__main__":

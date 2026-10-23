@@ -23,10 +23,10 @@
    "role": "Accounts User"
   },
   {
-   "role": "RetailEdge Manager"
+   "role": "RetailEdgeManager"
   },
   {
-   "role": "RetailEdge Auditor"
+   "role": "RetailEdgeAuditor"
   }
  ]
 }

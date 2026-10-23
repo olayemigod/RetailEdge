@@ -17,12 +17,12 @@ from retailedge.pos_runtime import (
 FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
 CASH_FLOW_OUTLOOK_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 	"Accounts Manager",
 	"Accounts User",
 }
@@ -36,12 +36,12 @@ SUPPLIER_DOCUMENT_REVIEW_ROLES = {
 }
 ACTION_CENTER_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 	"Accounts Manager",
 	"Accounts User",
 	"Stock Manager",

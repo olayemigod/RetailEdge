@@ -46,10 +46,10 @@ def test_page_roles_match_governed_money_and_banking_personas():
     roles = {row["role"] for row in meta.get("roles", [])}
     for role in (
         "System Manager",
-        "RetailEdge Manager",
         "RetailEdgeManager",
-        "RetailEdge Branch Manager",
+
         "RetailEdgeBranchManager",
+
         "Accounts Manager",
         "Accounts User",
     ):

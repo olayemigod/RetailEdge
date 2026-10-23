@@ -20,10 +20,10 @@ class TestAdvancedPaymentUIContract(TestCase):
 		for forbidden_role in (
 			"Sales User",
 			"Sales Manager",
-			"RetailEdge Manager",
 			"RetailEdgeManager",
-			"RetailEdge Branch Manager",
+
 			"RetailEdgeBranchManager",
+
 		):
 			self.assertNotIn(f'"role": "{forbidden_role}"', page_json)
 		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page_js)

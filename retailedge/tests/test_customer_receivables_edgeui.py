@@ -18,7 +18,7 @@ class RetailEdgeCustomerReceivablesEdgeUITests(unittest.TestCase):
 		roles = {row["role"] for row in data["roles"]}
 		self.assertIn("Sales Manager", roles)
 		self.assertIn("Accounts Manager", roles)
-		self.assertIn("RetailEdge Manager", roles)
+		self.assertIn("RetailEdgeManager", roles)
 
 	def test_component_uses_shared_report_shell(self):
 		source = COMPONENT.read_text()

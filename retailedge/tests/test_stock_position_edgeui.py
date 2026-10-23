@@ -47,7 +47,7 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		self.assertEqual(payload["name"], "stock-position")
 		self.assertEqual(payload["title"], "Stock Position")
 		roles = {entry["role"] for entry in payload["roles"]}
-		for role in ("Stock User", "Stock Manager", "RetailEdge Manager", "RetailEdge Branch Manager", "RetailEdge Auditor"):
+		for role in ("Stock User", "Stock Manager", "RetailEdgeManager", "RetailEdgeBranchManager", "RetailEdgeAuditor"):
 			self.assertIn(role, roles)
 
 	def test_bin_source_is_permission_aware_and_hard_bounded(self):

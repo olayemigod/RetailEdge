@@ -8,7 +8,7 @@ DOCTYPE = "Company"
 PERMLEVEL = 0
 CASHIER_ROLES = (
 	"RetailEdgeCashier",
-	"RetailEdge Cashier",
+
 )
 
 
