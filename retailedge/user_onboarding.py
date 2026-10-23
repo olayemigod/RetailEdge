@@ -73,7 +73,7 @@ def _user_summary(user: str) -> dict[str, Any]:
 		"user_type": doc.user_type or "",
 		"retailedge_roles": sorted(role for role in roles if role in RETAILEDGE_ROLE_NAMES),
 		"has_role_profiles": bool(doc.get("role_profiles")),
-		"can_write": bool(doc.has_permission("write")),
+		"can_write": bool(frappe.has_permission("User", "write", doc=doc)),
 		"readiness": get_retailedge_user_readiness(user=doc.name),
 	}
 
@@ -109,8 +109,18 @@ def _profile_summary(*, company: str, branch: str, user: str = "") -> dict[str, 
 	if not pos_profile_name:
 		return result
 
+	# POS is conditional. A non-POS User must not be blocked merely because the
+	# setup operator cannot read POS Profile details.
+	if not frappe.has_permission("POS Profile", "read", doc=pos_profile_name):
+		result.update(
+			{
+				"pos_access_mode": "unavailable",
+				"pos_message": _("You do not have permission to review the Branch POS Profile."),
+			}
+		)
+		return result
+
 	pos_doc = frappe.get_doc("POS Profile", pos_profile_name)
-	pos_doc.check_permission("read")
 	rows = list(pos_doc.get("applicable_for_users") or [])
 	matching = [row for row in rows if str(row.user or "").strip() == user] if user else []
 	result.update(
@@ -119,7 +129,7 @@ def _profile_summary(*, company: str, branch: str, user: str = "") -> dict[str, 
 			"pos_access_mode": "restricted" if rows else "shared",
 			"pos_assigned": bool(matching),
 			"pos_default": any(bool(cint(row.default)) for row in matching),
-			"can_manage_pos_profile": bool(pos_doc.has_permission("write")),
+			"can_manage_pos_profile": bool(frappe.has_permission("POS Profile", "write", doc=pos_doc)),
 			"pos_profile_disabled": bool(cint(pos_doc.disabled)),
 		}
 	)
@@ -252,7 +262,6 @@ def _ensure_retailedge_role(user_doc, role: str) -> bool:
 
 
 def _ensure_branch_assignment(*, user: str, values: dict[str, Any]) -> tuple[str, bool]:
-	_assert_assignment_create()
 	active = list(get_active_branch_assignments(user=user, company=values["company"]))
 	matching = [row for row in active if str(row.get("branch") or "").strip() == values["branch"]]
 	if matching:
@@ -263,6 +272,7 @@ def _ensure_branch_assignment(*, user: str, values: dict[str, Any]) -> tuple[str
 				"This User already has active Branch access in {0}. Use Branch Assignments to add or transfer Branch access without rewriting history."
 			).format(values["company"])
 		)
+	_assert_assignment_create()
 	result = create_branch_assignment(
 		user=user,
 		company=values["company"],
@@ -283,7 +293,7 @@ def _ensure_pos_access(*, user: str, company: str, branch: str) -> dict[str, Any
 	if not profile_name:
 		frappe.throw(_("Configure a default POS Profile in Branch Setup before assigning POS access."))
 	if not context.get("pos_required_supported"):
-		frappe.throw(_("The Branch POS Profile is disabled or belongs to another Company."))
+		frappe.throw(context.get("pos_message") or _("The Branch POS Profile is disabled or belongs to another Company."))
 	if context.get("pos_access_mode") == "shared":
 		# ERPNext intentionally treats an empty Applicable for Users table as shared.
 		# Do not add the first row here because that would silently revoke access for
@@ -319,8 +329,11 @@ def complete_user_onboarding(payload=None) -> dict[str, Any]:
 	branch_context = _profile_summary(company=values["company"], branch=values["branch"], user="")
 	if not branch_context.get("configured"):
 		frappe.throw(branch_context.get("message") or _("Branch Setup is required before onboarding can continue."))
-	if values["requires_pos"] and not branch_context.get("default_pos_profile"):
-		frappe.throw(_("Configure a default POS Profile in Branch Setup before assigning POS access."))
+	if values["requires_pos"]:
+		if not branch_context.get("default_pos_profile"):
+			frappe.throw(_("Configure a default POS Profile in Branch Setup before assigning POS access."))
+		if not branch_context.get("pos_required_supported"):
+			frappe.throw(branch_context.get("pos_message") or _("The Branch POS Profile is disabled or belongs to another Company."))
 
 	user_doc, created_user = _resolve_or_create_user(values)
 	role_added = _ensure_retailedge_role(user_doc, values["role"])
