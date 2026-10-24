@@ -220,7 +220,7 @@ def _resolve_or_create_user(values: dict[str, Any]):
 		if not cint(doc.enabled):
 			frappe.throw(_("Enable this User before completing RetailEdge onboarding."))
 		if str(doc.user_type or "") != "System User":
-			frappe.throw(_("RetailEdge operational access requires a System User."))
+			frappe.throw(_("This account cannot be used for RetailEdge operations. Convert it to a staff account before continuing."))
 		return doc, False
 
 	if not frappe.has_permission("User", "create"):
