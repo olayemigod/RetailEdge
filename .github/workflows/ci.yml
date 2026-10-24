@@ -92,7 +92,6 @@ jobs:
         with:
           repository: olayemigod/processedge-edge-suite-ui
           ref: 4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7
-          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
       - name: Fetch ERPNext, Payments, EdgeSuite UI, and RetailEdge
