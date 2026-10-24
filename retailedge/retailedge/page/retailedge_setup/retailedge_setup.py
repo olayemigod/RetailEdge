@@ -30,6 +30,8 @@ SETUP_RESOURCES = (
 		"manager": "user-onboarding",
 		"action_label": "Start Onboarding",
 		"hide_create_action": True,
+		"hide_count": True,
+		"required_read_doctypes": ("RetailEdge Branch Assignment",),
 		"singleton": False,
 		"icon": "users",
 	},
@@ -62,7 +64,7 @@ SETUP_RESOURCES = (
 	{
 		"key": "bank-accounts",
 		"label": "Bank Accounts",
-		"description": "Open ERPNext Bank Account records used by RetailEdge payments and reconciliation.",
+		"description": "Manage Bank Account records used by RetailEdge payments and reconciliation.",
 		"doctype": "Bank Account",
 		"singleton": False,
 		"icon": "wallet",
@@ -70,7 +72,7 @@ SETUP_RESOURCES = (
 	{
 		"key": "payment-methods",
 		"label": "Payment Methods",
-		"description": "Open ERPNext Mode of Payment records used by sales, collections and payments.",
+		"description": "Manage the payment methods used by sales, collections and payments.",
 		"doctype": "Mode of Payment",
 		"singleton": False,
 		"icon": "credit-card",
@@ -116,14 +118,22 @@ def get_setup_context() -> dict:
 		doctype = definition["doctype"]
 		if not _doctype_available(doctype) or not _has_permission(doctype, "read"):
 			continue
+		required_read_doctypes = tuple(definition.get("required_read_doctypes") or ())
+		if any(
+			not _doctype_available(required) or not _has_permission(required, "read")
+			for required in required_read_doctypes
+		):
+			continue
 		resource = dict(definition)
+		resource.pop("required_read_doctypes", None)
+		resource.pop("hide_count", None)
 		resource["can_create"] = bool(
 			not definition["singleton"]
 			and not definition.get("page")
 			and not definition.get("hide_create_action")
 			and _has_permission(doctype, "create")
 		)
-		if definition["singleton"]:
+		if definition["singleton"] or definition.get("hide_count"):
 			resource["count"] = None
 			resource["count_capped"] = False
 		else:
