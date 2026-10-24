@@ -65,7 +65,15 @@ class TestUserOnboardingWizard(unittest.TestCase):
 		mock_assert_create,
 		mock_create,
 	):
-		mock_assignments.return_value = [frappe._dict(name="RE-BA-0001", company=COMPANY, branch=BRANCH)]
+		mock_assignments.return_value = [
+			frappe._dict(
+				name="RE-BA-0001",
+				company=COMPANY,
+				branch=BRANCH,
+				branch_role="Cashier",
+				is_primary=1,
+			)
+		]
 		name, created = user_onboarding._ensure_branch_assignment(user=USER, values=payload())
 		self.assertEqual(name, "RE-BA-0001")
 		self.assertFalse(created)
