@@ -24,6 +24,13 @@
 			<EdgeLoadingState v-if="loading && !loaded" />
 			<EdgeErrorState v-else-if="error" :message="error" @retry="loadSetup" />
 
+			<UserOnboardingManager
+				v-else-if="activeManager === 'user-onboarding'"
+				:key="managerKey"
+				:initialMode="managerAction === 'new' ? 'new' : 'existing'"
+				@back="closeManager"
+			/>
+
 			<ExpenseCategoryManager
 				v-else-if="activeManager === 'expense-categories'"
 				:key="managerKey"
@@ -52,7 +59,7 @@
 					<section v-for="resource in resources" :key="resource.key" class="edge-panel setup-card">
 						<div class="setup-card-heading">
 							<div>
-								<span class="setup-kicker">{{ resource.singleton ? "Configuration" : "Master data" }}</span>
+								<span class="setup-kicker">{{ resource.manager ? "Guided setup" : (resource.singleton ? "Configuration" : "Master data") }}</span>
 								<h3>{{ resource.label }}</h3>
 							</div>
 							<EdgeStatusBadge v-if="resource.count !== null && resource.count !== undefined" :status="resource.count ? 'Active' : 'Warning'" />
@@ -77,6 +84,7 @@
 
 <script>
 import ExpenseCategoryManager from "./ExpenseCategoryManager.vue";
+import UserOnboardingManager from "./UserOnboardingManager.vue";
 
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
@@ -129,6 +137,7 @@ export default {
 	components: {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 		ExpenseCategoryManager,
+		UserOnboardingManager,
 	},
 	data() {
 		return {
@@ -175,12 +184,23 @@ export default {
 					options.expense_category || "",
 				);
 				frappe.route_options = null;
+				return;
+			}
+			if (options.setup_resource === "user-onboarding") {
+				this.openUserOnboardingManager(options.setup_action === "new" ? "new" : "existing");
+				frappe.route_options = null;
 			}
 		},
 		openExpenseCategoryManager(action = "list", name = "") {
 			this.activeManager = "expense-categories";
 			this.managerAction = action === "new" ? "new" : "list";
 			this.managerName = name || "";
+			this.managerKey += 1;
+		},
+		openUserOnboardingManager(mode = "existing") {
+			this.activeManager = "user-onboarding";
+			this.managerAction = mode === "new" ? "new" : "list";
+			this.managerName = "";
 			this.managerKey += 1;
 		},
 		closeManager() {
@@ -236,9 +256,18 @@ export default {
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
-		resourceUsesNativeDesk(resource) { return Boolean(resource?.doctype && resource?.manager !== "expense-categories" && !resource?.page); },
-		resourceActionLabel(resource) { const label = resource?.singleton ? "Open Settings" : "View Records"; return this.resourceUsesNativeDesk(resource) && !this.canUseNativeDesk ? `Advanced: ${label}` : label; },
+		resourceUsesNativeDesk(resource) {
+			return Boolean(resource?.doctype && !resource?.manager && !resource?.page);
+		},
+		resourceActionLabel(resource) {
+			const label = resource?.action_label || (resource?.singleton ? "Open Settings" : "View Records");
+			return this.resourceUsesNativeDesk(resource) && !this.canUseNativeDesk ? `Advanced: ${label}` : label;
+		},
 		openResource(resource) {
+			if (resource?.manager === "user-onboarding") {
+				this.openUserOnboardingManager("existing");
+				return;
+			}
 			if (resource?.manager === "expense-categories") {
 				this.openExpenseCategoryManager("list");
 				return;
@@ -252,6 +281,10 @@ export default {
 		},
 		createResource(resource) {
 			if (!resource?.doctype || !resource.can_create || resource.singleton) return;
+			if (resource.manager === "user-onboarding") {
+				this.openUserOnboardingManager("new");
+				return;
+			}
 			if (resource.manager === "expense-categories") {
 				this.openExpenseCategoryManager("new");
 				return;
