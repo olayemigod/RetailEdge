@@ -265,7 +265,22 @@ def _ensure_branch_assignment(*, user: str, values: dict[str, Any]) -> tuple[str
 	active = list(get_active_branch_assignments(user=user, company=values["company"]))
 	matching = [row for row in active if str(row.get("branch") or "").strip() == values["branch"]]
 	if matching:
-		return str(matching[0].get("name") or ""), False
+		if len(matching) != 1:
+			frappe.throw(
+				_(
+					"This User has multiple active assignments for {0}. Review Branch Assignments before continuing."
+				).format(values["branch"])
+			)
+		existing = matching[0]
+		matches_responsibility = str(existing.get("branch_role") or "Other").strip() == values["branch_role"]
+		matches_primary = bool(cint(existing.get("is_primary"))) == bool(cint(values["is_primary"]))
+		if not (matches_responsibility and matches_primary):
+			frappe.throw(
+				_(
+					"This User already has active access to {0}, but its Branch responsibility or Primary Branch setting differs. Use Branch Assignments to change it without rewriting history."
+				).format(values["branch"])
+			)
+		return str(existing.get("name") or ""), False
 	if active:
 		frappe.throw(
 			_(
