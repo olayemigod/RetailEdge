@@ -5,7 +5,7 @@
 				<button type="button" class="edge-button edge-button--secondary edge-button--small" @click="$emit('back')">Back to Setup</button>
 				<span class="onboarding-kicker">User access setup</span>
 				<h2 id="retailedge-user-onboarding-title">User Onboarding</h2>
-				<p>Set up RetailEdge access using the existing User, Branch and ERPNext POS records.</p>
+				<p>Set up a staff member's RetailEdge access, work location, and point-of-sale access.</p>
 			</div>
 			<EdgeStatusBadge v-if="result" :status="result.readiness?.ready ? 'Active' : 'Warning'" />
 		</div>
@@ -66,11 +66,11 @@
 					<div class="choice-grid" role="group" aria-label="User type">
 						<button type="button" class="choice-card" :class="{ 'is-selected': form.mode === 'existing' }" @click="setMode('existing')">
 							<strong>Existing User</strong>
-							<span>Set up RetailEdge for a User who already has an account.</span>
+							<span>Set up RetailEdge for a staff member who already has an account.</span>
 						</button>
 						<button type="button" class="choice-card" :class="{ 'is-selected': form.mode === 'new' }" :disabled="!permissions.can_create_user" @click="setMode('new')">
 							<strong>New User</strong>
-							<span>Create a System User, then complete their RetailEdge access.</span>
+							<span>Create a staff account, then complete their RetailEdge access.</span>
 						</button>
 					</div>
 
@@ -78,7 +78,7 @@
 						v-if="form.mode === 'existing'"
 						:modelValue="form.user"
 						label="User"
-						placeholder="Search enabled System Users"
+						placeholder="Search active staff accounts"
 						:required="true"
 						:searcher="searchUser"
 						@update:modelValue="setExistingUser"
@@ -87,13 +87,13 @@
 						<EdgeInput v-model="form.email" type="email" label="Email" placeholder="user@example.com" required autocomplete="email" />
 						<EdgeInput v-model="form.first_name" label="First Name" required autocomplete="given-name" />
 						<EdgeInput v-model="form.last_name" label="Last Name" autocomplete="family-name" />
-						<EdgeCheckbox v-model="form.send_welcome_email" label="Send welcome email when ready" description="The invitation is sent only after the governed RetailEdge setup succeeds." />
+						<EdgeCheckbox v-model="form.send_welcome_email" label="Send welcome email when ready" description="The invitation is sent only after the RetailEdge setup is complete." />
 					</div>
 					<div v-if="selectedUser.name" class="selection-summary">
 						<strong>{{ selectedUser.full_name }}</strong>
 						<span>{{ selectedUser.email }}</span>
 						<span v-if="selectedUser.retailedge_roles?.length">Current RetailEdge access: {{ selectedUser.retailedge_roles.join(', ') }}</span>
-						<span v-if="selectedUser.has_role_profiles">This User uses a Role Profile. The wizard will not bypass it.</span>
+						<span v-if="selectedUser.has_role_profiles">This account's access is managed by a Role Profile. Update that profile before changing RetailEdge access.</span>
 					</div>
 				</div>
 
@@ -108,8 +108,8 @@
 					/>
 					<EdgeDropdown v-model="form.branch_role" :options="branchRoles" label="Branch Responsibility" placeholder="Choose responsibility" required />
 					<div class="guidance-card">
-						<strong>Business document permissions stay in ERPNext.</strong>
-						<p>This wizard sets RetailEdge product access and operating scope. It does not silently grant Sales, Accounts, Stock or Purchasing authority.</p>
+						<strong>Business permissions are managed separately.</strong>
+						<p>This wizard sets RetailEdge access and work location. It does not change Sales, Accounts, Stock or Purchasing permissions.</p>
 					</div>
 				</div>
 
@@ -148,7 +148,7 @@
 					<EdgeCheckbox
 						v-model="form.requires_pos"
 						label="This User will work at Point of Sale"
-						description="Turn this on only when the User needs the Branch's ERPNext POS Profile."
+						description="Turn this on only when the User needs the Branch's POS Profile."
 					/>
 					<div v-if="!form.requires_pos" class="guidance-card">
 						<strong>POS is not required.</strong>
@@ -174,7 +174,7 @@
 						</div>
 						<div v-else-if="branchContext.pos_assigned" class="guidance-card edge-field--wide">
 							<strong>This User is already assigned to the Branch POS Profile.</strong>
-							<p>The wizard will keep the native ERPNext POS Profile as the authority.</p>
+							<p>The existing POS Profile assignment will be kept.</p>
 						</div>
 					</div>
 				</div>
@@ -190,7 +190,7 @@
 					</div>
 					<div class="guidance-card">
 						<strong>Readiness is checked after setup.</strong>
-						<p>RetailEdge will verify the User, role, Company, Branch, native permissions and any applicable POS setup before reporting the final status.</p>
+						<p>RetailEdge will verify the User, role, Company, Branch, business permissions and any applicable POS setup before reporting the final status.</p>
 					</div>
 				</div>
 
@@ -281,11 +281,11 @@ export default {
 			result: null,
 			form: blankForm(this.initialMode),
 			steps: [
-				{ number: 1, label: "Person", description: "Choose an existing User or create a new System User." },
-				{ number: 2, label: "Access", description: "Choose the RetailEdge role and Branch responsibility for this User." },
-				{ number: 3, label: "Location", description: "Assign the User to an enabled Company and Branch operating context." },
+				{ number: 1, label: "Person", description: "Choose an existing staff account or create a new one." },
+				{ number: 2, label: "Access", description: "Choose the RetailEdge access and Branch responsibility for this User." },
+				{ number: 3, label: "Location", description: "Assign the User to an enabled Company and Branch." },
 				{ number: 4, label: "Point of Sale", description: "Confirm whether this User needs the Branch's POS Profile." },
-				{ number: 5, label: "Review", description: "Review the setup before RetailEdge applies the governed changes." },
+				{ number: 5, label: "Review", description: "Review the setup before RetailEdge applies the changes." },
 			],
 		};
 	},
