@@ -191,14 +191,14 @@ test("setup administrator can enter the governed user onboarding wizard without 
 			await expect(page.getByRole("button", { name: new RegExp(step) }).first()).toBeVisible();
 		}
 
-		const userField = page.getByPlaceholder("Search enabled System Users", { exact: true });
+		const userField = page.getByPlaceholder("Search active staff accounts", { exact: true });
 		await userField.fill(INCOMPLETE_USER);
 		const option = page.getByRole("option").filter({ hasText: INCOMPLETE_USER }).first();
 		await expect(option).toBeVisible();
 		await option.click();
 		await expect(page.getByText(INCOMPLETE_USER, { exact: true }).first()).toBeVisible();
 		await page.getByRole("button", { name: "Continue", exact: true }).click();
-		await expect(page.getByText("Business document permissions stay in ERPNext.", { exact: true })).toBeVisible();
+		await expect(page.getByText("Business permissions are managed separately.", { exact: true })).toBeVisible();
 
 		const after = await apiGet(
 			context,
