@@ -128,6 +128,8 @@
 
 <script>
 const LIST_METHOD = "retailedge.professional_selling.get_professional_selling_list";
+const CASHIER_RECEIPT_ACTION = "cashier-receive-payment";
+const CASHIER_ROLES = new Set(["RetailEdgeCashier", "RetailEdge Cashier"]);
 const REQUIRED_COMPONENTS = ["EdgeInput", "EdgeDropdown", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
@@ -181,6 +183,9 @@ export default {
 		},
 		activeDocument() {
 			return this.readableDocuments.find((row) => row.key === this.activeKey) || this.readableDocuments[0] || null;
+		},
+		isCashierUser() {
+			return (window.frappe?.user_roles || []).some((role) => CASHIER_ROLES.has(role));
 		},
 		statusOptions() {
 			const common = ["All", "Draft", "Submitted", "Cancelled"];
@@ -335,6 +340,15 @@ export default {
 		canComplete(row) {
 			return Number(row?.docstatus || 0) === 0;
 		},
+		canReceiveCashierPayment(row) {
+			return Boolean(
+				this.isCashierUser
+				&& this.activeDocument?.key === "sales-invoice"
+				&& Number(row?.docstatus || 0) === 1
+				&& !Number(row?.is_return || 0)
+				&& Number(row?.outstanding_amount || 0) > 0.005
+			);
+		},
 		primaryActionLabel(row) {
 			return this.canComplete(row) ? "Edit / Complete" : "View";
 		},
@@ -347,6 +361,12 @@ export default {
 					disabled: Boolean(action?.disabled),
 				}))
 				.filter((action) => action.value && action.label);
+			if (
+				this.canReceiveCashierPayment(row)
+				&& !actions.some((action) => ["make-payment", CASHIER_RECEIPT_ACTION].includes(action.value))
+			) {
+				actions.unshift({ value: CASHIER_RECEIPT_ACTION, label: "Receive Payment" });
+			}
 			if (!actions.some((action) => action.value === "output")) {
 				actions.push({
 					value: "output",
@@ -390,6 +410,10 @@ export default {
 		runMoreAction(row, option) {
 			const action = String(option?.value || "");
 			if (!action) return;
+			if (action === CASHIER_RECEIPT_ACTION) {
+				frappe.set_route("cashier-customer-receipt", row.name);
+				return;
+			}
 			this.$emit("action", { action, actionDefinition: option, document: this.activeDocument, row });
 		},
 	},
