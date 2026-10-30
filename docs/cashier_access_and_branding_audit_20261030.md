@@ -36,7 +36,7 @@ The cashier is a daily POS and customer-selling persona, not a general Accounts 
 
 ### Governed selling-chain permissions
 
-The canonical cashier now receives the same bounded operational permission set on:
+The canonical cashier receives the same bounded operational permission set on:
 
 - Quotation
 - Sales Order
@@ -81,7 +81,7 @@ The corrected contract is:
 - Print & Share remains independently document-permission checked;
 - Native Desk remains an Advanced escape only where independently authorized.
 
-For a role-exact canonical cashier, Professional Selling is therefore expected to expose all four selling stages: **Quotation, Sales Order, Delivery Note and Sales Invoice**.
+For a role-exact canonical cashier, Professional Selling is expected to expose all four selling stages: **Quotation, Sales Order, Delivery Note and Sales Invoice**.
 
 ## One sidebar contract across RetailEdge routes
 
