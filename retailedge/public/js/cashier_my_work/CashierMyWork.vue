@@ -5,9 +5,9 @@
 	</div>
 	<EdgeAppShell
 		v-else
-		product="RetailEdge"
-		title="My Work"
-		subtitle="Today at a glance"
+		product="retailedge"
+		title="ProcessEdge Retail"
+		subtitle="Structured for Scale."
 		:tenantName="companyLabel || company"
 		:branchName="branch"
 		:userName="userName"
@@ -17,8 +17,14 @@
 		@navigate="handleNavigation"
 	>
 		<template #brand>
-			<img v-if="companyLogo" class="cashier-work-brand-logo" :src="companyLogo" :alt="`${companyLabel || company || 'Company'} logo`" />
-			<span v-else class="cashier-work-brand-fallback" aria-hidden="true">{{ companyInitial }}</span>
+			<img
+				v-if="productLogo && !productLogoFailed"
+				class="cashier-work-brand-logo"
+				:src="productLogo"
+				alt="ProcessEdge Retail"
+				@error="productLogoFailed = true"
+			/>
+			<span v-else class="cashier-work-brand-fallback" aria-hidden="true">R</span>
 		</template>
 
 		<div class="cashier-work-page">
@@ -29,11 +35,28 @@
 					<p>{{ dateLabel }} · {{ branch || "Current branch" }}</p>
 				</div>
 				<div class="cashier-work-hero-actions">
-					<span class="cashier-work-shift-pill" :class="{ 'is-open': shift.open }">
+					<span v-if="isToday" class="cashier-work-shift-pill" :class="{ 'is-open': shift.open }">
 						{{ shift.open ? "Shift open" : "No open shift" }}
 					</span>
 					<button v-if="startPosItem" class="edge-button edge-button--primary" type="button" @click="openItem(startPosItem)">
 						Start POS
+					</button>
+				</div>
+			</section>
+
+			<section class="cashier-work-date-bar" aria-label="Choose work date">
+				<EdgeInput
+					v-model="selectedDate"
+					type="date"
+					label="Work date"
+					:max="today"
+					:disabled="loading"
+					@change="changeDate"
+				/>
+				<div class="cashier-work-date-actions">
+					<span>{{ isToday ? "Showing today" : "Showing historical activity" }}</span>
+					<button v-if="!isToday && today" class="edge-button edge-button--secondary" type="button" :disabled="loading" @click="showToday">
+						Today
 					</button>
 				</div>
 			</section>
@@ -45,16 +68,16 @@
 				<button class="edge-button edge-button--secondary" type="button" @click="load">Retry</button>
 			</div>
 			<template v-else>
-				<section class="cashier-work-summary" aria-label="Today's summary">
+				<section class="cashier-work-summary" :aria-label="`${dateLabel} summary`">
 					<article class="cashier-work-card">
-						<span>Sales today</span>
+						<span>Sales</span>
 						<strong>{{ money(summary.gross_sales) }}</strong>
 						<small>{{ summary.sales_count || 0 }} sale{{ Number(summary.sales_count || 0) === 1 ? "" : "s" }}</small>
 					</article>
 					<article class="cashier-work-card">
 						<span>Payments recorded</span>
 						<strong>{{ money(summary.payments_total) }}</strong>
-						<small>Across your sales today</small>
+						<small>Across your sales for this day</small>
 					</article>
 					<article class="cashier-work-card">
 						<span>Returns</span>
@@ -68,8 +91,8 @@
 					</article>
 				</section>
 
-				<section class="cashier-work-grid">
-					<article class="cashier-work-panel">
+				<section class="cashier-work-grid" :class="{ 'cashier-work-grid--history': !isToday }">
+					<article v-if="isToday" class="cashier-work-panel">
 						<div class="cashier-work-panel-heading">
 							<div>
 								<div class="cashier-work-eyebrow">Current shift</div>
@@ -94,7 +117,7 @@
 						<div class="cashier-work-panel-heading">
 							<div>
 								<div class="cashier-work-eyebrow">Payments</div>
-								<h3>Today's payment mix</h3>
+								<h3>Payment mix</h3>
 							</div>
 						</div>
 						<div v-if="paymentBreakdown.length" class="cashier-work-payment-list">
@@ -103,17 +126,18 @@
 								<strong>{{ money(payment.amount) }}</strong>
 							</div>
 						</div>
-						<div v-else class="cashier-work-empty compact">No payments recorded on your sales today.</div>
+						<div v-else class="cashier-work-empty compact">No payments were recorded on your sales for this day.</div>
 					</article>
 				</section>
 
 				<section class="cashier-work-panel">
 					<div class="cashier-work-panel-heading">
 						<div>
-							<div class="cashier-work-eyebrow">Today's work</div>
+							<div class="cashier-work-eyebrow">Work activity</div>
 							<h3>My sales and returns</h3>
 							<p>Only transactions recorded by your account are shown.</p>
 						</div>
+						<span v-if="activityTruncated" class="cashier-work-muted">Showing latest {{ activityLimit }} of {{ activityTotal }}</span>
 					</div>
 					<div v-if="recentActivity.length" class="cashier-work-table-wrap">
 						<table class="cashier-work-table">
@@ -134,9 +158,9 @@
 						</table>
 					</div>
 					<div v-else class="cashier-work-empty">
-						<strong>No activity yet today.</strong>
-						<p>{{ emptyMessage || "Your sales and returns will appear here as you work." }}</p>
-						<button v-if="startPosItem" class="edge-button edge-button--primary" type="button" @click="openItem(startPosItem)">Start POS</button>
+						<strong>No activity for this day.</strong>
+						<p>{{ emptyMessage || "Your sales and returns for the selected day will appear here." }}</p>
+						<button v-if="isToday && startPosItem" class="edge-button edge-button--primary" type="button" @click="openItem(startPosItem)">Start POS</button>
 					</div>
 				</section>
 			</template>
@@ -145,7 +169,8 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeInput"];
+const DEFAULT_PRODUCT_LOGO = "/assets/retailedge/images/processedge_retail/processedge-retail-mark.svg";
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -162,6 +187,10 @@ function callMethod(method, args = {}) {
 	});
 }
 
+function shellIdentity() {
+	return frappe.boot?.edgesuite_ui_identity?.retailedge || frappe.boot?.retailedge_ui_identity || {};
+}
+
 export default {
 	name: "CashierMyWork",
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
@@ -172,28 +201,33 @@ export default {
 			error: "",
 			company: "",
 			companyLabel: "",
-			companyLogo: "",
 			branch: "",
 			userName: "",
 			currency: "",
 			date: "",
+			today: "",
+			selectedDate: "",
+			isToday: true,
 			menuItems: [],
 			summary: {},
 			shift: {},
 			paymentBreakdown: [],
 			recentActivity: [],
+			activityTotal: 0,
+			activityLimit: 0,
+			activityTruncated: false,
 			emptyMessage: "",
+			productLogo: shellIdentity().product_logo || DEFAULT_PRODUCT_LOGO,
+			productLogoFailed: false,
 		};
 	},
 	computed: {
-		companyInitial() {
-			return String(this.companyLabel || this.company || "R").trim().charAt(0).toUpperCase() || "R";
-		},
 		greeting() {
-			return this.userName ? `Today, ${this.userName}` : "Today at a glance";
+			if (this.isToday) return this.userName ? `Today, ${this.userName}` : "Today at a glance";
+			return this.userName ? `Work for ${this.userName}` : "Historical work";
 		},
 		dateLabel() {
-			if (!this.date) return "Today";
+			if (!this.date) return this.isToday ? "Today" : "Selected day";
 			try {
 				return new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${this.date}T00:00:00`));
 			} catch (_error) {
@@ -220,21 +254,31 @@ export default {
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [activity, navigation] = await Promise.all([
-					callMethod("retailedge.cashier_self_service.get_my_cashier_activity"),
+					callMethod("retailedge.cashier_self_service.get_my_cashier_activity", {
+						work_date: this.selectedDate,
+					}),
 					navigationPromise,
 				]);
 				const context = navigation?.context || {};
+				const identity = shellIdentity();
+				this.productLogo = identity.product_logo || DEFAULT_PRODUCT_LOGO;
+				this.productLogoFailed = false;
 				this.company = activity.company || context.company || "";
 				this.companyLabel = context.company_label || this.company;
-				this.companyLogo = context.company_logo || "";
 				this.branch = activity.branch || context.branch || "";
 				this.userName = context.user_name || activity.user || "";
 				this.currency = activity.currency || context.company_currency || "";
 				this.date = activity.date || "";
+				this.today = activity.today || this.date || "";
+				this.selectedDate = this.date;
+				this.isToday = activity.is_today !== false;
 				this.summary = activity.summary || {};
 				this.shift = activity.shift || {};
 				this.paymentBreakdown = Array.isArray(activity.payment_breakdown) ? activity.payment_breakdown : [];
 				this.recentActivity = Array.isArray(activity.recent_activity) ? activity.recent_activity : [];
+				this.activityTotal = Number(activity.activity_total || this.recentActivity.length || 0);
+				this.activityLimit = Number(activity.activity_limit || this.recentActivity.length || 0);
+				this.activityTruncated = Boolean(activity.activity_truncated);
 				this.emptyMessage = activity.empty_message || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) {
@@ -242,6 +286,16 @@ export default {
 			} finally {
 				this.loading = false;
 			}
+		},
+		changeDate(value) {
+			if (!value || value === this.date) return;
+			this.selectedDate = value;
+			this.load();
+		},
+		showToday() {
+			if (!this.today) return;
+			this.selectedDate = this.today;
+			this.load();
 		},
 		mapNavigationGroups(groups) {
 			return (groups || [])
@@ -264,7 +318,13 @@ export default {
 		},
 		openItem(item) {
 			if (!item) return;
-			if (item.target_type === "URL" && item.target) window.location.assign(item.target);
+			if (item.target_type === "URL" && item.target) {
+				if (item.target === "/pos/") {
+					window.open(item.target, "_blank", "noopener,noreferrer");
+					return;
+				}
+				window.location.assign(item.target);
+			}
 			else if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -291,7 +351,8 @@ export default {
 .cashier-work-hero,
 .cashier-work-panel,
 .cashier-work-card,
-.cashier-work-state { border: 1px solid var(--border-color); background: var(--card-bg, var(--fg-color)); border-radius: var(--border-radius-lg, 12px); }
+.cashier-work-state,
+.cashier-work-date-bar { border: 1px solid var(--border-color); background: var(--card-bg, var(--fg-color)); border-radius: var(--border-radius-lg, 12px); }
 .cashier-work-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.25rem; }
 .cashier-work-hero h2, .cashier-work-panel h3 { margin: 0; color: var(--heading-color, var(--text-color)); }
 .cashier-work-hero p, .cashier-work-panel-heading p { margin: .35rem 0 0; color: var(--text-muted); }
@@ -299,12 +360,16 @@ export default {
 .cashier-work-hero-actions { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; justify-content: flex-end; }
 .cashier-work-shift-pill, .cashier-work-type { border: 1px solid var(--border-color); border-radius: 999px; padding: .35rem .6rem; font-size: .8rem; font-weight: 600; }
 .cashier-work-shift-pill.is-open { background: var(--green-50, var(--subtle-fg)); }
+.cashier-work-date-bar { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; }
+.cashier-work-date-bar :deep(.edge-input) { width: min(18rem, 100%); }
+.cashier-work-date-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; color: var(--text-muted); font-size: .82rem; }
 .cashier-work-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
 .cashier-work-card { display: grid; gap: .25rem; padding: 1rem; min-width: 0; }
 .cashier-work-card > span, .cashier-work-metrics span, .cashier-work-payment-list span { color: var(--text-muted); font-size: .82rem; }
 .cashier-work-card strong { font-size: 1.35rem; overflow: hidden; text-overflow: ellipsis; }
 .cashier-work-card small { color: var(--text-muted); }
 .cashier-work-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1rem; }
+.cashier-work-grid--history { grid-template-columns: 1fr; }
 .cashier-work-panel { padding: 1.1rem; min-width: 0; }
 .cashier-work-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
 .cashier-work-muted, .cashier-work-note { color: var(--text-muted); font-size: .82rem; }
@@ -333,6 +398,9 @@ export default {
 	.cashier-work-page { padding: .75rem; }
 	.cashier-work-hero { flex-direction: column; align-items: stretch; }
 	.cashier-work-hero-actions { justify-content: flex-start; }
+	.cashier-work-date-bar { align-items: stretch; flex-direction: column; }
+	.cashier-work-date-bar :deep(.edge-input) { width: 100%; }
+	.cashier-work-date-actions { justify-content: space-between; }
 	.cashier-work-summary { grid-template-columns: 1fr; }
 	.cashier-work-metrics { grid-template-columns: 1fr; }
 }
