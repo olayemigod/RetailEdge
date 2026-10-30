@@ -104,9 +104,13 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 	def test_cashier_can_open_permission_aware_professional_selling(self):
 		frappe.set_user(CASHIER_USER)
 		self.assertTrue(bool(frappe.get_doc("Page", "professional-selling").is_permitted()))
-		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="read")))
-		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="write")))
-		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="submit")))
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			with self.subTest(doctype=doctype):
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="read")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="create")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="write")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="submit")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="print")))
 		# Opening the workspace does not grant broad accounting authority.
 		self.assertFalse(bool(frappe.has_permission("Payment Entry", ptype="create")))
 
