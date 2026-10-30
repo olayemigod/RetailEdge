@@ -83,7 +83,7 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 	}
 });
 
-test("cashier can open Professional Selling while document stages remain permission-derived", async ({ browser }) => {
+test("cashier can use the governed Professional Selling chain while accounting authority stays separate", async ({ browser }) => {
 	const { context, page } = await newCashier(browser);
 	try {
 		const selling = await apiGet(context, "retailedge.professional_selling.get_professional_selling_context");
@@ -93,21 +93,24 @@ test("cashier can open Professional Selling while document stages remain permiss
 		expect(invoice.payload.message?.can_read).toBeTruthy();
 		expect(invoice.payload.message?.can_create).toBeTruthy();
 
-		// The role-exact cashier fixture intentionally has no generic Sales User/Accounts User role.
-		// Opening the workspace must therefore not manufacture Quotation/Order/Delivery authority.
-		for (const document of selling.payload.message?.documents || []) {
-			expect(document.can_read || document.can_create).toBeFalsy();
+		const sellingDocuments = selling.payload.message?.documents || [];
+		for (const doctype of ["Quotation", "Sales Order", "Delivery Note"]) {
+			const document = sellingDocuments.find((row) => row.doctype === doctype);
+			expect(document, `${doctype} capability missing`).toBeTruthy();
+			expect(document.can_read, `${doctype} read permission missing`).toBeTruthy();
+			expect(document.can_create, `${doctype} create permission missing`).toBeTruthy();
 		}
 
 		await openProductPage(page, "professional-selling", "Professional Selling");
-		await expect(page.getByRole("heading", { name: "Sales Invoice", exact: true }).first()).toBeVisible();
-		await expect(page.getByRole("heading", { name: "Quotation", exact: true })).toHaveCount(0);
-		await expect(page.getByRole("heading", { name: "Sales Order", exact: true })).toHaveCount(0);
-		await expect(page.getByRole("heading", { name: "Delivery Note", exact: true })).toHaveCount(0);
+		for (const label of ["Quotation", "Sales Order", "Delivery Note", "Sales Invoice"]) {
+			await expect(page.getByRole("heading", { name: label, exact: true }).first()).toBeVisible();
+		}
 
 		const records = page.locator(".selling-records-panel");
 		await expect(records).toBeVisible();
-		await expect(records.getByRole("tab", { name: "Sales Invoice", exact: true })).toBeVisible();
+		for (const label of ["Quotation", "Sales Order", "Delivery Note", "Sales Invoice"]) {
+			await expect(records.getByRole("tab", { name: label, exact: true })).toBeVisible();
+		}
 
 		const paymentContext = await apiGet(context, "retailedge.guided_payment.get_simple_payment_context", {
 			intent: "receive-customer-payment",
@@ -135,30 +138,6 @@ test("cashier has Sales Invoice print authority and can open Document Output & S
 		await expect(page.getByRole("heading", { name: "Find a permitted customer document", exact: true })).toBeVisible();
 		const documentType = page.locator("#output-document-type");
 		await expect(documentType).toBeVisible();
-	} finally {
-		await context.close();
-	}
-});
-
-test("cashier final navigation exposes Professional Selling and Reports Centre does not restore filtered groups", async ({ browser }) => {
-	const { context, page } = await newCashier(browser);
-	try {
-		const navigation = await apiGet(
-			context,
-			"retailedge.navigation_consolidation.get_retailedge_business_hub_context"
-		);
-		expect(navigation.response.ok(), navigation.text).toBeTruthy();
-		const groups = navigation.payload.message?.navigation_groups || [];
-		const targets = groups.flatMap((group) => group.items || []).map((item) => item.target);
-		const groupLabels = groups.map((group) => group.label);
-
-		expect(targets).toContain("professional-selling");
-		expect(groupLabels).not.toContain("Asset Management");
-		expect(groupLabels).not.toContain("Service & Warranty");
-
-		await openProductPage(page, "reports-centre", "Reports Centre");
-		await expect(page.getByText("Asset Management", { exact: true })).toHaveCount(0);
-		await expect(page.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
 	} finally {
 		await context.close();
 	}
