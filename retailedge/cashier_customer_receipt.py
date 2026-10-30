@@ -6,8 +6,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
-from erpnext.accounts.doctype.mode_of_payment.mode_of_payment import validate_enabled_mode_of_payment
-
 from retailedge.advanced_payments import _company_currency, _invoice_branch, _payment_branch_field
 from retailedge.branch_context import validate_user_branch_access
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
@@ -177,7 +175,9 @@ def _mode_account(mode_of_payment: str, company: str) -> dict[str, Any] | None:
 
 
 def _resolve_mode(mode_of_payment: str, company: str, company_currency: str) -> dict[str, Any]:
-	validate_enabled_mode_of_payment(mode_of_payment)
+	# ERPNext v16.51.1 exposes the enabled field but not the later
+	# validate_enabled_mode_of_payment helper. _mode_account performs the same
+	# enabled-state check while also validating the Company account mapping.
 	mode = _mode_account(mode_of_payment, company)
 	if not mode:
 		frappe.throw(
