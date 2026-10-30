@@ -10,6 +10,7 @@ from retailedge.master_experience import (
 )
 from retailedge.navigation_visibility import filter_context_for_runtime_capabilities
 from retailedge.printing_navigation import normalize_printing_navigation
+from retailedge.setup_roles import user_has_retailedge_role
 from retailedge.user_readiness import get_retailedge_user_readiness
 
 
@@ -31,6 +32,7 @@ MAKE_SALE_TARGET = "make-sale"
 PROFESSIONAL_SELLING_TARGET = "professional-selling"
 LEGACY_SALES_FORECAST_TARGET = "sales-forecast"
 RETAILEDGE_SALES_FORECAST_TARGET = "retailedge-sales-forecast"
+CASHIER_MY_WORK_TARGET = "cashier-my-work"
 READINESS_REPAIR_TARGETS = {
 	"operating-context",
 	"branch-assignments",
@@ -159,6 +161,38 @@ def _apply_user_readiness(context: dict[str, Any]) -> None:
 	context["navigation_groups"] = filtered_groups
 
 
+def _add_cashier_self_service_navigation(context: dict[str, Any]) -> None:
+	"""Give a ready cashier one bounded self-service home instead of manager dashboards."""
+	if not user_has_retailedge_role("RetailEdgeCashier", user=frappe.session.user):
+		return
+	readiness = context.get("readiness") or {}
+	if readiness.get("applicable") and not readiness.get("ready"):
+		return
+
+	item = {
+		"label": "My Work",
+		"target_type": "Page",
+		"target": CASHIER_MY_WORK_TARGET,
+		"icon": "activity",
+	}
+	groups = context.setdefault("navigation_groups", [])
+	sales_group = next((group for group in groups if group.get("key") == SALES_GROUP_KEY), None)
+	if sales_group is None:
+		sales_group = {
+			"key": SALES_GROUP_KEY,
+			"label": "Sales & POS",
+			"icon": "shopping-cart",
+			"items": [],
+		}
+		groups.insert(0, sales_group)
+	items = [existing for existing in sales_group.get("items") or [] if existing.get("target") != CASHIER_MY_WORK_TARGET]
+	items.insert(0, item)
+	sales_group["items"] = items
+
+	context.setdefault("context", {})["home_experience"] = "cashier"
+	context["context"]["home_route"] = CASHIER_MY_WORK_TARGET
+
+
 def _load_master_context_quietly() -> dict[str, Any]:
 	"""Build permission-aware navigation without leaking probe messages to Desk.
 
@@ -187,6 +221,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_normalize_sales_forecast_route(navigation_groups)
 	context["navigation_groups"] = navigation_groups
 	_apply_user_readiness(context)
+	_add_cashier_self_service_navigation(context)
 	# Printing normalization is presentation/navigation-only. It runs after the
 	# current consolidated review and Sales ordering model is complete.
 	context = normalize_printing_navigation(context)
