@@ -293,6 +293,16 @@ def get_shell_identity() -> dict[str, Any]:
 	profile = resolve_company_profile(company)
 	branches = get_allowed_operating_branches(company=company) if company else []
 	can_view_all_branches = can_use_company_wide_branch_view(company=company) if company else False
+	companies = (
+		{
+			company: {
+				"label": profile.get("label") or company,
+				"logo": profile.get("logo") or "",
+			}
+		}
+		if company
+		else {}
+	)
 	return {
 		"product_code": "retailedge",
 		"product_name": "ProcessEdge Retail",
@@ -303,6 +313,7 @@ def get_shell_identity() -> dict[str, Any]:
 		"tenant_logo": profile.get("logo") or "",
 		"tenant_icon": "building",
 		"tenant_subtitle": "Business workspace",
+		"companies": companies,
 		"active_company": company,
 		"active_branch": _clean(current.get("branch")),
 		"company_wide": bool(current.get("company_wide")),
