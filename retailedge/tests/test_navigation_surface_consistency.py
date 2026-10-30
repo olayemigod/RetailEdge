@@ -45,6 +45,13 @@ def test_cashier_selling_document_permissions_are_upgrade_reconciled():
 	assert "retailedge.patches.ensure_retailedge_cashier_selling_document_permissions" in patches
 
 
+def test_cashier_selling_permissions_remain_outside_generic_accounting_authority():
+	permission_patch = read("patches/ensure_retailedge_cashier_selling_document_permissions.py")
+	assert '"Payment Entry"' not in permission_patch
+	assert '"Journal Entry"' not in permission_patch
+	assert '"Purchase Invoice"' not in permission_patch
+
+
 def test_persisted_sales_pages_refresh_the_shared_navigation_snapshot_on_show():
 	my_work = read("retailedge/page/cashier_my_work/cashier_my_work.js")
 	professional_selling = read("retailedge/page/professional_selling/professional_selling.js")
