@@ -27,6 +27,7 @@ PRESERVED_SHIFT_WORKFLOW_TARGETS = {
 	"daily-sales-audit",
 	"expense-review",
 }
+HOME_GROUP_KEY = "home"
 SALES_GROUP_KEY = "sales"
 MAKE_SALE_TARGET = "make-sale"
 PROFESSIONAL_SELLING_TARGET = "professional-selling"
@@ -64,9 +65,6 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 			None,
 		)
 		if canonical_item is None:
-			# Preserve the permission-filtered fallback exactly as received. A user who
-			# cannot open Shift Reconciliation must not lose an older permitted review
-			# route merely because the canonical page is unavailable to that role.
 			continue
 
 		consolidated = deepcopy(canonical_item)
@@ -80,8 +78,6 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 			and item.get("target") != SHIFT_RECONCILIATION_TARGET
 		]
 
-		# Keep the consolidated cash-control entry close to Action Centre / other
-		# operational review work rather than among low-level historical reports.
 		insert_at = next(
 			(
 				index + 1
@@ -96,14 +92,7 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 
 
 def _prioritize_sales_navigation(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Keep Make Sale as the first visible Sales operation when it is permitted.
-
-	Master Experience promotes Transaction Workspace, Make Sale and Professional Selling
-	before task-frequency reclassification. Transaction Workspace is then intentionally
-	hidden as a duplicate, which can leave Professional Selling ahead of Make Sale because
-	both promotions insert beside the same temporary anchor. Final composition owns the
-	customer-facing order, so normalize only the already-permitted Sales items here.
-	"""
+	"""Keep Make Sale as the first visible Sales operation when it is permitted."""
 	for group in navigation_groups:
 		if group.get("key") != SALES_GROUP_KEY:
 			continue
@@ -115,11 +104,7 @@ def _prioritize_sales_navigation(navigation_groups: list[dict[str, Any]]) -> Non
 
 		group["items"] = [
 			make_sale,
-			*[
-				item
-				for item in items
-				if item is not make_sale
-			],
+			*[item for item in items if item is not make_sale],
 		]
 		return
 
@@ -142,9 +127,6 @@ def _apply_user_readiness(context: dict[str, Any]) -> None:
 	if not readiness.get("applicable") or readiness.get("ready"):
 		return
 
-	# Incomplete product users never receive transaction shortcuts. Navigation is
-	# reduced to already-permitted repair/context pages; this does not grant access
-	# to any setup Page the caller could not already open.
 	context["quick_actions"] = []
 	filtered_groups: list[dict[str, Any]] = []
 	for group in context.get("navigation_groups") or []:
@@ -162,7 +144,7 @@ def _apply_user_readiness(context: dict[str, Any]) -> None:
 
 
 def _add_cashier_self_service_navigation(context: dict[str, Any]) -> None:
-	"""Give a ready cashier one bounded self-service home instead of manager dashboards."""
+	"""Give a ready cashier a bounded self-service home under Home navigation."""
 	if not user_has_retailedge_role("RetailEdgeCashier", user=frappe.session.user):
 		return
 	readiness = context.get("readiness") or {}
@@ -176,34 +158,30 @@ def _add_cashier_self_service_navigation(context: dict[str, Any]) -> None:
 		"icon": "activity",
 	}
 	groups = context.setdefault("navigation_groups", [])
-	sales_group = next((group for group in groups if group.get("key") == SALES_GROUP_KEY), None)
-	if sales_group is None:
-		sales_group = {
-			"key": SALES_GROUP_KEY,
-			"label": "Sales & POS",
-			"icon": "shopping-cart",
+	for group in groups:
+		group["items"] = [
+			existing
+			for existing in group.get("items") or []
+			if existing.get("target") != CASHIER_MY_WORK_TARGET
+		]
+
+	home_group = next((group for group in groups if group.get("key") == HOME_GROUP_KEY), None)
+	if home_group is None:
+		home_group = {
+			"key": HOME_GROUP_KEY,
+			"label": "Home",
+			"icon": "home",
 			"items": [],
 		}
-		groups.insert(0, sales_group)
-	items = [existing for existing in sales_group.get("items") or [] if existing.get("target") != CASHIER_MY_WORK_TARGET]
-	items.insert(0, item)
-	sales_group["items"] = items
+		groups.insert(0, home_group)
+	home_group["items"] = [item, *(home_group.get("items") or [])]
 
 	context.setdefault("context", {})["home_experience"] = "cashier"
 	context["context"]["home_route"] = CASHIER_MY_WORK_TARGET
 
 
 def _load_master_context_quietly() -> dict[str, Any]:
-	"""Build permission-aware navigation without leaking probe messages to Desk.
-
-	The master context intentionally probes many native ERPNext destinations so an
-	inaccessible target can be omitted. Frappe permission probes may append user-facing
-	messages before returning False. Those probe messages are not workflow errors and
-	must not become modal dialogs on unrelated RetailEdge pages.
-
-	Exceptions still propagate; only message-log side effects from capability probes are
-	restored to the caller's prior state.
-	"""
+	"""Build permission-aware navigation without leaking probe messages to Desk."""
 	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
 		return deepcopy(_get_master_business_hub_context() or {})
@@ -222,10 +200,5 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context["navigation_groups"] = navigation_groups
 	_apply_user_readiness(context)
 	_add_cashier_self_service_navigation(context)
-	# Printing normalization is presentation/navigation-only. It runs after the
-	# current consolidated review and Sales ordering model is complete.
 	context = normalize_printing_navigation(context)
-	# Final capability filtering owns only presentation. Destination APIs keep their
-	# authoritative server-side permission checks; links that would reject this user
-	# simply are not advertised in Business Hub or the product menu.
 	return filter_context_for_runtime_capabilities(context)
