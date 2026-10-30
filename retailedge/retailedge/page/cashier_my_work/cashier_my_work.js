@@ -26,6 +26,20 @@ function hideNativePageSidebar(wrapper) {
 	}
 }
 
+function clearNavigationCache() {
+	window.__retailedgeBusinessHubContextCache = null;
+	window.__retailedgeBusinessHubContextRequest = null;
+}
+
+function refreshMountedMyWork(wrapper) {
+	clearNavigationCache();
+	const component = wrapper?._retailedgeCashierMyWorkApp?._instance?.proxy;
+	if (component && typeof component.load === "function") {
+		return component.load();
+	}
+	return null;
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const loading = document.createElement("div");
@@ -43,11 +57,15 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-cashier-my-work-root";
 		page.body.append(root);
-		window.mountCashierMyWork(root);
+		clearNavigationCache();
+		wrapper._retailedgeCashierMyWorkApp = window.mountCashierMyWork(root);
 	} catch (error) {
 		loading.textContent = error?.message || __("My Work failed to load.");
 		loading.classList.add("text-danger");
 	}
 };
 
-frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) { hideNativePageSidebar(wrapper); };
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativePageSidebar(wrapper);
+	refreshMountedMyWork(wrapper);
+};
