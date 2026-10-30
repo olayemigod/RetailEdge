@@ -98,7 +98,7 @@ The correction is:
 - My Work clears the shared navigation cache and reloads its mounted component when the route is shown again;
 - Professional Selling clears the same cache before its page-show refresh;
 - Reports Centre obtains its sidebar from the same final navigation contract rather than its older report-context snapshot;
-- browser acceptance now traverses My Work → Professional Selling → My Work and requires Professional Selling to remain present throughout.
+- browser acceptance traverses My Work → Professional Selling → My Work and requires Professional Selling to remain present throughout.
 
 A route change must therefore not add or remove sidebar capabilities unless the user's effective permissions, readiness or operating context actually changed.
 
