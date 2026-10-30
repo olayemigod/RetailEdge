@@ -167,7 +167,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			hooks,
 		)
 		self.assertIn("from retailedge.printing_navigation import normalize_printing_navigation", final_navigation)
-		self.assertIn("return normalize_printing_navigation(context)", final_navigation)
+		self.assertIn("context = normalize_printing_navigation(context)", final_navigation)
+		self.assertIn("return filter_context_for_runtime_capabilities(context)", final_navigation)
 
 	def test_branch_print_policy_is_opt_in_and_presentation_only(self):
 		settings = self.read_app("print_output_settings.py")
