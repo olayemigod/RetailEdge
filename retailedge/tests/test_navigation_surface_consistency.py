@@ -61,3 +61,14 @@ def test_persisted_sales_pages_refresh_the_shared_navigation_snapshot_on_show():
 
 	assert "refreshMountedMyWork(wrapper)" in my_work
 	assert 'CustomEvent("retailedge-professional-selling-page-show")' in professional_selling
+
+
+def test_cross_route_browser_acceptance_is_part_of_the_exact_head_gate():
+	workflow = read("../.github/workflows/browser-persona-smoke.yml")
+	spec = read("../browser-tests/retailedge_cashier_sidebar_consistency.spec.cjs")
+	assert "browser-tests/retailedge_cashier_sidebar_consistency.spec.cjs" in workflow
+	assert 'openRoute(page, "cashier-my-work")' in spec
+	assert 'openRoute(page, "professional-selling")' in spec
+	assert 'getByText("Professional Selling", { exact: true })' in spec
+	for label in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+		assert f'"{label}"' in spec
