@@ -108,6 +108,13 @@ test("cashier can open Professional Selling while document stages remain permiss
 		const records = page.locator(".selling-records-panel");
 		await expect(records).toBeVisible();
 		await expect(records.getByRole("tab", { name: "Sales Invoice", exact: true })).toBeVisible();
+
+		const paymentContext = await apiGet(context, "retailedge.guided_payment.get_simple_payment_context", {
+			intent: "receive-customer-payment",
+		});
+		expect(paymentContext.response.ok()).toBeFalsy();
+		expect(paymentContext.text).toMatch(/Payment Entr|permission/i);
+		await expect(page.getByText("Make Payment", { exact: true })).toHaveCount(0);
 	} finally {
 		await context.close();
 	}
