@@ -83,6 +83,36 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 	}
 });
 
+test("cashier can open Professional Selling while document stages remain permission-derived", async ({ browser }) => {
+	const { context, page } = await newCashier(browser);
+	try {
+		const selling = await apiGet(context, "retailedge.professional_selling.get_professional_selling_context");
+		expect(selling.response.ok(), selling.text).toBeTruthy();
+		const invoice = await apiGet(context, "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability");
+		expect(invoice.response.ok(), invoice.text).toBeTruthy();
+		expect(invoice.payload.message?.can_read).toBeTruthy();
+		expect(invoice.payload.message?.can_create).toBeTruthy();
+
+		// The role-exact cashier fixture intentionally has no generic Sales User/Accounts User role.
+		// Opening the workspace must therefore not manufacture Quotation/Order/Delivery authority.
+		for (const document of selling.payload.message?.documents || []) {
+			expect(document.can_read || document.can_create).toBeFalsy();
+		}
+
+		await openProductPage(page, "professional-selling", "Professional Selling");
+		await expect(page.getByRole("heading", { name: "Sales Invoice", exact: true }).first()).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Quotation", exact: true })).toHaveCount(0);
+		await expect(page.getByRole("heading", { name: "Sales Order", exact: true })).toHaveCount(0);
+		await expect(page.getByRole("heading", { name: "Delivery Note", exact: true })).toHaveCount(0);
+
+		const records = page.locator(".selling-records-panel");
+		await expect(records).toBeVisible();
+		await expect(records.getByRole("tab", { name: "Sales Invoice", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("cashier has Sales Invoice print authority and can open Document Output & Sharing", async ({ browser }) => {
 	const { context, page } = await newCashier(browser);
 	try {
