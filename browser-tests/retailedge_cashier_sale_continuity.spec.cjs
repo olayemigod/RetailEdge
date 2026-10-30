@@ -123,6 +123,47 @@ test("cashier can use the governed Professional Selling chain while accounting a
 	}
 });
 
+test("cashier unpaid Sales Invoice exposes the constrained Receive Payment workflow", async ({ browser }) => {
+	const { context, page } = await newCashier(browser);
+	try {
+		const invoices = await apiGet(context, "retailedge.professional_selling.get_professional_selling_list", {
+			document: "sales-invoice",
+			status: "Unpaid",
+			start: "0",
+			page_length: "20",
+		});
+		expect(invoices.response.ok(), invoices.text).toBeTruthy();
+		const rows = invoices.payload.message?.rows || [];
+		const unpaid = rows.find(
+			(row) => Number(row.docstatus || 0) === 1 && !Number(row.is_return || 0) && Number(row.outstanding_amount || 0) > 0.005
+		);
+		expect(unpaid, "expected a submitted unpaid cashier-visible Sales Invoice fixture").toBeTruthy();
+
+		await openProductPage(page, "professional-selling", "Professional Selling");
+		const records = page.locator(".selling-records-panel");
+		const search = records.getByRole("searchbox", { name: "Search" });
+		await expect(search).toBeVisible();
+		await search.fill(unpaid.name);
+
+		const invoiceRow = records.locator("tbody tr").filter({ hasText: unpaid.name }).first();
+		await expect(invoiceRow).toBeVisible({ timeout: 20_000 });
+		const moreTrigger = invoiceRow.locator(".record-more .edge-dropdown__trigger").first();
+		await expect(moreTrigger).toBeVisible();
+		await moreTrigger.click();
+		const receivePayment = page.getByText("Receive Payment", { exact: true }).last();
+		await expect(receivePayment).toBeVisible();
+		await receivePayment.click();
+
+		await expect(page).toHaveURL(new RegExp(`/cashier-customer-receipt/${unpaid.name}(?:$|[?#])`), { timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "Receive Payment", exact: true })).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: unpaid.name, exact: true })).toBeVisible();
+		await expect(page.getByText("Invoice outstanding", { exact: true }).first()).toBeVisible();
+		await expect(page.getByRole("button", { name: "Review Payment", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("cashier has Sales Invoice print authority and can open Document Output & Sharing", async ({ browser }) => {
 	const { context, page } = await newCashier(browser);
 	try {
