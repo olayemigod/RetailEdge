@@ -61,6 +61,8 @@ The canonical cashier still does **not** receive generic Payment Entry, Journal 
 
 Customer-payment collection therefore remains a distinct capability decision. Professional Selling may expose payment actions only where the current user has the required payment authority. If ProcessEdge makes customer-payment collection inherent to the cashier role, it should use a constrained customer-receipt boundary scoped to permitted customer documents, Company/Branch and approved payment modes rather than silently granting broad accounting access.
 
+This audit intentionally does not solve that separate payment-capability design; it preserves the existing Payment Entry boundary while fixing selling-document and navigation access.
+
 ## Professional Selling: permission-aware workspace
 
 Professional Selling is the EdgeSuite everyday workspace over ERPNext selling truth.
