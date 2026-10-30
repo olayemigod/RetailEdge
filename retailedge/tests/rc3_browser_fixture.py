@@ -23,6 +23,8 @@ BRANCHES = (
 )
 BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
 EXPENSE_CATEGORY = "Browser Working Branch Expense"
+CASHIER_USER = "browser-cashier@example.com"
+CASHIER_UNFINISHED_MARKER = "RetailEdge browser cashier unfinished sale fixture"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -49,7 +51,7 @@ ACTIVE_ASSIGNMENTS = {
 	"Administrator": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-branch-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
-	"browser-cashier@example.com": (("RetailEdge RC3 Lagos", "Cashier", 1),),
+	CASHIER_USER: (("RetailEdge RC3 Lagos", "Cashier", 1),),
 	"browser-accounts@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),
 	"browser-stock@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-stock-manager@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
@@ -197,6 +199,38 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 	return str(result["name"])
 
 
+def _sales_invoice_values(branch_name: str, marker: str) -> dict:
+	company = frappe.get_doc("Company", COMPANY)
+	currency = str(company.default_currency or "NGN")
+	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
+	income = _first_leaf_account(COMPANY, root_type="Income")
+	cost_center = _first_cost_center(COMPANY)
+	return {
+		"doctype": "Sales Invoice",
+		"company": COMPANY,
+		"customer": CUSTOMER,
+		"posting_date": nowdate(),
+		"due_date": add_days(nowdate(), 30),
+		"currency": currency,
+		"conversion_rate": 1,
+		"selling_price_list": PRICE_LIST,
+		"price_list_currency": currency,
+		"plc_conversion_rate": 1,
+		"debit_to": receivable,
+		"remarks": marker,
+		"retailedge_branch": branch_name,
+		"items": [
+			{
+				"item_code": ITEM,
+				"qty": 2,
+				"rate": 1250,
+				"income_account": income,
+				"cost_center": cost_center,
+			}
+		],
+	}
+
+
 def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	"""Seed a deterministic ERPNext draft for list/read-scope acceptance only."""
 	marker = f"RetailEdge browser Working Branch fixture: {branch_name}"
@@ -213,40 +247,35 @@ def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	if existing:
 		return str(existing)
 
-	company = frappe.get_doc("Company", COMPANY)
-	currency = str(company.default_currency or "NGN")
-	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
-	income = _first_leaf_account(COMPANY, root_type="Income")
-	cost_center = _first_cost_center(COMPANY)
-	invoice = frappe.get_doc(
-		{
-			"doctype": "Sales Invoice",
-			"company": COMPANY,
-			"customer": CUSTOMER,
-			"posting_date": nowdate(),
-			"due_date": add_days(nowdate(), 30),
-			"currency": currency,
-			"conversion_rate": 1,
-			"selling_price_list": PRICE_LIST,
-			"price_list_currency": currency,
-			"plc_conversion_rate": 1,
-			"debit_to": receivable,
-			"remarks": marker,
-			"retailedge_branch": branch_name,
-			"items": [
-				{
-					"item_code": ITEM,
-					"qty": 1,
-					"rate": 1000,
-					"income_account": income,
-					"cost_center": cost_center,
-				}
-			],
-		}
-	)
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, marker))
 	if invoice.meta.has_field("branch"):
 		invoice.branch = branch_name
 	invoice.insert(ignore_permissions=True)
+	return str(invoice.name)
+
+
+def _ensure_cashier_unfinished_sale(branch_name: str) -> str:
+	"""Seed one cashier-owned Sales Invoice draft for restart/resume acceptance."""
+	existing = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"company": COMPANY,
+			"retailedge_branch": branch_name,
+			"remarks": CASHIER_UNFINISHED_MARKER,
+			"docstatus": 0,
+		},
+		"name",
+		order_by="creation asc",
+	)
+	if existing:
+		frappe.db.set_value("Sales Invoice", existing, "owner", CASHIER_USER, update_modified=False)
+		return str(existing)
+
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, CASHIER_UNFINISHED_MARKER))
+	if invoice.meta.has_field("branch"):
+		invoice.branch = branch_name
+	invoice.insert(ignore_permissions=True)
+	frappe.db.set_value("Sales Invoice", invoice.name, "owner", CASHIER_USER, update_modified=False)
 	return str(invoice.name)
 
 
@@ -358,6 +387,7 @@ def seed_rc3_personas() -> dict:
 		branch_name: _ensure_branch_sales_invoice(branch_name)
 		for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
+	cashier_unfinished_sale = _ensure_cashier_unfinished_sale(BRANCHES[0])
 	branch_cashier_expenses = {
 		branch_name: _ensure_branch_cashier_expense(branch_name)
 		for branch_name in (BRANCHES[0], BRANCHES[1])
@@ -371,6 +401,7 @@ def seed_rc3_personas() -> dict:
 		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
 		"branch_quotations": branch_quotations,
 		"branch_sales_invoices": branch_sales_invoices,
+		"cashier_unfinished_sale": cashier_unfinished_sale,
 		"branch_cashier_expenses": branch_cashier_expenses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
