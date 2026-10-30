@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate
+from frappe.utils import flt, getdate, nowdate
 
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
 from retailedge.operating_context import get_operating_context
@@ -43,14 +43,33 @@ def _safe_operating_context() -> dict[str, Any]:
 		return {}
 
 
-def _today_invoices(*, user: str, company: str = "", branch: str = "") -> list[dict[str, Any]]:
+def _resolve_work_date(work_date: str = "") -> str:
+	"""Resolve a cashier-selected business day without permitting future activity."""
+	today = getdate(nowdate())
+	try:
+		selected = getdate(work_date) if str(work_date or "").strip() else today
+	except Exception:
+		frappe.throw(_("Choose a valid work date."), frappe.ValidationError)
+		return str(today)
+	if selected > today:
+		frappe.throw(_("Work date cannot be in the future."), frappe.ValidationError)
+	return str(selected)
+
+
+def _invoices_for_date(
+	*,
+	user: str,
+	work_date: str,
+	company: str = "",
+	branch: str = "",
+) -> list[dict[str, Any]]:
 	if not frappe.db.exists("DocType", "Sales Invoice"):
 		return []
 
 	filters: dict[str, Any] = {
 		"docstatus": 1,
 		"owner": user,
-		"posting_date": nowdate(),
+		"posting_date": work_date,
 	}
 	if company and _has_field("Sales Invoice", "company"):
 		filters["company"] = company
@@ -79,12 +98,14 @@ def _today_invoices(*, user: str, company: str = "", branch: str = "") -> list[d
 	if branch_field and branch_field not in fields:
 		fields.append(branch_field)
 
+	# A single cashier business day is deliberately loaded completely so the KPI
+	# totals are authoritative. Only the presentation list is capped afterwards.
 	return frappe.get_all(
 		"Sales Invoice",
 		filters=filters,
 		fields=list(dict.fromkeys(fields)),
 		order_by="creation desc",
-		limit_page_length=RECENT_ACTIVITY_LIMIT,
+		limit_page_length=0,
 	)
 
 
@@ -169,30 +190,9 @@ def _normalize_activity(rows: list[dict[str, Any]]) -> tuple[dict[str, Any], lis
 	)
 
 
-@frappe.whitelist()
-def get_my_cashier_activity() -> dict[str, Any]:
-	"""Return only the signed-in cashier's own operational activity for today.
-
-	The provider deliberately does not grant Sales Invoice or Payment Entry read access.
-	It returns a bounded projection of submitted invoices owned by the current session
-	user and payment rows belonging to those invoices. Destination document permissions
-	remain unchanged.
-	"""
-	user = _assert_cashier_self_service_access()
-	operating_context = _safe_operating_context()
-	company = str(operating_context.get("company") or "").strip()
-	cashier_context = get_current_cashier_context(user=user, company=company or None)
-	company = str(cashier_context.get("company") or company or "").strip()
-	branch = str(cashier_context.get("branch") or operating_context.get("branch") or "").strip()
-
-	rows = _today_invoices(user=user, company=company, branch=branch)
-	summary, activity = _normalize_activity(rows)
-	payments_total, payment_breakdown = _payment_breakdown(
-		[str(row.get("name")) for row in rows if row.get("name")]
-	)
-	summary["payments_total"] = payments_total
-
+def _current_shift_payload(*, cashier_context: dict[str, Any], company: str, user: str) -> dict[str, Any]:
 	shift: dict[str, Any] = {
+		"available": True,
 		"open": False,
 		"opening_shift": cashier_context.get("linked_pos_opening_shift"),
 		"status": cashier_context.get("opening_shift_status"),
@@ -203,34 +203,93 @@ def get_my_cashier_activity() -> dict[str, Any]:
 		"available_cash": 0.0,
 		"message": cashier_context.get("message"),
 	}
-	if cashier_context.get("linked_pos_opening_shift"):
-		snapshot = get_shift_cash_snapshot(
-			opening_shift=cashier_context.get("linked_pos_opening_shift"),
-			company=company or None,
-			pos_profile=cashier_context.get("pos_profile"),
-			user=user,
-		)
-		shift.update(
-			{
-				"open": True,
-				"opening_cash": flt(snapshot.get("opening_cash")),
-				"cash_sales": flt(snapshot.get("cash_sales")),
-				"prior_expenses": flt(snapshot.get("prior_expenses")),
-				"available_cash": flt(snapshot.get("available_before")),
-				"message": snapshot.get("message") or shift.get("message"),
-			}
-		)
+	if not cashier_context.get("linked_pos_opening_shift"):
+		return shift
 
+	snapshot = get_shift_cash_snapshot(
+		opening_shift=cashier_context.get("linked_pos_opening_shift"),
+		company=company or None,
+		pos_profile=cashier_context.get("pos_profile"),
+		user=user,
+	)
+	shift.update(
+		{
+			"open": True,
+			"opening_cash": flt(snapshot.get("opening_cash")),
+			"cash_sales": flt(snapshot.get("cash_sales")),
+			"prior_expenses": flt(snapshot.get("prior_expenses")),
+			"available_cash": flt(snapshot.get("available_before")),
+			"message": snapshot.get("message") or shift.get("message"),
+		}
+	)
+	return shift
+
+
+@frappe.whitelist()
+def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
+	"""Return the signed-in cashier's own operational activity for one selected day.
+
+	The provider deliberately does not grant Sales Invoice or Payment Entry read access.
+	It returns a bounded presentation of submitted invoices owned by the current session
+	user while calculating the selected day's totals from the complete matching set.
+	Current-shift cash position is intentionally shown only for today; a historical date
+	must never be labelled with the user's present open-shift values.
+	"""
+	user = _assert_cashier_self_service_access()
+	selected_date = _resolve_work_date(work_date)
+	today = str(getdate(nowdate()))
+	is_today = selected_date == today
+
+	operating_context = _safe_operating_context()
+	company = str(operating_context.get("company") or "").strip()
+	cashier_context = get_current_cashier_context(user=user, company=company or None)
+	company = str(cashier_context.get("company") or company or "").strip()
+	branch = str(cashier_context.get("branch") or operating_context.get("branch") or "").strip()
+
+	rows = _invoices_for_date(
+		user=user,
+		work_date=selected_date,
+		company=company,
+		branch=branch,
+	)
+	summary, all_activity = _normalize_activity(rows)
+	payments_total, payment_breakdown = _payment_breakdown(
+		[str(row.get("name")) for row in rows if row.get("name")]
+	)
+	summary["payments_total"] = payments_total
+
+	if is_today:
+		shift = _current_shift_payload(cashier_context=cashier_context, company=company, user=user)
+	else:
+		shift = {
+			"available": False,
+			"open": False,
+			"opening_shift": "",
+			"status": "",
+			"pos_profile": "",
+			"opening_cash": 0.0,
+			"cash_sales": 0.0,
+			"prior_expenses": 0.0,
+			"available_cash": 0.0,
+			"message": _("Shift position is available for today only."),
+		}
+
+	recent_activity = all_activity[:RECENT_ACTIVITY_LIMIT]
 	return {
-		"date": nowdate(),
+		"date": selected_date,
+		"today": today,
+		"is_today": is_today,
 		"user": user,
 		"company": company,
 		"branch": branch,
-		"currency": next((item.get("currency") for item in activity if item.get("currency")), ""),
+		"currency": next((item.get("currency") for item in all_activity if item.get("currency")), ""),
 		"summary": summary,
 		"shift": shift,
 		"payment_breakdown": payment_breakdown,
-		"recent_activity": activity,
-		"empty": not bool(activity),
-		"empty_message": "No sales or returns have been recorded by you today." if not activity else "",
+		"recent_activity": recent_activity,
+		"activity_total": len(all_activity),
+		"activity_limit": RECENT_ACTIVITY_LIMIT,
+		"activity_truncated": len(all_activity) > RECENT_ACTIVITY_LIMIT,
+		"empty": not bool(all_activity),
+		"empty_message": _("No sales or returns were recorded by you on this day.") if not all_activity else "",
 	}
