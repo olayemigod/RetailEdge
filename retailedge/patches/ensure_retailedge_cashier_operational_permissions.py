@@ -27,6 +27,7 @@ SALES_INVOICE_PERMISSIONS = (
 	"create",
 	"write",
 	"submit",
+	"print",
 )
 
 
