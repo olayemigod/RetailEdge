@@ -196,7 +196,7 @@ test("RetailEdge cashier sidebar preserves permission-authorized operational too
 			waitUntil: "domcontentloaded",
 			timeout: 30_000,
 		});
-		await expect(page.getByText("My Work", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
 		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
 		await expect(sidebar).toBeVisible();
 
@@ -211,7 +211,7 @@ test("RetailEdge cashier sidebar preserves permission-authorized operational too
 			await expect(sidebar.getByText(label, { exact: true }).first()).toBeAttached({ timeout: 15_000 });
 		}
 
-		await expect(sidebar.getByText("Professional Selling", { exact: true })).toHaveCount(0);
+		await expect(sidebar.getByText("Professional Selling", { exact: true }).first()).toBeAttached({ timeout: 15_000 });
 		await expect(sidebar.getByText("Asset Management", { exact: true })).toHaveCount(0);
 		await expect(sidebar.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
 
@@ -299,7 +299,7 @@ test("canonical RetailEdge cashier lands on My Work with Home navigation, histor
 			timeout: 30_000,
 		});
 		await expect(page).toHaveURL(/cashier-my-work/, { timeout: 20_000 });
-		await expect(page.getByText("My Work", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
 
 		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
 		await expect(sidebar).toBeVisible();
