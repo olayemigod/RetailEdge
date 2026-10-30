@@ -74,7 +74,10 @@ def _native_source_is_available(source: dict[str, Any]) -> bool:
 	if kind == "report":
 		return _report_is_permitted(target)
 	if kind == "page":
-		return _page_is_permitted(target)
+		# A native control workspace must not stay visible merely because a nested
+		# RetailEdge Page record is readable. Reuse the same functional dashboard /
+		# report capability gate that applies to top-level navigation.
+		return _page_is_functionally_available(target)
 	return False
 
 
@@ -124,9 +127,10 @@ def _page_is_functionally_available(
 			lambda: bool(assert_can_access_bank_transaction_matching(user=frappe.session.user))
 		)
 
-	# The master navigation layer has already checked Frappe Page permission for
-	# ordinary Pages. This final layer only owns functional/product capability gates.
-	return True
+	# Re-check ordinary Page permission at the final composition boundary. This is
+	# intentionally redundant for master-registry links and also protects Pages that
+	# final composition adds dynamically (for example cashier My Work).
+	return _page_is_permitted(page_name)
 
 
 def _item_is_functionally_available(
