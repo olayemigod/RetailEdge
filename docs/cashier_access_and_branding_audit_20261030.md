@@ -2,13 +2,14 @@
 
 ## Scope
 
-This audit follows the `browser-cashier@example.com` acceptance pass on PR #239. It answers three questions:
+This audit follows the `browser-cashier@example.com` acceptance pass on PR #239. It answers four questions:
 
 1. Which RetailEdge destinations should a canonical `RetailEdgeCashier` see?
-2. How should Professional Selling behave when a cashier has some, but not necessarily all, selling-document permissions?
-3. Why can a Company Profile logo uploaded by an administrator still render as a broken image for an operational role?
+2. Which ERPNext selling documents should the canonical cashier operate through Professional Selling?
+3. Why could different RetailEdge routes show different sidebar contents for the same cashier?
+4. Why can a Company Profile logo uploaded by an administrator still render as a broken image for an operational role?
 
-The change is presentation/access reconciliation. It must not manufacture transaction or accounting authority.
+The governing rule is permission-first: navigation exposes authorized work but does not itself grant authority. ERPNext documents, DocPerm, Workflow, document state and RetailEdge Company/Branch scope remain authoritative.
 
 ## Current platform baseline
 
@@ -19,74 +20,118 @@ Relevant v16 behavior:
 - Frappe permissions are granular by document action: Read, Create, Write, Submit, Print, Email and other actions remain independent authorities.
 - Draft documents (`docstatus = 0`) remain editable only where the current user has the required native permission/workflow authority.
 - ERPNext selling remains document-driven: Quotation, Sales Order, Delivery Note, Sales Invoice and Payment Entry retain their own permissions and state rules.
-- Frappe v16 persistent sidebar guidance treats navigation as curated presentation: sidebar entries do not grant permission and inaccessible destinations should be omitted.
+- Frappe navigation is presentation; sidebar entries do not grant permission and inaccessible destinations should be omitted.
 - Frappe public uploads are served from `/files/...`; private uploads are served from `/private/files/...` and require authorization when the file is fetched.
-- POS products commonly separate transaction authority from device/printer configuration authority. A cashier/workstation user may need access to receipt-printer setup without receiving accounting or administration rights.
 
-## Existing RetailEdge cashier authority
+## Canonical RetailEdge cashier authority
 
-The canonical permission regression suite and migration establish the cashier as a daily sales/POS persona, not a general Sales or Accounts user.
+The cashier is a daily POS and customer-selling persona, not a general Accounts or back-office user.
 
-### Native document permissions intentionally granted
+### Native master/reference access
 
-`RetailEdgeCashier` receives:
+`RetailEdgeCashier` receives the read/select access required for selling and POS context, including:
 
 - Company — read only.
-- Branch, POS Profile, Warehouse, Mode of Payment, Customer, Item, UOM, Price List, Item Price — read/select.
-- Sales Invoice — read, create, write, submit and print; no cancel/delete/amend/email.
-- RetailEdge Cashier Expense — cashier-scoped operational create/read/write/submit through its existing role and server scope.
+- Branch, POS Profile, Warehouse, Mode of Payment, Customer, Item, UOM, Price List and Item Price — read/select.
 
-The canonical role does **not** receive Payment Entry, Journal Entry, Purchase Invoice, Quotation, Sales Order or Delivery Note authority merely by being a RetailEdge cashier. A particular user may nevertheless receive additional native selling permissions through another assigned role or a deliberate customer permission design.
+### Governed selling-chain permissions
 
-## Professional Selling: permission-aware workspace, not persona gate
+The canonical cashier now receives the same bounded operational permission set on:
 
-Professional Selling is an EdgeSuite workspace over ERPNext selling documents. Its Page must therefore not block a user merely because the user is a cashier when that user already has legitimate selling-document authority.
+- Quotation
+- Sales Order
+- Delivery Note
+- Sales Invoice
+
+For each of those documents the role receives:
+
+- Read
+- Create
+- Write
+- Submit
+- Print
+
+The role does **not** receive Cancel, Delete, Amend or Email by default. Native ERPNext validation, Workflow, stock/accounting rules, document state and RetailEdge Company/Branch scope remain authoritative.
+
+This makes Professional Selling a complete everyday cashier selling workspace: a cashier can quote, take an order, fulfil/deliver where appropriate, invoice, edit permitted drafts, submit permitted documents and use downstream conversions when ERPNext allows them.
+
+### Accounting authority remains separate
+
+The canonical cashier still does **not** receive generic Payment Entry, Journal Entry or Purchase Invoice authority merely by being a cashier.
+
+Customer-payment collection therefore remains a distinct capability decision. Professional Selling may expose payment actions only where the current user has the required payment authority. If ProcessEdge makes customer-payment collection inherent to the cashier role, it should use a constrained customer-receipt boundary scoped to permitted customer documents, Company/Branch and approved payment modes rather than silently granting broad accounting access.
+
+## Professional Selling: permission-aware workspace
+
+Professional Selling is the EdgeSuite everyday workspace over ERPNext selling truth.
 
 The corrected contract is:
 
 - both canonical and legacy RetailEdge cashier role names may open the `professional-selling` Page;
-- opening the Page grants **no** Quotation, Sales Order, Delivery Note, Sales Invoice or Payment Entry permission;
+- the cashier operational permission baseline supplies the governed Quotation → Sales Order → Delivery Note → Sales Invoice authority described above;
+- opening the Page itself still grants no document authority;
 - the workspace displays a document stage only when that document is available and the current user can read or create it;
-- create controls remain tied to the document's native Create permission;
+- create controls remain tied to native Create permission;
 - record lists remain tied to native Read permission and current Company/Branch scope;
 - draft edit/completion and submission continue through the existing permission/workflow-aware completion endpoints;
-- conversion actions appear only when the downstream document can be created and the source record is in a valid state; every conversion endpoint revalidates permissions and Company/Branch context;
-- customer payment actions remain independently gated by Payment Entry authority and the guided-payment server boundary;
-- Print & Share continues through the document-output permission boundary;
-- Native Desk remains an Advanced escape only where the user is independently allowed to use it.
+- conversion actions appear only when the downstream document can be created and the source record is in a valid state; target endpoints revalidate authority and Company/Branch context;
+- payment actions remain independently gated by the governed payment boundary;
+- Print & Share remains independently document-permission checked;
+- Native Desk remains an Advanced escape only where independently authorized.
 
-Therefore a role-exact `RetailEdgeCashier` currently sees Sales Invoice capability inside Professional Selling because Sales Invoice is the selling document that role owns. If that same user is deliberately granted Quotation, Sales Order or Delivery Note authority, those corresponding stages and allowed actions appear automatically without another RetailEdge persona change.
+For a role-exact canonical cashier, Professional Selling is therefore expected to expose all four selling stages: **Quotation, Sales Order, Delivery Note and Sales Invoice**.
 
-This is the intended distinction between **workspace access** and **business authority**.
+## One sidebar contract across RetailEdge routes
+
+My Work, Professional Selling, Reports Centre and the other EdgeSuite pages are intended to render the **same final permission-aware Business Hub navigation**, not page-specific cashier menus.
+
+The inconsistency found during browser acceptance had two causes:
+
+1. Earlier PR work had introduced a second cashier presentation projection that could subtract valid destinations after the normal permission-aware registry had already filtered them. That allowlist has been removed.
+2. Frappe Desk keeps Page/Vue instances mounted across route changes. My Work could therefore keep an older navigation snapshot while a newly opened Professional Selling page resolved a newer one. The shared Business Hub context is also cached briefly in the browser. This made two routes appear to have different sidebars even though they were intended to use the same server contract.
+
+The correction is:
+
+- final navigation remains owned by `navigation_consolidation.get_retailedge_business_hub_context`;
+- My Work clears the shared navigation cache and reloads its mounted component when the route is shown again;
+- Professional Selling clears the same cache before its page-show refresh;
+- Reports Centre obtains its sidebar from the same final navigation contract rather than its older report-context snapshot;
+- browser acceptance now traverses My Work → Professional Selling → My Work and requires Professional Selling to remain present throughout.
+
+A route change must therefore not add or remove sidebar capabilities unless the user's effective permissions, readiness or operating context actually changed.
 
 ## RetailEdge/EdgeSuite Pages whose own boundaries support the cashier
 
-The audited presentation may expose destinations that are independently permitted, including:
+Expected destinations include, where independently permitted:
 
-- My Work.
-- Start POS.
-- Make Sale / Sales Invoice operations where normal Sales Invoice permission permits them.
-- Professional Selling as the permission-aware selling workspace described above.
-- Cashier Expenses.
-- Expense Register, subject to its report capability and cashier row scope.
-- Reports Centre, whose catalogue remains permission-filtered destination by destination.
-- Operating Context.
-- Company Profile as a read-only business identity view for a cashier; write/upload controls remain permission-driven.
-- Devices & Printing (`edge-printing`), which is a shared EdgeSuite workstation/device surface and does not grant transaction authority.
-- Document Output & Sharing, whose operations remain document-permission and Company/Branch checked.
-- Any other registry item that survives the existing native Frappe permission check and RetailEdge functional Page capability check.
+- Home → My Work
+- Point of Sale → Start POS and permitted POS operational links
+- Sales → Make Sale
+- Sales → Professional Selling
+- Sales → Document Output & Sharing
+- Expenses → Cashier Expenses / Expense Register as applicable
+- Reports → Reports Centre
+- Business Setup → Operating Context / Company Profile / Devices & Printing
+- other registry destinations that survive native Frappe permission and RetailEdge functional capability checks
+
+Professional Selling provides the normal Quotation, Sales Order, Delivery Note and Sales Invoice journey rather than advertising separate native DocType routes as the everyday experience.
 
 ### Explicitly not granted by this audit
 
-Professional Selling Page access does not itself add Quotation, Sales Order, Delivery Note or Payment Entry authority. It also does not add banking, Journal Entry, purchase, asset, warranty, management dashboard, audit-control, stock-management or financial-report authority.
+The selling permission correction does not add:
 
-A cashier who lacks Payment Entry Create permission must not receive a Make Payment action merely because Professional Selling is visible. If ProcessEdge later chooses to make customer-payment collection an inherent `RetailEdgeCashier` capability, that requires a separately governed, constrained customer-receipt design rather than silently giving the role broad accounting authority.
+- generic Payment Entry or Journal Entry authority;
+- banking/reconciliation controls;
+- purchasing authority;
+- management/audit dashboards without their own permission;
+- asset/service/warranty workspaces without underlying authority;
+- financial statements merely because Reports Centre is accessible.
 
-## Root cause: sidebar regression
+## Reports Centre navigation consistency
 
-PR #239 added a second presentation projection after the normal permission-aware registry had already filtered navigation. That projection used a small hard-coded cashier allowlist and therefore removed legitimate surfaces even when their real permission boundaries allowed them.
+Reports Centre is a catalogue of permitted report destinations, not a second navigation authority. Its EdgeSuite shell must use the same final sidebar contract as My Work and Professional Selling.
 
-The correction removes the persona allowlist. Final composition now preserves the already-authorized registry result and continues to apply functional Page checks for dashboards, reports, banking and native workspaces. Professional Selling follows the same rule: its Page can be shown to the cashier, while the workspace itself derives usable documents/actions from effective native permission truth.
+Opening Reports Centre must not cause hidden groups such as Asset Management or Service & Warranty to reappear for a cashier when the final navigation contract has filtered them out.
 
 ## Company logo root cause and design
 
@@ -94,7 +139,7 @@ RetailEdge Company Profile is the presentation authority for the business logo u
 
 A Company logo is tenant branding, not confidential business evidence. The selected design is therefore:
 
-- keep Company Profile create/write/logo-change authority exactly as configured today;
+- keep Company Profile create/write/logo-change authority exactly as configured;
 - require logo selection to come from a File already attached to that Company Profile;
 - if the selected file is private, create/reuse a public Frappe copy and persist its `/files/...` URL as the Company Profile logo;
 - migrate existing private Company Profile logo references to public copies during `bench migrate`;
@@ -105,31 +150,26 @@ This makes the branding asset readable by every role while keeping branding muta
 
 ## Acceptance matrix
 
-### Cashier sidebar
+### Cashier selling
 
-Expected visible when independently authorized:
+Expected:
 
-- Home → My Work
-- Point of Sale → Start POS / permitted POS operational links
-- Sales → Make Sale and Professional Selling
-- Sales → Document Output & Sharing as available
-- Expenses → Cashier Expenses / Expense Register as available
-- Reports → Reports Centre
-- Business Setup → Operating Context / Company Profile / Devices & Printing
-- other native read-only destinations only where the registry and Frappe permissions already allow them
+- Professional Selling is visible under Sales from My Work and other RetailEdge routes.
+- Professional Selling exposes Quotation, Sales Order, Delivery Note and Sales Invoice.
+- Draft editing, submission and conversions appear only when native state/workflow permits them.
+- Sales documents remain Company/Branch scoped.
+- Print is available on the governed selling documents.
+- Cancel/Delete/Amend/Email remain unavailable unless separately granted.
+- generic Payment Entry remains unavailable until a separate payment-capability decision is implemented.
 
-Inside Professional Selling, the exact stages/actions are permission-derived. The role-exact browser cashier is expected to see Sales Invoice but not Quotation, Sales Order or Delivery Note because those extra native document permissions are intentionally absent from the test persona.
+### Sidebar consistency
 
-Expected absent when not authorized:
+Expected across My Work, Professional Selling and Reports Centre:
 
-- Payment actions without Payment Entry authority
-- Quotation/Sales Order/Delivery Note stages where those native permissions are absent
-- Payment & Settlement Analysis
-- banking/reconciliation controls
-- accounting/financial statements
-- purchase operations
-- manager/auditor control surfaces
-- asset/service workspaces without underlying authority
+- the same permission-authorized navigation families are present;
+- route changes do not restore stale or hidden menu groups;
+- Professional Selling remains under Sales after navigating away and back;
+- Asset Management and Service & Warranty remain absent for a role-exact cashier when their underlying authority is absent.
 
 ### Company logo
 
@@ -142,15 +182,15 @@ After migrate:
 
 ## Validation required
 
-1. Unit/integration contracts for capability-driven navigation, Professional Selling Page access and private-to-public logo normalization.
-2. Browser acceptance proving a role-exact cashier can open Professional Selling while unavailable document stages/payment actions remain absent.
-3. Exact-head lint, integration, upgrade, EdgeSuite compatibility and browser-persona gates.
-4. `retail.local` acceptance using `browser-cashier@example.com` after pull, migrate and asset build:
-   - confirm the permission-authorized sidebar;
-   - open Professional Selling and confirm Sales Invoice is usable;
-   - confirm Quotation/Sales Order/Delivery Note appear only when that user has the corresponding native authority;
-   - confirm draft edit/completion, conversion and payment actions follow effective permissions/document state;
-   - open Reports Centre and verify only permitted report catalogue entries;
-   - open Devices & Printing and Document Output & Sharing;
-   - verify Company logo loads in the shell;
-   - verify cashier still cannot open banking/accounting/management destinations directly.
+1. Integration tests proving the role-exact cashier has Read/Create/Write/Submit/Print on Quotation, Sales Order, Delivery Note and Sales Invoice while broad accounting authority remains absent.
+2. Browser acceptance proving all four Professional Selling stages are visible to the role-exact cashier.
+3. Browser acceptance proving My Work → Professional Selling → My Work keeps the same final sidebar and does not restore unauthorized groups.
+4. Exact-head lint, integration, upgrade, EdgeSuite compatibility and browser-persona gates.
+5. `retail.local` acceptance after pull, migrate and asset build:
+   - confirm Professional Selling under Sales on My Work;
+   - open Professional Selling and confirm all four selling stages;
+   - exercise permitted draft edit/completion and conversion paths;
+   - return to My Work and confirm Professional Selling remains in the sidebar;
+   - open Reports Centre and confirm unauthorized Asset/Service groups do not reappear;
+   - verify Devices & Printing, Document Output & Sharing and Company logo remain available as governed;
+   - verify banking/accounting/management destinations remain absent where unauthorized.
