@@ -109,25 +109,26 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				actual_roles = {row.role for row in frappe.get_doc("User", email).roles}
 				self.assertEqual(actual_roles, set(expected_roles))
 
-	def test_cashier_has_sales_authority_without_accounting_posting_authority(self):
+	def test_cashier_has_governed_selling_authority_without_accounting_posting_authority(self):
 		user = "permission-cashier@example.com"
 		self.assert_permissions(user, "Company", {"read": True, "write": False, "create": False})
 		self.assert_permissions(user, "Customer", {"read": True, "write": False, "create": False})
-		self.assert_permissions(
-			user,
-			"Sales Invoice",
-			{
-				"read": True,
-				"create": True,
-				"write": True,
-				"submit": True,
-				"print": True,
-				"email": False,
-				"cancel": False,
-				"delete": False,
-				"amend": False,
-			},
-		)
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			self.assert_permissions(
+				user,
+				doctype,
+				{
+					"read": True,
+					"create": True,
+					"write": True,
+					"submit": True,
+					"print": True,
+					"email": False,
+					"cancel": False,
+					"delete": False,
+					"amend": False,
+				},
+			)
 		for doctype in ("Payment Entry", "Journal Entry", "Purchase Invoice"):
 			self.assert_permissions(
 				user,
