@@ -139,3 +139,27 @@ test("cashier has Sales Invoice print authority and can open Document Output & S
 		await context.close();
 	}
 });
+
+test("cashier final navigation exposes Professional Selling and Reports Centre does not restore filtered groups", async ({ browser }) => {
+	const { context, page } = await newCashier(browser);
+	try {
+		const navigation = await apiGet(
+			context,
+			"retailedge.navigation_consolidation.get_retailedge_business_hub_context"
+		);
+		expect(navigation.response.ok(), navigation.text).toBeTruthy();
+		const groups = navigation.payload.message?.navigation_groups || [];
+		const targets = groups.flatMap((group) => group.items || []).map((item) => item.target);
+		const groupLabels = groups.map((group) => group.label);
+
+		expect(targets).toContain("professional-selling");
+		expect(groupLabels).not.toContain("Asset Management");
+		expect(groupLabels).not.toContain("Service & Warranty");
+
+		await openProductPage(page, "reports-centre", "Reports Centre");
+		await expect(page.getByText("Asset Management", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
+	} finally {
+		await context.close();
+	}
+});
