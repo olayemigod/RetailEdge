@@ -3,101 +3,121 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from retailedge.navigation_visibility import _project_cashier_navigation
+from retailedge.navigation_visibility import filter_context_for_runtime_capabilities
 
 
 class TestCashierNavigationProjection(unittest.TestCase):
-	@patch("retailedge.navigation_visibility.frappe.has_permission", return_value=False)
-	@patch("retailedge.navigation_visibility.frappe.get_roles", return_value=["RetailEdgeCashier"])
-	def test_thin_cashier_keeps_only_self_service_and_pos_when_sales_create_is_denied(
+	@patch("retailedge.navigation_visibility._page_is_functionally_available")
+	def test_permission_authorized_cashier_surfaces_are_not_removed_by_persona_projection(
 		self,
-		_roles,
-		_has_permission,
+		page_available,
 	):
+		allowed_pages = {
+			"cashier-my-work",
+			"make-sale",
+			"cashier-expenses",
+			"expense-register",
+			"reports-centre",
+			"operating-context",
+			"company-profile",
+			"edge-printing",
+			"document-output-sharing",
+		}
+		page_available.side_effect = lambda target, **_kwargs: target in allowed_pages
 		context = {
+			"context": {"company": "ACME", "branch": "Main"},
 			"navigation_groups": [
+				{
+					"key": "home",
+					"items": [
+						{"label": "My Work", "target_type": "Page", "target": "cashier-my-work"},
+					],
+				},
+				{
+					"key": "point-of-sale",
+					"items": [
+						{"label": "Start POS", "target_type": "URL", "target": "/pos/"},
+					],
+				},
 				{
 					"key": "sales",
 					"items": [
-						{"label": "My Work", "target_type": "Page", "target": "cashier-my-work"},
-						{"label": "Start POS", "target_type": "URL", "target": "/pos/"},
 						{"label": "Make Sale", "target_type": "Page", "target": "make-sale"},
+						{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice"},
+						{"label": "Document Output & Sharing", "target_type": "Page", "target": "document-output-sharing"},
+						{"label": "Professional Selling", "target_type": "Page", "target": "professional-selling"},
+					],
+				},
+				{
+					"key": "expenses",
+					"items": [
+						{"label": "Cashier Expenses", "target_type": "Page", "target": "cashier-expenses"},
+						{"label": "Expense Register", "target_type": "Page", "target": "expense-register"},
+					],
+				},
+				{
+					"key": "reports",
+					"items": [
 						{"label": "Reports Centre", "target_type": "Page", "target": "reports-centre"},
 					],
 				},
+				{
+					"key": "business-setup",
+					"items": [
+						{"label": "Operating Context", "target_type": "Page", "target": "operating-context"},
+						{"label": "Company Profile", "target_type": "Page", "target": "company-profile"},
+						{"label": "Devices & Printing", "target_type": "Page", "target": "edge-printing"},
+					],
+				},
+			],
+			"quick_actions": [
+				{"label": "Quick Sale", "target_type": "DocType", "target": "Sales Invoice"},
+			],
+		}
+
+		filtered = filter_context_for_runtime_capabilities(context)
+		visible = {
+			item["target"]
+			for group in filtered["navigation_groups"]
+			for item in group.get("items") or []
+		}
+
+		self.assertIn("cashier-my-work", visible)
+		self.assertIn("/pos/", visible)
+		self.assertIn("make-sale", visible)
+		self.assertIn("Sales Invoice", visible)
+		self.assertIn("document-output-sharing", visible)
+		self.assertIn("cashier-expenses", visible)
+		self.assertIn("expense-register", visible)
+		self.assertIn("reports-centre", visible)
+		self.assertIn("operating-context", visible)
+		self.assertIn("company-profile", visible)
+		self.assertIn("edge-printing", visible)
+		# Professional Selling is still absent when its own Page boundary rejects the
+		# cashier. Navigation presentation must not manufacture Quote/Order/Delivery
+		# authority that the cashier role does not possess.
+		self.assertNotIn("professional-selling", visible)
+		self.assertEqual(filtered["quick_actions"][0]["target"], "Sales Invoice")
+
+	@patch("retailedge.navigation_visibility._page_is_functionally_available")
+	def test_page_capability_denial_still_removes_manager_only_surfaces(self, page_available):
+		page_available.return_value = False
+		context = {
+			"context": {"company": "ACME", "branch": "Main"},
+			"navigation_groups": [
 				{
 					"key": "management",
 					"items": [
 						{"label": "Assets", "target_type": "Page", "target": "assets-control"},
 						{"label": "Warranty", "target_type": "Page", "target": "service-warranty-control"},
 					],
-				},
-			],
-			"quick_actions": [
-				{"label": "Start POS", "target_type": "URL", "target": "/pos/"},
-				{"label": "Quick Sale", "target_type": "DocType", "target": "Sales Invoice"},
-			],
-		}
-
-		_project_cashier_navigation(context)
-
-		self.assertEqual([group["key"] for group in context["navigation_groups"]], ["sales"])
-		self.assertEqual(
-			[item["target"] for item in context["navigation_groups"][0]["items"]],
-			["cashier-my-work", "/pos/"],
-		)
-		self.assertEqual([action["target"] for action in context["quick_actions"]], ["/pos/"])
-
-	@patch("retailedge.navigation_visibility.frappe.db.exists", return_value=True)
-	@patch("retailedge.navigation_visibility.frappe.has_permission", return_value=True)
-	@patch("retailedge.navigation_visibility.frappe.get_roles", return_value=["RetailEdgeCashier"])
-	def test_cashier_keeps_make_sale_and_quick_sale_only_when_native_create_is_granted(
-		self,
-		_roles,
-		_has_permission,
-		_exists,
-	):
-		context = {
-			"navigation_groups": [
-				{
-					"key": "sales",
-					"items": [
-						{"label": "My Work", "target_type": "Page", "target": "cashier-my-work"},
-						{"label": "Make Sale", "target_type": "Page", "target": "make-sale"},
-					],
-				}
-			],
-			"quick_actions": [
-				{"label": "Quick Sale", "target_type": "DocType", "target": "Sales Invoice"},
-			],
-		}
-
-		_project_cashier_navigation(context)
-
-		self.assertEqual(
-			[item["target"] for item in context["navigation_groups"][0]["items"]],
-			["cashier-my-work", "make-sale"],
-		)
-		self.assertEqual([action["target"] for action in context["quick_actions"]], ["Sales Invoice"])
-
-	@patch(
-		"retailedge.navigation_visibility.frappe.get_roles",
-		return_value=["RetailEdgeCashier", "RetailEdgeManager"],
-	)
-	def test_manager_who_also_has_cashier_role_is_not_reduced_to_cashier_menu(self, _roles):
-		context = {
-			"navigation_groups": [
-				{
-					"key": "management",
-					"items": [{"label": "Assets", "target_type": "Page", "target": "assets-control"}],
 				}
 			],
 			"quick_actions": [],
 		}
 
-		_project_cashier_navigation(context)
-
-		self.assertEqual(context["navigation_groups"][0]["items"][0]["target"], "assets-control")
+		filtered = filter_context_for_runtime_capabilities(context)
+		self.assertEqual(filtered["navigation_groups"], [])
 
 
 if __name__ == "__main__":
