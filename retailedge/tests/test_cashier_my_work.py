@@ -49,9 +49,6 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertEqual(filters["posting_date"], "2026-10-24")
 		self.assertEqual(filters["company"], "Retail Co")
 		self.assertEqual(filters["retailedge_branch"], "Main")
-		# Totals must be authoritative for the selected day. The response may slice
-		# the displayed activity list afterwards, but must not calculate KPIs from
-		# an arbitrary first page of invoices.
 		self.assertEqual(get_all.call_args.kwargs["limit_page_length"], 0)
 
 	@patch("retailedge.cashier_self_service.nowdate", return_value="2026-10-30")
@@ -133,7 +130,7 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertIn('label="Work date"', component)
 		self.assertIn('work_date: this.selectedDate', component)
 		self.assertIn('No activity for this day.', component)
-		self.assertIn('Start POS', component)
+		self.assertIn('window.open(item.target, "_blank", "noopener,noreferrer")', component)
 		self.assertIn('CASHIER_HOME = "cashier-my-work"', business_hub)
 
 
