@@ -25,6 +25,7 @@ BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
 EXPENSE_CATEGORY = "Browser Working Branch Expense"
 CASHIER_USER = "browser-cashier@example.com"
 CASHIER_UNFINISHED_MARKER = "RetailEdge browser cashier unfinished sale fixture"
+CASHIER_RECEIPT_MARKER = "RetailEdge browser cashier unpaid receipt fixture"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -279,6 +280,33 @@ def _ensure_cashier_unfinished_sale(branch_name: str) -> str:
 	return str(invoice.name)
 
 
+def _ensure_cashier_receivable_invoice(branch_name: str) -> str:
+	"""Seed one submitted unpaid cashier-visible invoice for constrained receipt acceptance."""
+	existing = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"company": COMPANY,
+			"retailedge_branch": branch_name,
+			"remarks": CASHIER_RECEIPT_MARKER,
+			"docstatus": 1,
+		},
+		"name",
+		order_by="creation asc",
+	)
+	if existing:
+		frappe.db.set_value("Sales Invoice", existing, "owner", CASHIER_USER, update_modified=False)
+		return str(existing)
+
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, CASHIER_RECEIPT_MARKER))
+	if invoice.meta.has_field("branch"):
+		invoice.branch = branch_name
+	invoice.flags.ignore_permissions = True
+	invoice.insert(ignore_permissions=True)
+	invoice.submit()
+	frappe.db.set_value("Sales Invoice", invoice.name, "owner", CASHIER_USER, update_modified=False)
+	return str(invoice.name)
+
+
 def _ensure_expense_category() -> str:
 	if frappe.db.exists("RetailEdge Expense Category", EXPENSE_CATEGORY):
 		return EXPENSE_CATEGORY
@@ -388,6 +416,7 @@ def seed_rc3_personas() -> dict:
 		for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 	cashier_unfinished_sale = _ensure_cashier_unfinished_sale(BRANCHES[0])
+	cashier_receivable_invoice = _ensure_cashier_receivable_invoice(BRANCHES[0])
 	branch_cashier_expenses = {
 		branch_name: _ensure_branch_cashier_expense(branch_name)
 		for branch_name in (BRANCHES[0], BRANCHES[1])
@@ -402,6 +431,7 @@ def seed_rc3_personas() -> dict:
 		"branch_quotations": branch_quotations,
 		"branch_sales_invoices": branch_sales_invoices,
 		"cashier_unfinished_sale": cashier_unfinished_sale,
+		"cashier_receivable_invoice": cashier_receivable_invoice,
 		"branch_cashier_expenses": branch_cashier_expenses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
