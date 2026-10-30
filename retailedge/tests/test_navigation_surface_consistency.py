@@ -32,3 +32,25 @@ def test_professional_selling_cashier_page_access_is_declared_and_upgrade_reconc
 
 	patches = read("patches.txt")
 	assert "retailedge.patches.ensure_retailedge_cashier_professional_selling_access" in patches
+
+
+def test_cashier_selling_document_permissions_are_upgrade_reconciled():
+	permission_patch = read("patches/ensure_retailedge_cashier_selling_document_permissions.py")
+	for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+		assert f'"{doctype}"' in permission_patch
+	for permission_type in ("read", "create", "write", "submit", "print"):
+		assert f'"{permission_type}"' in permission_patch
+
+	patches = read("patches.txt")
+	assert "retailedge.patches.ensure_retailedge_cashier_selling_document_permissions" in patches
+
+
+def test_persisted_sales_pages_refresh_the_shared_navigation_snapshot_on_show():
+	my_work = read("retailedge/page/cashier_my_work/cashier_my_work.js")
+	professional_selling = read("retailedge/page/professional_selling/professional_selling.js")
+	for source in (my_work, professional_selling):
+		assert "__retailedgeBusinessHubContextCache = null" in source
+		assert "__retailedgeBusinessHubContextRequest = null" in source
+
+	assert "refreshMountedMyWork(wrapper)" in my_work
+	assert 'CustomEvent("retailedge-professional-selling-page-show")' in professional_selling
