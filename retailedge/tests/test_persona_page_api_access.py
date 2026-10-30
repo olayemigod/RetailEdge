@@ -101,6 +101,15 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				frappe.set_user(user)
 				self.assertTrue(bool(frappe.get_doc("Page", "retailedge-business-hub").is_permitted()))
 
+	def test_cashier_can_open_permission_aware_professional_selling(self):
+		frappe.set_user(CASHIER_USER)
+		self.assertTrue(bool(frappe.get_doc("Page", "professional-selling").is_permitted()))
+		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="read")))
+		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="write")))
+		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="submit")))
+		# Opening the workspace does not grant broad accounting authority.
+		self.assertFalse(bool(frappe.has_permission("Payment Entry", ptype="create")))
+
 	def test_auditor_does_not_gain_business_hub_page_access(self):
 		frappe.set_user("permission-auditor@example.com")
 		self.assertFalse(bool(frappe.get_doc("Page", "retailedge-business-hub").is_permitted()))
