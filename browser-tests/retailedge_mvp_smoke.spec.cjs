@@ -189,7 +189,7 @@ test("RetailEdge manager reaches Reports Centre and can search the permitted cat
 	}
 });
 
-test("RetailEdge cashier menu does not advertise management reporting", async ({ browser }) => {
+test("RetailEdge cashier sidebar preserves permission-authorized operational tools", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
 		await page.goto(`${BASE_URL}/app/cashier-my-work`, {
@@ -199,10 +199,27 @@ test("RetailEdge cashier menu does not advertise management reporting", async ({
 		await expect(page.getByText("My Work", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
 		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
 		await expect(sidebar).toBeVisible();
-		await expect(sidebar.getByText("Reports", { exact: true })).toHaveCount(0);
-		await expect(sidebar.getByText("Insights & Dashboards", { exact: true })).toHaveCount(0);
+
+		for (const label of [
+			"Reports",
+			"Reports Centre",
+			"Expense Register",
+			"Document Output & Sharing",
+			"Company Profile",
+			"Devices & Printing",
+		]) {
+			await expect(sidebar.getByText(label, { exact: true }).first()).toBeAttached({ timeout: 15_000 });
+		}
+
+		await expect(sidebar.getByText("Professional Selling", { exact: true })).toHaveCount(0);
 		await expect(sidebar.getByText("Asset Management", { exact: true })).toHaveCount(0);
 		await expect(sidebar.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
+
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+		const catalogue = page.locator(".reports-centre");
+		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Selling Control", { exact: true })).toHaveCount(0);
 	} finally {
 		await context.close().catch(() => {});
 	}
