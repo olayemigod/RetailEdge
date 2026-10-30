@@ -32,9 +32,11 @@ class TestCashierOperationalPermissionBaseline(unittest.TestCase):
 	def test_cashier_sales_invoice_authority_is_bounded(self):
 		source = PATCH.read_text(encoding="utf-8")
 
+		self.assertIn('SELLING_DOCUMENTS = (', source)
+		self.assertIn('\t"Sales Invoice",', source)
 		for permission in ("read", "create", "write", "submit"):
 			self.assertIn(f'\t"{permission}",', source)
-		self.assertIn('_grant("Sales Invoice", role, SALES_INVOICE_PERMISSIONS)', source)
+		self.assertIn('_grant(doctype, role, SELLING_DOCUMENT_PERMISSIONS)', source)
 
 		for forbidden in (
 			'"delete"',
