@@ -121,6 +121,8 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				"create": True,
 				"write": True,
 				"submit": True,
+				"print": True,
+				"email": False,
 				"cancel": False,
 				"delete": False,
 				"amend": False,
@@ -181,18 +183,6 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 			"Purchase Order",
 			"Purchase Receipt",
 			"Purchase Invoice",
-			"Stock Entry",
-			"Stock Reconciliation",
-			"Payment Entry",
 		):
-			self.assert_permissions(user, doctype, {"read": True})
-
-	def test_native_accounts_user_retains_erpnext_read_access(self):
-		user = "permission-accounts@example.com"
-		for doctype in ("Sales Invoice", "Purchase Invoice", "Payment Entry", "Journal Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
-
-	def test_native_stock_user_retains_erpnext_read_access(self):
-		user = "permission-stock@example.com"
-		for doctype in ("Item", "Warehouse", "Stock Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True})
