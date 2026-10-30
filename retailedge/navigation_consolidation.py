@@ -8,6 +8,7 @@ import frappe
 from retailedge.master_experience import (
 	get_retailedge_business_hub_context as _get_master_business_hub_context,
 )
+from retailedge.navigation_visibility import filter_context_for_runtime_capabilities
 from retailedge.printing_navigation import normalize_printing_navigation
 from retailedge.user_readiness import get_retailedge_user_readiness
 
@@ -178,7 +179,7 @@ def _load_master_context_quietly() -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return final RetailEdge navigation with review, sales-order, readiness and printing governance composed."""
+	"""Return final permission-aware RetailEdge navigation and operational context."""
 	context = _load_master_context_quietly()
 	navigation_groups = context.get("navigation_groups") or []
 	_consolidate_shift_review_navigation(navigation_groups)
@@ -186,7 +187,10 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_normalize_sales_forecast_route(navigation_groups)
 	context["navigation_groups"] = navigation_groups
 	_apply_user_readiness(context)
-	# Printing normalization is presentation/navigation-only. It runs last so the
-	# final Business Hub keeps the current consolidated review and Sales ordering model
-	# while shared Devices & Printing remains a queryless internal Page route.
-	return normalize_printing_navigation(context)
+	# Printing normalization is presentation/navigation-only. It runs after the
+	# current consolidated review and Sales ordering model is complete.
+	context = normalize_printing_navigation(context)
+	# Final capability filtering owns only presentation. Destination APIs keep their
+	# authoritative server-side permission checks; links that would reject this user
+	# simply are not advertised in Business Hub or the product menu.
+	return filter_context_for_runtime_capabilities(context)
