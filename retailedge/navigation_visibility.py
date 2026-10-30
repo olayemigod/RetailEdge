@@ -29,6 +29,23 @@ NATIVE_WORKSPACE_BY_PAGE = {
 
 REPORT_PAGE_TARGETS = frozenset(_REPORT_SPECS)
 BANK_MATCHING_PAGE = "bank-matching-reconciliation"
+CASHIER_ROLES = {"RetailEdgeCashier", "RetailEdge Cashier"}
+CASHIER_MANAGEMENT_ROLES = {
+	"System Manager",
+	"RetailEdgeManager",
+	"RetailEdge Manager",
+	"RetailEdgeBranchManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeAuditor",
+	"RetailEdge Auditor",
+}
+CASHIER_ALLOWED_PAGE_TARGETS = {
+	"cashier-my-work",
+	"cashier-expenses",
+	"operating-context",
+	"make-sale",
+}
+CASHIER_ALLOWED_URL_TARGETS = {"/pos/"}
 
 
 def _quiet_probe(callback: Callable[[], bool]) -> bool:
@@ -148,6 +165,58 @@ def _item_is_functionally_available(
 	return _page_is_functionally_available(target, company=company, branch=branch)
 
 
+def _is_cashier_home_persona() -> bool:
+	"""Return True for the thin cashier persona, not managers who also carry Cashier."""
+	roles = set(frappe.get_roles(frappe.session.user) or [])
+	return bool(roles.intersection(CASHIER_ROLES)) and not bool(roles.intersection(CASHIER_MANAGEMENT_ROLES))
+
+
+def _cashier_item_is_relevant(item: dict[str, Any]) -> bool:
+	"""Keep the cashier menu task-focused after normal permission filtering.
+
+	A cashier should see their own work, POS launch, cashier expense entry and working
+	Branch context. Make Sale remains available only where the merchant has separately
+	granted normal Sales Invoice create permission. This projection grants nothing.
+	"""
+	target_type = str(item.get("target_type") or "").strip()
+	target = str(item.get("target") or "").strip()
+	if target_type == "URL":
+		return target in CASHIER_ALLOWED_URL_TARGETS
+	if target_type == "Page":
+		if target not in CASHIER_ALLOWED_PAGE_TARGETS:
+			return False
+		if target == "make-sale":
+			return _quiet_probe(
+				lambda: bool(frappe.db.exists("DocType", "Sales Invoice"))
+				and bool(frappe.has_permission("Sales Invoice", ptype="create", user=frappe.session.user))
+			)
+		return True
+	# Quick Sale may be represented as the Sales Invoice DocType in quick actions.
+	if target_type == "DocType" and target == "Sales Invoice":
+		return _quiet_probe(
+			lambda: bool(frappe.has_permission("Sales Invoice", ptype="create", user=frappe.session.user))
+		)
+	return False
+
+
+def _project_cashier_navigation(context: dict[str, Any]) -> None:
+	if not _is_cashier_home_persona():
+		return
+
+	groups: list[dict[str, Any]] = []
+	for group in context.get("navigation_groups") or []:
+		items = [item for item in group.get("items") or [] if _cashier_item_is_relevant(item)]
+		if not items:
+			continue
+		clean_group = deepcopy(group)
+		clean_group["items"] = items
+		groups.append(clean_group)
+	context["navigation_groups"] = groups
+	context["quick_actions"] = [
+		action for action in context.get("quick_actions") or [] if _cashier_item_is_relevant(action)
+	]
+
+
 def filter_context_for_runtime_capabilities(context: dict[str, Any]) -> dict[str, Any]:
 	"""Remove links that would immediately reject the current user.
 
@@ -179,4 +248,5 @@ def filter_context_for_runtime_capabilities(context: dict[str, Any]) -> dict[str
 		for action in filtered.get("quick_actions") or []
 		if _item_is_functionally_available(action, company=company, branch=branch)
 	]
+	_project_cashier_navigation(filtered)
 	return filtered
