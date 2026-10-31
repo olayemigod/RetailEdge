@@ -412,6 +412,18 @@ function recoverProductMenuTrigger(event) {
 	});
 }
 
+function recoverProductMenuShortcut(event) {
+	if (!event?.isTrusted) return;
+	if (!event.ctrlKey || event.altKey || event.metaKey || String(event.key || "").toLowerCase() !== "k") return;
+	const target = event.target;
+	const tagName = String(target?.tagName || "").toLowerCase();
+	if (target?.isContentEditable || ["input", "textarea", "select"].includes(tagName)) return;
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => {
+		if (!productMenuIsOpen()) requestProductMenuOpen();
+	});
+}
+
 function scheduleRefresh() {
 	const schedule =
 		window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
@@ -426,6 +438,7 @@ function scheduleRefresh() {
 });
 document.addEventListener("click", handleNativeSidebarClick, true);
 document.addEventListener("click", recoverProductMenuTrigger, true);
+document.addEventListener("keydown", recoverProductMenuShortcut, true);
 window.frappe?.router?.on?.("change", scheduleRefresh);
 
 window.retailedgeGetBusinessHubContext = fetchContext;

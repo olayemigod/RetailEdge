@@ -66,7 +66,7 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 
 		await expect(page.getByRole("heading", { name: `Review ${seededDraft.name}`, exact: true })).toBeVisible();
 		await expect(page.getByRole("heading", { name: "Confirm the sale details", exact: true })).toBeVisible();
-		await expect(page.getByRole("columnheader", { name: "Item", exact: true })).toBeVisible();
+		await expect(page.locator(".sale-review__table thead th").filter({ hasText: /^Item$/ }).first()).toBeVisible();
 		await expect(page.getByText("Amount due", { exact: true })).toBeVisible();
 		await expect(page.getByRole("button", { name: "Submit Reviewed Sale", exact: true })).toBeVisible();
 		await expect(page.getByRole("button", { name: "Edit Sale", exact: true })).toBeVisible();
@@ -147,7 +147,7 @@ test("cashier unpaid Sales Invoice exposes the constrained Receive Payment workf
 
 		const invoiceRow = records.locator("tbody tr").filter({ hasText: unpaid.name }).first();
 		await expect(invoiceRow).toBeVisible({ timeout: 20_000 });
-		const moreTrigger = invoiceRow.locator(".record-more .edge-dropdown__trigger").first();
+		const moreTrigger = invoiceRow.locator(".record-more.edge-dropdown__trigger, .record-more .edge-dropdown__trigger").first();
 		await expect(moreTrigger).toBeVisible();
 		await moreTrigger.click();
 		const receivePayment = page.getByText("Receive Payment", { exact: true }).last();

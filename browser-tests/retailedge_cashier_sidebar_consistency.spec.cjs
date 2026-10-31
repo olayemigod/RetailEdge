@@ -86,15 +86,18 @@ test("cashier can start a constrained receipt from an unpaid Sales Invoice", asy
 		await openRoute(page, "professional-selling");
 		const invoiceRow = page.locator(".selling-record-table tbody tr").filter({ hasText: invoice.name }).first();
 		await expect(invoiceRow).toBeVisible({ timeout: 20_000 });
-		await invoiceRow.locator(".edge-dropdown__trigger").click();
+		const moreTrigger = invoiceRow.locator(".record-more.edge-dropdown__trigger, .record-more .edge-dropdown__trigger").first();
+		await expect(moreTrigger).toBeVisible();
+		await moreTrigger.click();
 		const receivePayment = page.getByText("Receive Payment", { exact: true }).last();
 		await expect(receivePayment).toBeVisible();
 		await receivePayment.click();
 
 		await page.getByRole("heading", { name: "Receive Payment", exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
-		await expect(page.getByText(invoice.name, { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Invoice outstanding", { exact: true }).first()).toBeVisible();
-		await expect(page.getByRole("button", { name: "Review Payment", exact: true })).toBeVisible();
+		const receiptPage = page.locator(".cashier-receipt-page:visible").first();
+		await expect(receiptPage.locator(".receipt-context").getByText(invoice.name, { exact: true })).toBeVisible();
+		await expect(receiptPage.getByText("Invoice outstanding", { exact: true }).first()).toBeVisible();
+		await expect(receiptPage.getByRole("button", { name: "Review Payment", exact: true })).toBeVisible();
 	} finally {
 		await context.close();
 	}

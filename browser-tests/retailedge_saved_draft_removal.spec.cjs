@@ -112,7 +112,7 @@ test("Make Sale persists removed saved-draft row and recalculated total after re
 		await expect(page.getByRole("heading", { name: "Make Sale", exact: true })).toBeVisible({ timeout: 25_000 });
 		await expect(page.locator(".saved-panel").getByText(draft.name, { exact: true })).toBeVisible({ timeout: 25_000 });
 
-		await page.getByRole("button", { name: "Continue Editing on Page", exact: true }).click();
+		await page.getByRole("button", { name: "Edit Sale", exact: true }).click();
 		const rows = page.locator(".make-sale-form .edge-child-table tbody tr");
 		await expect(rows).toHaveCount(2, { timeout: 25_000 });
 
@@ -136,7 +136,7 @@ test("Make Sale persists removed saved-draft row and recalculated total after re
 
 		const savedPanel = page.locator(".saved-panel");
 		await expect(savedPanel.getByText(draft.name, { exact: true })).toBeVisible({ timeout: 25_000 });
-		await expect(savedPanel.getByRole("button", { name: "Continue Editing on Page", exact: true })).toBeVisible();
+		await expect(savedPanel.getByRole("button", { name: "Edit Sale", exact: true })).toBeVisible();
 
 		const persistedPreview = await apiGet(
 			context,
@@ -148,7 +148,7 @@ test("Make Sale persists removed saved-draft row and recalculated total after re
 		expect(Number(persistedPreview.grand_total)).toBeLessThan(Number(initialPreview.grand_total));
 		expect(moneyValue(reducedTotalText)).toBeCloseTo(Number(persistedPreview.grand_total), 2);
 
-		await savedPanel.getByRole("button", { name: "Continue Editing on Page", exact: true }).click();
+		await savedPanel.getByRole("button", { name: "Edit Sale", exact: true }).click();
 		await expect(rows).toHaveCount(1, { timeout: 25_000 });
 		await expect(page.locator(".make-sale-form .item-count")).toContainText("1 item");
 		await expect(invoiceTotal).toBeVisible({ timeout: 25_000 });

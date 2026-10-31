@@ -30,7 +30,7 @@
 		<div class="cashier-work-page">
 			<section class="cashier-work-hero">
 				<div>
-					<div class="cashier-work-eyebrow">My Work</div>
+					<div class="cashier-work-eyebrow" role="heading" aria-level="1">My Work</div>
 					<h2>{{ greeting }}</h2>
 					<p>{{ dateLabel }} · {{ branch || "Current branch" }}</p>
 				</div>
