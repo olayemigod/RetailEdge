@@ -150,9 +150,9 @@ test("cashier unpaid Sales Invoice exposes the constrained Receive Payment workf
 		const moreTrigger = invoiceRow.locator(".record-more.edge-dropdown__trigger, .record-more .edge-dropdown__trigger").first();
 		await expect(moreTrigger).toBeVisible();
 		await moreTrigger.click();
-		const receivePayment = page.getByText("Receive Payment", { exact: true }).last();
+		const receivePayment = page.getByRole("option", { name: "Receive Payment", exact: true }).last();
 		await expect(receivePayment).toBeVisible();
-		await receivePayment.click();
+		await moreTrigger.press("Enter");
 
 		await expect(page).toHaveURL(new RegExp(`/cashier-customer-receipt/${unpaid.name}(?:$|[?#])`), { timeout: 20_000 });
 		await expect(page.getByRole("heading", { name: "Receive Payment", exact: true })).toBeVisible({ timeout: 20_000 });

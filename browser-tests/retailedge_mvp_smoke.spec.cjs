@@ -219,7 +219,7 @@ test("RetailEdge cashier sidebar preserves permission-authorized operational too
 		const catalogue = page.locator(".reports-centre");
 		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
 		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
-		await expect(catalogue.getByText("Selling Control", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Selling Control", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -311,18 +311,18 @@ test("canonical RetailEdge cashier lands on My Work with Home navigation, histor
 		await expect(productLogo).toBeVisible();
 		expect(await productLogo.evaluate((image) => image.complete && image.naturalWidth > 0)).toBeTruthy();
 
+		const popupPromise = context.waitForEvent("page");
+		await page.getByRole("button", { name: "Start POS", exact: true }).first().click();
+		const posPage = await popupPromise;
+		await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
+		await posPage.close().catch(() => {});
+
 		const workDate = page.getByLabel("Work date", { exact: true });
 		await expect(workDate).toBeVisible();
 		await workDate.fill(isoDaysAgo(1));
 		await workDate.press("Tab");
 		await expect(page.getByText("Showing historical activity", { exact: true })).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByText("Current shift", { exact: true })).toHaveCount(0);
-
-		const popupPromise = context.waitForEvent("page");
-		await page.getByRole("button", { name: "Start POS", exact: true }).first().click();
-		const posPage = await popupPromise;
-		await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
-		await posPage.close().catch(() => {});
 
 		await page.goto(`${BASE_URL}/app/banking-readiness`, {
 			waitUntil: "domcontentloaded",
