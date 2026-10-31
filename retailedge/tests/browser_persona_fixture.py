@@ -6,12 +6,14 @@ from frappe.utils.password import update_password
 from retailedge.setup_roles import ensure_retailedge_roles
 from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
+	ITEM_GROUP,
 	_ensure_company,
 	_ensure_fiscal_year,
 	_ensure_transaction_masters,
 )
 
 PASSWORD = "RetailEdgeBrowser1!"
+SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"
 
 PERSONAS = {
 	# The RC3 owner/manager persona represents a broad permitted Company context,
@@ -54,12 +56,29 @@ def _ensure_user(email: str, first_name: str, roles: tuple[str, ...]) -> None:
 	frappe.defaults.set_user_default("Company", COMPANY, user=email)
 
 
+def _ensure_secondary_item() -> None:
+	"""Keep multi-row browser acceptance valid under ERPNext's duplicate-item guard."""
+	if frappe.db.exists("Item", SECOND_ITEM):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Item",
+			"item_code": SECOND_ITEM,
+			"item_name": "RetailEdge Upgrade Service Second",
+			"item_group": ITEM_GROUP,
+			"stock_uom": "Nos",
+			"is_stock_item": 0,
+		}
+	).insert(ignore_permissions=True)
+
+
 def seed_browser_personas() -> dict:
 	"""Seed deterministic users for the release browser smoke gate."""
 	ensure_retailedge_roles(migrate_alias_assignments=True)
 	_ensure_company()
 	_ensure_fiscal_year(COMPANY)
 	_ensure_transaction_masters()
+	_ensure_secondary_item()
 
 	for email, (first_name, roles) in PERSONAS.items():
 		_ensure_user(email, first_name, roles)
@@ -68,5 +87,6 @@ def seed_browser_personas() -> dict:
 	return {
 		"company": COMPANY,
 		"password": PASSWORD,
+		"second_item": SECOND_ITEM,
 		"users": {email: list(roles) for email, (_name, roles) in PERSONAS.items()},
 	}
