@@ -48,6 +48,31 @@ class TestNavigationVisibility(unittest.TestCase):
 		)
 		self.assertEqual([item["target"] for item in filtered["quick_actions"]], ["/pos/"])
 
+	@patch("retailedge.navigation_visibility.frappe.has_permission")
+	@patch("retailedge.navigation_visibility.frappe.db.exists")
+	def test_quick_actions_use_doctype_create_permission_instead_of_navigation_target(self, exists, has_permission):
+		exists.side_effect = lambda doctype, name: doctype == "DocType" and name in {"Stock Entry", "Journal Entry"}
+		has_permission.side_effect = (
+			lambda doctype, ptype=None, user=None: doctype == "Stock Entry" and ptype == "create"
+		)
+		context = {
+			"context": {"company": "ACME", "branch": "Main"},
+			"navigation_groups": [],
+			"quick_actions": [
+				{"key": "transfer-stock", "label": "Quick Transfer", "doctype": "Stock Entry"},
+				{"key": "journal-entry", "label": "Journal Entry", "doctype": "Journal Entry"},
+			],
+		}
+
+		filtered = filter_context_for_runtime_capabilities(context)
+
+		self.assertEqual(
+			[action["key"] for action in filtered["quick_actions"]],
+			["transfer-stock"],
+		)
+		has_permission.assert_any_call("Stock Entry", ptype="create", user=frappe.session.user)
+		has_permission.assert_any_call("Journal Entry", ptype="create", user=frappe.session.user)
+
 	@patch("retailedge.navigation_visibility.get_dashboard_capabilities")
 	def test_dashboard_link_is_hidden_when_dashboard_capability_denies_view(self, capabilities):
 		capabilities.return_value = {"can_view": False}
