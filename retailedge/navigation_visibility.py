@@ -157,6 +157,30 @@ def _item_is_functionally_available(
 	return _page_is_functionally_available(target, company=company, branch=branch)
 
 
+def _quick_action_is_functionally_available(
+	action: dict[str, Any],
+	*,
+	company: str = "",
+	branch: str = "",
+) -> bool:
+	"""Revalidate a guided Create action using its native quick-action schema.
+
+	RetailEdge quick actions are permission-approved upstream and identify their
+	authoritative business destination with ``doctype`` rather than navigation
+	``target`` / ``target_type``. Treating them as navigation items therefore
+	incorrectly deletes valid Create actions. Re-check native Create permission here
+	for defence in depth, while retaining the navigation-item fallback for any
+	future target-based action shape.
+	"""
+	doctype = str(action.get("doctype") or "").strip()
+	if doctype:
+		return _quiet_probe(
+			lambda: bool(frappe.db.exists("DocType", doctype))
+			and bool(frappe.has_permission(doctype, ptype="create", user=frappe.session.user))
+		)
+	return _item_is_functionally_available(action, company=company, branch=branch)
+
+
 def filter_context_for_runtime_capabilities(context: dict[str, Any]) -> dict[str, Any]:
 	"""Remove links that would immediately reject the current user.
 
@@ -192,6 +216,6 @@ def filter_context_for_runtime_capabilities(context: dict[str, Any]) -> dict[str
 	filtered["quick_actions"] = [
 		action
 		for action in filtered.get("quick_actions") or []
-		if _item_is_functionally_available(action, company=company, branch=branch)
+		if _quick_action_is_functionally_available(action, company=company, branch=branch)
 	]
 	return filtered
