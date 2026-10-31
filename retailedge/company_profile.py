@@ -4,6 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils.file_manager import save_file
 
 from retailedge.operating_context import (
 	can_use_company_wide_branch_view,
@@ -206,6 +207,60 @@ def _save_profile_doc(doc, *, is_new: bool):
 	return doc
 
 
+def _attached_profile_logo_file(profile_name: str, file_url: str) -> str:
+	"""Return the File attached as this profile's logo, or fail closed.
+
+	A logo is deliberately selected through the Company Profile surface so callers
+	cannot point tenant branding at an unrelated private attachment.
+	"""
+	file_url = _clean(file_url)
+	if not file_url:
+		return ""
+	file_name = frappe.db.get_value(
+		"File",
+		{
+			"file_url": file_url,
+			"attached_to_doctype": PROFILE_DOCTYPE,
+			"attached_to_name": profile_name,
+		},
+		"name",
+	)
+	if not file_name:
+		frappe.throw(_("Upload the logo through this Company Profile before selecting it."))
+	return _clean(file_name)
+
+
+def ensure_public_profile_logo(profile_name: str, file_url: str) -> str:
+	"""Return a public URL for an attached Company Profile logo.
+
+	Company branding is shown in the shared product shell to every permitted role and
+	is not confidential business data. Frappe private attachments require document
+	read permission at image-request time, which makes a private logo render as a broken
+	image for operational roles. Preserve manager-only mutation authority, but copy a
+	legacy/private logo into Frappe's public ``/files`` store before persisting the URL.
+	"""
+	file_url = _clean(file_url)
+	if not file_url:
+		return ""
+	file_name = _attached_profile_logo_file(profile_name, file_url)
+	if not file_url.startswith("/private/files/"):
+		return file_url
+
+	source = frappe.get_doc("File", file_name)
+	public_file = save_file(
+		source.file_name,
+		source.get_content(),
+		PROFILE_DOCTYPE,
+		profile_name,
+		is_private=0,
+		df="logo",
+	)
+	public_url = _clean(getattr(public_file, "file_url", ""))
+	if not public_url.startswith("/files/"):
+		frappe.throw(_("The Company logo could not be prepared for shared display."))
+	return public_url
+
+
 @frappe.whitelist()
 def get_company_profile(company: str = "") -> dict[str, Any]:
 	current = get_operating_context()
@@ -256,22 +311,6 @@ def save_company_address(company: str, address: str | dict[str, Any]) -> dict[st
 	return _profile_response(company)
 
 
-def _assert_attached_profile_logo(profile_name: str, file_url: str) -> None:
-	if not file_url:
-		return
-	file_name = frappe.db.get_value(
-		"File",
-		{
-			"file_url": file_url,
-			"attached_to_doctype": PROFILE_DOCTYPE,
-			"attached_to_name": profile_name,
-		},
-		"name",
-	)
-	if not file_name:
-		frappe.throw(_("Upload the logo through this Company Profile before selecting it."))
-
-
 @frappe.whitelist(methods=["POST"])
 def set_company_logo(company: str, file_url: str = "") -> dict[str, Any]:
 	company = _clean(company)
@@ -279,9 +318,11 @@ def set_company_logo(company: str, file_url: str = "") -> dict[str, Any]:
 	_assert_profile_write(company, "" if is_new else doc.name)
 	if is_new:
 		_save_profile_doc(doc, is_new=True)
-	_assert_attached_profile_logo(doc.name, _clean(file_url))
+
+	requested_logo = _clean(file_url)
+	public_logo = ensure_public_profile_logo(doc.name, requested_logo) if requested_logo else ""
 	doc.reload()
-	doc.logo = _clean(file_url)
+	doc.logo = public_logo
 	doc.save()
 	return _profile_response(company)
 
@@ -293,6 +334,16 @@ def get_shell_identity() -> dict[str, Any]:
 	profile = resolve_company_profile(company)
 	branches = get_allowed_operating_branches(company=company) if company else []
 	can_view_all_branches = can_use_company_wide_branch_view(company=company) if company else False
+	companies = (
+		{
+			company: {
+				"label": profile.get("label") or company,
+				"logo": profile.get("logo") or "",
+			}
+		}
+		if company
+		else {}
+	)
 	return {
 		"product_code": "retailedge",
 		"product_name": "ProcessEdge Retail",
@@ -303,6 +354,7 @@ def get_shell_identity() -> dict[str, Any]:
 		"tenant_logo": profile.get("logo") or "",
 		"tenant_icon": "building",
 		"tenant_subtitle": "Business workspace",
+		"companies": companies,
 		"active_company": company,
 		"active_branch": _clean(current.get("branch")),
 		"company_wide": bool(current.get("company_wide")),

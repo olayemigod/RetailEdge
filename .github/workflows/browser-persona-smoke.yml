@@ -203,6 +203,8 @@ jobs:
           npx playwright test \
             browser-tests/retailedge_mvp_smoke.spec.cjs \
             browser-tests/retailedge_rc3_acceptance.spec.cjs \
+            browser-tests/retailedge_cashier_sale_continuity.spec.cjs \
+            browser-tests/retailedge_cashier_sidebar_consistency.spec.cjs \
             browser-tests/retailedge_working_branch_scope.spec.cjs \
             browser-tests/retailedge_user_readiness.spec.cjs \
             browser-tests/retailedge_printing_shell.spec.cjs \

@@ -22,11 +22,19 @@ READ_SELECT_DOCTYPES = (
 	"Item Price",
 )
 
-SALES_INVOICE_PERMISSIONS = (
+SELLING_DOCUMENTS = (
+	"Quotation",
+	"Sales Order",
+	"Delivery Note",
+	"Sales Invoice",
+)
+
+SELLING_DOCUMENT_PERMISSIONS = (
 	"read",
 	"create",
 	"write",
 	"submit",
+	"print",
 )
 
 
@@ -57,7 +65,7 @@ def _grant(doctype: str, role: str, properties: tuple[str, ...]) -> None:
 
 
 def execute():
-	"""Grant the RetailEdge cashier only the native permissions required for daily cashier operations."""
+	"""Grant the RetailEdge cashier the native permissions required for governed selling work."""
 	for role in CASHIER_ROLES:
 		if not frappe.db.exists("Role", role):
 			continue
@@ -65,4 +73,5 @@ def execute():
 		for doctype in READ_SELECT_DOCTYPES:
 			_grant(doctype, role, ("read", "select"))
 
-		_grant("Sales Invoice", role, SALES_INVOICE_PERMISSIONS)
+		for doctype in SELLING_DOCUMENTS:
+			_grant(doctype, role, SELLING_DOCUMENT_PERMISSIONS)

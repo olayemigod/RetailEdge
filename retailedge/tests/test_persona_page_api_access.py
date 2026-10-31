@@ -6,6 +6,7 @@ from frappe.tests import IntegrationTestCase
 from retailedge.master_experience import get_retailedge_business_hub_context
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
 from retailedge.patches.ensure_retailedge_cashier_operational_permissions import execute as ensure_cashier_operational_permissions
+from retailedge.patches.ensure_retailedge_cashier_sales_output_access import execute as ensure_cashier_sales_output_access
 from retailedge.patches.ensure_retailedge_manager_payment_entry_read import execute as ensure_manager_payment_entry_read
 from retailedge.report_center import get_reports_centre_context
 from retailedge.setup_roles import ensure_retailedge_roles
@@ -37,6 +38,7 @@ BRANCH_SCOPED_PERSONAS = {
 	"permission-branch-manager@example.com": "Manager",
 	"permission-auditor@example.com": "Auditor",
 }
+CASHIER_USER = "permission-cashier@example.com"
 
 
 def _reset_branch_scoped_company_context(user: str) -> None:
@@ -63,6 +65,7 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 		_ensure_transaction_masters()
 		ensure_cashier_company_read()
 		ensure_cashier_operational_permissions()
+		ensure_cashier_sales_output_access()
 		ensure_manager_payment_entry_read()
 
 		for email, (first_name, roles) in PERSONAS.items():
@@ -98,6 +101,19 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				frappe.set_user(user)
 				self.assertTrue(bool(frappe.get_doc("Page", "retailedge-business-hub").is_permitted()))
 
+	def test_cashier_can_open_permission_aware_professional_selling(self):
+		frappe.set_user(CASHIER_USER)
+		self.assertTrue(bool(frappe.get_doc("Page", "professional-selling").is_permitted()))
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			with self.subTest(doctype=doctype):
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="read")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="create")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="write")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="submit")))
+				self.assertTrue(bool(frappe.has_permission(doctype, ptype="print")))
+		# Opening the workspace does not grant broad accounting authority.
+		self.assertFalse(bool(frappe.has_permission("Payment Entry", ptype="create")))
+
 	def test_auditor_does_not_gain_business_hub_page_access(self):
 		frappe.set_user("permission-auditor@example.com")
 		self.assertFalse(bool(frappe.get_doc("Page", "retailedge-business-hub").is_permitted()))
@@ -107,6 +123,13 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 			with self.subTest(user=user):
 				frappe.set_user(user)
 				self.assertTrue(bool(frappe.get_doc("Page", "reports-centre").is_permitted()))
+
+	def test_cashier_can_open_document_output_and_print_sales_invoices(self):
+		frappe.set_user(CASHIER_USER)
+		self.assertTrue(bool(frappe.get_doc("Page", "document-output-sharing").is_permitted()))
+		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="read")))
+		self.assertTrue(bool(frappe.has_permission("Sales Invoice", ptype="print")))
+		self.assertFalse(bool(frappe.has_permission("Sales Invoice", ptype="email")))
 
 	def test_branch_scoped_page_personas_get_read_only_company_context_without_user_permission(self):
 		for user in BRANCH_SCOPED_PERSONAS:

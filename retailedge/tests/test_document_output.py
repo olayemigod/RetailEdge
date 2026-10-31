@@ -46,6 +46,19 @@ class TestDocumentOutput(unittest.TestCase):
 		self.assertNotIn("frappe.get_all", source)
 		self.assertNotIn("ignore_permissions=True", source)
 
+	def test_exact_document_output_revalidates_operating_company_and_branch(self):
+		source = self.read("document_output.py")
+		for contract in (
+			"def _assert_document_operating_scope(doc)",
+			"_assert_document_operating_scope(frappe.get_doc(doctype, name))",
+			'company = str(operating.get("company") or "").strip()',
+			'branch = str(operating.get("branch") or "").strip()',
+			"get_first_existing_field(doc.doctype, BRANCH_FIELD_CANDIDATES)",
+			"This document belongs to another Company",
+			"This document does not belong to the current Operating Branch",
+		):
+			self.assertIn(contract, source)
+
 	def test_pdf_uses_native_print_engine_and_remains_private(self):
 		source = self.read("document_output.py")
 		for contract in (
@@ -147,7 +160,6 @@ class TestDocumentOutput(unittest.TestCase):
 			self.assertIn(contract, component)
 		self.assertNotIn("/printview?", component)
 
-
 	def test_output_workspace_is_share_only_and_never_used_as_view(self):
 		component = self.read("public/js/document_output_sharing/DocumentOutputSharing.vue")
 		global_runtime = self.read("public/js/retailedge.js")
@@ -159,7 +171,6 @@ class TestDocumentOutput(unittest.TestCase):
 		self.assertIn("openDocumentOutputSharing = function", global_runtime)
 		self.assertIn('mode: "share"', global_runtime)
 		self.assertIn('frappe.set_route("document-output-sharing")', global_runtime)
-
 
 	def test_whatsapp_is_user_initiated_without_public_document_link(self):
 		source = self.read("document_output.py")

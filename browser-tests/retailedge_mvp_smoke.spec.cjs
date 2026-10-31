@@ -77,6 +77,12 @@ async function newPersona(browser, user, options = {}) {
 	return { context, page };
 }
 
+function isoDaysAgo(days) {
+	const value = new Date();
+	value.setUTCDate(value.getUTCDate() - days);
+	return value.toISOString().slice(0, 10);
+}
+
 test("canonical RetailEdge manager reaches Business Hub and Action Centre", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
@@ -183,13 +189,37 @@ test("RetailEdge manager reaches Reports Centre and can search the permitted cat
 	}
 });
 
-test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
+test("RetailEdge cashier sidebar preserves permission-authorized operational tools", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
+		await page.goto(`${BASE_URL}/app/cashier-my-work`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
+		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+		await expect(sidebar).toBeVisible();
+
+		for (const label of [
+			"Reports",
+			"Reports Centre",
+			"Expense Register",
+			"Document Output & Sharing",
+			"Company Profile",
+			"Devices & Printing",
+		]) {
+			await expect(sidebar.getByText(label, { exact: true }).first()).toBeAttached({ timeout: 15_000 });
+		}
+
+		await expect(sidebar.getByText("Professional Selling", { exact: true }).first()).toBeAttached({ timeout: 15_000 });
+		await expect(sidebar.getByText("Asset Management", { exact: true })).toHaveCount(0);
+		await expect(sidebar.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
+
 		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
 		const catalogue = page.locator(".reports-centre");
-		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
 		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Selling Control", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -261,10 +291,38 @@ test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ br
 	}
 });
 
-test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({ browser }) => {
+test("canonical RetailEdge cashier lands on My Work with Home navigation, history, and new-tab POS", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+		await page.goto(`${BASE_URL}/app/retailedge-business-hub`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await expect(page).toHaveURL(/cashier-my-work/, { timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
+
+		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+		await expect(sidebar).toBeVisible();
+		const homeSection = sidebar.locator(".edge-sidebar__section").filter({ hasText: "Home" }).first();
+		await expect(homeSection).toBeVisible();
+		await expect(homeSection.getByText("My Work", { exact: true }).first()).toBeVisible();
+
+		const productLogo = page.locator(".cashier-work-brand-logo").first();
+		await expect(productLogo).toBeVisible();
+		expect(await productLogo.evaluate((image) => image.complete && image.naturalWidth > 0)).toBeTruthy();
+
+		const popupPromise = context.waitForEvent("page");
+		await page.getByRole("button", { name: "Start POS", exact: true }).first().click();
+		const posPage = await popupPromise;
+		await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
+		await posPage.close().catch(() => {});
+
+		const workDate = page.getByLabel("Work date", { exact: true });
+		await expect(workDate).toBeVisible();
+		await workDate.fill(isoDaysAgo(1));
+		await workDate.press("Tab");
+		await expect(page.getByText("Showing historical activity", { exact: true })).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("Current shift", { exact: true })).toHaveCount(0);
 
 		await page.goto(`${BASE_URL}/app/banking-readiness`, {
 			waitUntil: "domcontentloaded",

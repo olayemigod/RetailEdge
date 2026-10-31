@@ -178,6 +178,7 @@ def _assert_document_permission(doctype: str, name: str, ptype: str = "read") ->
 			_("You do not have {0} permission for {1} {2}.").format(ptype, doctype, name),
 			frappe.PermissionError,
 		)
+	_assert_document_operating_scope(frappe.get_doc(doctype, name))
 
 
 def _document_capability(definition: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +206,36 @@ def _operating_filters(doctype: str) -> dict[str, Any]:
 		if branch_field:
 			filters[branch_field] = branch
 	return filters
+
+
+def _assert_document_operating_scope(doc) -> None:
+	"""Apply the same Company/Branch scope to exact output actions as to search.
+
+	Native DocPerm remains mandatory, but RetailEdge operating scope is a separate
+	server-side boundary. Without this check a user who knows another Branch's
+	document name could bypass the search filters by calling preview/print directly.
+	"""
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+
+	if company and doc.meta.has_field("company"):
+		document_company = str(doc.get("company") or "").strip()
+		if document_company != company:
+			frappe.throw(
+				_("This document belongs to another Company. Change Operating Context before opening it."),
+				frappe.PermissionError,
+			)
+
+	if branch:
+		branch_field = get_first_existing_field(doc.doctype, BRANCH_FIELD_CANDIDATES)
+		if branch_field:
+			document_branch = str(doc.get(branch_field) or "").strip()
+			if document_branch != branch:
+				frappe.throw(
+					_("This document does not belong to the current Operating Branch."),
+					frappe.PermissionError,
+				)
 
 
 def _validate_print_format(doctype: str, print_format: str | None) -> str:

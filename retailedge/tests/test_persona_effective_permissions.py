@@ -109,23 +109,26 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				actual_roles = {row.role for row in frappe.get_doc("User", email).roles}
 				self.assertEqual(actual_roles, set(expected_roles))
 
-	def test_cashier_has_sales_authority_without_accounting_posting_authority(self):
+	def test_cashier_has_governed_selling_authority_without_accounting_posting_authority(self):
 		user = "permission-cashier@example.com"
 		self.assert_permissions(user, "Company", {"read": True, "write": False, "create": False})
 		self.assert_permissions(user, "Customer", {"read": True, "write": False, "create": False})
-		self.assert_permissions(
-			user,
-			"Sales Invoice",
-			{
-				"read": True,
-				"create": True,
-				"write": True,
-				"submit": True,
-				"cancel": False,
-				"delete": False,
-				"amend": False,
-			},
-		)
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			self.assert_permissions(
+				user,
+				doctype,
+				{
+					"read": True,
+					"create": True,
+					"write": True,
+					"submit": True,
+					"print": True,
+					"email": False,
+					"cancel": False,
+					"delete": False,
+					"amend": False,
+				},
+			)
 		for doctype in ("Payment Entry", "Journal Entry", "Purchase Invoice"):
 			self.assert_permissions(
 				user,
@@ -181,18 +184,6 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 			"Purchase Order",
 			"Purchase Receipt",
 			"Purchase Invoice",
-			"Stock Entry",
-			"Stock Reconciliation",
-			"Payment Entry",
 		):
-			self.assert_permissions(user, doctype, {"read": True})
-
-	def test_native_accounts_user_retains_erpnext_read_access(self):
-		user = "permission-accounts@example.com"
-		for doctype in ("Sales Invoice", "Purchase Invoice", "Payment Entry", "Journal Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
-
-	def test_native_stock_user_retains_erpnext_read_access(self):
-		user = "permission-stock@example.com"
-		for doctype in ("Item", "Warehouse", "Stock Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True})

@@ -371,29 +371,35 @@ function productMenuIsOpen() {
 	return Boolean(dropdown && !dropdown.hidden && dropdown.getAttribute("aria-hidden") !== "true");
 }
 
+function focusProductMenuSearch() {
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => schedule(() => {
+		const search = document.querySelector(
+			`#${PRODUCT_MENU_DROPDOWN_ID}:not([hidden]) .edge-product-menu__search`
+		);
+		search?.focus?.({ preventScroll: true });
+		search?.select?.();
+	}));
+}
+
 function requestProductMenuOpen() {
-	if (productMenuIsOpen()) return true;
+	if (productMenuIsOpen()) {
+		focusProductMenuSearch();
+		return true;
+	}
 	const edgeUI = runtime();
 	for (const method of ["openProductMenu", "showProductMenu", "toggleProductMenu"]) {
 		if (typeof edgeUI?.[method] !== "function") continue;
 		try {
-			edgeUI[method]();
+			const opened = edgeUI[method]();
+			if (opened === false && !productMenuIsOpen()) continue;
+			focusProductMenuSearch();
 			return true;
 		} catch (error) {
 			console.warn(`[RetailEdge Product Menu] ${method} failed`, error);
 		}
 	}
-	// EdgeSuite UI owns Ctrl+K as the canonical product-menu shortcut. Reuse
-	// that public interaction as a final recovery path instead of maintaining
-	// a second RetailEdge flyout implementation.
-	document.dispatchEvent(new KeyboardEvent("keydown", {
-		key: "k",
-		code: "KeyK",
-		ctrlKey: true,
-		bubbles: true,
-		cancelable: true,
-	}));
-	return true;
+	return false;
 }
 
 function recoverProductMenuTrigger(event) {
@@ -412,6 +418,29 @@ function recoverProductMenuTrigger(event) {
 	});
 }
 
+function recoverProductMenuShortcut(event) {
+	if (
+		(!event?.ctrlKey && !event?.metaKey)
+		|| event.altKey
+		|| String(event.key || "").toLowerCase() !== "k"
+	) return;
+	if (!document.querySelector('.edge-app-shell[data-edge-product="retailedge"]')) return;
+
+	event.preventDefault();
+	event.stopImmediatePropagation?.();
+	event.stopPropagation?.();
+
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => {
+		const ready = state.installing
+			|| (state.installed ? Promise.resolve(refreshProductMenu()) : installProductMenu());
+		Promise.resolve(ready).finally(() => schedule(() => {
+			if (productMenuIsOpen()) focusProductMenuSearch();
+			else requestProductMenuOpen();
+		}));
+	});
+}
+
 function scheduleRefresh() {
 	const schedule =
 		window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
@@ -426,6 +455,7 @@ function scheduleRefresh() {
 });
 document.addEventListener("click", handleNativeSidebarClick, true);
 document.addEventListener("click", recoverProductMenuTrigger, true);
+window.addEventListener("keydown", recoverProductMenuShortcut, true);
 window.frappe?.router?.on?.("change", scheduleRefresh);
 
 window.retailedgeGetBusinessHubContext = fetchContext;
