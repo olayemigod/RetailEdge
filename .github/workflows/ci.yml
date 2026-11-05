@@ -106,6 +106,7 @@ jobs:
             --branch version-16 \
             --skip-assets \
             https://github.com/frappe/payments.git
+          git -C apps/payments fetch --no-tags --depth=1 upstream cca07d9f9392e2ea0e521c5975151db9e4b6c321
           git -C apps/payments checkout cca07d9f9392e2ea0e521c5975151db9e4b6c321
           bench setup requirements --python payments
 
