@@ -204,9 +204,27 @@ def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) 
 
 
 def execute() -> None:
-    """Merge obsolete spaced RetailEdge roles into one canonical role per persona."""
-    _assert_permission_equivalence_before_merge()
-    _assert_authorization_link_safety_before_merge()
+    """Merge only safe roles; preserve and audit historical conflicts.
+
+    After explicit administrator reconciliation, this idempotent function may
+    be rerun with bench execute to complete the deferred consolidation.
+    """
+    try:
+        _assert_permission_equivalence_before_merge()
+        _assert_authorization_link_safety_before_merge()
+    except frappe.ValidationError as exc:
+        # Never merge two roles with divergent grants or reviewer/approver
+        # links just to pass an upgrade. No role mutation has occurred.
+        frappe.log_error(
+            title="RetailEdge role consolidation deferred",
+            message=(
+                "Both legacy and canonical roles, their grants and assignments "
+                "were preserved. Explicit administrator reconciliation is "
+                "required before replay. Details: " + str(exc)
+            ),
+        )
+        return
+
     for legacy, canonical in LEGACY_TO_CANONICAL.items():
         if not frappe.db.exists("Role", legacy):
             continue

@@ -33,16 +33,19 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             patch.object(migration, "_merge_duplicate_permission_rows"),
             patch.object(migration.frappe, "clear_cache"),
             patch.object(migration, "get_link_fields", return_value=[]),
+            patch.object(migration.frappe, "log_error"),
         )
 
     def assert_blocked_before_mutation(self, rows, *, roles=None):
         patches = self.run_preflight(rows, roles=roles)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7]:
-            with self.assertRaises(frappe.ValidationError):
-                migration.execute()
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit:
+            migration.execute()
             rename.assert_not_called()
             merge_roles.assert_not_called()
             merge_grants.assert_not_called()
+            audit.assert_called_once()
+            self.assertEqual(audit.call_args.kwargs.get("title"), "RetailEdge role consolidation deferred")
+            self.assertIn("Explicit administrator reconciliation", audit.call_args.kwargs.get("message", ""))
 
     def test_create_submit_escalation_is_rejected(self):
         self.assert_blocked_before_mutation({
@@ -83,8 +86,9 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             ("Custom DocPerm", CANONICAL): [grant(read=1, print=1)],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit:
             migration.execute()
+            audit.assert_not_called()
         merge_roles.assert_called_once_with(LEGACY, CANONICAL)
         self.assertEqual(merge_grants.call_count, 2)
         rename.assert_called_once()
@@ -99,12 +103,12 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             if doctype == "RetailEdge Daily Sales Audit Reviewer Role":
                 return value == {"role": LEGACY}
             return True
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links, patches[8] as audit:
             links.return_value = role_links
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
-                with self.assertRaises(frappe.ValidationError):
-                    migration.execute()
+                migration.execute()
             rename.assert_not_called()
+            audit.assert_called_once()
 
     def test_legacy_only_page_role_assignment_fails_closed(self):
         rows = {
@@ -117,18 +121,34 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             if doctype == "Has Role" and isinstance(value, dict) and value.get("role") == CANONICAL:
                 return False
             return True
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
-                with self.assertRaises(frappe.ValidationError):
-                    migration.execute()
+                migration.execute()
             rename.assert_not_called()
+            audit.assert_called_once()
+
+    def test_preflight_remains_strict_for_manual_audit(self):
+        patches = self.run_preflight({
+            ("Custom DocPerm", LEGACY): [grant(read=1, submit=1)],
+            ("Custom DocPerm", CANONICAL): [grant(read=1)],
+        })
+        with patches[0], patches[1], patches[2]:
+            with self.assertRaises(frappe.ValidationError):
+                migration._assert_permission_equivalence_before_merge()
+
+    def test_equivalent_roles_merge_without_audit(self):
+        patches = self.run_preflight({})
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
+            migration.execute()
+            rename.assert_called_once()
+            audit.assert_not_called()
 
     def test_canonical_role_assignment_counterpart_preserves_authority(self):
         rows = {
             ("Has Role", LEGACY): [frappe._dict(parent="private-review", parenttype="Page", parentfield="roles")],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
             migration.execute()
         rename.assert_called_once()
 
