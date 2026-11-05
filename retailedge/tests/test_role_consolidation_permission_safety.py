@@ -119,7 +119,7 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             links.return_value = role_links
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
                 with self.assertRaises(frappe.ValidationError):
-                migration.execute()
+                    migration.execute()
             rename.assert_not_called()
             audit.assert_not_called()
 
@@ -137,11 +137,11 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
                 with self.assertRaises(frappe.ValidationError):
-                migration.execute()
+                    migration.execute()
             rename.assert_not_called()
             audit.assert_not_called()
 
-    def test_custom_permission_type_difference_defers_role_merge(self):
+    def test_custom_permission_type_difference_blocks_role_merge(self):
         rows = {
             ("Custom DocPerm", LEGACY): [grant("User", read=1, impersonate=1)],
             ("Custom DocPerm", CANONICAL): [grant("User", read=1, impersonate=0)],
