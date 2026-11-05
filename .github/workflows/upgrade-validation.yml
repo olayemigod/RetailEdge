@@ -96,6 +96,7 @@ jobs:
         run: |
           bench get-app --branch v16.51.1 --skip-assets https://github.com/frappe/erpnext.git
           bench get-app --branch version-16 --skip-assets https://github.com/frappe/payments.git
+          git -C apps/payments fetch --no-tags --depth=1 upstream cca07d9f9392e2ea0e521c5975151db9e4b6c321
           git -C apps/payments checkout cca07d9f9392e2ea0e521c5975151db9e4b6c321
           bench setup requirements --python payments
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
