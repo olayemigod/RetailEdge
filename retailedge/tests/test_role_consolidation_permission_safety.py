@@ -69,6 +69,38 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         self.assertTrue(should_never_skip(name + " # replay", set(hooks.never_skip_patches)))
         self.assertFalse(should_never_skip("retailedge.patches.unrelated_patch", set(hooks.never_skip_patches)))
 
+    def test_permission_conflict_report_exposes_exact_grants_without_mutation(self):
+        rows = {
+            ("Custom DocPerm", LEGACY): [grant("User", read=1, impersonate=1)],
+            ("Custom DocPerm", CANONICAL): [grant("User", read=1)],
+            ("DocPerm", LEGACY): [grant("RetailEdge Cashier Expense", read=1)],
+            ("DocPerm", CANONICAL): [],
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[9] as ptypes:
+            ptypes.return_value = {"User": ["impersonate"]}
+            report = migration.get_role_permission_conflict_report()
+            rename.assert_not_called()
+            merge_roles.assert_not_called()
+            merge_grants.assert_not_called()
+        self.assertTrue(report["read_only"])
+        self.assertEqual(report["conflict_count"], 2)
+        self.assertIn("impersonate", report["permission_fields_checked"])
+        by_doc = {row["document_type"]: row for row in report["conflicts"]}
+        self.assertEqual(by_doc["User"]["legacy_grants"], [{"impersonate": 1, "read": 1}])
+        self.assertEqual(by_doc["User"]["canonical_grants"], [{"read": 1}])
+        self.assertEqual(by_doc["RetailEdge Cashier Expense"]["canonical_grants"], [])
+
+    def test_permission_conflict_report_returns_empty_when_grants_equivalent(self):
+        rows = {
+            ("DocPerm", LEGACY): [grant("Payment Entry", read=1)],
+            ("DocPerm", CANONICAL): [grant("Payment Entry", read=1)],
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[9]:
+            report = migration.get_role_permission_conflict_report()
+        self.assertEqual(report["conflict_count"], 0)
+
     def test_preflight_reports_all_conflicts_without_truncation(self):
         rows = {
             ("DocPerm", LEGACY): [grant(f"Business DocType {index}", read=1) for index in range(16)],

@@ -70,6 +70,57 @@ def _permission_signatures(
     return {key: sorted(grants) for key, grants in signatures.items()}
 
 
+
+def get_role_permission_conflict_report() -> dict:
+    """Read-only CLI diagnostic. Does not expose a whitelisted API or mutate Roles.
+
+    Use with bench execute on an isolated site, before authorizing any Role
+    reconciliation. The report includes all conflicting native and custom
+    permission flags; zero-valued flags are omitted for readability.
+    """
+    permission_fields = _permission_fields()
+    conflicts: list[dict] = []
+    for legacy, canonical in LEGACY_TO_CANONICAL.items():
+        if not (frappe.db.exists("Role", legacy) and frappe.db.exists("Role", canonical)):
+            continue
+        for doctype in ("DocPerm", "Custom DocPerm"):
+            left = _permission_signatures(doctype, legacy, permission_fields)
+            right = _permission_signatures(doctype, canonical, permission_fields)
+            for scope in sorted(set(left) | set(right)):
+                legacy_grants = left.get(scope, [])
+                canonical_grants = right.get(scope, [])
+                if legacy_grants == canonical_grants:
+                    continue
+                parent, permlevel, if_owner = scope
+
+                def active_flags(grants):
+                    return [
+                        {
+                            field: value
+                            for field, value in zip(permission_fields, grant)
+                            if value
+                        }
+                        for grant in grants
+                    ]
+
+                conflicts.append({
+                    "legacy_role": legacy,
+                    "canonical_role": canonical,
+                    "permission_table": doctype,
+                    "document_type": parent,
+                    "permission_level": permlevel,
+                    "if_owner": if_owner,
+                    "legacy_grants": active_flags(legacy_grants),
+                    "canonical_grants": active_flags(canonical_grants),
+                })
+    return {
+        "read_only": True,
+        "conflict_count": len(conflicts),
+        "permission_fields_checked": list(permission_fields),
+        "conflicts": conflicts,
+    }
+
+
 def _assert_permission_equivalence_before_merge() -> None:
     """Fail closed across ALL role pairs before the first role is renamed.
 

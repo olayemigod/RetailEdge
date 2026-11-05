@@ -15,6 +15,17 @@ If any source/destination role differs, it raises `frappe.ValidationError` and *
 
 If all checks pass, the patch merges only equivalent roles and is repeat-safe.
 
+## Read-only permission comparison
+
+Before modifying any Role, run this command on the isolated upgrade predecessor or a backed-up staging copy:
+
+```bash
+bench --site retail.local execute \
+  retailedge.patches.consolidate_duplicate_retailedge_roles.get_role_permission_conflict_report
+```
+
+The command returns `read_only: true`, the complete conflicting `DocPerm` / `Custom DocPerm` scope list, and the **actual enabled permission flags on each legacy and canonical Role** (including Frappe v16 custom Permission Types). No Role, assignment, permission, or accounting document is changed. Capture its output as approval evidence. Role-level 2FA/domain settings and authorization-bearing links are checked separately by the existing migration guards and also require explicit review. This diagnostic does **not** resolve or waive any migration failure; no automated permission union is authorized.
+
 ## Administrator reconciliation on an isolated site
 1. Back up the existing database. Record all conflicting permission rows and reviewer/approver policies before altering permissions.
 2. Review the permitted effective rights of legacy-only, canonical-only and dual-role users, including User/Role Profile, Page, Branch, and payment/approval direct API access. Define an explicit least-privilege mapping; do not copy all legacy grants into canonical roles.
