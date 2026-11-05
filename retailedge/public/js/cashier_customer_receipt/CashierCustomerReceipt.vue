@@ -80,6 +80,7 @@
 							label="Mode of Payment"
 							placeholder="Cash, bank transfer, card..."
 							:required="true"
+							:disabled="reviewing || posting || confirming"
 							:searcher="searchModes"
 							@update:modelValue="setMode"
 						/>
@@ -140,8 +141,8 @@
 					</div>
 					<p class="receipt-note">Posting creates and submits the standard ERPNext customer Payment Entry. It does not directly rewrite the invoice balance.</p>
 					<div class="receipt-actions receipt-actions--split">
-						<button type="button" class="edge-button" :disabled="posting" @click="editPayment">Edit Payment</button>
-						<button type="button" class="edge-button edge-button--primary" :disabled="posting" @click="postPayment">
+						<button type="button" class="edge-button" :disabled="posting || confirming" @click="editPayment">Edit Payment</button>
+						<button type="button" class="edge-button edge-button--primary" :disabled="posting || confirming" @click="postPayment">
 							{{ posting ? "Posting..." : "Post Payment" }}
 						</button>
 					</div>
@@ -191,6 +192,7 @@ export default {
 			edgeUIValid: true,
 			loading: true,
 			reviewing: false,
+			confirming: false,
 			posting: false,
 			error: "",
 			formError: "",
@@ -198,6 +200,7 @@ export default {
 			values: { posting_date: "", mode_of_payment: "", amount: "", reference_no: "", reference_date: "" },
 			modeDetails: {},
 			review: null,
+			reviewedValues: null,
 			posted: null,
 			menuItems: [],
 			userName: "",
@@ -221,6 +224,7 @@ export default {
 			this.error = "";
 			this.formError = "";
 			this.review = null;
+			this.reviewedValues = null;
 			this.posted = null;
 			try {
 				const salesInvoice = routeInvoice();
@@ -270,64 +274,89 @@ export default {
 			return callMethod(SEARCH_METHOD, { sales_invoice: this.context.sales_invoice, txt: query || "" });
 		},
 		async setMode(next) {
-			this.values.mode_of_payment = next || "";
+			if (this.reviewing || this.confirming || this.posting || this.review) return;
+			const selectedMode = next || "";
+			this.values.mode_of_payment = selectedMode;
 			this.modeDetails = {};
 			this.formError = "";
-			if (!next) return;
+			if (!selectedMode) return;
 			try {
-				this.modeDetails = await callMethod(MODE_METHOD, {
+				const details = await callMethod(MODE_METHOD, {
 					sales_invoice: this.context.sales_invoice,
-					mode_of_payment: next,
+					mode_of_payment: selectedMode,
 				});
-				if (!this.modeDetails.reference_required) this.values.reference_no = "";
+				// Do not let a stale mode lookup change the values under review.
+				if (this.reviewing || this.confirming || this.posting || this.review || this.values.mode_of_payment !== selectedMode) return;
+				this.modeDetails = details;
+				if (!details.reference_required) this.values.reference_no = "";
 			} catch (error) {
-				this.formError = errorMessage(error, "This Mode of Payment is not available for the invoice.");
+				if (this.values.mode_of_payment === selectedMode && !this.reviewing && !this.review) {
+					this.formError = errorMessage(error, "This Mode of Payment is not available for the invoice.");
+				}
 			}
 		},
 		async reviewPayment() {
-			if (this.reviewing) return;
+			if (this.reviewing || this.confirming || this.posting || this.review) return;
 			this.reviewing = true;
+			this.reviewedValues = null;
 			this.formError = "";
+			// Keep the exact submitted review input, regardless of later form events.
+			const paymentValues = { ...this.values };
 			try {
-				this.review = await callMethod(PREVIEW_METHOD, {
+				const preview = await callMethod(PREVIEW_METHOD, {
 					sales_invoice: this.context.sales_invoice,
-					values: this.values,
+					values: paymentValues,
 				});
+				this.reviewedValues = { ...paymentValues };
+				this.review = preview;
 			} catch (error) {
+				this.review = null;
+				this.reviewedValues = null;
 				this.formError = errorMessage(error, "The payment could not be reviewed.");
 			} finally {
 				this.reviewing = false;
 			}
 		},
 		editPayment() {
-			if (this.posting) return;
+			if (this.posting || this.confirming) return;
 			this.review = null;
+			this.reviewedValues = null;
 			this.formError = "";
 		},
 		async postPayment() {
-			if (this.posting || !this.review?.can_post) return;
-			const confirmed = await new Promise((resolve) => {
-				confirmAboveEdgeModal(
-					`Post ${this.money(this.review.payment_amount)} against Sales Invoice ${this.review.sales_invoice}?`,
-					() => resolve(true),
-					() => resolve(false),
-				);
-			});
+			if (this.posting || this.confirming || !this.review?.can_post || !this.reviewedValues) return;
+			const reviewed = { ...this.review };
+			const values = { ...this.reviewedValues };
+			this.confirming = true;
+			let confirmed = false;
+			try {
+				confirmed = await new Promise((resolve) => {
+					confirmAboveEdgeModal(
+						`Post ${this.money(reviewed.payment_amount)} against Sales Invoice ${reviewed.sales_invoice}?`,
+						() => resolve(true),
+						() => resolve(false),
+					);
+				});
+			} finally {
+				if (!confirmed) this.confirming = false;
+			}
 			if (!confirmed) return;
 			this.posting = true;
 			this.formError = "";
 			try {
 				this.posted = await callMethod(POST_METHOD, {
-					sales_invoice: this.review.sales_invoice,
-					values: this.values,
-					expected_invoice_modified: this.review.expected_invoice_modified,
-					expected_outstanding_amount: this.review.expected_outstanding_amount,
+					sales_invoice: reviewed.sales_invoice,
+					values,
+					expected_invoice_modified: reviewed.expected_invoice_modified,
+					expected_outstanding_amount: reviewed.expected_outstanding_amount,
 				}, "POST");
 			} catch (error) {
 				this.formError = errorMessage(error, "The customer payment could not be posted. Refresh the invoice and review it again.");
 				this.review = null;
+				this.reviewedValues = null;
 			} finally {
 				this.posting = false;
+				this.confirming = false;
 			}
 		},
 		backToSelling() {

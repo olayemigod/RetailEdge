@@ -271,6 +271,21 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		):
 			self.assertIn(contract, records)
 
+	def test_payment_review_posts_the_frozen_review_snapshot(self):
+		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
+		for contract in (
+			':disabled="reviewing || posting || confirming"',
+			'this.reviewedValues = { ...paymentValues }',
+			'const paymentValues = { ...this.values }',
+			'const values = { ...this.reviewedValues }',
+			'this.values.mode_of_payment !== selectedMode',
+			'if (this.reviewing || this.confirming || this.posting || this.review) return;',
+			'if (this.posting || this.confirming) return;',
+		):
+			self.assertIn(contract, component)
+		self.assertNotIn('values: this.values,', component)
+		self.assertNotIn('this.posted = await callMethod(POST_METHOD, {\n\t\t\t\t\tsales_invoice: this.review.sales_invoice,', component)
+
 	def test_receipt_page_uses_edgesuite_review_then_post_contract(self):
 		page = json.loads(
 			(APP_ROOT / "retailedge" / "page" / "cashier_customer_receipt" / "cashier_customer_receipt.json").read_text(encoding="utf-8")
