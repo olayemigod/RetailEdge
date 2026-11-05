@@ -180,6 +180,9 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 			'!Number(row?.is_return || 0)',
 			'Number(row?.outstanding_amount || 0) > 0.005',
 			'label: "Receive Payment"',
+			'primaryPaymentAction(row)',
+			'const paymentAction = this.primaryPaymentAction(row)',
+			'actions.unshift({ value: "view", label: "View Invoice" })',
 			'frappe.set_route("cashier-customer-receipt", row.name)',
 		):
 			self.assertIn(contract, records)
