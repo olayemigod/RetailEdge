@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="receipt-state">
 		<strong>Receive Payment could not start.</strong>
-		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
+		<span>Refresh the page. If the problem continues, contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -30,9 +30,9 @@
 					<div>
 						<span class="receipt-kicker">Payment posted</span>
 						<h3>{{ posted.payment_reference }}</h3>
-						<p>The customer payment was posted through the standard ERPNext accounting process.</p>
+						<p>This payment has been posted to your accounts.</p>
 					</div>
-					<EdgeStatusBadge status="Paid" />
+					<EdgeStatusBadge status="Posted" />
 				</section>
 				<section class="edge-panel receipt-summary-grid">
 					<div><span>Sales Invoice</span><strong>{{ posted.sales_invoice }}</strong></div>
@@ -139,7 +139,7 @@
 						<div><span>Posting Date</span><strong>{{ userDate(review.posting_date) }}</strong></div>
 						<div v-if="review.reference_required"><span>Reference No</span><strong>{{ review.reference_no }}</strong></div>
 					</div>
-					<p class="receipt-note">Posting creates and submits the standard ERPNext customer Payment Entry. It does not directly rewrite the invoice balance.</p>
+					<p class="receipt-note">Posting records this payment against the invoice through the normal accounting process.</p>
 					<div class="receipt-actions receipt-actions--split">
 						<button type="button" class="edge-button" :disabled="posting || confirming" @click="editPayment">Edit Payment</button>
 						<button type="button" class="edge-button edge-button--primary" :disabled="posting || confirming" @click="postPayment">

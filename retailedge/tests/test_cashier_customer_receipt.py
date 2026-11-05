@@ -271,6 +271,14 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		):
 			self.assertIn(contract, records)
 
+	def test_posted_receipt_status_does_not_claim_partial_invoice_is_paid(self):
+		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
+		self.assertIn('<EdgeStatusBadge status="Posted" />', component)
+		self.assertNotIn('<EdgeStatusBadge status="Paid" />', component)
+		self.assertIn("Remaining outstanding", component)
+		self.assertNotIn("ERPNext accounting process", component)
+		self.assertNotIn("standard ERPNext customer Payment Entry", component)
+
 	def test_payment_review_posts_the_frozen_review_snapshot(self):
 		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
 		for contract in (
