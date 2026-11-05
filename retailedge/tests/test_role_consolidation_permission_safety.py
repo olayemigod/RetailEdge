@@ -149,11 +149,11 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         patches = self.run_preflight(rows)
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9] as ptypes:
             ptypes.return_value = {"User": ["impersonate"]}
-            with self.assertRaises(frappe.ValidationError):
+            with self.assertRaises(frappe.ValidationError) as blocked:
                 migration.execute()
             rename.assert_not_called()
             audit.assert_not_called()
-            self.assertIn("Custom DocPerm User", audit.call_args.kwargs["message"])
+            self.assertIn("Custom DocPerm User", str(blocked.exception))
 
     def test_legacy_two_factor_auth_policy_is_preserved(self):
         rows = {
@@ -170,11 +170,11 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         }
         patches = self.run_preflight(rows)
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
-            with self.assertRaises(frappe.ValidationError):
+            with self.assertRaises(frappe.ValidationError) as blocked:
                 migration.execute()
             rename.assert_not_called()
             audit.assert_not_called()
-            self.assertIn("Role.two_factor_auth", audit.call_args.kwargs["message"])
+            self.assertIn("Role.two_factor_auth", str(blocked.exception))
 
     def test_preflight_remains_strict_for_manual_audit(self):
         patches = self.run_preflight({
