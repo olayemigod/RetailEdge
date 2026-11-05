@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const RECEIPT_ASSET = "cashier_customer_receipt.bundle.js";
 const PAGE_ROUTE = "cashier-customer-receipt";
 

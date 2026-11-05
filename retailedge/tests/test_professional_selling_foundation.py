@@ -66,13 +66,27 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		self.assertIn('v-if="document.can_create"', component)
 		self.assertIn('v-if="document.can_read"', component)
 
+	def test_retail_cashier_and_hub_loaders_use_unique_edgesuite_runtime(self):
+		"""Avoid asset-manifest collision with legacy CoreEdge edgeui.bundle.js."""
+		for path in (
+			"retailedge/page/cashier_my_work/cashier_my_work.js",
+			"retailedge/page/cashier_customer_receipt/cashier_customer_receipt.js",
+			"retailedge/page/professional_selling/professional_selling.js",
+			"public/js/retailedge_business_hub_page.js",
+			"public/js/retailedge_product_menu.bundle.js",
+		):
+			with self.subTest(path=path):
+				source = self.read(path)
+				self.assertIn('"edgesuite_ui.bundle.js"', source)
+				self.assertNotIn('"edgeui.bundle.js"', source)
+
 	def test_page_uses_edgesuite_single_shell(self):
 		loader = self.read("retailedge/page/professional_selling/professional_selling.js")
 		bundle = self.read("public/js/professional_selling.bundle.js")
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertNotIn("window.EdgeUI", component)
-		for contract in ("edgeui.bundle.js", "professional_selling.bundle.js"):
+		for contract in ("edgesuite_ui.bundle.js", "professional_selling.bundle.js"):
 			self.assertIn(contract, loader)
 		self.assertIn("createEdgeApp", bundle)
 		self.assertIn("const edgeUI = window.EdgeSuiteUI;", bundle)
