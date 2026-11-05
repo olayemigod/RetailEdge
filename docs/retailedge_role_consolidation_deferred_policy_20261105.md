@@ -1,10 +1,10 @@
 # Role consolidation: non-destructive upgrade policy
 
 ## Reason
-Frappe v16 `rename_doc("Role", ..., merge=True)` rewrites Role links. Some existing merchants and the upgrade-test predecessor site have different legacy and canonical `DocPerm`, `Custom DocPerm`, reviewer/approver or Page grants. Combining these can grant permissions never authorized for canonical-only users.
+Frappe v16 `rename_doc("Role", ..., merge=True)` rewrites Role links. Some existing merchants and the upgrade-test predecessor site have different legacy and canonical `DocPerm`, `Custom DocPerm` (including v16 custom Permission Types), reviewer/approver or Page grants. Legacy and canonical Role documents can also differ in security policy, including mandatory two-factor authentication. Combining these can grant permissions never authorized for canonical-only users.
 
 ## Migration contract
-The migration **preflights all role pairs before any mutation**. If either permission equivalence or authorization-link validation reports an issue, no Role, DocPerm, Custom DocPerm, Has Role, Role Profile, Page or reviewer/approver references are modified by this patch. The issue is recorded in standard Frappe Error Log as `RetailEdge role consolidation deferred`. The migration may then complete using the unchanged legacy/canonical data; **consolidation is not complete**.
+The migration **preflights all role pairs before any mutation**. If permission equivalence, Role security policy or authorization-link validation reports an issue, no Role, DocPerm, Custom DocPerm, Has Role, Role Profile, Page or reviewer/approver references are modified by this patch. The issue is recorded in standard Frappe Error Log as `RetailEdge role consolidation deferred`. The migration may then complete using the unchanged legacy/canonical data; **consolidation is not complete**.
 
 Only if the entire preflight succeeds will the patch merge equivalent roles. There is no maximum/union of grants and no automatic change to merchant approval policy.
 

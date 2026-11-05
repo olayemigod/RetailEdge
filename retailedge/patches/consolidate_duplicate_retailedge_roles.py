@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.rename_doc import get_link_fields, rename_doc
+from frappe.core.doctype.permission_type.permission_type import get_doctype_ptype_map
 
 
 LEGACY_TO_CANONICAL = {
@@ -30,9 +31,22 @@ PERMISSION_FIELDS = (
     "mask",
 )
 
+ROLE_POLICY_FIELDS = ("disabled", "desk_access", "two_factor_auth", "restrict_to_domain")
 
 
-def _permission_signatures(doctype: str, role: str) -> dict[tuple[str, int, int], list[tuple[int, ...]]]:
+def _permission_fields() -> tuple[str, ...]:
+    """Include Frappe v16 custom Permission Type columns in both permission tables."""
+    custom = {
+        perm
+        for permission_types in get_doctype_ptype_map().values()
+        for perm in permission_types
+    }
+    return tuple(sorted(set(PERMISSION_FIELDS) | custom))
+
+
+def _permission_signatures(
+    doctype: str, role: str, permission_fields: tuple[str, ...]
+) -> dict[tuple[str, int, int], list[tuple[int, ...]]]:
     """Compare the complete raw grants, including rows without a counterpart.
 
     DocPerm and Custom DocPerm remain separate: Frappe's custom permission
@@ -42,7 +56,7 @@ def _permission_signatures(doctype: str, role: str) -> dict[tuple[str, int, int]
     rows = frappe.get_all(
         doctype,
         filters={"role": role},
-        fields=["parent", "permlevel", "if_owner", *PERMISSION_FIELDS],
+        fields=["parent", "permlevel", "if_owner", *permission_fields],
     )
     signatures: dict[tuple[str, int, int], list[tuple[int, ...]]] = {}
     for row in rows:
@@ -51,7 +65,7 @@ def _permission_signatures(doctype: str, role: str) -> dict[tuple[str, int, int]
             int(row.get("permlevel") or 0),
             int(row.get("if_owner") or 0),
         )
-        grant = tuple(int(row.get(fieldname) or 0) for fieldname in PERMISSION_FIELDS)
+        grant = tuple(int(row.get(fieldname) or 0) for fieldname in permission_fields)
         signatures.setdefault(key, []).append(grant)
     return {key: sorted(grants) for key, grants in signatures.items()}
 
@@ -64,12 +78,13 @@ def _assert_permission_equivalence_before_merge() -> None:
     consequential, as Frappe rewrites Role links when merging Role documents.
     """
     differences: list[str] = []
+    permission_fields = _permission_fields()
     for legacy, canonical in LEGACY_TO_CANONICAL.items():
         if not (frappe.db.exists("Role", legacy) and frappe.db.exists("Role", canonical)):
             continue
         for doctype in ("DocPerm", "Custom DocPerm"):
-            legacy_rows = _permission_signatures(doctype, legacy)
-            canonical_rows = _permission_signatures(doctype, canonical)
+            legacy_rows = _permission_signatures(doctype, legacy, permission_fields)
+            canonical_rows = _permission_signatures(doctype, canonical, permission_fields)
             for scope in sorted(set(legacy_rows) | set(canonical_rows)):
                 if legacy_rows.get(scope, []) != canonical_rows.get(scope, []):
                     parent, permlevel, if_owner = scope
@@ -90,6 +105,35 @@ def _assert_permission_equivalence_before_merge() -> None:
             frappe.ValidationError,
         )
 
+
+
+
+def _assert_role_policy_equivalence_before_merge() -> None:
+    """Retain legacy security policy unless the destination role matches it.
+
+    Frappe's Role merge retains the canonical Role document, so a different
+    legacy 2FA/domain/disabled/Desk-access policy would otherwise be lost.
+    """
+    rows = frappe.get_all(
+        "Role", filters={"name": ["in", list(LEGACY_TO_CANONICAL) + list(LEGACY_TO_CANONICAL.values())]},
+        fields=["name", *ROLE_POLICY_FIELDS], limit_page_length=0,
+    )
+    by_name = {row.get("name"): row for row in rows}
+    differences: list[str] = []
+    for legacy, canonical in LEGACY_TO_CANONICAL.items():
+        if legacy not in by_name or canonical not in by_name:
+            continue
+        for fieldname in ROLE_POLICY_FIELDS:
+            if str(by_name[legacy].get(fieldname) or "") != str(by_name[canonical].get(fieldname) or ""):
+                differences.append(f"{legacy} / {canonical}: Role.{fieldname}")
+    if differences:
+        frappe.throw(
+            _(
+                "RetailEdge role consolidation would change Role security policy. "
+                "Reconcile these settings before merging: {0}"
+            ).format("; ".join(differences)),
+            frappe.ValidationError,
+        )
 
 
 def _assert_authorization_link_safety_before_merge() -> None:
@@ -183,7 +227,7 @@ def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) 
     rows = frappe.get_all(
         doctype,
         filters={"role": legacy},
-        fields=["name", "parent", "permlevel", "if_owner", *PERMISSION_FIELDS],
+        fields=["name", "parent", "permlevel", "if_owner"],
     )
     for row in rows:
         canonical_name = frappe.db.get_value(
@@ -211,6 +255,7 @@ def execute() -> None:
     """
     try:
         _assert_permission_equivalence_before_merge()
+        _assert_role_policy_equivalence_before_merge()
         _assert_authorization_link_safety_before_merge()
     except frappe.ValidationError as exc:
         # Never merge two roles with divergent grants or reviewer/approver

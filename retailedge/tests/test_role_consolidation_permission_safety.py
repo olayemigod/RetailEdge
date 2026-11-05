@@ -22,7 +22,19 @@ def grant(parent="Payment Entry", **permissions):
 class TestRoleConsolidationPermissionSafety(unittest.TestCase):
     def run_preflight(self, rows, *, roles=None):
         role_pairs = roles or {LEGACY: CANONICAL}
-        def get_all(doctype, *, filters=None, fields=None):
+        def get_all(doctype, *, filters=None, fields=None, **kwargs):
+            if doctype == "Role":
+                names = filters["name"][1]
+                role_policies = rows.get(("Role", "policies"), {})
+                return [
+                    frappe._dict(name=role, **role_policies.get(role, {
+                        "disabled": 0,
+                        "desk_access": 1,
+                        "two_factor_auth": 0,
+                        "restrict_to_domain": "",
+                    }))
+                    for role in names
+                ]
             return rows.get((doctype, filters["role"]), [])
         return (
             patch.object(migration, "LEGACY_TO_CANONICAL", role_pairs),
@@ -34,11 +46,12 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             patch.object(migration.frappe, "clear_cache"),
             patch.object(migration, "get_link_fields", return_value=[]),
             patch.object(migration.frappe, "log_error"),
+            patch.object(migration, "get_doctype_ptype_map", return_value={}),
         )
 
     def assert_blocked_before_mutation(self, rows, *, roles=None):
         patches = self.run_preflight(rows, roles=roles)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit, patches[9]:
             migration.execute()
             rename.assert_not_called()
             merge_roles.assert_not_called()
@@ -86,7 +99,7 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             ("Custom DocPerm", CANONICAL): [grant(read=1, print=1)],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit, patches[9]:
             migration.execute()
             audit.assert_not_called()
         merge_roles.assert_called_once_with(LEGACY, CANONICAL)
@@ -121,24 +134,57 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             if doctype == "Has Role" and isinstance(value, dict) and value.get("role") == CANONICAL:
                 return False
             return True
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
                 migration.execute()
             rename.assert_not_called()
             audit.assert_called_once()
+
+    def test_custom_permission_type_difference_defers_role_merge(self):
+        rows = {
+            ("Custom DocPerm", LEGACY): [grant("User", read=1, impersonate=1)],
+            ("Custom DocPerm", CANONICAL): [grant("User", read=1, impersonate=0)],
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9] as ptypes:
+            ptypes.return_value = {"User": ["impersonate"]}
+            migration.execute()
+            rename.assert_not_called()
+            audit.assert_called_once()
+            self.assertIn("Custom DocPerm User", audit.call_args.kwargs["message"])
+
+    def test_legacy_two_factor_auth_policy_is_preserved(self):
+        rows = {
+            ("Role", "policies"): {
+                LEGACY: {
+                    "disabled": 0, "desk_access": 1,
+                    "two_factor_auth": 1, "restrict_to_domain": "",
+                },
+                CANONICAL: {
+                    "disabled": 0, "desk_access": 1,
+                    "two_factor_auth": 0, "restrict_to_domain": "",
+                },
+            },
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
+            migration.execute()
+            rename.assert_not_called()
+            audit.assert_called_once()
+            self.assertIn("Role.two_factor_auth", audit.call_args.kwargs["message"])
 
     def test_preflight_remains_strict_for_manual_audit(self):
         patches = self.run_preflight({
             ("Custom DocPerm", LEGACY): [grant(read=1, submit=1)],
             ("Custom DocPerm", CANONICAL): [grant(read=1)],
         })
-        with patches[0], patches[1], patches[2]:
+        with patches[0], patches[1], patches[2], patches[9]:
             with self.assertRaises(frappe.ValidationError):
                 migration._assert_permission_equivalence_before_merge()
 
     def test_equivalent_roles_merge_without_audit(self):
         patches = self.run_preflight({})
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
             migration.execute()
             rename.assert_called_once()
             audit.assert_not_called()
@@ -148,7 +194,7 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             ("Has Role", LEGACY): [frappe._dict(parent="private-review", parenttype="Page", parentfield="roles")],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
             migration.execute()
         rename.assert_called_once()
 
