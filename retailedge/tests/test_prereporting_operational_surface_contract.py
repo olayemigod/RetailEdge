@@ -105,9 +105,9 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 		path = APP_ROOT / "retailedge" / "page" / "professional_purchasing" / "professional_purchasing.json"
 		roles = {row["role"] for row in json.loads(path.read_text())["roles"]}
 		self.assertTrue({"Purchase User", "Purchase Manager"}.intersection(roles))
-		self.assertNotIn("RetailEdge Manager", roles)
 		self.assertNotIn("RetailEdgeManager", roles)
-		self.assertNotIn("RetailEdge Branch Manager", roles)
+		self.assertNotIn("RetailEdgeManager", roles)
+		self.assertNotIn("RetailEdgeBranchManager", roles)
 		self.assertNotIn("RetailEdgeBranchManager", roles)
 
 

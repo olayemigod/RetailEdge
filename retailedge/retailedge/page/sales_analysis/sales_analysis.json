@@ -11,39 +11,14 @@
   "owner": "Administrator",
   "page_name": "sales-analysis",
   "roles": [
-    {
-      "role": "System Manager"
-    },
-    {
-      "role": "Sales User"
-    },
-    {
-      "role": "Sales Manager"
-    },
-    {
-      "role": "Accounts User"
-    },
-    {
-      "role": "Accounts Manager"
-    },
-    {
-      "role": "RetailEdge Manager"
-    },
-    {
-      "role": "RetailEdgeManager"
-    },
-    {
-      "role": "RetailEdge Branch Manager"
-    },
-    {
-      "role": "RetailEdgeBranchManager"
-    },
-    {
-      "role": "RetailEdge Auditor"
-    },
-    {
-      "role": "RetailEdgeAuditor"
-    }
+   {"role": "System Manager"},
+   {"role": "Sales User"},
+   {"role": "Sales Manager"},
+   {"role": "Accounts User"},
+   {"role": "Accounts Manager"},
+   {"role": "RetailEdgeManager"},
+   {"role": "RetailEdgeBranchManager"},
+   {"role": "RetailEdgeAuditor"}
   ],
   "script": null,
   "standard": "Yes",

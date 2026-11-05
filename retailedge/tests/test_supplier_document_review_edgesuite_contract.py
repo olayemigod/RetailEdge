@@ -13,7 +13,7 @@ class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
 		vue = (APP_ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue").read_text()
 		self.assertIn("window.EdgeSuiteUI", bundle)
 		self.assertIn("edgeUI.createEdgeApp", bundle)
-		self.assertIn("edgeui.bundle.js", page_js)
+		self.assertIn("edgesuite_ui.bundle.js", page_js)
 		self.assertIn("window.EdgeSuiteUI?.components", page_js)
 		for component in (
 			"<EdgeAppShell",

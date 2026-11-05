@@ -30,12 +30,12 @@ DEFAULT_DAILY_SALES_AUDIT_REVIEWER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 SYSTEM_MANAGER_ROLE = "System Manager"
 FINAL_REVIEW_STATUSES = {"Approved", "Rejected", "Balanced", "Variance Found", "Cancelled"}

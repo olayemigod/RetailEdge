@@ -31,12 +31,13 @@ def test_banking_pages_accept_canonical_manager_personas():
 			assert role in roles
 
 
-def test_role_normalization_does_not_depend_on_new_spaced_cashier_alias():
+def test_role_normalization_uses_only_canonical_cashier():
 	roles = _roles("retailedge/page/retailedge_business_hub/retailedge_business_hub.json")
 	assert "RetailEdgeCashier" in roles
 	setup_roles = (ROOT / "setup_roles.py").read_text(encoding="utf-8")
 	assert '"RetailEdgeCashier",' in setup_roles
-	assert '"RetailEdgeCashier": (' not in setup_roles
+	assert "RETAILEDGE_ROLE_ALIASES" not in setup_roles
+	assert "RETAILEDGE_COMPATIBILITY_ROLE_NAMES" not in setup_roles
 
 def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
 	roles = _roles("retailedge/page/document_output_sharing/document_output_sharing.json")
@@ -66,10 +67,10 @@ def test_professional_purchasing_keeps_purchase_authority_role_scoped():
 	):
 		assert role in roles
 	for role in (
-		"RetailEdge Manager",
 		"RetailEdgeManager",
-		"RetailEdge Branch Manager",
+
 		"RetailEdgeBranchManager",
+
 	):
 		assert role not in roles
 

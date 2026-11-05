@@ -29,7 +29,7 @@ def test_sales_overview_uses_shared_edgesuite_dashboard_shell_and_downloads():
 def test_sales_overview_page_mounts_edgesuite_runtime():
 	page = PAGE.read_text()
 	bundle = BUNDLE.read_text()
-	assert 'const EDGEUI_ASSET = "edgeui.bundle.js"' in page
+	assert 'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"' in page
 	assert 'const DASHBOARD_ASSET = "sales_dashboard.bundle.js"' in page
 	assert "window.mountSalesDashboard" in page
 	assert "createEdgeApp(SalesDashboard)" in bundle

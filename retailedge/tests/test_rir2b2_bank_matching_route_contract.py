@@ -58,8 +58,8 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 			{
 				"Accounts Manager",
 				"Accounts User",
-				"RetailEdge Manager",
-				"RetailEdge Branch Manager",
+				"RetailEdgeManager",
+				"RetailEdgeBranchManager",
 			}.issubset(roles)
 		)
 

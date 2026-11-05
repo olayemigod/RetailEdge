@@ -227,6 +227,6 @@ def _assert_reconciliation_access() -> None:
 	if user == "Administrator":
 		return
 	roles = set(frappe.get_roles(user))
-	if roles.intersection({"System Manager", "RetailEdge Manager", "RetailEdgeManager"}):
+	if roles.intersection({"System Manager", "RetailEdgeManager"}):
 		return
 	frappe.throw(_("You do not have permission to audit or reconcile Cashier Expense Branch history."), frappe.PermissionError)

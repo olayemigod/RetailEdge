@@ -1,84 +1,84 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
 from retailedge.setup_roles import (
-	ALL_RETAILEDGE_ROLE_NAMES,
-	RETAILEDGE_ROLE_ALIASES,
-	RETAILEDGE_ROLE_NAMES,
-	canonical_retailedge_role,
-	canonicalize_retailedge_roles,
-	retailedge_role_variants,
+    ALL_RETAILEDGE_ROLE_NAMES,
+    RETAILEDGE_ROLE_NAMES,
+    canonical_retailedge_role,
+    canonicalize_retailedge_roles,
+    retailedge_role_variants,
 )
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestPrereportingRoleContract(unittest.TestCase):
-	def test_longstanding_compact_roles_remain_canonical(self):
-		self.assertEqual(
-			RETAILEDGE_ROLE_NAMES,
-			(
-				"RetailEdgeCashier",
-				"RetailEdgeManager",
-				"RetailEdgeBranchManager",
-				"RetailEdgeAuditor",
-			),
-		)
-		self.assertEqual(canonical_retailedge_role("RetailEdge Cashier"), "RetailEdgeCashier")
-		self.assertEqual(canonical_retailedge_role("RetailEdge Manager"), "RetailEdgeManager")
-		self.assertEqual(canonical_retailedge_role("RetailEdge Branch Manager"), "RetailEdgeBranchManager")
-		self.assertEqual(canonical_retailedge_role("RetailEdge Auditor"), "RetailEdgeAuditor")
-		self.assertEqual(canonical_retailedge_role("RetailEdgeCashier"), "RetailEdgeCashier")
+    def test_exactly_four_canonical_product_roles_exist_in_code(self):
+        expected = (
+            "RetailEdgeCashier",
+            "RetailEdgeManager",
+            "RetailEdgeBranchManager",
+            "RetailEdgeAuditor",
+        )
+        self.assertEqual(RETAILEDGE_ROLE_NAMES, expected)
+        self.assertEqual(ALL_RETAILEDGE_ROLE_NAMES, expected)
 
-	def test_only_observed_spaced_names_are_compatibility_aliases(self):
-		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeCashier"], ("RetailEdge Cashier",))
-		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeManager"], ("RetailEdge Manager",))
-		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeBranchManager"], ("RetailEdge Branch Manager",))
-		self.assertEqual(RETAILEDGE_ROLE_ALIASES["RetailEdgeAuditor"], ("RetailEdge Auditor",))
-		self.assertEqual(
-			set(retailedge_role_variants("RetailEdge Cashier")),
-			{"RetailEdgeCashier", "RetailEdge Cashier"},
-		)
-		self.assertEqual(
-			set(retailedge_role_variants("RetailEdge Manager")),
-			{"RetailEdgeManager", "RetailEdge Manager"},
-		)
-		self.assertEqual(
-			set(retailedge_role_variants("RetailEdgeCashier")),
-			{"RetailEdgeCashier", "RetailEdge Cashier"},
-		)
-		self.assertEqual(len(ALL_RETAILEDGE_ROLE_NAMES), 8)
+    def test_role_helpers_do_not_expand_aliases(self):
+        for role_name in RETAILEDGE_ROLE_NAMES:
+            self.assertEqual(canonical_retailedge_role(role_name), role_name)
+            self.assertEqual(retailedge_role_variants(role_name), (role_name,))
+        self.assertEqual(
+            canonicalize_retailedge_roles(
+                {"RetailEdgeCashier", "RetailEdgeManager", "Accounts Manager"}
+            ),
+            {"RetailEdgeCashier", "RetailEdgeManager", "Accounts Manager"},
+        )
 
-	def test_role_sets_can_be_compared_without_alias_drift(self):
-		self.assertEqual(
-			canonicalize_retailedge_roles(
-				{"RetailEdge Cashier", "RetailEdge Manager", "RetailEdgeBranchManager", "Accounts Manager"}
-			),
-			{"RetailEdgeCashier", "RetailEdgeManager", "RetailEdgeBranchManager", "Accounts Manager"},
-		)
+    def test_legacy_role_migration_is_registered_and_removes_duplicates(self):
+        patch = (
+            APP_ROOT / "patches" / "consolidate_duplicate_retailedge_roles.py"
+        ).read_text(encoding="utf-8")
+        patches_txt = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
 
-	def test_migration_is_additive_and_does_not_rename_or_remove_roles(self):
-		source = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
-		patch = (APP_ROOT / "patches" / "normalize_retailedge_role_assignments.py").read_text(encoding="utf-8")
-		patches_txt = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
+        self.assertIn("retailedge.patches.consolidate_duplicate_retailedge_roles", patches_txt)
+        for legacy, canonical in (
+            ("RetailEdge Cashier", "RetailEdgeCashier"),
+            ("RetailEdge Manager", "RetailEdgeManager"),
+            ("RetailEdge Branch Manager", "RetailEdgeBranchManager"),
+            ("RetailEdge Auditor", "RetailEdgeAuditor"),
+        ):
+            self.assertIn(f'"{legacy}": "{canonical}"', patch)
+        self.assertIn("rename_doc(", patch)
+        self.assertIn("merge=True", patch)
+        self.assertIn("_merge_duplicate_has_role_rows", patch)
+        self.assertIn("_merge_duplicate_permission_rows", patch)
 
-		self.assertIn("_add_canonical_roles_for_alias_assignments", source)
-		self.assertIn('user_doc.append("roles", {"role": canonical})', source)
-		self.assertIn("user_doc.save(ignore_permissions=True)", source)
-		self.assertNotIn("remove_roles", source)
-		self.assertNotIn("frappe.rename_doc", source)
-		self.assertNotIn('frappe.db.set_value("Role"', source)
-		self.assertIn("ensure_retailedge_roles(migrate_alias_assignments=True)", patch)
-		self.assertIn("retailedge.patches.normalize_retailedge_role_assignments", patches_txt)
+    def test_json_permission_rows_use_only_canonical_product_roles_once(self):
+        legacy_roles = {
+            "RetailEdge Cashier",
+            "RetailEdge Manager",
+            "RetailEdge Branch Manager",
+            "RetailEdge Auditor",
+        }
+        for path in APP_ROOT.rglob("*.json"):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            permissions = payload.get("permissions") or []
+            keys = []
+            for row in permissions:
+                role = row.get("role")
+                self.assertNotIn(role, legacy_roles, path)
+                keys.append((role, int(row.get("permlevel") or 0), int(row.get("if_owner") or 0)))
+            self.assertEqual(len(keys), len(set(keys)), path)
 
-	def test_desk_access_contract_stays_system_user_compatible(self):
-		source = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
-		self.assertIn('"desk_access": 1', source)
-		self.assertIn('if frappe.db.exists("Role", role_name):', source)
-		self.assertNotIn('"desk_access": 0', source)
+    def test_desk_access_contract_stays_system_user_compatible(self):
+        source = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
+        self.assertIn('"desk_access": 1', source)
+        self.assertIn('if frappe.db.exists("Role", role_name):', source)
+        self.assertNotIn('"desk_access": 0', source)
 
 
 if __name__ == "__main__":
-	unittest.main()
+    unittest.main()

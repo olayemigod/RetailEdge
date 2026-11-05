@@ -25,12 +25,12 @@ AUTHORITATIVE_SUPPLIER_REVIEW_ROLES = {
 	"Accounts User",
 }
 RETAILEDGE_GENERAL_ROLES = {
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 
 

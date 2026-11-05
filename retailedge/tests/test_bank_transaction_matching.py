@@ -63,7 +63,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			assert_can_access_bank_transaction_matching(user="auditor@example.com")
 		roles = has_role.call_args.kwargs["roles"]
-		self.assertNotIn("RetailEdge Auditor", roles)
+		self.assertNotIn("RetailEdgeAuditor", roles)
 		self.assertNotIn("RetailEdgeAuditor", roles)
 
 	def _field(self, fieldname, fieldtype="Data"):

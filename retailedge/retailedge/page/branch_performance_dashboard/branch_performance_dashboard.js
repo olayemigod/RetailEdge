@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const DASHBOARD_ASSET = "branch_performance_dashboard.bundle.js";
 const PAGE_ROUTE = "branch-performance-dashboard";
 const PAGE_TITLE = "Branch Performance";
