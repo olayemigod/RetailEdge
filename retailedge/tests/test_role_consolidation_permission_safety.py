@@ -32,11 +32,12 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             patch.object(migration, "_merge_duplicate_has_role_rows"),
             patch.object(migration, "_merge_duplicate_permission_rows"),
             patch.object(migration.frappe, "clear_cache"),
+            patch.object(migration, "get_link_fields", return_value=[]),
         )
 
     def assert_blocked_before_mutation(self, rows, *, roles=None):
         patches = self.run_preflight(rows, roles=roles)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7]:
             with self.assertRaises(frappe.ValidationError):
                 migration.execute()
             rename.assert_not_called()
@@ -82,12 +83,54 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             ("Custom DocPerm", CANONICAL): [grant(read=1, print=1)],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7]:
             migration.execute()
         merge_roles.assert_called_once_with(LEGACY, CANONICAL)
         self.assertEqual(merge_grants.call_count, 2)
         rename.assert_called_once()
         self.assertTrue(rename.call_args.kwargs["merge"])
+
+    def test_legacy_reviewer_role_link_does_not_expand_canonical_users(self):
+        patches = self.run_preflight({})
+        role_links = [{"parent": "RetailEdge Daily Sales Audit Reviewer Role", "fieldname": "role", "issingle": 0}]
+        def exists(doctype, value):
+            if doctype == "Role":
+                return True
+            if doctype == "RetailEdge Daily Sales Audit Reviewer Role":
+                return value == {"role": LEGACY}
+            return True
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links:
+            links.return_value = role_links
+            with patch.object(migration.frappe.db, "exists", side_effect=exists):
+                with self.assertRaises(frappe.ValidationError):
+                    migration.execute()
+            rename.assert_not_called()
+
+    def test_legacy_only_page_role_assignment_fails_closed(self):
+        rows = {
+            ("Has Role", LEGACY): [frappe._dict(parent="private-review", parenttype="Page", parentfield="roles")],
+        }
+        patches = self.run_preflight(rows)
+        def exists(doctype, value):
+            if doctype == "Role":
+                return True
+            if doctype == "Has Role" and isinstance(value, dict) and value.get("role") == CANONICAL:
+                return False
+            return True
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7]:
+            with patch.object(migration.frappe.db, "exists", side_effect=exists):
+                with self.assertRaises(frappe.ValidationError):
+                    migration.execute()
+            rename.assert_not_called()
+
+    def test_canonical_role_assignment_counterpart_preserves_authority(self):
+        rows = {
+            ("Has Role", LEGACY): [frappe._dict(parent="private-review", parenttype="Page", parentfield="roles")],
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7]:
+            migration.execute()
+        rename.assert_called_once()
 
     def test_no_implicit_permission_union_remains(self):
         source = open(migration.__file__, encoding="utf-8").read()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.model.rename_doc import rename_doc
+from frappe.model.rename_doc import get_link_fields, rename_doc
 
 
 LEGACY_TO_CANONICAL = {
@@ -91,6 +91,71 @@ def _assert_permission_equivalence_before_merge() -> None:
         )
 
 
+
+def _assert_authorization_link_safety_before_merge() -> None:
+    """Reject Role-link remaps that could widen page, profile or approval access.
+
+    Frappe rename_doc updates every Link-to-Role value, not only DocPerm.
+    Legacy-only reviewer/approver settings would grant the same authority to
+    existing canonical-only users after rename. Require explicit reconciliation.
+    """
+    differences: list[str] = []
+    role_links = get_link_fields("Role")
+    permission_and_assignment_tables = {"Has Role", "DocPerm", "Custom DocPerm"}
+
+    for legacy, canonical in LEGACY_TO_CANONICAL.items():
+        if not (frappe.db.exists("Role", legacy) and frappe.db.exists("Role", canonical)):
+            continue
+
+        # User/Role Profile/Page/Report assignments also carry authorization.
+        # An existing matching canonical assignment is safe; legacy-only ones
+        # are not silently converted to grants for a wider population.
+        old_assignments = frappe.get_all(
+            "Has Role",
+            filters={"role": legacy},
+            fields=["parent", "parenttype", "parentfield"],
+        )
+        for row in old_assignments:
+            scope = {
+                "role": canonical,
+                "parent": row.get("parent"),
+                "parenttype": row.get("parenttype"),
+                "parentfield": row.get("parentfield"),
+            }
+            if not frappe.db.exists("Has Role", scope):
+                differences.append(
+                    f"{legacy} / {canonical}: Has Role "
+                    f"{row.get('parenttype')} {row.get('parent')}"
+                )
+
+        for link in role_links:
+            doctype = str(link.get("parent") or "").strip()
+            fieldname = str(link.get("fieldname") or "").strip()
+            if not doctype or not fieldname or doctype in permission_and_assignment_tables:
+                continue
+            if link.get("issingle"):
+                configured_role = frappe.db.get_single_value(doctype, fieldname)
+                has_legacy = configured_role == legacy
+            else:
+                has_legacy = bool(frappe.db.exists(doctype, {fieldname: legacy}))
+            if has_legacy:
+                differences.append(
+                    f"{legacy} / {canonical}: {doctype}.{fieldname}"
+                )
+    if differences:
+        details = "; ".join(differences[:12])
+        remaining = f" (+{len(differences) - 12} more)" if len(differences) > 12 else ""
+        frappe.throw(
+            _(
+                "RetailEdge role consolidation cannot proceed because Role links "
+                "or authorization assignments require explicit reconciliation. "
+                "Review these reviewer, approver, Page, profile or User settings "
+                "before retrying migration: {0}{1}"
+            ).format(details, remaining),
+            frappe.ValidationError,
+        )
+
+
 def _merge_duplicate_has_role_rows(legacy: str, canonical: str) -> None:
     rows = frappe.get_all(
         "Has Role",
@@ -141,6 +206,7 @@ def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) 
 def execute() -> None:
     """Merge obsolete spaced RetailEdge roles into one canonical role per persona."""
     _assert_permission_equivalence_before_merge()
+    _assert_authorization_link_safety_before_merge()
     for legacy, canonical in LEGACY_TO_CANONICAL.items():
         if not frappe.db.exists("Role", legacy):
             continue
