@@ -271,6 +271,21 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		):
 			self.assertIn(contract, records)
 
+	def test_bank_mode_lookup_resolves_before_payment_preview(self):
+		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
+		for contract in (
+			"modeLookupPromise: null",
+			"this.modeLookupPromise = lookup;",
+			"if (this.modeLookupPromise === lookup) this.modeLookupPromise = null;",
+			"const pendingModeLookup = this.modeLookupPromise;",
+			"if (pendingModeLookup) await pendingModeLookup;",
+			"if (this.formError) return;",
+			"this.modeDetails = details;",
+			"if (!this.values.mode_of_payment || !this.modeDetails?.account_type)",
+		):
+			self.assertIn(contract, component)
+		self.assertLess(component.index("if (pendingModeLookup) await pendingModeLookup;"), component.index("const paymentValues = { ...this.values };"))
+
 	def test_posted_receipt_status_does_not_claim_partial_invoice_is_paid(self):
 		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
 		self.assertIn('<EdgeStatusBadge status="Posted" />', component)

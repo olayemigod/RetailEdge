@@ -199,6 +199,7 @@ export default {
 			context: {},
 			values: { posting_date: "", mode_of_payment: "", amount: "", reference_no: "", reference_date: "" },
 			modeDetails: {},
+			modeLookupPromise: null,
 			review: null,
 			reviewedValues: null,
 			posted: null,
@@ -225,6 +226,8 @@ export default {
 			this.formError = "";
 			this.review = null;
 			this.reviewedValues = null;
+			this.modeLookupPromise = null;
+			this.modeDetails = {};
 			this.posted = null;
 			try {
 				const salesInvoice = routeInvoice();
@@ -279,20 +282,29 @@ export default {
 			this.values.mode_of_payment = selectedMode;
 			this.modeDetails = {};
 			this.formError = "";
-			if (!selectedMode) return;
+			if (!selectedMode) {
+				this.modeLookupPromise = null;
+				return;
+			}
+			const lookup = callMethod(MODE_METHOD, {
+				sales_invoice: this.context.sales_invoice,
+				mode_of_payment: selectedMode,
+			});
+			this.modeLookupPromise = lookup;
 			try {
-				const details = await callMethod(MODE_METHOD, {
-					sales_invoice: this.context.sales_invoice,
-					mode_of_payment: selectedMode,
-				});
-				// Do not let a stale mode lookup change the values under review.
-				if (this.reviewing || this.confirming || this.posting || this.review || this.values.mode_of_payment !== selectedMode) return;
+				const details = await lookup;
+				// An older lookup cannot overwrite a newer selection or a review.
+				if (this.values.mode_of_payment !== selectedMode || this.review || this.confirming || this.posting) return;
+				// Set the reference requirements even if Review was clicked while
+				// the lookup was running. Review waits for this same request.
 				this.modeDetails = details;
-				if (!details.reference_required) this.values.reference_no = "";
+				if (!details.reference_required && !this.reviewing) this.values.reference_no = "";
 			} catch (error) {
-				if (this.values.mode_of_payment === selectedMode && !this.reviewing && !this.review) {
+				if (this.values.mode_of_payment === selectedMode && !this.review && !this.posting && !this.confirming) {
 					this.formError = errorMessage(error, "This Mode of Payment is not available for the invoice.");
 				}
+			} finally {
+				if (this.modeLookupPromise === lookup) this.modeLookupPromise = null;
 			}
 		},
 		async reviewPayment() {
@@ -300,9 +312,17 @@ export default {
 			this.reviewing = true;
 			this.reviewedValues = null;
 			this.formError = "";
-			// Keep the exact submitted review input, regardless of later form events.
-			const paymentValues = { ...this.values };
 			try {
+				// Wait for the selected Bank/Cash mode's field requirements
+				// before building the exact review snapshot.
+				const pendingModeLookup = this.modeLookupPromise;
+				if (pendingModeLookup) await pendingModeLookup;
+				if (this.formError) return;
+				if (!this.values.mode_of_payment || !this.modeDetails?.account_type) {
+					this.formError = "Choose an available Mode of Payment before reviewing.";
+					return;
+				}
+				const paymentValues = { ...this.values };
 				const preview = await callMethod(PREVIEW_METHOD, {
 					sales_invoice: this.context.sales_invoice,
 					values: paymentValues,
