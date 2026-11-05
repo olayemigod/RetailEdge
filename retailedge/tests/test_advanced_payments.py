@@ -58,7 +58,9 @@ class TestAdvancedPayments(unittest.TestCase):
 			)
 		]
 
-		rows = list_customer_advances(customer="CUST-001", company="Demo Company", limit=1000)
+		# Keep this unit test independent of live operating-context/defaults state.
+		with patch("retailedge.advanced_payments.get_operating_context", return_value={"company": "Demo Company", "branch": ""}):
+			rows = list_customer_advances(customer="CUST-001", company="Demo Company", limit=1000)
 
 		kwargs = mock_get_list.call_args.kwargs
 		self.assertEqual(kwargs["filters"]["docstatus"], 1)
