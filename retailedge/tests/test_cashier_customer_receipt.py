@@ -9,9 +9,12 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.cashier_customer_receipt import (
+	_assert_invoice_scope,
 	_build_payment_entry,
+	_get_receivable_invoice,
 	_post_native_payment,
 	_receipt_values,
+	post_cashier_customer_receipt,
 )
 
 
@@ -139,6 +142,86 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		self.assertTrue(payment.flags.ignore_permissions)
 		self.assertEqual(getattr(frappe.flags, "ignore_account_permission", False), previous)
 
+	def test_invoice_branch_requires_current_operating_readiness_even_with_legacy_assignment(self):
+		invoice = SimpleNamespace(
+			name="ACC-SINV-0007",
+			company="RetailEdge Consulting",
+			is_return=0,
+			docstatus=1,
+			outstanding_amount=200000,
+		)
+		readiness = {
+			"company": invoice.company,
+			"restricted": True,
+			"allowed_branches": [],
+			"source": "user_readiness",
+			"readiness_message": "Your Branch setup is not active.",
+		}
+		with (
+			patch("retailedge.cashier_customer_receipt._assert_cashier", return_value="cashier"),
+			patch("retailedge.cashier_customer_receipt.frappe.db.exists", return_value=True),
+			patch("retailedge.cashier_customer_receipt.frappe.db.sql"),
+			patch("retailedge.cashier_customer_receipt.frappe.get_doc", return_value=invoice),
+			patch("retailedge.cashier_customer_receipt.frappe.has_permission", return_value=True),
+			patch("retailedge.cashier_customer_receipt._invoice_branch", return_value="Ketu"),
+			patch("retailedge.cashier_customer_receipt.get_operating_context", return_value={"company": invoice.company}),
+			patch("retailedge.cashier_customer_receipt.get_operational_branch_scope", return_value=readiness),
+			patch("retailedge.operating_context.get_operational_branch_scope", return_value=readiness),
+			patch("retailedge.cashier_customer_receipt.validate_user_branch_access") as legacy_access,
+			patch("retailedge.cashier_customer_receipt._post_native_payment") as native_post,
+		):
+			with self.assertRaises(frappe.PermissionError):
+				_get_receivable_invoice(invoice.name)
+			with self.assertRaises(frappe.PermissionError):
+				post_cashier_customer_receipt(
+					invoice.name,
+					{"mode_of_payment": "Cash", "amount": 50000},
+					expected_invoice_modified="unchanged",
+					expected_outstanding_amount=200000,
+				)
+			legacy_access.assert_not_called()
+			native_post.assert_not_called()
+
+	def test_invoice_branch_denied_when_current_branch_setup_is_disabled(self):
+		invoice = SimpleNamespace(name="ACC-SINV-0008", company="RetailEdge Consulting")
+		scope = {
+			"company": invoice.company,
+			"restricted": True,
+			"allowed_branches": ["Ketu"],
+			"source": "branch_assignment",
+		}
+		with (
+			patch("retailedge.cashier_customer_receipt._invoice_branch", return_value="Ketu"),
+			patch("retailedge.cashier_customer_receipt.get_operating_context", return_value={"company": invoice.company}),
+			patch("retailedge.cashier_customer_receipt.get_operational_branch_scope", return_value=scope),
+			patch("retailedge.operating_context.get_operational_branch_scope", return_value=scope),
+			patch("retailedge.operating_context.validate_operating_branch", side_effect=frappe.PermissionError("Branch Setup disabled")),
+			patch("retailedge.cashier_customer_receipt.validate_user_branch_access") as legacy_access,
+		):
+			with self.assertRaises(frappe.PermissionError):
+				_assert_invoice_scope(invoice)
+			legacy_access.assert_not_called()
+
+	def test_invoice_branch_accepts_ready_active_matching_branch(self):
+		invoice = SimpleNamespace(name="ACC-SINV-0009", company="RetailEdge Consulting")
+		scope = {
+			"company": invoice.company,
+			"restricted": True,
+			"allowed_branches": ["Ketu"],
+			"source": "branch_assignment",
+		}
+		with (
+			patch("retailedge.cashier_customer_receipt._invoice_branch", return_value="Ketu"),
+			patch("retailedge.cashier_customer_receipt.get_operating_context", return_value={"company": invoice.company, "branch": "Ketu"}),
+			patch("retailedge.cashier_customer_receipt.get_operational_branch_scope", return_value=scope),
+			patch("retailedge.operating_context.get_operational_branch_scope", return_value=scope),
+			patch("retailedge.operating_context.validate_operating_branch", return_value={"allowed": True}) as active_branch,
+			patch("retailedge.cashier_customer_receipt.validate_user_branch_access") as legacy_access,
+		):
+			self.assertEqual(_assert_invoice_scope(invoice), (invoice.company, "Ketu"))
+			active_branch.assert_called_once()
+			legacy_access.assert_called_once()
+
 	def test_server_boundary_is_cashier_invoice_branch_and_concurrency_scoped(self):
 		source = (APP_ROOT / "cashier_customer_receipt.py").read_text(encoding="utf-8")
 		for contract in (
@@ -146,6 +229,7 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 			'frappe.has_permission(SALES_INVOICE_DOCTYPE, "read", doc=invoice)',
 			"validate_user_branch_access(",
 			"get_operational_branch_scope(",
+			"resolve_operational_branch(company, branch=branch, user=frappe.session.user)",
 			'"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE"',
 			"expected_invoice_modified",
 			"expected_outstanding_amount",

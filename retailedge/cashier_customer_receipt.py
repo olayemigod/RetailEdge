@@ -8,7 +8,7 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 from retailedge.advanced_payments import _company_currency, _invoice_branch, _payment_branch_field
 from retailedge.branch_context import validate_user_branch_access
-from retailedge.operating_context import get_operating_context, get_operational_branch_scope
+from retailedge.operating_context import get_operating_context, get_operational_branch_scope, resolve_operational_branch
 from retailedge.setup_roles import user_has_retailedge_role
 
 
@@ -76,6 +76,15 @@ def _assert_invoice_scope(invoice: Any) -> tuple[str, str]:
 	branch = str(_invoice_branch(invoice) or "").strip()
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if branch:
+		# Historical Branch Assignments alone are insufficient for a cashier
+		# posting exception. Re-check current user readiness, Company/Branch
+		# validity and active Branch Setup before any Payment Entry is created.
+		resolved = resolve_operational_branch(company, branch=branch, user=frappe.session.user)
+		if str(resolved.get("branch") or "").strip() != branch:
+			frappe.throw(
+				_("Sales Invoice {0} does not belong to an available Working Branch.").format(invoice.name),
+				frappe.PermissionError,
+			)
 		validate_user_branch_access(
 			branch,
 			user=frappe.session.user,
