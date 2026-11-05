@@ -93,15 +93,15 @@ def _assert_permission_equivalence_before_merge() -> None:
                         f"(level {permlevel}, if_owner {if_owner})"
                     )
     if differences:
-        details = "; ".join(differences[:12])
-        remaining = f" (+{len(differences) - 12} more)" if len(differences) > 12 else ""
+        # Do not hide affected scopes: administrators must review them all.
+        details = "; ".join(differences)
         frappe.throw(
             _(
                 "RetailEdge role consolidation cannot proceed because legacy and "
                 "canonical permissions differ. Review these grants in Role Permission "
                 "Manager or reconcile the conflicting permission rows explicitly "
-                "before retrying migration: {0}{1}"
-            ).format(details, remaining),
+                "before retrying migration: {0}"
+            ).format(details),
             frappe.ValidationError,
         )
 
@@ -187,15 +187,15 @@ def _assert_authorization_link_safety_before_merge() -> None:
                     f"{legacy} / {canonical}: {doctype}.{fieldname}"
                 )
     if differences:
-        details = "; ".join(differences[:12])
-        remaining = f" (+{len(differences) - 12} more)" if len(differences) > 12 else ""
+        # Do not hide affected scopes: administrators must review them all.
+        details = "; ".join(differences)
         frappe.throw(
             _(
                 "RetailEdge role consolidation cannot proceed because Role links "
                 "or authorization assignments require explicit reconciliation. "
                 "Review these reviewer, approver, Page, profile or User settings "
-                "before retrying migration: {0}{1}"
-            ).format(details, remaining),
+                "before retrying migration: {0}"
+            ).format(details),
             frappe.ValidationError,
         )
 

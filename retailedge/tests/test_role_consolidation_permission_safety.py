@@ -59,6 +59,19 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             merge_grants.assert_not_called()
             audit.assert_not_called()
 
+    def test_preflight_reports_all_conflicts_without_truncation(self):
+        rows = {
+            ("DocPerm", LEGACY): [grant(f"Business DocType {index}", read=1) for index in range(16)],
+            ("DocPerm", CANONICAL): [],
+        }
+        patches = self.run_preflight(rows)
+        with patches[0], patches[1], patches[2], patches[9]:
+            with self.assertRaises(frappe.ValidationError) as blocked:
+                migration._assert_permission_equivalence_before_merge()
+        self.assertIn("Business DocType 0", str(blocked.exception))
+        self.assertIn("Business DocType 15", str(blocked.exception))
+        self.assertNotIn("(+4 more)", str(blocked.exception))
+
     def test_create_submit_escalation_is_rejected(self):
         self.assert_blocked_before_mutation({
             ("Custom DocPerm", LEGACY): [grant(read=1, create=1, submit=1)],
