@@ -12,7 +12,7 @@ This file records actual manual evidence for `docs/mvp_c2_physical_merchant_acce
 | PR #236 merge | confirmed |
 | Acceptance PR | #238 |
 | Current PR head | read from PR #238 at acceptance; do not copy an older SHA |
-| Last fully green runtime SHA | `44df381c563d41e24be697acbffed50645f3b17f` |
+| Last fully green hosted PR candidate SHA | `f3873c0e030b10fb436aaf0e803b132283d2d1d7` (prior to this evidence-only update) |
 | RetailEdge deployed SHA | PENDING local verification |
 | EdgeSuite UI deployed SHA | PENDING local verification |
 | Frappe version | expected `16.52.0`; verify on site |
@@ -39,15 +39,17 @@ Runtime SHA `44df381c563d41e24be697acbffed50645f3b17f` passed all five required 
 | EdgeSuite UI Candidate Compatibility | PASS — run #3585 |
 | Browser Persona | PASS — run #2596 |
 
-After that green runtime run, the acceptance evidence was recorded and the candidate baseline was corrected from ProcessEdge POSNext Extension `0.0.14` / `922fd7ba5d4730afc86bcdc05764e4b4b12208dc` to the required authenticated-session compatibility dependency `0.0.15` / `61a5fb9b92d8b9f4bb003c408474811f62deef3b`. Because the baseline pin is part of the candidate contract, the current PR head must pass the full exact-head gate set again before local acceptance can begin.
+After that green runtime run, the acceptance evidence was recorded and the candidate baseline was corrected from ProcessEdge POSNext Extension `0.0.14` / `922fd7ba5d4730afc86bcdc05764e4b4b12208dc` to the required authenticated-session compatibility dependency `0.0.15` / `61a5fb9b92d8b9f4bb003c408474811f62deef3b`. The corrected runtime candidate passed the full five-gate set at `f3873c0e030b10fb436aaf0e803b132283d2d1d7`. Manual evidence may be recorded while other cases remain pending; an evidence-only update must not be represented as tested at an older exact head.
 
-| Gate | Current PR #238 head |
+| Gate | Last validated pre-evidence head `f3873c0e030b10fb436aaf0e803b132283d2d1d7` |
 | --- | --- |
-| CI | PENDING replacement exact-head run |
-| Linters / security | PENDING replacement exact-head run |
-| Upgrade Validation | PENDING replacement exact-head run |
-| EdgeSuite UI Candidate Compatibility | PENDING replacement exact-head run |
-| Browser Persona | PENDING replacement exact-head run |
+| CI | PASS — run #5626 |
+| Linters / security | PASS — run #5483 |
+| Upgrade Validation | PASS — run #2649 |
+| EdgeSuite UI Candidate Compatibility | PASS — run #3739 |
+| Browser Persona | PASS — run #2750 |
+
+The printing-evidence record is a documentation update. It moves the PR head, so **replacement exact-head checks must be completed on that new head** before merge. These prior green results cannot be reassigned to the updated commit.
 
 Any runtime-code, migration, baseline, or evidence change that moves the candidate head requires replacement exact-head validation before that new head can be accepted.
 
@@ -67,7 +69,7 @@ Use exact document names and concise evidence references in Notes where useful.
 | 8 | Selling | Non-cash or mixed payment | Cashier/Sales | PENDING |  |  |
 | 9 | Selling | Edited price/tax/discount reflected in totals | Cashier/Sales | PENDING |  |  |
 | 10 | Context | Correct Branch and cashier/user attribution | Cashier | PENDING |  |  |
-| 11 | Printing | Produce receipt through supported 1.0 path | Cashier | PENDING |  |  |
+| 11 | Printing | Produce receipt through supported 1.0 path | Cashier | **PASS — user-reported** | Confirmation in conversation, 05/11/2026 | Printing on `retail.local` confirmed successful by project operator. Printer connection/path, receipt identifier and exact local deployed SHA not supplied; qualify before full release acceptance. |
 | 12 | Printing | Receipt readable; submitted document unchanged | Cashier | PENDING |  |  |
 | 13 | Expense | Record cashier expense | Cashier | PENDING |  |  |
 | 14 | Cash | Record governed cash deposit/removal | Cashier/Manager | PENDING |  |  |
@@ -94,6 +96,8 @@ Use exact document names and concise evidence references in Notes where useful.
 
 RetailEdge 1.0 does not require WebUSB physical acceptance under the current support boundary.
 
+User-reported physical printing on `retail.local`: **PASS (reported 05/11/2026)**. The operator did not specify whether the successful route was system printing or configured Serial/Bluetooth. Both path-specific rows below remain unverified until the method is identified. This report does not independently prove receipt readability, submitted-document integrity, or the exact deployed application versions.
+
 At least one supported merchant path must pass:
 
 | Printing path | Required for MVP-C2? | Result | Evidence / notes |
@@ -112,7 +116,7 @@ At least one supported merchant path must pass:
 
 ## Acceptance decision
 
-Current decision: **NOT ACCEPTED — the baseline now matches the required POS runtime dependency, but replacement exact-head validation and manual `retail.local` evidence are pending.**
+Current decision: **NOT ACCEPTED — printing on `retail.local` was reported successful, but supported-path identification, receipt-integrity evidence, other merchant-journey rows and exact deployed SHA remain outstanding.**
 
 Promote this to PASS only when all required rows have passed on one exact deployed candidate, no release-blocking defect remains, and at least one supported 1.0 printing path has been physically accepted.
 
