@@ -291,7 +291,7 @@ test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ br
 	}
 });
 
-test("canonical RetailEdge cashier lands on My Work with Home navigation, history, and new-tab POS", async ({ browser }) => {
+test("canonical RetailEdge cashier lands on My Work with Home navigation, history, and provider-aware POS", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
 		await page.goto(`${BASE_URL}/app/retailedge-business-hub`, {
@@ -311,11 +311,31 @@ test("canonical RetailEdge cashier lands on My Work with Home navigation, histor
 		await expect(productLogo).toBeVisible();
 		expect(await productLogo.evaluate((image) => image.complete && image.naturalWidth > 0)).toBeTruthy();
 
-		const popupPromise = context.waitForEvent("page");
-		await page.getByRole("button", { name: "Start POS", exact: true }).first().click();
-		const posPage = await popupPromise;
-		await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
-		await posPage.close().catch(() => {});
+		// Standalone browser QA may not have a POS provider installed.
+		// The button must agree with the permission-filtered runtime navigation.
+		const navigationResponse = await context.request.get(
+			`${BASE_URL}/api/method/retailedge.edgesuite_ui.get_retailedge_business_hub_context`
+		);
+		expect(navigationResponse.ok()).toBeTruthy();
+		const navigation = (await navigationResponse.json()).message || {};
+		const posItem = (navigation.navigation_groups || [])
+			.flatMap((group) => group.items || [])
+			.find((item) => item.label === "Start POS");
+		const startPosButton = page.getByRole("button", { name: "Start POS", exact: true }).first();
+		if (!posItem) {
+			await expect(startPosButton).toHaveCount(0);
+		} else if (posItem.target_type === "URL" && posItem.target === "/pos/") {
+			await expect(startPosButton).toBeVisible();
+			const [posPage] = await Promise.all([context.waitForEvent("page"), startPosButton.click()]);
+			await posPage.waitForURL(/\\/pos\\//, { timeout: 20_000 });
+			await posPage.close().catch(() => {});
+		} else if (posItem.target_type === "Page") {
+			await expect(startPosButton).toBeVisible();
+			await startPosButton.click();
+			await expect(page).toHaveURL(new RegExp(`/app/${posItem.target}$`));
+		} else {
+			throw new Error(`Unexpected Start POS target: ${JSON.stringify(posItem)}`);
+		}
 
 		const workDate = page.getByLabel("Work date", { exact: true });
 		await expect(workDate).toBeVisible();
