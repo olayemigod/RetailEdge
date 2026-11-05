@@ -19,9 +19,6 @@ def get_reviewer_roles() -> set[str]:
 	return {
 		"System Manager",
 		"Accounts Manager",
-		"RetailEdge Manager",
-		"RetailEdge Branch Manager",
-		"RetailEdge Auditor",
 		"RetailEdgeManager",
 		"RetailEdgeBranchManager",
 		"RetailEdgeAuditor",
@@ -30,8 +27,8 @@ def get_reviewer_roles() -> set[str]:
 
 def get_cashier_roles() -> set[str]:
 	return {
-		"RetailEdge Cashier",
 		"RetailEdgeCashier",
+
 	}
 
 

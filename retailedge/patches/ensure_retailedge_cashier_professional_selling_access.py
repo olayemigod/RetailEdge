@@ -5,7 +5,6 @@ import frappe
 
 CASHIER_ROLES = (
 	"RetailEdgeCashier",
-	"RetailEdge Cashier",
 )
 PROFESSIONAL_SELLING_PAGE = "professional-selling"
 

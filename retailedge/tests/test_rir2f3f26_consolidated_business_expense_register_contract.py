@@ -19,7 +19,7 @@ def test_consolidated_view_is_privileged_and_explicit():
 	with patch.object(
 		consolidated.frappe,
 		"get_roles",
-		return_value=["RetailEdge Manager"],
+		return_value=["RetailEdgeManager"],
 	):
 		assert consolidated.can_view_consolidated_business_expenses(
 			"manager@example.com"
@@ -27,7 +27,7 @@ def test_consolidated_view_is_privileged_and_explicit():
 	with patch.object(
 		consolidated.frappe,
 		"get_roles",
-		return_value=["RetailEdge Cashier"],
+		return_value=["RetailEdgeCashier"],
 	):
 		assert not consolidated.can_view_consolidated_business_expenses(
 			"cashier@example.com"

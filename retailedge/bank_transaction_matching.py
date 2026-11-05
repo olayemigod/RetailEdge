@@ -25,10 +25,10 @@ BANK_TRANSACTION_MATCHING_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
+
 }
 
 ACTIVE_CONFIRMED_MATCH_STATUS = "Confirmed"

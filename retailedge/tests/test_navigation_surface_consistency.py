@@ -22,12 +22,13 @@ def test_reports_centre_uses_final_permission_filtered_navigation_context():
 def test_professional_selling_cashier_page_access_is_declared_and_upgrade_reconciled():
 	page = json.loads(read("retailedge/page/professional_selling/professional_selling.json"))
 	roles = {row.get("role") for row in page.get("roles") or []}
-	assert {"RetailEdgeCashier", "RetailEdge Cashier"}.issubset(roles)
+	assert "RetailEdgeCashier" in roles
+	assert "RetailEdge Cashier" not in roles
 
 	patch = read("patches/ensure_retailedge_cashier_professional_selling_access.py")
 	assert 'PROFESSIONAL_SELLING_PAGE = "professional-selling"' in patch
 	assert '"RetailEdgeCashier"' in patch
-	assert '"RetailEdge Cashier"' in patch
+	assert '"RetailEdge Cashier"' not in patch
 	assert 'page.append("roles", {"role": role})' in patch
 
 	patches = read("patches.txt")
@@ -40,6 +41,7 @@ def test_cashier_selling_document_permissions_are_upgrade_reconciled():
 		assert f'"{doctype}"' in permission_patch
 	for permission_type in ("read", "create", "write", "submit", "print"):
 		assert f'"{permission_type}"' in permission_patch
+	assert '"RetailEdge Cashier"' not in permission_patch
 
 	patches = read("patches.txt")
 	assert "retailedge.patches.ensure_retailedge_cashier_selling_document_permissions" in patches

@@ -7,7 +7,6 @@ from frappe.permissions import add_permission, update_permission_property
 PERMLEVEL = 0
 CASHIER_ROLES = (
 	"RetailEdgeCashier",
-	"RetailEdge Cashier",
 )
 OUTPUT_PAGE = "document-output-sharing"
 

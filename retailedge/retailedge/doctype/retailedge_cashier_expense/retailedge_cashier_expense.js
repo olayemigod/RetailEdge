@@ -560,9 +560,9 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		const reviewerRoles = new Set([
 			"System Manager",
 			"Accounts Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
-			"RetailEdge Auditor",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
+			"RetailEdgeAuditor",
 			"RetailEdgeManager",
 			"RetailEdgeBranchManager",
 			"RetailEdgeAuditor",
@@ -575,8 +575,8 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"System Manager",
 			"Accounts Manager",
 			"Accounts User",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
 			"RetailEdgeManager",
 			"RetailEdgeBranchManager",
 		]);
@@ -587,10 +587,10 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		const refreshRoles = new Set([
 			"System Manager",
 			"Accounts Manager",
-			"RetailEdge Manager",
 			"RetailEdgeManager",
-			"RetailEdge Auditor",
+
 			"RetailEdgeAuditor",
+
 		]);
 		return (frappe.user_roles || []).some((role) => refreshRoles.has(role));
 	},

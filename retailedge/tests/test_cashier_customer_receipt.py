@@ -314,7 +314,7 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 			(APP_ROOT / "retailedge" / "page" / "cashier_customer_receipt" / "cashier_customer_receipt.json").read_text(encoding="utf-8")
 		)
 		roles = {row.get("role") for row in page.get("roles") or []}
-		self.assertEqual(roles, {"RetailEdgeCashier", "RetailEdge Cashier"})
+		self.assertEqual(roles, {"RetailEdgeCashier"})
 		component = (APP_ROOT / "public" / "js" / "cashier_customer_receipt" / "CashierCustomerReceipt.vue").read_text(encoding="utf-8")
 		for contract in (
 			"EdgeAppShell",

@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const PAGE_ASSET = "branch_setup.bundle.js";
 const PAGE_ROUTE = "branch-setup";
 const PAGE_TITLE = "Branch Setup";

@@ -79,6 +79,7 @@ def test_cashier_receipt_print_and_document_output_use_native_permissions():
 	assert 'update_permission_property("Sales Invoice", role, PERMLEVEL, "print", 1)' in output_patch
 	assert 'OUTPUT_PAGE = "document-output-sharing"' in output_patch
 	assert 'page.append("roles", {"role": role})' in output_patch
+	assert '"RetailEdge Cashier"' not in output_patch
 	assert "retailedge.patches.ensure_retailedge_cashier_sales_output_access" in patches
-	assert '"role": "RetailEdge Cashier"' in page
+	assert '"role": "RetailEdge Cashier"' not in page
 	assert '"role": "RetailEdgeCashier"' in page

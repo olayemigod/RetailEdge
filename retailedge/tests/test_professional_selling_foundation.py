@@ -60,7 +60,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 	def test_page_allows_cashier_shell_access_without_replacing_document_permissions(self):
 		page = self.read("retailedge/page/professional_selling/professional_selling.json")
 		self.assertIn('"role": "RetailEdgeCashier"', page)
-		self.assertIn('"role": "RetailEdge Cashier"', page)
+		self.assertNotIn('"role": "RetailEdge Cashier"', page)
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		self.assertIn("allDocuments.filter((row) => row?.available && (row.can_read || row.can_create))", component)
 		self.assertIn('v-if="document.can_create"', component)

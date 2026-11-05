@@ -9,9 +9,6 @@ from retailedge.cashier_context import get_shift_cash_snapshot
 SNAPSHOT_REFRESH_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
-	"RetailEdge Branch Manager",
-	"RetailEdge Auditor",
 	"RetailEdgeManager",
 	"RetailEdgeBranchManager",
 	"RetailEdgeAuditor",

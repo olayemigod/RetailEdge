@@ -16,9 +16,7 @@
     {"role": "System Manager"},
     {"role": "Accounts Manager"},
     {"role": "Accounts User"},
-    {"role": "RetailEdge Manager"},
     {"role": "RetailEdgeManager"},
-    {"role": "RetailEdge Branch Manager"},
     {"role": "RetailEdgeBranchManager"}
   ]
 }

@@ -83,10 +83,10 @@ def test_expense_register_no_longer_creates_cashier_expense_in_native_form():
 
 def test_page_permissions_exclude_cashier_roles():
 	page = PAGE_JSON.read_text(encoding="utf-8")
-	assert "RetailEdge Manager" in page
+	assert "RetailEdgeManager" in page
 	assert "Accounts User" in page
-	assert "RetailEdge Auditor" in page
-	assert '"RetailEdge Cashier"' not in page
+	assert "RetailEdgeAuditor" in page
+	assert '"RetailEdgeCashier"' not in page
 	assert '"RetailEdgeCashier"' not in page
 
 

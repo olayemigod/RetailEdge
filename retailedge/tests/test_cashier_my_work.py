@@ -121,7 +121,7 @@ class TestCashierMyWork(unittest.TestCase):
 		business_hub = BUSINESS_HUB_PAGE_JS.read_text(encoding="utf-8")
 
 		self.assertIn('"RetailEdgeCashier"', page_json)
-		self.assertIn('"RetailEdge Cashier"', page_json)
+		self.assertNotIn('"RetailEdge Cashier"', page_json)
 		self.assertIn('cashier_my_work.bundle.js', page_js)
 		self.assertIn('<EdgeAppShell', component)
 		self.assertIn('template #brand', component)

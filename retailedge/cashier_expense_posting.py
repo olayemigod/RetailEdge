@@ -15,10 +15,10 @@ CASHIER_EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 POSTING_REFRESH_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 
 

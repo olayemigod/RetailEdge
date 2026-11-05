@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const REPORT_ASSET = "managed_review_report.bundle.js";
 const PAGE_ROUTE = "unmatched-bank-transactions";
 const SURFACE_KEY = "unmatched-bank-transactions";

@@ -258,7 +258,7 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		loader = self.read("retailedge/page/operating_context/operating_context.js")
 		component = self.read("public/js/operating_context/OperatingContext.vue")
 		for contract in (
-			'"edgeui.bundle.js"',
+			'"edgesuite_ui.bundle.js"',
 			'"operating_context.bundle.js"',
 			"window.EdgeSuiteUI",
 			"mountRetailEdgeOperatingContext",

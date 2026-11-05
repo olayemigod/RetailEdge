@@ -82,7 +82,7 @@ class CashierExpenseDirectPostingContinuityTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense_detail.get_cashier_expense_posting_permissions", return_value={"can_post": False})
 	@patch("retailedge.cashier_expense_detail.frappe.has_permission", return_value=True)
 	@patch("retailedge.cashier_expense_detail.user_is_reviewer", return_value=True)
-	@patch("retailedge.cashier_expense_detail.frappe.get_roles", return_value=["RetailEdge Manager"])
+	@patch("retailedge.cashier_expense_detail.frappe.get_roles", return_value=["RetailEdgeManager"])
 	@patch("retailedge.cashier_expense_detail.get_cashier_expense_posting_settings", return_value=_settings("Direct Posting"))
 	def test_direct_submitted_expense_does_not_offer_approval_actions(
 		self,
