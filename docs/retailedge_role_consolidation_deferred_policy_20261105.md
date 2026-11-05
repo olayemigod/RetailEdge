@@ -1,25 +1,27 @@
-# Role consolidation: non-destructive upgrade policy
+# Role consolidation — strict upgrade stop and administrator reconciliation
 
-## Reason
-Frappe v16 `rename_doc("Role", ..., merge=True)` rewrites Role links. Some existing merchants and the upgrade-test predecessor site have different legacy and canonical `DocPerm`, `Custom DocPerm` (including v16 custom Permission Types), reviewer/approver or Page grants. Legacy and canonical Role documents can also differ in security policy, including mandatory two-factor authentication. Combining these can grant permissions never authorized for canonical-only users.
+## Historical collision
+Existing RetailEdge installations and the hosted upgrade predecessor contain both spaced legacy roles (for example `RetailEdge Cashier`) and canonical roles (`RetailEdgeCashier`) with different DocPerm, Custom DocPerm, Frappe v16 Permission Type, User/Role Profile/Page, reviewer/approver or Role-level security settings (including mandatory 2FA).
 
-## Migration contract
-The migration **preflights all role pairs before any mutation**. If permission equivalence, Role security policy or authorization-link validation reports an issue, no Role, DocPerm, Custom DocPerm, Has Role, Role Profile, Page or reviewer/approver references are modified by this patch. The issue is recorded in standard Frappe Error Log as `RetailEdge role consolidation deferred`. The migration may then complete using the unchanged legacy/canonical data; **consolidation is not complete**.
+Frappe v16 `rename_doc("Role", ..., merge=True)` rewrites Role Link references and keeps the destination Role's security policy. Automatically unioning grants or remapping an approver role could expand authorization for canonical-only users.
 
-Only if the entire preflight succeeds will the patch merge equivalent roles. There is no maximum/union of grants and no automatic change to merchant approval policy.
+## Mandatory preflight and failure
+The consolidation patch checks **all role pairs before any rename or permission-row mutation**:
+- every installed native and custom permission column, including `if_owner`, `mask` and custom Permission Types;
+- Role `two_factor_auth`, `disabled`, `desk_access` and `restrict_to_domain`;
+- Has Role, Role Profile, Page and other authorization-bearing Role links.
 
-## Completion after explicit administration
-1. Review Error Log details and the original Role Permission Manager, Role Profile, Page and reviewer/approver assignments. Obtain authorization to reconcile each conflicting permission; do not give canonical-only users legacy-only rights by default.
-2. Backup the site and resolve the conflicting configuration in an isolated test environment, with evidence.
-3. Rerun the idempotent routine only after the role permissions and authorization references are reconciled:
+If any source/destination role differs, it raises `frappe.ValidationError` and **stops the upgrade**. Neither role is merged; no legacy permissions are silently added to the canonical role. Do not suppress or catch this exception to let the remaining patches run: model synchronization and subsequent Page governance patches may alter effective rights even if Role records remain in place.
 
-```bash
-bench --site retail.local execute retailedge.patches.consolidate_duplicate_retailedge_roles.execute
-```
+If all checks pass, the patch merges only equivalent roles and is repeat-safe.
 
-4. Verify all affected personas and negative direct-API cases. Repeat on production only after separate acceptance.
+## Administrator reconciliation on an isolated site
+1. Back up the existing database. Record all conflicting permission rows and reviewer/approver policies before altering permissions.
+2. Review the permitted effective rights of legacy-only, canonical-only and dual-role users, including User/Role Profile, Page, Branch, and payment/approval direct API access. Define an explicit least-privilege mapping; do not copy all legacy grants into canonical roles.
+3. Reconcile the original source data with an authorized administrator on a test site. Retest the upgrade and all relevant persona/Branch tests before any production migration.
+4. Confirm each failed gate has passed on the **same exact PR head** and complete the merchant acceptance ledger. Do not edit Frappe Patch Log or use a manual data rewrite simply to make CI pass.
 
-Do not modify Frappe Patch Log to force replay. A completed upgrade does **not** prove all historical legacy roles have been retired.
+The previous proposal to continue migration while logging deferred roles was rejected after review demonstrated that post-model-sync and subsequent Page patches could still change effective authorization. **A blocked upgrade is the intended safe outcome until the historical conflicts are resolved.**
 
-## Release gates
-The PR still needs five green exact-head hosted gates, independent full-scope review, user/branch/role/approval regression tests and recorded merchant acceptance on `retail.local`. Physical printing was user-reported PASS; receipt integrity and other merchant journeys remain distinct.
+## Release boundary
+PR #238 remains Draft and may not merge with a failed Upgrade Validation gate or unresolved P1 review. Physical printing on `retail.local` was user-reported PASS, but other merchant acceptance and receipt-integrity cases remain separate. PR #239 requires integration against #238's eventual accepted head.

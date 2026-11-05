@@ -52,13 +52,12 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
     def assert_blocked_before_mutation(self, rows, *, roles=None):
         patches = self.run_preflight(rows, roles=roles)
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4] as merge_roles, patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit, patches[9]:
-            migration.execute()
+            with self.assertRaises(frappe.ValidationError):
+                migration.execute()
             rename.assert_not_called()
             merge_roles.assert_not_called()
             merge_grants.assert_not_called()
-            audit.assert_called_once()
-            self.assertEqual(audit.call_args.kwargs.get("title"), "RetailEdge role consolidation deferred")
-            self.assertIn("Explicit administrator reconciliation", audit.call_args.kwargs.get("message", ""))
+            audit.assert_not_called()
 
     def test_create_submit_escalation_is_rejected(self):
         self.assert_blocked_before_mutation({
@@ -119,9 +118,10 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links, patches[8] as audit, patches[9]:
             links.return_value = role_links
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
+                with self.assertRaises(frappe.ValidationError):
                 migration.execute()
             rename.assert_not_called()
-            audit.assert_called_once()
+            audit.assert_not_called()
 
     def test_legacy_only_page_role_assignment_fails_closed(self):
         rows = {
@@ -136,9 +136,10 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             return True
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
+                with self.assertRaises(frappe.ValidationError):
                 migration.execute()
             rename.assert_not_called()
-            audit.assert_called_once()
+            audit.assert_not_called()
 
     def test_custom_permission_type_difference_defers_role_merge(self):
         rows = {
@@ -148,9 +149,10 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         patches = self.run_preflight(rows)
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9] as ptypes:
             ptypes.return_value = {"User": ["impersonate"]}
-            migration.execute()
+            with self.assertRaises(frappe.ValidationError):
+                migration.execute()
             rename.assert_not_called()
-            audit.assert_called_once()
+            audit.assert_not_called()
             self.assertIn("Custom DocPerm User", audit.call_args.kwargs["message"])
 
     def test_legacy_two_factor_auth_policy_is_preserved(self):
@@ -168,9 +170,10 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         }
         patches = self.run_preflight(rows)
         with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
-            migration.execute()
+            with self.assertRaises(frappe.ValidationError):
+                migration.execute()
             rename.assert_not_called()
-            audit.assert_called_once()
+            audit.assert_not_called()
             self.assertIn("Role.two_factor_auth", audit.call_args.kwargs["message"])
 
     def test_preflight_remains_strict_for_manual_audit(self):
