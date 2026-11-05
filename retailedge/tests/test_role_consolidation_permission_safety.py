@@ -59,6 +59,16 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             merge_grants.assert_not_called()
             audit.assert_not_called()
 
+    def test_role_consolidation_patch_cannot_be_skipped_by_migrate(self):
+        from frappe.modules.patch_handler import should_never_skip
+        from retailedge import hooks
+
+        name = "retailedge.patches.consolidate_duplicate_retailedge_roles"
+        self.assertIn(name, hooks.never_skip_patches)
+        self.assertTrue(should_never_skip(name, set(hooks.never_skip_patches)))
+        self.assertTrue(should_never_skip(name + " # replay", set(hooks.never_skip_patches)))
+        self.assertFalse(should_never_skip("retailedge.patches.unrelated_patch", set(hooks.never_skip_patches)))
+
     def test_preflight_reports_all_conflicts_without_truncation(self):
         rows = {
             ("DocPerm", LEGACY): [grant(f"Business DocType {index}", read=1) for index in range(16)],
