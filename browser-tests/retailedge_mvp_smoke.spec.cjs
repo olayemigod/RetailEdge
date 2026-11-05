@@ -327,7 +327,7 @@ test("canonical RetailEdge cashier lands on My Work with Home navigation, histor
 		} else if (posItem.target_type === "URL" && posItem.target === "/pos/") {
 			await expect(startPosButton).toBeVisible();
 			const [posPage] = await Promise.all([context.waitForEvent("page"), startPosButton.click()]);
-			await posPage.waitForURL(/\\/pos\\//, { timeout: 20_000 });
+			await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
 			await posPage.close().catch(() => {});
 		} else if (posItem.target_type === "Page") {
 			await expect(startPosButton).toBeVisible();

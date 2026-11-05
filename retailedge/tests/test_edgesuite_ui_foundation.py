@@ -263,11 +263,11 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 	def test_global_controller_uses_canonical_runtime_and_product_bundles(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
 		self.assertLess(
-			controller.index("edgeui.bundle.js"), controller.index("retailedge_business_hub.bundle.js")
+			controller.index("edgesuite_ui.bundle.js"), controller.index("retailedge_business_hub.bundle.js")
 		)
 		self.assertIn("assertEdgeSuiteUIRuntime", controller)
 		self.assertIn("global.EdgeSuiteUI", controller)
-		self.assertNotIn('"edgesuite_ui.bundle.js"', controller)
+		self.assertNotIn('"edgeui.bundle.js"', controller)
 		self.assertNotIn("global.EdgeUI", controller)
 
 	def test_global_controller_supports_promise_based_frappe_require(self):
