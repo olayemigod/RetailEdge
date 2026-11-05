@@ -116,7 +116,7 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             if doctype == "RetailEdge Daily Sales Audit Reviewer Role":
                 return value == {"role": LEGACY}
             return True
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links, patches[8] as audit:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7] as links, patches[8] as audit, patches[9]:
             links.return_value = role_links
             with patch.object(migration.frappe.db, "exists", side_effect=exists):
                 migration.execute()
