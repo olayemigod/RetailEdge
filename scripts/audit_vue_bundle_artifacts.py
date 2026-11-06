@@ -8,14 +8,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
+from runpy import run_path
 
-# CI invokes this script with the global Python, not the Frappe bench virtualenv.
-# Make the checked-out app package importable without relying on environment state.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from retailedge.vue_runtime_build_guard import inspect, validate_bridge_contract  # noqa: E402
+# CI invokes this script with the global Python. Importing "retailedge"
+# directly would execute its Frappe-dependent __init__.py, so load the
+# pure, side-effect-free build guard module by file path instead.
+_guard = run_path(str(Path(__file__).resolve().parents[1] / "retailedge" / "vue_runtime_build_guard.py"))
+inspect = _guard["inspect"]
+validate_bridge_contract = _guard["validate_bridge_contract"]
 
 
 def main() -> None:
