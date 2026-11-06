@@ -339,11 +339,11 @@ test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not r
         const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
         expect(width, "Styled sidebar must have bounded desktop width").toBeGreaterThan(60);
         expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
-        // Vue 3 attaches the host app to the actual mount container. Frappe's
-        // pages[route] registry stores controller state, not the Page wrapper.
-        const mounted = await page.locator(".retailedge-business-hub-app-root")
-            .evaluate((root) => Boolean(root.__vue_app__?._instance));
-        expect(mounted, "Business Hub should mount its Vue app").toBeTruthy();
+        // Validate the real Business Hub component tree. Vue's private
+        // _instance property is not a stable production-build contract.
+        const hubAppRoot = page.locator(".retailedge-business-hub-app-root");
+        await expect(hubAppRoot.locator(".edge-app-shell")).toBeVisible();
+        await expect(hubAppRoot.locator(".edge-sidebar")).toBeVisible();
         expect(vueErrors).toEqual([]);
     } finally {
         await context.close().catch(() => {});
@@ -363,10 +363,23 @@ test("Vue runtime contract: Professional Selling preserves nested template refs"
         await expect(page.locator(".retailedge-professional-selling-root .edge-app-shell")).toBeVisible();
         await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
         await expect(page.locator(".professional-selling-load-error")).toHaveCount(0);
-        await page.waitForFunction(() => Boolean(
-            document.querySelector(".retailedge-professional-selling-root")
-                ?.__vue_app__?._instance?.proxy?.$refs?.sellingRecords
-        ), null, { timeout: 20_000 });
+        // Exercise the parent-to-child $refs.sellingRecords.selectDocument()
+        // path through its public UI behaviour, not private Vue internals.
+        const recordStages = page.locator(".selling-stage").filter({
+            has: page.getByRole("button", { name: "View records", exact: true }),
+        });
+        await expect(page.locator(".selling-records-panel")).toBeVisible();
+        const count = await recordStages.count();
+        expect(count, "Need two readable document types to prove tab switching").toBeGreaterThan(1);
+        const targetStage = recordStages.nth(1);
+        const documentLabel = (await targetStage.locator("h3").innerText()).trim();
+        const tab = page.locator(".selling-records-panel").getByRole("tab", {
+            name: documentLabel, exact: true,
+        });
+        await expect(tab).toBeVisible();
+        await expect(tab).toHaveAttribute("aria-selected", "false");
+        await targetStage.getByRole("button", { name: "View records", exact: true }).click();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
         expect(vueErrors).toEqual([]);
     } finally {
         await context.close().catch(() => {});
