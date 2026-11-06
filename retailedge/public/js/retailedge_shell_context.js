@@ -554,7 +554,7 @@
 			return;
 		}
 		try {
-			frappe.require("edgeui.bundle.js", start);
+			frappe.require("edgesuite_ui.bundle.js", start);
 		} catch (_error) {
 			window.setTimeout(boot, 100);
 		}
