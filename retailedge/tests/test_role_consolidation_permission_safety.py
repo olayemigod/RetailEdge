@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 import frappe
 
 from retailedge.patches import consolidate_duplicate_retailedge_roles as migration
-
 
 LEGACY = "RetailEdge Manager"
 CANONICAL = "RetailEdgeManager"
@@ -19,9 +18,22 @@ def grant(parent="Payment Entry", **permissions):
     return payload
 
 
+def raise_validation_error(message, *args, **kwargs):
+    raise frappe.ValidationError(message)
+
+
 class TestRoleConsolidationPermissionSafety(unittest.TestCase):
+    def setUp(self):
+        throw_patcher = patch.object(
+            migration.frappe, "throw", side_effect=raise_validation_error
+        )
+        throw_patcher.start()
+        self.addCleanup(throw_patcher.stop)
+
     def run_preflight(self, rows, *, roles=None):
         role_pairs = roles or {LEGACY: CANONICAL}
+        database = MagicMock()
+        database.exists.return_value = True
         def get_all(doctype, *, filters=None, fields=None, **kwargs):
             if doctype == "Role":
                 names = filters["name"][1]
@@ -38,7 +50,7 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             return rows.get((doctype, filters["role"]), [])
         return (
             patch.object(migration, "LEGACY_TO_CANONICAL", role_pairs),
-            patch.object(migration.frappe.db, "exists", return_value=True),
+            patch.object(migration.frappe, "db", database),
             patch.object(migration.frappe, "get_all", side_effect=get_all),
             patch.object(migration, "rename_doc"),
             patch.object(migration, "_merge_duplicate_has_role_rows"),
@@ -59,8 +71,17 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             merge_grants.assert_not_called()
             audit.assert_not_called()
 
+    def assert_canonical_policy_selected(self, rows, *, roles=None):
+        patches = self.run_preflight(rows, roles=roles)
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit, patches[9]:
+            migration.execute()
+        self.assertEqual(merge_grants.call_count, 2 * len(roles or {LEGACY: CANONICAL}))
+        audit.assert_called_once()
+        rename.assert_called()
+
     def test_role_consolidation_patch_cannot_be_skipped_by_migrate(self):
         from frappe.modules.patch_handler import should_never_skip
+
         from retailedge import hooks
 
         name = "retailedge.patches.consolidate_duplicate_retailedge_roles"
@@ -114,33 +135,33 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
         self.assertIn("Business DocType 15", str(blocked.exception))
         self.assertNotIn("(+4 more)", str(blocked.exception))
 
-    def test_create_submit_escalation_is_rejected(self):
-        self.assert_blocked_before_mutation({
+    def test_create_submit_escalation_is_replaced_by_canonical_policy(self):
+        self.assert_canonical_policy_selected({
             ("Custom DocPerm", LEGACY): [grant(read=1, create=1, submit=1)],
             ("Custom DocPerm", CANONICAL): [grant(read=1)],
         })
 
-    def test_nonoverlapping_legacy_grant_is_rejected(self):
-        self.assert_blocked_before_mutation({
+    def test_nonoverlapping_legacy_grant_is_replaced_by_canonical_policy(self):
+        self.assert_canonical_policy_selected({
             ("DocPerm", LEGACY): [grant("Journal Entry", read=1)],
             ("DocPerm", CANONICAL): [],
         })
 
-    def test_mask_and_if_owner_differences_are_rejected(self):
+    def test_mask_and_if_owner_differences_select_canonical_policy(self):
         self.assertIn("mask", migration.PERMISSION_FIELDS)
-        self.assert_blocked_before_mutation({
+        self.assert_canonical_policy_selected({
             ("Custom DocPerm", LEGACY): [grant(read=1, mask=1)],
             ("Custom DocPerm", CANONICAL): [grant(read=1, mask=0)],
         })
         legacy_owned = grant(read=1)
         legacy_owned.if_owner = 1
-        self.assert_blocked_before_mutation({
+        self.assert_canonical_policy_selected({
             ("DocPerm", LEGACY): [legacy_owned],
             ("DocPerm", CANONICAL): [grant(read=1)],
         })
 
-    def test_second_role_conflict_prevents_first_role_merge(self):
-        self.assert_blocked_before_mutation({
+    def test_all_role_conflicts_use_canonical_permissions(self):
+        self.assert_canonical_policy_selected({
             ("DocPerm", "RetailEdge Cashier"): [grant("Company", read=1)],
             ("DocPerm", "RetailEdgeCashier"): [grant("Company", read=1)],
             ("Custom DocPerm", LEGACY): [grant(write=1)],
@@ -196,19 +217,18 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             rename.assert_not_called()
             audit.assert_not_called()
 
-    def test_custom_permission_type_difference_blocks_role_merge(self):
+    def test_custom_permission_type_difference_uses_canonical_permissions(self):
         rows = {
             ("Custom DocPerm", LEGACY): [grant("User", read=1, impersonate=1)],
             ("Custom DocPerm", CANONICAL): [grant("User", read=1, impersonate=0)],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9] as ptypes:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5] as merge_grants, patches[6], patches[7], patches[8] as audit, patches[9] as ptypes:
             ptypes.return_value = {"User": ["impersonate"]}
-            with self.assertRaises(frappe.ValidationError) as blocked:
-                migration.execute()
-            rename.assert_not_called()
-            audit.assert_not_called()
-            self.assertIn("Custom DocPerm User", str(blocked.exception))
+            migration.execute()
+            self.assertEqual(merge_grants.call_count, 2)
+            rename.assert_called_once()
+            audit.assert_called_once()
 
     def test_legacy_two_factor_auth_policy_is_preserved(self):
         rows = {
@@ -252,14 +272,24 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             ("Has Role", LEGACY): [frappe._dict(parent="private-review", parenttype="Page", parentfield="roles")],
         }
         patches = self.run_preflight(rows)
-        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8] as audit, patches[9]:
+        with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8], patches[9]:
             migration.execute()
         rename.assert_called_once()
 
     def test_no_implicit_permission_union_remains(self):
         source = open(migration.__file__, encoding="utf-8").read()
         self.assertNotIn("merged = max(", source)
-        self.assertIn("_assert_permission_equivalence_before_merge()", source)
+        self.assertIn('frappe.db.delete(doctype, {"role": legacy})', source)
+
+    def test_permission_merge_helper_deletes_only_legacy_role_rows(self):
+        database = MagicMock()
+        database.exists.return_value = True
+        with patch.object(migration.frappe, "db", database):
+            migration._merge_duplicate_permission_rows("DocPerm", LEGACY, CANONICAL)
+        self.assertEqual(
+            database.delete.call_args_list,
+            [call("DocPerm", {"role": LEGACY})],
+        )
 
 
 if __name__ == "__main__":

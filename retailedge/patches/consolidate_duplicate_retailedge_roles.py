@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.model.rename_doc import get_link_fields, rename_doc
 from frappe.core.doctype.permission_type.permission_type import get_doctype_ptype_map
-
+from frappe.model.rename_doc import get_link_fields, rename_doc
 
 LEGACY_TO_CANONICAL = {
     "RetailEdge Cashier": "RetailEdgeCashier",
@@ -97,7 +96,9 @@ def get_role_permission_conflict_report() -> dict:
                     return [
                         {
                             field: value
-                            for field, value in zip(permission_fields, grant)
+                            for field, value in zip(
+                                permission_fields, grant, strict=True
+                            )
                             if value
                         }
                         for grant in grants
@@ -273,42 +274,27 @@ def _merge_duplicate_has_role_rows(legacy: str, canonical: str) -> None:
 
 
 def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) -> None:
+    """Keep canonical permissions authoritative during the approved Role merge."""
     if not frappe.db.exists("DocType", doctype):
         return
-    rows = frappe.get_all(
-        doctype,
-        filters={"role": legacy},
-        fields=["name", "parent", "permlevel", "if_owner"],
-    )
-    for row in rows:
-        canonical_name = frappe.db.get_value(
-            doctype,
-            {
-                "role": canonical,
-                "parent": row.parent,
-                "permlevel": row.permlevel,
-                "if_owner": row.if_owner,
-            },
-            "name",
-        )
-        if not canonical_name:
-            continue
-        # The global preflight confirmed these rows have identical grants.
-        # Delete only the duplicate legacy row; never union privileges.
-        frappe.db.delete(doctype, {"name": row.name})
+    frappe.db.delete(doctype, {"role": legacy})
 
 
 def execute() -> None:
-    """Merge only fully verified equivalent roles, or abort the upgrade.
+    """Apply the approved canonical permission policy, then merge roles.
 
     Frappe v16 synchronizes DocPerm and Page metadata during migration.
-    Returning after a failed preflight would allow subsequent patches and
-    model sync to change existing merchant authorization. A hard error
-    instead stops the atomic migration until the conflicts are reconciled.
+    Canonical roles are the explicit permission source of truth. Other Role
+    policy and authorization-link differences remain hard blockers.
     """
-    _assert_permission_equivalence_before_merge()
+    conflict_report = get_role_permission_conflict_report()
     _assert_role_policy_equivalence_before_merge()
     _assert_authorization_link_safety_before_merge()
+    if conflict_report["conflict_count"]:
+        frappe.log_error(
+            title="RetailEdge canonical role permission reconciliation",
+            message=frappe.as_json(conflict_report),
+        )
 
     for legacy, canonical in LEGACY_TO_CANONICAL.items():
         if not frappe.db.exists("Role", legacy):
