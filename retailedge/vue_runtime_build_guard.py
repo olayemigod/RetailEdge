@@ -79,8 +79,11 @@ def validate_bridge_contract(rows: list[dict[str, object]]) -> list[str]:
 
 def verify_retailedge_after_build() -> None:
     """Run after bench build --app retailedge; abort if Frappe emitted duplicate Vue."""
-    # Editable Frappe bench path: bench/apps/retailedge/retailedge/this_module.py
-    bench = Path(__file__).resolve().parents[3]
+    # Editable-app source may live outside the bench (e.g. GitHub CI checkout).
+    # The Frappe bench resolver, not this module's physical path, is authoritative.
+    from frappe.utils import get_bench_path
+
+    bench = Path(get_bench_path()).resolve()
     problems = validate_bridge_contract(inspect(bench))
     if problems:
         raise RuntimeError("RetailEdge frontend build rejected:\n" + "\n".join(problems))
