@@ -11,6 +11,9 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# Reject hosted builds whose compiled Vue templates bypass the shared EdgeSuite runtime.
+after_build = "retailedge.vue_runtime_build_guard.verify_retailedge_after_build"
+
 # EdgeSuite product availability is product-owned. RetailEdge explicitly
 # publishes its descriptor rather than relying on installation alone.
 edgesuite_product_availability_providers = [
