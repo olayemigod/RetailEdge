@@ -217,6 +217,36 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
             rename.assert_not_called()
             audit.assert_not_called()
 
+    def test_approved_salesperson_dashboard_assignment_preserves_manager_access(self):
+        role_pairs = (
+            ("RetailEdge Manager", "RetailEdgeManager"),
+            ("RetailEdge Branch Manager", "RetailEdgeBranchManager"),
+        )
+        for legacy, canonical in role_pairs:
+            with self.subTest(legacy=legacy):
+                rows = {
+                    ("Has Role", legacy): [
+                        frappe._dict(
+                            parent="salesperson-performance-dashboard",
+                            parenttype="Page",
+                            parentfield="roles",
+                        )
+                    ],
+                }
+                patches = self.run_preflight(rows, roles={legacy: canonical})
+
+                def exists(doctype, value):
+                    if doctype == "Role":
+                        return True
+                    if doctype == "Has Role":
+                        return False
+                    return True
+
+                with patches[0], patches[1], patches[2], patches[3] as rename, patches[4], patches[5], patches[6], patches[7], patches[8], patches[9]:
+                    with patch.object(migration.frappe.db, "exists", side_effect=exists):
+                        migration.execute()
+                rename.assert_called_once()
+
     def test_custom_permission_type_difference_uses_canonical_permissions(self):
         rows = {
             ("Custom DocPerm", LEGACY): [grant("User", read=1, impersonate=1)],

@@ -32,6 +32,23 @@ PERMISSION_FIELDS = (
 
 ROLE_POLICY_FIELDS = ("disabled", "desk_access", "two_factor_auth", "restrict_to_domain")
 
+APPROVED_HAS_ROLE_MERGES = {
+    (
+        "RetailEdge Manager",
+        "RetailEdgeManager",
+        "Page",
+        "salesperson-performance-dashboard",
+        "roles",
+    ),
+    (
+        "RetailEdge Branch Manager",
+        "RetailEdgeBranchManager",
+        "Page",
+        "salesperson-performance-dashboard",
+        "roles",
+    ),
+}
+
 
 def _permission_fields() -> tuple[str, ...]:
     """Include Frappe v16 custom Permission Type columns in both permission tables."""
@@ -212,6 +229,15 @@ def _assert_authorization_link_safety_before_merge() -> None:
             fields=["parent", "parenttype", "parentfield"],
         )
         for row in old_assignments:
+            approved_assignment = (
+                legacy,
+                canonical,
+                row.get("parenttype"),
+                row.get("parent"),
+                row.get("parentfield"),
+            )
+            if approved_assignment in APPROVED_HAS_ROLE_MERGES:
+                continue
             scope = {
                 "role": canonical,
                 "parent": row.get("parent"),
