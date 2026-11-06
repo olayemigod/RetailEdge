@@ -39,7 +39,7 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 		).read_text(encoding="utf-8")
 		bundle = (APP_ROOT / "public" / "js" / "inventory_intelligence.bundle.js").read_text(encoding="utf-8")
 
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page)
 		self.assertIn('const INVENTORY_INTELLIGENCE_ASSET = "inventory_intelligence.bundle.js"', page)
 		self.assertIn("mountInventoryIntelligence", page)
 		self.assertIn("EdgeAppShell", component)

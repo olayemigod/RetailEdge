@@ -251,7 +251,7 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 	def test_loader_uses_canonical_edgesuite_runtime_and_hides_native_sidebar(self):
 		loader = self.read(PAGE_ROOT / "stock_position.js")
 		for contract in (
-			'const EDGEUI_ASSET = "edgeui.bundle.js"',
+			'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"',
 			'const STOCK_POSITION_ASSET = "stock_position.bundle.js"',
 			"await requireAsync(EDGEUI_ASSET)",
 			"window.EdgeSuiteUI?.components",
