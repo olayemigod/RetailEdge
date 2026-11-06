@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const OUTLOOK_ASSET = "cash_flow_outlook.bundle.js";
 const PAGE_ROUTE = "cash-flow-outlook";
 const PAGE_TITLE = "13-Week Cash Commitments";
