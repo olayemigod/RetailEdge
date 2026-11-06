@@ -74,12 +74,26 @@ def inspect(bench: Path) -> list[dict[str, object]]:
     return rows
 
 
-def validate_bridge_contract(rows: list[dict[str, object]]) -> list[str]:
+def validate_bridge_contract(
+    rows: list[dict[str, object]], *, require_shared: bool = True
+) -> list[str]:
+    """Validate product bundles; require shared assets only at complete-bench gates.
+
+    Frappe calls each app's after_build immediately after its own scoped build.
+    The edgesuite_ui app may not have built its assets yet at that point.
+    """
     issues: list[str] = []
     if not rows or rows[0].get("asset") != SHARED_BUNDLE:
         return ["Shared EdgeSuite UI asset was not checked."]
-    if rows[0].get("status") != "present" or not rows[0].get("app_signature"):
-        issues.append("Shared EdgeSuite UI runtime bundle is missing or invalid.")
+    shared = rows[0]
+    if shared.get("status") == "present":
+        if not shared.get("app_signature"):
+            issues.append("Shared EdgeSuite UI runtime bundle is invalid.")
+    elif require_shared:
+        issues.append(
+            "Shared EdgeSuite UI runtime bundle is missing; build edgesuite_ui "
+            "and run the complete-bench strict audit before release."
+        )
     for row in rows[1:]:
         bundle = str(row["asset"])
         if row.get("status") != "present":
@@ -102,6 +116,15 @@ def verify_retailedge_after_build() -> None:
     from frappe.utils import get_bench_path
 
     bench = Path(get_bench_path()).resolve()
-    problems = validate_bridge_contract(inspect(bench))
+    rows = inspect(bench)
+    # A scoped 'Install Apps - RetailEdge' build must validate every product
+    # artifact, but may run before EdgeSuite UI publishes its own assets.
+    # The CLI --strict gate still *requires* the shared asset in a full bench.
+    problems = validate_bridge_contract(rows, require_shared=False)
     if problems:
         raise RuntimeError("RetailEdge frontend build rejected:\n" + "\n".join(problems))
+    if rows[0].get("status") != "present":
+        print(
+            "[RetailEdge] EdgeSuite UI bundle is not built at this per-app stage; "
+            "complete-bench runtime verification remains mandatory."
+        )

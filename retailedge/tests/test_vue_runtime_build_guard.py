@@ -90,6 +90,35 @@ class TestVueRuntimeBuildGuard(unittest.TestCase):
         self.assertTrue(any("stock_adjustment.bundle.js" in issue for issue in
                             guard.validate_bridge_contract(guard.inspect(self.bench))))
 
+    def test_app_install_can_precede_shared_runtime_build(self):
+        # Frappe runs each app's after_build after its own scoped compilation.
+        self.manifest.pop(guard.SHARED_BUNDLE)
+        self.save_manifest()
+        rows = guard.inspect(self.bench)
+        self.assertEqual(guard.validate_bridge_contract(rows, require_shared=False), [])
+        self.assertTrue(
+            any("Shared EdgeSuite" in issue for issue in guard.validate_bridge_contract(rows))
+        )
+
+    def test_scoped_build_still_rejects_duplicate_product_vue(self):
+        self.manifest.pop(guard.SHARED_BUNDLE)
+        self.make("professional_selling.bundle.js", "__v_isVNode")
+        self.save_manifest()
+        issues = guard.validate_bridge_contract(guard.inspect(self.bench), require_shared=False)
+        self.assertTrue(any("professional_selling.bundle.js" in issue for issue in issues))
+
+    def test_scoped_build_still_requires_mandatory_product_bundle(self):
+        self.manifest.pop(guard.SHARED_BUNDLE)
+        self.manifest.pop("make_sale.bundle.js")
+        self.save_manifest()
+        issues = guard.validate_bridge_contract(guard.inspect(self.bench), require_shared=False)
+        self.assertTrue(any("make_sale.bundle.js" in issue for issue in issues))
+
+    def test_present_but_invalid_shared_runtime_rejected_even_when_scoped(self):
+        self.make(guard.SHARED_BUNDLE, "console.log('invalid shared bundle')")
+        issues = guard.validate_bridge_contract(guard.inspect(self.bench), require_shared=False)
+        self.assertTrue(any("Shared EdgeSuite" in issue for issue in issues))
+
     def test_standalone_audit_cli_requires_no_frappe_package_import(self):
         script = APP_ROOT.parent / "scripts" / "audit_vue_bundle_artifacts.py"
         result = subprocess.run(
