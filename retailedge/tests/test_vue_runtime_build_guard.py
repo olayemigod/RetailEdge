@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from retailedge import vue_runtime_build_guard as guard
 
@@ -118,6 +119,20 @@ class TestVueRuntimeBuildGuard(unittest.TestCase):
         self.make(guard.SHARED_BUNDLE, "console.log('invalid shared bundle')")
         issues = guard.validate_bridge_contract(guard.inspect(self.bench), require_shared=False)
         self.assertTrue(any("Shared EdgeSuite" in issue for issue in issues))
+
+    def test_actual_after_build_hook_allows_missing_shared_during_install(self):
+        self.manifest.pop(guard.SHARED_BUNDLE)
+        self.save_manifest()
+        with patch("frappe.utils.get_bench_path", return_value=str(self.bench)):
+            guard.verify_retailedge_after_build()
+
+    def test_actual_after_build_hook_rejects_embedded_product_vue(self):
+        self.manifest.pop(guard.SHARED_BUNDLE)
+        self.make("professional_selling.bundle.js", guard.BRIDGE_MARKER + " __v_isVNode")
+        self.save_manifest()
+        with patch("frappe.utils.get_bench_path", return_value=str(self.bench)):
+            with self.assertRaisesRegex(RuntimeError, "professional_selling.bundle.js"):
+                guard.verify_retailedge_after_build()
 
     def test_standalone_audit_cli_requires_no_frappe_package_import(self):
         script = APP_ROOT.parent / "scripts" / "audit_vue_bundle_artifacts.py"
