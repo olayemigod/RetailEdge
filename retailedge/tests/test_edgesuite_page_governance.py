@@ -41,7 +41,7 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "professional_selling" / "professional_selling.js",
 		"bundle": APP_ROOT / "public" / "js" / "professional_selling.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSelling.vue",
-		"runtime_asset": "edgeui.bundle.js",
+		"runtime_asset": "edgesuite_ui.bundle.js",
 		"asset": "professional_selling.bundle.js",
 		"mount": "mountRetailEdgeProfessionalSelling",
 		"component_name": "ProfessionalSelling.vue",
