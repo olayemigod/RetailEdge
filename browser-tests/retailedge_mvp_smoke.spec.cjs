@@ -339,9 +339,10 @@ test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not r
         const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
         expect(width, "Styled sidebar must have bounded desktop width").toBeGreaterThan(60);
         expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
-        const mounted = await page.evaluate(() => Boolean(
-            window.frappe?.pages?.["retailedge-business-hub"]?._retailedgeBusinessHub?._instance
-        ));
+        // Vue 3 attaches the host app to the actual mount container. Frappe's
+        // pages[route] registry stores controller state, not the Page wrapper.
+        const mounted = await page.locator(".retailedge-business-hub-app-root")
+            .evaluate((root) => Boolean(root.__vue_app__?._instance));
         expect(mounted, "Business Hub should mount its Vue app").toBeTruthy();
         expect(vueErrors).toEqual([]);
     } finally {
@@ -363,8 +364,8 @@ test("Vue runtime contract: Professional Selling preserves nested template refs"
         await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
         await expect(page.locator(".professional-selling-load-error")).toHaveCount(0);
         await page.waitForFunction(() => Boolean(
-            window.frappe?.pages?.["professional-selling"]?._retailedgeProfessionalSellingApp
-                ?._instance?.proxy?.$refs?.sellingRecords
+            document.querySelector(".retailedge-professional-selling-root")
+                ?.__vue_app__?._instance?.proxy?.$refs?.sellingRecords
         ), null, { timeout: 20_000 });
         expect(vueErrors).toEqual([]);
     } finally {
