@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -70,6 +72,17 @@ class TestVueRuntimeBuildGuard(unittest.TestCase):
         self.save_manifest()
         self.assertTrue(any("stock_adjustment.bundle.js" in issue for issue in
                             guard.validate_bridge_contract(guard.inspect(self.bench))))
+
+    def test_standalone_audit_cli_requires_no_frappe_package_import(self):
+        script = APP_ROOT.parent / "scripts" / "audit_vue_bundle_artifacts.py"
+        result = subprocess.run(
+            [sys.executable, "-S", str(script), "--bench", str(self.bench), "--strict"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Compiled Vue bridge gate PASS", result.stdout)
 
     def test_hooks_enforce_build_gate_after_compilation(self):
         hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
