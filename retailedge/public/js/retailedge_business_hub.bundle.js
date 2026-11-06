@@ -2,6 +2,41 @@ import RetailEdgeBusinessHub from "./retailedge_business_hub/RetailEdgeBusinessH
 import UserReadinessNotice from "./retailedge_business_hub/UserReadinessNotice.vue";
 import { installGuidedCreateSearch } from "./retailedge_business_hub/guided_create_search";
 
+function bindEdgeSuiteRuntimeComponents(rootComponents, runtimeComponents) {
+	const visited = new Set();
+	const unresolved = new Set();
+
+	function visit(component) {
+		if (
+			!component ||
+			(typeof component !== "object" && typeof component !== "function") ||
+			visited.has(component)
+		) {
+			return;
+		}
+		visited.add(component);
+
+		const localComponents = component.components;
+		if (!localComponents || typeof localComponents !== "object") return;
+
+		Object.entries(localComponents).forEach(([name, registeredComponent]) => {
+			if (registeredComponent == null) {
+				const runtimeComponent = runtimeComponents?.[name];
+				if (runtimeComponent) {
+					localComponents[name] = runtimeComponent;
+				} else {
+					unresolved.add(name);
+				}
+				return;
+			}
+			visit(registeredComponent);
+		});
+	}
+
+	rootComponents.forEach(visit);
+	return Array.from(unresolved).sort();
+}
+
 function mountRetailEdgeBusinessHub(target) {
 	if (typeof window === "undefined" || !window.EdgeSuiteUI) {
 		throw new Error("Standalone EdgeSuite UI runtime not loaded.");
@@ -11,6 +46,20 @@ function mountRetailEdgeBusinessHub(target) {
 	}
 	if (!target) {
 		throw new Error("RetailEdge Business Hub mount target is unavailable.");
+	}
+
+	const missingComponents = bindEdgeSuiteRuntimeComponents(
+		[UserReadinessNotice, RetailEdgeBusinessHub],
+		window.EdgeSuiteUI.components || window.EdgeSuiteUI
+	);
+	if (missingComponents.length) {
+		console.error(
+			"[RetailEdge Business Hub] unresolved EdgeSuite components",
+			missingComponents
+		);
+		throw new Error(
+			"Business Hub could not start because required interface components are unavailable."
+		);
 	}
 
 	target.replaceChildren();
