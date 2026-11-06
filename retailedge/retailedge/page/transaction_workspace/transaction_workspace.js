@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const WORKSPACE_ASSET = "transaction_workspace.bundle.js";
 const PAGE_ROUTE = "transaction-workspace";
 const PAGE_TITLE = "Transaction Workspace";
