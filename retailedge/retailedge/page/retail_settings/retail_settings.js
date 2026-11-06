@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const SETTINGS_ASSET = "retail_settings.bundle.js";
 const PAGE_ROUTE = "retail-settings";
 

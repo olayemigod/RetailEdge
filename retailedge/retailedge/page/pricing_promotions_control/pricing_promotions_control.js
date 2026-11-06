@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const WORKSPACE_ASSET = "pricing_promotions_workspace.bundle.js";
 const PAGE_ROUTE = "pricing-promotions-control";
 const PAGE_TITLE = "Pricing & Promotions";

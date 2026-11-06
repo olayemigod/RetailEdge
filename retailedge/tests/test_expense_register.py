@@ -290,7 +290,7 @@ class TestExpenseRegister(unittest.TestCase):
 
 	def test_page_uses_single_edgesuite_shell(self):
 		page = (APP_ROOT / "retailedge" / "page" / "expense_register" / "expense_register.js").read_text()
-		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page)
 		self.assertIn('const EXPENSE_REGISTER_ASSET = "expense_register.bundle.js"', page)
 		self.assertIn("hideNativePageSidebar", page)
 		self.assertIn("window.mountExpenseRegister", page)

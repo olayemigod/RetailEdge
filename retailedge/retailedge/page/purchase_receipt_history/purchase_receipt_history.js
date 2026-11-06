@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const HISTORY_ASSET = "purchase_receipt_history.bundle.js";
 const PAGE_ROUTE = "purchase-receipt-history";
 const PAGE_TITLE = "Purchase Receipt History";

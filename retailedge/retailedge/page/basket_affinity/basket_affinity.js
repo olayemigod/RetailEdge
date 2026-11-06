@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const BASKET_AFFINITY_ASSET = "basket_affinity.bundle.js";
 const PAGE_ROUTE = "basket-affinity";
 const PAGE_TITLE = "Basket & Product Affinity";

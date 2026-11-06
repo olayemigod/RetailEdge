@@ -4,6 +4,7 @@ const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.local
 const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
 
 const USERS = {
+	sales: "browser-sales@example.com",
 	manager: "browser-manager@example.com",
 	branchManager: "browser-branch-manager@example.com",
 	cashier: "browser-cashier@example.com",
@@ -319,4 +320,68 @@ test("Business Hub remains usable at narrow mobile width", async ({ browser }) =
 	} finally {
 		await context.close().catch(() => {});
 	}
+});
+
+
+test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not raw custom elements", async ({ browser }) => {
+    const { context, page } = await newPersona(browser, USERS.manager, {
+        viewport: { width: 1280, height: 800 },
+    });
+    const vueErrors = [];
+    page.on("pageerror", (error) => {
+        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
+    });
+    try {
+        await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
+        const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+        await expect(sidebar).toBeVisible();
+        const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+        expect(width, "Styled sidebar must have bounded desktop width").toBeGreaterThan(60);
+        expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
+        // Validate the real Business Hub component tree. Vue's private
+        // _instance property is not a stable production-build contract.
+        const hubAppRoot = page.locator(".retailedge-business-hub-app-root");
+        await expect(hubAppRoot.locator(".edge-app-shell")).toBeVisible();
+        await expect(hubAppRoot.locator(".edge-sidebar")).toBeVisible();
+        expect(vueErrors).toEqual([]);
+    } finally {
+        await context.close().catch(() => {});
+    }
+});
+
+test("Vue runtime contract: Professional Selling preserves nested template refs", async ({ browser }) => {
+    const { context, page } = await newPersona(browser, USERS.sales, {
+        viewport: { width: 1280, height: 800 },
+    });
+    const vueErrors = [];
+    page.on("pageerror", (error) => {
+        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
+    });
+    try {
+        await openProductPage(page, "professional-selling", "Professional Selling");
+        await expect(page.locator(".retailedge-professional-selling-root .edge-app-shell")).toBeVisible();
+        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
+        await expect(page.locator(".professional-selling-load-error")).toHaveCount(0);
+        // Exercise the parent-to-child $refs.sellingRecords.selectDocument()
+        // path through its public UI behaviour, not private Vue internals.
+        const recordStages = page.locator(".selling-stage").filter({
+            has: page.getByRole("button", { name: "View records", exact: true }),
+        });
+        await expect(page.locator(".selling-records-panel")).toBeVisible();
+        const count = await recordStages.count();
+        expect(count, "Need two readable document types to prove tab switching").toBeGreaterThan(1);
+        const targetStage = recordStages.nth(1);
+        const documentLabel = (await targetStage.locator("h3").innerText()).trim();
+        const tab = page.locator(".selling-records-panel").getByRole("tab", {
+            name: documentLabel, exact: true,
+        });
+        await expect(tab).toBeVisible();
+        await expect(tab).toHaveAttribute("aria-selected", "false");
+        await targetStage.getByRole("button", { name: "View records", exact: true }).click();
+        await expect(tab).toHaveAttribute("aria-selected", "true");
+        expect(vueErrors).toEqual([]);
+    } finally {
+        await context.close().catch(() => {});
+    }
 });

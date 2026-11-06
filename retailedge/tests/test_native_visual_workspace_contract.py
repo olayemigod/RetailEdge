@@ -36,7 +36,7 @@ class TestNativeVisualWorkspaceContract(TestCase):
 			page_dir = APP_ROOT / "retailedge" / "page" / page_name
 			self.assertTrue((page_dir / f"{page_name}.json").exists())
 			source = (page_dir / f"{page_name}.js").read_text()
-			self.assertIn('"edgeui.bundle.js"', source)
+			self.assertIn('"edgesuite_ui.bundle.js"', source)
 			self.assertIn('"native_visual_workspaces.bundle.js"', source)
 			self.assertIn("mountNativeERPNextWorkspace", source)
 
