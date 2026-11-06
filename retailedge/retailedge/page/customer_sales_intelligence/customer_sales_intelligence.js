@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const CUSTOMER_INTELLIGENCE_ASSET = "customer_sales_intelligence.bundle.js";
 const PAGE_ROUTE = "customer-sales-intelligence";
 const PAGE_TITLE = "Customer & Sales Intelligence";
