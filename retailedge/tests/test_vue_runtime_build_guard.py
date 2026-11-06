@@ -62,6 +62,23 @@ class TestVueRuntimeBuildGuard(unittest.TestCase):
         self.assertTrue(any("reports_centre.bundle.js" in issue for issue in
                             guard.validate_bridge_contract(guard.inspect(self.bench))))
 
+    def test_non_vue_published_bundle_does_not_require_shared_vue_bridge(self):
+        self.make("retail_helpers.bundle.js", "console.log('retail helpers');")
+        self.save_manifest()
+        self.assertEqual(guard.validate_bridge_contract(guard.inspect(self.bench)), [])
+
+    def test_rejects_hidden_vue_runtime_from_indirect_js_import(self):
+        # Vue can be imported via a JS module, without .vue in entry source.
+        self.make("indirect_vue.bundle.js", "__v_isVNode")
+        self.save_manifest()
+        issues = guard.validate_bridge_contract(guard.inspect(self.bench))
+        self.assertTrue(any("indirect_vue.bundle.js" in issue for issue in issues))
+
+    def test_non_direct_bundle_with_shared_bridge_is_accepted(self):
+        self.make("indirect_bridge.bundle.js", guard.BRIDGE_MARKER)
+        self.save_manifest()
+        self.assertEqual(guard.validate_bridge_contract(guard.inspect(self.bench)), [])
+
     def test_rejects_duplicate_vue_even_when_bridge_marker_is_present(self):
         self.make("professional_selling.bundle.js", guard.BRIDGE_MARKER + " __v_isVNode")
         self.assertTrue(any("professional_selling.bundle.js" in issue for issue in
