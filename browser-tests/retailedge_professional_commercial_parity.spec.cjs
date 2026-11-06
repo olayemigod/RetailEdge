@@ -108,7 +108,7 @@ test("Quotation and standalone Sales Order share governed commercial preview and
 		await expect(page.getByText("Sales Order summary", { exact: true })).toBeVisible();
 
 		await page.getByRole("button", { name: "From Submitted Quotation", exact: true }).click();
-		await expect(page.getByText("Submitted Quotation", { exact: true }).first()).toBeVisible();
+		await expect(page.getByRole("combobox", { name: /Submitted Quotation/ }).first()).toBeVisible();
 		await expect(page.getByText("Sales Order discount & tax", { exact: true })).toHaveCount(0);
 	} finally {
 		await context.close();

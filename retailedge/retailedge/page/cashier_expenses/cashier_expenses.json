@@ -12,13 +12,9 @@
   "page_name": "cashier-expenses",
   "roles": [
     {"role": "System Manager"},
-    {"role": "RetailEdge Manager"},
     {"role": "RetailEdgeManager"},
-    {"role": "RetailEdge Branch Manager"},
     {"role": "RetailEdgeBranchManager"},
-    {"role": "RetailEdge Auditor"},
     {"role": "RetailEdgeAuditor"},
-    {"role": "RetailEdge Cashier"},
     {"role": "RetailEdgeCashier"},
     {"role": "Accounts Manager"},
     {"role": "Accounts User"}

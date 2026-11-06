@@ -454,7 +454,9 @@ test("RC3 restricted Branch Manager reaches Home, Action Centre and Banking work
 test("RC3 cashier remains in Home and cannot open Banking Readiness", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.goto(`${BASE_URL}/app/retailedge-business-hub`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+		await expect(page).toHaveURL(/cashier-my-work/, { timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
 		await page.goto(`${BASE_URL}/app/banking-readiness`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 		await page.waitForTimeout(1_000);
 		const bankingTitleVisible = await page

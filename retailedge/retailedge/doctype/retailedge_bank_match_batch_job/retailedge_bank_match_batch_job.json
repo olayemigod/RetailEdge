@@ -320,38 +320,10 @@
  "name": "RetailEdge Bank Match Batch Job",
  "owner": "Administrator",
  "permissions": [
-  {
-   "role": "System Manager",
-   "read": 1,
-   "write": 1,
-   "create": 1,
-   "delete": 1,
-   "submit": 0,
-   "cancel": 0,
-   "amend": 0
-  },
-  {
-   "role": "RetailEdge Bank Match Manager",
-   "read": 1,
-   "write": 1,
-   "create": 1
-  },
-  {
-   "role": "RetailEdge Manager",
-   "read": 1,
-   "write": 1,
-   "create": 1
-  },
-  {
-   "role": "RetailEdgeManager",
-   "read": 1,
-   "write": 1,
-   "create": 1
-  },
-  {
-   "role": "RetailEdgeAuditor",
-   "read": 1
-  }
+  {"role":"System Manager","read":1,"write":1,"create":1,"delete":1,"submit":0,"cancel":0,"amend":0},
+  {"role":"RetailEdge Bank Match Manager","read":1,"write":1,"create":1},
+  {"role":"RetailEdgeManager","read":1,"write":1,"create":1},
+  {"role":"RetailEdgeAuditor","read":1}
  ],
  "sort_field": "modified",
  "sort_order": "DESC",

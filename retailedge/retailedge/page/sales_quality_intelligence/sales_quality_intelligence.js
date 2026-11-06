@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const SALES_QUALITY_ASSET = "sales_quality_intelligence.bundle.js";
 const PAGE_ROUTE = "sales-quality-intelligence";
 const PAGE_TITLE = "Discount & Sales Quality";

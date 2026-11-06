@@ -3,7 +3,7 @@ const { defineConfig } = require("@playwright/test");
 module.exports = defineConfig({
 	testDir: __dirname,
 	testMatch:
-		/retailedge_(?:mvp_smoke|rc3_acceptance|working_branch_scope|user_readiness|printing_shell|navigation_collapse|shell_date_consumer|old_audit_acceptance)\.spec\.cjs/,
+		/retailedge_(?:mvp_smoke|rc3_acceptance|cashier_sale_continuity|cashier_sidebar_consistency|working_branch_scope|user_readiness|printing_shell|navigation_collapse|shell_date_consumer|old_audit_acceptance|saved_draft_removal|professional_commercial_parity)\.spec\.cjs/,
 	fullyParallel: false,
 	retries: 0,
 	workers: 1,

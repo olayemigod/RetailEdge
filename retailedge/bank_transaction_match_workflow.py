@@ -35,12 +35,12 @@ BANK_TRANSACTION_MATCH_WORKFLOW_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
+
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
+
 	"RetailEdgeAuditor",
+
 }
 
 NO_MATCH_CANDIDATE_MESSAGE = "No match candidate found."

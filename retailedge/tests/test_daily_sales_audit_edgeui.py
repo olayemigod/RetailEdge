@@ -57,7 +57,7 @@ def test_daily_sales_audit_uses_canonical_edgesuite_shell_provider_and_smart_lin
 		assert expected in bundle
 
 	for expected in (
-		'const EDGEUI_ASSET = "edgeui.bundle.js"',
+		'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"',
 		'const REPORTING_ASSET = "daily_sales_audit.bundle.js"',
 		"hideNativePageSidebar",
 		"renderLoadError",

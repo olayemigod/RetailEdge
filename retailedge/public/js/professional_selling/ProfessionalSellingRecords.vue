@@ -128,6 +128,8 @@
 
 <script>
 const LIST_METHOD = "retailedge.professional_selling.get_professional_selling_list";
+const CASHIER_RECEIPT_ACTION = "cashier-receive-payment";
+const CASHIER_ROLES = new Set(["RetailEdgeCashier", "RetailEdge Cashier"]);
 const REQUIRED_COMPONENTS = ["EdgeInput", "EdgeDropdown", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge", "EdgeSmartDateRange"];
 
 function runtimeComponents() {
@@ -181,6 +183,9 @@ export default {
 		},
 		activeDocument() {
 			return this.readableDocuments.find((row) => row.key === this.activeKey) || this.readableDocuments[0] || null;
+		},
+		isCashierUser() {
+			return (window.frappe?.user_roles || []).some((role) => CASHIER_ROLES.has(role));
 		},
 		statusOptions() {
 			const common = ["All", "Draft", "Submitted", "Cancelled"];
@@ -335,10 +340,40 @@ export default {
 		canComplete(row) {
 			return Number(row?.docstatus || 0) === 0;
 		},
+		canReceiveCashierPayment(row) {
+			return Boolean(
+				this.isCashierUser
+				&& this.activeDocument?.key === "sales-invoice"
+				&& Number(row?.docstatus || 0) === 1
+				&& !Number(row?.is_return || 0)
+				&& Number(row?.outstanding_amount || 0) > 0.005
+			);
+		},
+		primaryPaymentAction(row) {
+			// Outstanding is authoritative; an invoice may be Unpaid, Overdue or Partly Paid.
+			if (
+				this.activeDocument?.key !== "sales-invoice"
+				|| Number(row?.docstatus || 0) !== 1
+				|| Number(row?.is_return || 0)
+				|| Number(row?.outstanding_amount || 0) <= 0.005
+			) return null;
+			// Cashiers use the restricted, server-verified invoice receipt workflow.
+			if (this.canReceiveCashierPayment(row)) {
+				return { value: CASHIER_RECEIPT_ACTION, label: "Receive Payment" };
+			}
+			// Non-cashiers only see this action when native Payment Entry create
+			// authority was confirmed by the permission-aware list endpoint.
+			const nativePayment = (Array.isArray(row?.actions) ? row.actions : []).find(
+				(action) => action?.value === "make-payment" && !action?.disabled
+			);
+			return nativePayment ? { value: "make-payment", label: "Receive Payment" } : null;
+		},
 		primaryActionLabel(row) {
-			return this.canComplete(row) ? "Edit / Complete" : "View";
+			if (this.canComplete(row)) return "Edit / Complete";
+			return this.primaryPaymentAction(row)?.label || "View";
 		},
 		moreActions(row) {
+			const paymentAction = this.primaryPaymentAction(row);
 			const actions = (Array.isArray(row?.actions) ? row.actions : [])
 				.map((action) => ({
 					...action,
@@ -346,24 +381,32 @@ export default {
 					label: action?.label,
 					disabled: Boolean(action?.disabled),
 				}))
-				.filter((action) => action.value && action.label);
+				.filter((action) => action.value && action.label)
+				// The primary payment action is not repeated under More.
+				.filter((action) => !paymentAction || !["make-payment", CASHIER_RECEIPT_ACTION].includes(action.value));
+			if (paymentAction) {
+				actions.unshift({ value: "view", label: "View Invoice" });
+			}
 			if (!actions.some((action) => action.value === "output")) {
-				actions.push({
-					value: "output",
-					label: "Print & Share",
-				});
+				actions.push({ value: "output", label: "Print & Share" });
 			}
 			if (this.canUseNativeDesk) {
-				actions.push({
-					value: "advanced",
-					label: `Advanced: Open ${this.activeDocument?.label || "Record"}`,
-				});
+				actions.push({ value: "advanced", label: `Advanced: Open ${this.activeDocument?.label || "Record"}` });
 			}
 			return actions;
 		},
 		runPrimaryAction(row) {
 			if (this.canComplete(row)) {
 				this.$emit("action", { action: "complete", document: this.activeDocument, row });
+				return;
+			}
+			const paymentAction = this.primaryPaymentAction(row);
+			if (paymentAction?.value === CASHIER_RECEIPT_ACTION) {
+				frappe.set_route("cashier-customer-receipt", row.name);
+				return;
+			}
+			if (paymentAction?.value === "make-payment") {
+				this.$emit("action", { action: "make-payment", document: this.activeDocument, row });
 				return;
 			}
 			this.$emit("action", { action: "view", document: this.activeDocument, row });
@@ -390,6 +433,10 @@ export default {
 		runMoreAction(row, option) {
 			const action = String(option?.value || "");
 			if (!action) return;
+			if (action === CASHIER_RECEIPT_ACTION) {
+				frappe.set_route("cashier-customer-receipt", row.name);
+				return;
+			}
 			this.$emit("action", { action, actionDefinition: option, document: this.activeDocument, row });
 		},
 	},

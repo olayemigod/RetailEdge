@@ -49,8 +49,8 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 			roles = {entry["role"] for entry in payload["roles"]}
 			self.assertIn("Sales User", roles)
 			self.assertIn("Sales Manager", roles)
-			self.assertIn("RetailEdge Branch Manager", roles)
-			self.assertIn("RetailEdge Auditor", roles)
+			self.assertIn("RetailEdgeBranchManager", roles)
+			self.assertIn("RetailEdgeAuditor", roles)
 
 	def test_backend_is_submitted_invoice_based_permission_aware_and_bounded(self):
 		source = self.read(BACKEND)
@@ -128,7 +128,7 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 		):
 			loader = self.read(path)
 			for contract in (
-				'const EDGEUI_ASSET = "edgeui.bundle.js"',
+				'const EDGEUI_ASSET = "edgesuite_ui.bundle.js"',
 				'const SALES_REPORTING_ASSET = "sales_reporting.bundle.js"',
 				"await requireAsync(EDGEUI_ASSET)",
 				"window.EdgeSuiteUI?.components",

@@ -199,11 +199,21 @@ export default {
 			this.loading = true;
 			this.error = "";
 			try {
-				const result = await callMethod("retailedge.report_center.get_reports_centre_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
+					? window.retailedgeGetBusinessHubContext()
+					: callMethod("retailedge.navigation_consolidation.get_retailedge_business_hub_context");
+				const [result, navigation] = await Promise.all([
+					callMethod("retailedge.report_center.get_reports_centre_context"),
+					navigationPromise,
+				]);
 				this.groups = result.groups || [];
-				this.context = { ...this.context, ...(result.context || {}) };
-				this.canUseNativeDesk = Boolean(result.access?.can_use_native_desk);
-				this.menuItems = this.mapNavigationGroups(result.navigation_groups || []);
+				this.context = {
+					...this.context,
+					...(result.context || {}),
+					...(navigation.context || {}),
+				};
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) {
 				this.groups = [];
 				this.error =

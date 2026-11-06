@@ -14,12 +14,12 @@ def get_cashier_expense_dashboard_roles() -> set[str]:
 		"System Manager",
 		"Accounts Manager",
 		"Accounts User",
-		"RetailEdge Manager",
 		"RetailEdgeManager",
-		"RetailEdge Branch Manager",
+
 		"RetailEdgeBranchManager",
-		"RetailEdge Auditor",
+
 		"RetailEdgeAuditor",
+
 	}
 
 

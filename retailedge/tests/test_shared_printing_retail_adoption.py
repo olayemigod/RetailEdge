@@ -6,7 +6,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = APP_ROOT.parent
-EDGESUITE_SHA = "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7"
+EDGESUITE_SHA = "d50920b005da8dcf1bd1e35c1c88be8afedecfbf"
 
 
 class TestSharedPrintingRetailAdoption(unittest.TestCase):
@@ -167,7 +167,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			hooks,
 		)
 		self.assertIn("from retailedge.printing_navigation import normalize_printing_navigation", final_navigation)
-		self.assertIn("return normalize_printing_navigation(context)", final_navigation)
+		self.assertIn("context = normalize_printing_navigation(context)", final_navigation)
+		self.assertIn("return filter_context_for_runtime_capabilities(context)", final_navigation)
 
 	def test_branch_print_policy_is_opt_in_and_presentation_only(self):
 		settings = self.read_app("print_output_settings.py")

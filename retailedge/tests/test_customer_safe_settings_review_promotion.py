@@ -74,7 +74,7 @@ def test_settings_are_managed_in_vertical_navigation_workspace():
     assert "ignore_permissions" not in backend
     assert "frappe.db.set_value" not in backend
 
-    assert "edgeui.bundle.js" in page
+    assert "edgesuite_ui.bundle.js" in page
     assert "retail_settings.bundle.js" in page
     assert 'class="settings-navigation"' in vue
     assert 'class="settings-nav"' in vue

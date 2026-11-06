@@ -10,6 +10,9 @@ const USERS = {
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
 	purchasing: "browser-purchasing@example.com",
+	auditor: "browser-auditor@example.com",
+	noAccess: "browser-no-access@example.com",
+	native: "browser-native@example.com",
 };
 
 async function login(context, user) {
@@ -18,7 +21,9 @@ async function login(context, user) {
 	});
 	expect(response.ok(), `login failed for ${user}`).toBeTruthy();
 	const payload = await response.json();
-	expect(String(payload.message || "")).toMatch(/Logged In/i);
+	// Frappe returns "No App" after a successful login when a System User has
+	// deliberately been given no module access. That is the expected no-access fixture.
+	expect(String(payload.message || "")).toMatch(/Logged In|No App/i);
 }
 
 async function routeDiagnostic(page, route) {
@@ -75,6 +80,12 @@ async function newPersona(browser, user, options = {}) {
 	await login(context, user);
 	const page = await context.newPage();
 	return { context, page };
+}
+
+function isoDaysAgo(days) {
+	const value = new Date();
+	value.setUTCDate(value.getUTCDate() - days);
+	return value.toISOString().slice(0, 10);
 }
 
 test("canonical RetailEdge manager reaches Business Hub and Action Centre", async ({ browser }) => {
@@ -145,7 +156,7 @@ test("RetailEdge cashier cannot open Shift Reconciliation", async ({ browser }) 
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -183,13 +194,37 @@ test("RetailEdge manager reaches Reports Centre and can search the permitted cat
 	}
 });
 
-test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
+test("RetailEdge cashier sidebar preserves permission-authorized operational tools", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
+		await page.goto(`${BASE_URL}/app/cashier-my-work`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
+		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+		await expect(sidebar).toBeVisible();
+
+		for (const label of [
+			"Reports",
+			"Reports Centre",
+			"Expense Register",
+			"Document Output & Sharing",
+			"Company Profile",
+			"Devices & Printing",
+		]) {
+			await expect(sidebar.getByText(label, { exact: true }).first()).toBeAttached({ timeout: 15_000 });
+		}
+
+		await expect(sidebar.getByText("Professional Selling", { exact: true }).first()).toBeAttached({ timeout: 15_000 });
+		await expect(sidebar.getByText("Asset Management", { exact: true })).toHaveCount(0);
+		await expect(sidebar.getByText("Service & Warranty", { exact: true })).toHaveCount(0);
+
 		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
 		const catalogue = page.locator(".reports-centre");
-		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
 		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Selling Control", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -255,16 +290,64 @@ test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ br
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
 });
 
-test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({ browser }) => {
+test("canonical RetailEdge cashier lands on My Work with Home navigation, history, and provider-aware POS", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+		await page.goto(`${BASE_URL}/app/retailedge-business-hub`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await expect(page).toHaveURL(/cashier-my-work/, { timeout: 20_000 });
+		await expect(page.getByRole("heading", { name: "My Work", exact: true })).toBeVisible({ timeout: 20_000 });
+
+		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+		await expect(sidebar).toBeVisible();
+		const homeSection = sidebar.locator(".edge-sidebar__section").filter({ hasText: "Home" }).first();
+		await expect(homeSection).toBeVisible();
+		await expect(homeSection.getByText("My Work", { exact: true }).first()).toBeVisible();
+
+		const productLogo = page.locator(".cashier-work-brand-logo").first();
+		await expect(productLogo).toBeVisible();
+		expect(await productLogo.evaluate((image) => image.complete && image.naturalWidth > 0)).toBeTruthy();
+
+		// Standalone browser QA may not have a POS provider installed.
+		// The button must agree with the permission-filtered runtime navigation.
+		const navigationResponse = await context.request.get(
+			`${BASE_URL}/api/method/retailedge.edgesuite_ui.get_retailedge_business_hub_context`
+		);
+		expect(navigationResponse.ok()).toBeTruthy();
+		const navigation = (await navigationResponse.json()).message || {};
+		const posItem = (navigation.navigation_groups || [])
+			.flatMap((group) => group.items || [])
+			.find((item) => item.label === "Start POS");
+		const startPosButton = page.getByRole("button", { name: "Start POS", exact: true }).first();
+		if (!posItem) {
+			await expect(startPosButton).toHaveCount(0);
+		} else if (posItem.target_type === "URL" && posItem.target === "/pos/") {
+			await expect(startPosButton).toBeVisible();
+			const [posPage] = await Promise.all([context.waitForEvent("page"), startPosButton.click()]);
+			await posPage.waitForURL(/\/pos\//, { timeout: 20_000 });
+			await posPage.close().catch(() => {});
+		} else if (posItem.target_type === "Page") {
+			await expect(startPosButton).toBeVisible();
+			await startPosButton.click();
+			await expect(page).toHaveURL(new RegExp(`/app/${posItem.target}$`));
+		} else {
+			throw new Error(`Unexpected Start POS target: ${JSON.stringify(posItem)}`);
+		}
+
+		const workDate = page.getByLabel("Work date", { exact: true });
+		await expect(workDate).toBeVisible();
+		await workDate.fill(isoDaysAgo(1));
+		await workDate.press("Tab");
+		await expect(page.getByText("Showing historical activity", { exact: true })).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("Current shift", { exact: true })).toHaveCount(0);
 
 		await page.goto(`${BASE_URL}/app/banking-readiness`, {
 			waitUntil: "domcontentloaded",
@@ -278,7 +361,7 @@ test("canonical RetailEdge cashier reaches Business Hub but not banking control 
 			.isVisible()
 			.catch(() => false);
 		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -316,6 +399,53 @@ test("Business Hub remains usable at narrow mobile width", async ({ browser }) =
 			() => Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)
 		);
 		expect(overflow).toBeLessThanOrEqual(4);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge auditor reaches governed reports but not operational Business Hub", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.auditor);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+		await page.goto(BASE_URL + "/app/retailedge-business-hub", {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		await expect(page.getByRole("heading", { name: "Business Hub", exact: true })).toHaveCount(0);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("user without RetailEdge access is denied Page and direct context API access", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.noAccess);
+	try {
+		const response = await context.request.get(
+			BASE_URL + "/api/method/retailedge.navigation_consolidation.get_retailedge_business_hub_context"
+		);
+		expect(response.status()).toBe(403);
+		await page.goto(BASE_URL + "/app/reports-centre", {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		await expect(page.getByRole("heading", { name: "Reports Centre", exact: true })).toHaveCount(0);
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed|do not have access/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("System Manager sees the Back to Desk advanced action", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.native);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+		await expect(page.getByRole("link", { name: "Back to Desk — Advanced ERPNext", exact: true })).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}

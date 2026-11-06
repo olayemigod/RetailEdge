@@ -18,8 +18,8 @@ def test_reporting_capability_registry_matches_approved_page_view_roles():
 		assert role in _roles("sales-invoice-register")
 		assert role in _roles("sales-by-item")
 	assert '_ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES' in source
-	assert {"RetailEdge Cashier", "RetailEdgeCashier"}.issubset(_roles("expense-register"))
-	assert '_CASHIER_ROLES = {"RetailEdge Cashier", "RetailEdgeCashier"}' in source
+	assert "RetailEdgeCashier" in _roles("expense-register")
+	assert '_CASHIER_ROLES = {"RetailEdgeCashier"}' in source
 	assert 'view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES, _CASHIER_ROLES)' in source
 
 
@@ -83,9 +83,9 @@ def test_banking_operational_roles_match_page_access_and_exclude_auditor_mutatio
 	matching = (ROOT / "bank_transaction_matching.py").read_text(encoding="utf-8")
 	summary = (ROOT / "bank_exception_summary.py").read_text(encoding="utf-8")
 	page_roles = _roles("bank-matching-reconciliation")
-	assert "RetailEdge Auditor" not in page_roles
+	assert "RetailEdgeAuditor" not in page_roles
 	role_block = matching.split("BANK_TRANSACTION_MATCHING_ROLES =", 1)[1].split("}", 1)[0]
-	assert "RetailEdge Auditor" not in role_block
+	assert "RetailEdgeAuditor" not in role_block
 	assert "RetailEdgeAuditor" not in role_block
 	assert "assert_can_access_bank_transaction_matching()" in summary
 

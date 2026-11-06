@@ -11,6 +11,10 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# Frappe v16 supports bench migrate --skip-failing. This permission migration
+# must not be skipped: subsequent model/Page patches could widen access.
+never_skip_patches = ["retailedge.patches.consolidate_duplicate_retailedge_roles"]
+
 # EdgeSuite product availability is product-owned. RetailEdge explicitly
 # publishes its descriptor rather than relying on installation alone.
 edgesuite_product_availability_providers = [

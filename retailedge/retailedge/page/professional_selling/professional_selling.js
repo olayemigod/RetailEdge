@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 const SELLING_ASSET = "professional_selling.bundle.js";
 const PAGE_ROUTE = "professional-selling";
@@ -29,6 +29,11 @@ function hideNativePageSidebar(wrapper) {
 		mainWrapper.style.maxWidth = "100%";
 		mainWrapper.classList.add("retailedge-edgeui-main");
 	}
+}
+
+function clearNavigationCache() {
+	window.__retailedgeBusinessHubContextCache = null;
+	window.__retailedgeBusinessHubContextRequest = null;
 }
 
 function installRestrictedOperationalGuard() {
@@ -76,6 +81,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-professional-selling-root";
 		page.body.append(root);
+		clearNavigationCache();
 		wrapper._retailedgeProfessionalSellingApp = await window.mountRetailEdgeProfessionalSelling(root);
 	} catch (error) {
 		bootLoading.remove();
@@ -86,5 +92,6 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	installRestrictedOperationalGuard();
+	clearNavigationCache();
 	window.dispatchEvent(new CustomEvent("retailedge-professional-selling-page-show"));
 };

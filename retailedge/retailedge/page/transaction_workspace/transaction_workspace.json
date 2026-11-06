@@ -12,11 +12,8 @@
  "page_name": "transaction-workspace",
  "roles": [
   {"role": "System Manager"},
-  {"role": "RetailEdge Manager"},
   {"role": "RetailEdgeManager"},
-  {"role": "RetailEdge Branch Manager"},
   {"role": "RetailEdgeBranchManager"},
-  {"role": "RetailEdge Cashier"},
   {"role": "RetailEdgeCashier"},
   {"role": "Sales Manager"},
   {"role": "Sales User"},

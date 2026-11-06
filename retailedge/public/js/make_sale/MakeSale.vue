@@ -33,18 +33,28 @@
 				</section>
 
 				<section v-if="handoffNotice" class="edge-panel handoff-panel">
-					<span class="make-sale-kicker">Continued from Quick Sale</span>
+					<span class="make-sale-kicker">Sale status</span>
 					<p>{{ handoffNotice }}</p>
 				</section>
+
+				<UnfinishedSalesPanel
+					v-if="!savedDocument && !editingSavedDraft"
+					:drafts="unfinishedSales"
+					:loading="unfinishedSalesLoading"
+					:error="unfinishedSalesError"
+					@refresh="refreshUnfinishedSales"
+					@resume="resumeUnfinishedSale"
+					@review="reviewUnfinishedSale"
+				/>
 
 				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div>
 						<span class="make-sale-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span>
 						<h3>{{ savedDocument.name }}</h3>
-						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "The Sales Invoice has been submitted. Continue with the next valid customer workflow or start another sale." : "The Sales Invoice draft now owns the saved work. You can complete it or start another sale." }}</p>
+						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "This sale has been submitted. Continue with the next customer action or start another sale." : "This sale is saved as a draft. Review it below, edit it if needed, or start another sale." }}</p>
 					</div>
 					<div class="make-sale-inline-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" type="button" class="edge-button" @click="beginSavedDraftEdit">Continue Editing on Page</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0 && savedDocument.can_edit" type="button" class="edge-button" @click="beginSavedDraftEdit">Edit Sale</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
@@ -65,16 +75,18 @@
 				<section
 					v-if="savedDocument && !editingSavedDraft && Number(savedDocument.docstatus || 0) === 0"
 					class="edge-panel make-sale-form"
-					aria-label="Sales Invoice workflow and submission"
+					aria-label="Review and submit sale"
 				>
 					<div class="items-heading">
 						<div>
-							<span class="make-sale-kicker">Workflow & submission</span>
-							<h3>Complete {{ savedDocument.name }}</h3>
-							<p>Approval and submission stay on this persistent page. Quick Sale only creates the Sales Invoice draft.</p>
+							<span class="make-sale-kicker">Review & submit</span>
+							<h3>Review {{ savedDocument.name }}</h3>
+							<p>Confirm the saved sale below before submission. You can return to editing while it remains a draft.</p>
 						</div>
-						<span class="item-count">{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow" : "Ready to submit" }}</span>
+						<span class="item-count">{{ savedDocument.workflow_readiness?.source === "frappe" ? "Approval required" : "Ready to submit" }}</span>
 					</div>
+
+					<SalesInvoiceSubmissionReview v-if="savedDocument.review_complete" :document="savedDocument" />
 
 					<div v-if="workflowError" class="guided-invoice-error" role="alert">{{ workflowError }}</div>
 
@@ -83,11 +95,11 @@
 						<div v-if="savedDocument.workflow_readiness.current_state">
 							Current state: <strong>{{ savedDocument.workflow_readiness.current_state }}</strong>
 						</div>
-						<div>{{ savedDocument.workflow_readiness.message || "Use one of the permitted workflow actions below." }}</div>
+						<div>{{ savedDocument.workflow_readiness.message || "Use one of the permitted approval actions below." }}</div>
 					</div>
 
 					<div v-if="savedDocument.blockers?.length" class="guided-invoice-warning" role="status">
-						<strong>Completion checks</strong>
+						<strong>Checks to resolve</strong>
 						<ul>
 							<li v-for="blocker in savedDocument.blockers" :key="blocker">{{ blocker }}</li>
 						</ul>
@@ -95,17 +107,17 @@
 
 					<div class="make-sale-actions">
 						<div>
-							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Workflow controls this draft" : "Submission controls" }}</strong>
+							<strong>{{ savedDocument.workflow_readiness?.source === "frappe" ? "Approval controls this draft" : "Submit reviewed sale" }}</strong>
 							<small v-if="savedDocument.workflow_readiness?.source === 'frappe'">
-								Only actions currently permitted by the active approval workflow are shown.
+								Only approval actions currently available to you are shown.
 							</small>
 							<small v-else>
-								Submit uses the normal Sales Invoice validation, accounting and stock posting rules.
+								Submission applies the normal Sales Invoice validation and posts the accounting{{ savedDocument.update_stock ? " and stock" : "" }} effects shown above.
 							</small>
 						</div>
 						<div class="make-sale-inline-actions">
 							<button type="button" class="edge-button" :disabled="workflowBusy" @click="refreshSavedDocumentPreview">
-								{{ workflowBusy ? "Refreshing..." : "Refresh Status" }}
+								{{ workflowBusy ? "Refreshing..." : "Refresh Review" }}
 							</button>
 							<button
 								v-for="action in workflowActions"
@@ -121,10 +133,10 @@
 								v-if="savedDocument.can_submit && savedDocument.workflow_readiness?.source !== 'frappe'"
 								type="button"
 								class="edge-button edge-button--primary"
-								:disabled="workflowBusy"
-								@click="submitSavedDocument"
+								:disabled="workflowBusy || !savedDocument.review_complete"
+								@click="confirmSavedDocumentSubmission"
 							>
-								{{ workflowBusy ? "Submitting..." : "Submit Sales Invoice" }}
+								{{ workflowBusy ? "Submitting..." : "Submit Reviewed Sale" }}
 							</button>
 							<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="workflowBusy" @click="openAdvancedNative">
 								Advanced: Open Sales Invoice
@@ -337,6 +349,8 @@ import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.
 import PartyBusinessContext from "../retailedge_business_hub/PartyBusinessContext.vue";
 import SalesCommercialSummary from "../selling/SalesCommercialSummary.vue";
 import SalesCommercialTermsControls from "../selling/SalesCommercialTermsControls.vue";
+import SalesInvoiceSubmissionReview from "./SalesInvoiceSubmissionReview.vue";
+import UnfinishedSalesPanel from "./UnfinishedSalesPanel.vue";
 import {
 	openRetailPrinterSetup,
 	printRetailReceipt,
@@ -351,7 +365,8 @@ const COMMERCIAL_PREVIEW_METHOD = "retailedge.sales_commercial_preview.get_sales
 const COMMERCIAL_TERM_CONTEXT_METHOD = "retailedge.sales_commercial_terms.get_sales_commercial_edit_context";
 const COMMERCIAL_TERM_SEARCH_METHOD = "retailedge.sales_commercial_terms.search_sales_commercial_term_options";
 const UPDATE_WITH_TERMS_METHOD = "retailedge.sales_commercial_draft_update.update_sales_invoice_draft_with_commercial_terms";
-const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
+const PREVIEW_METHOD = "retailedge.sales_invoice_workbench.get_sales_invoice_submission_review";
+const DRAFTS_METHOD = "retailedge.sales_invoice_workbench.get_resumable_sales_invoice_drafts";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
@@ -444,6 +459,8 @@ export default {
 		PartyBusinessContext,
 		SalesCommercialSummary,
 		SalesCommercialTermsControls,
+		SalesInvoiceSubmissionReview,
+		UnfinishedSalesPanel,
 	},
 	data() {
 		return {
@@ -473,6 +490,9 @@ export default {
 			workflowBusy: false,
 			workflowError: "",
 			receiptPrinting: false,
+			unfinishedSales: [],
+			unfinishedSalesLoading: false,
+			unfinishedSalesError: "",
 			deliveryCompletionOpen: false,
 			deliveryCompletionDocument: null,
 			paymentOpen: false,
@@ -647,13 +667,78 @@ export default {
 				this.applyShellContext(shell || {});
 				this.applyFreshDefaults(data?.defaults || {});
 				const usedHandoff = await this.consumeHandoff();
-				if (!usedHandoff) this.loadRecoveryCandidate();
+				if (!usedHandoff) {
+					this.loadRecoveryCandidate();
+					await this.refreshUnfinishedSales({ silent: true });
+				}
 				this.loaded = true;
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Make Sale.");
 			} finally {
 				this.loading = false;
 			}
+		},
+		async refreshUnfinishedSales({ silent = false } = {}) {
+			if (this.unfinishedSalesLoading) return;
+			this.unfinishedSalesLoading = true;
+			if (!silent) this.unfinishedSalesError = "";
+			try {
+				const drafts = await callMethod(DRAFTS_METHOD, { limit: 12 }, "GET");
+				this.unfinishedSales = Array.isArray(drafts) ? drafts : [];
+				this.unfinishedSalesError = "";
+			} catch (error) {
+				this.unfinishedSales = [];
+				this.unfinishedSalesError = errorMessage(error, "Unable to load unfinished sales.");
+			} finally {
+				this.unfinishedSalesLoading = false;
+			}
+		},
+		async openUnfinishedSale(name, { edit = false } = {}) {
+			const documentName = String(name || "").trim();
+			if (!documentName || this.saving || this.workflowBusy) return;
+			const openDraft = async () => {
+				this.saveError = "";
+				this.workflowError = "";
+				try {
+					const preview = await callMethod(PREVIEW_METHOD, { name: documentName, source_mode: "standard" }, "GET");
+					if (Number(preview?.docstatus || 0) !== 0) {
+						this.savedDocument = { ...preview, doctype: "Sales Invoice" };
+						this.handoffNotice = `Sale ${documentName} is no longer a draft. Its current status is shown below.`;
+						return;
+					}
+					if (preview?.is_return || preview?.source_mode === "sales_return") {
+						this.saveError = "Return / Credit Note drafts use the governed return review instead of Make Sale.";
+						return;
+					}
+					this.savedDocument = { ...preview, doctype: "Sales Invoice" };
+					this.syncPageFromDraftPreview(preview);
+					this.editingSavedDraft = false;
+					this.savedCommercialTermCapabilities = null;
+					this.recoveryCandidate = null;
+					this.clearRecovery();
+					this.initialSnapshot = editableSnapshot(this.values);
+					this.handoffNotice = edit
+						? `Resuming unfinished sale ${documentName}. Review the saved values before updating the draft.`
+						: `Reviewing unfinished sale ${documentName}. Edit it if anything needs to change before submission.`;
+					if (edit) await this.beginSavedDraftEdit();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to open this unfinished sale.");
+				}
+			};
+			if (this.hasUnsavedChanges && !this.savedDocument) {
+				frappe.confirm(
+					"Open this unfinished sale? The unsaved entries currently on Make Sale will be replaced.",
+					openDraft,
+				);
+				return;
+			}
+			await openDraft();
+		},
+		resumeUnfinishedSale(name) {
+			return this.openUnfinishedSale(name, { edit: true });
+		},
+		reviewUnfinishedSale(name) {
+			return this.openUnfinishedSale(name, { edit: false });
 		},
 		applyFreshDefaults(defaults) {
 			this.savedCommercialTermCapabilities = null;
@@ -807,7 +892,7 @@ export default {
 				this.recoveryCandidate = null;
 				this.clearRecovery();
 				this.initialSnapshot = editableSnapshot(this.values);
-				this.handoffNotice = `Sales Invoice ${name} was saved from Quick Sale. Review workflow/submission below or continue editing on this page.`;
+				this.handoffNotice = `Sales Invoice ${name} was saved from Quick Sale. Review the sale below or edit it before submission.`;
 				return true;
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to load the Sales Invoice draft on Make Sale.");
@@ -1377,7 +1462,7 @@ export default {
 					if (!this.editingSavedDraft) this.initialSnapshot = editableSnapshot(this.values);
 				}
 			} catch (error) {
-				this.workflowError = errorMessage(error, "Unable to refresh Sales Invoice workflow status.");
+				this.workflowError = errorMessage(error, "Unable to refresh the sale review.");
 			} finally {
 				this.workflowBusy = false;
 			}
@@ -1399,8 +1484,21 @@ export default {
 				this.workflowError = errorMessage(error, "Sales Invoice was completed, but its next actions could not be refreshed.");
 			}
 		},
+		confirmSavedDocumentSubmission() {
+			if (!this.savedDocument?.name || !this.savedDocument?.can_submit || !this.savedDocument?.review_complete || this.workflowBusy) return;
+			const currency = String(this.savedDocument.currency || "NGN").trim() || "NGN";
+			const amount = Number(this.savedDocument.rounded_total || 0) || Number(this.savedDocument.grand_total || 0);
+			const formatted = `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+			const effect = this.savedDocument.update_stock
+				? "This will post the accounting and stock movements shown in the review."
+				: "This will post the accounting entries shown in the review.";
+			frappe.confirm(
+				`Submit ${this.savedDocument.name} for ${formatted}? ${effect}`,
+				() => this.submitSavedDocument(),
+			);
+		},
 		async submitSavedDocument() {
-			if (!this.savedDocument?.name || !this.savedDocument?.can_submit || this.workflowBusy) return;
+			if (!this.savedDocument?.name || !this.savedDocument?.can_submit || !this.savedDocument?.review_complete || this.workflowBusy) return;
 			this.workflowBusy = true;
 			this.workflowError = "";
 			try {

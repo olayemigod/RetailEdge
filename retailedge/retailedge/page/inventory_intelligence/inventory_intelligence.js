@@ -1,4 +1,4 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";
+const EDGEUI_ASSET = "edgesuite_ui.bundle.js";
 const INVENTORY_INTELLIGENCE_ASSET = "inventory_intelligence.bundle.js";
 const PAGE_ROUTE = "inventory-intelligence";
 const PAGE_TITLE = "Inventory Intelligence";
