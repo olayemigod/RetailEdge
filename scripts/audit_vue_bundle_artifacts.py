@@ -46,10 +46,25 @@ def inspect(bench: Path) -> list[dict[str, object]]:
     return rows
 
 
+def validate_bridge_contract(rows: list[dict[str, object]]) -> list[str]:
+    """Require product Vue render helpers to use the EdgeSuite bridge."""
+    issues: list[str] = []
+    shared = rows[0]
+    if shared.get("status") != "present" or not shared.get("app_signature"):
+        issues.append("Shared EdgeSuite runtime bundle missing or invalid.")
+    for row in rows[1:]:
+        asset = str(row["asset"])
+        if row.get("status") != "present":
+            issues.append(f"{asset}: compiled bundle missing")
+        elif not row.get("bridge_marker") or row.get("vnode_signature") or row.get("app_signature"):
+            issues.append(f"{asset}: invalid compiled Vue bridge: {row}")
+    return issues
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bench", type=Path, default=Path.cwd())
     parser.add_argument("--markdown-summary", action="store_true")
+    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
     rows = inspect(args.bench)
     print(json.dumps(rows, indent=2))
@@ -71,6 +86,12 @@ def main() -> None:
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
             out.write("\n".join(lines))
 
+
+    if args.strict:
+        problems = validate_bridge_contract(rows)
+        if problems:
+            raise SystemExit("INVALID COMPILED VUE BRIDGE:\n" + "\n".join(problems))
+        print("Compiled Vue bridge gate PASS; browser acceptance still required.")
 
 if __name__ == "__main__":
     main()
