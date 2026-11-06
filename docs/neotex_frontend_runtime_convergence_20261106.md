@@ -33,3 +33,36 @@ Before treating NEOTEX fixed:
 5. Complete exact-head CI and NEOTEX hosted deployment acceptance; retain no financial/schema/permission changes.
 
 **Release status:** asset-name convergence may be merged after its independent tests, but it does not close issue #244; browser runtime acceptance remains blocked.
+
+
+## Clean CI build compared with NEOTEX production
+
+The clean Frappe v16 CI build produced these hashes and signatures:
+
+| Bundle | NEOTEX | CI | Bridge marker in CI | Duplicate VNode marker in CI |
+| --- | --- | --- | --- | --- |
+| EdgeSuite UI | LBNBGUUL | LBNBGUUL | n/a | expected in shared runtime |
+| Business Hub | RPHRGBEQ | U42LKNDO | present | absent |
+| Professional Selling | RAS7WQDT | POFNT7OU | present | absent |
+
+The CI build also confirms the correct bridge marker in Make Sale, Stock Adjustment,
+Transfer Stock, Payment Management and Owner Dashboard. This strongly points to
+different hosted production **build output**, not an absent source bridge.
+
+Run this after compiling the exact deployed revision from the Frappe bench root:
+
+    python apps/retailedge/scripts/audit_vue_bundle_artifacts.py --bench . --strict
+
+This check fails if the shared runtime bundle is absent or if representative
+RetailEdge product bundles do not contain the canonical bridge or contain duplicate
+Vue runtime signatures. The exact same check is enforced in CI and Browser Persona CI.
+
+This is a build provenance check, not a complete browser acceptance. Browser tests
+now require Business Hub to render its actual EdgeSuite shell and styled sidebar,
+and Professional Selling to expose its nested Vue template ref. NEOTEX still requires
+fresh deployment verification because its builds diverged from clean CI.
+
+If hosted output fails the check, inspect the Frappe Cloud builder working directory,
+its effective tsconfig/alias resolution, installed Frappe/esbuild/Vue plugin versions,
+and whether the app's tsconfig was available at build time. Do not bypass the gate
+or mask the error by rebinding Vue components on individual pages.

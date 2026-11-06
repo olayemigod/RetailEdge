@@ -4,6 +4,7 @@ const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.local
 const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
 
 const USERS = {
+	sales: "browser-sales@example.com",
 	manager: "browser-manager@example.com",
 	branchManager: "browser-branch-manager@example.com",
 	cashier: "browser-cashier@example.com",
@@ -319,4 +320,54 @@ test("Business Hub remains usable at narrow mobile width", async ({ browser }) =
 	} finally {
 		await context.close().catch(() => {});
 	}
+});
+
+
+test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not raw custom elements", async ({ browser }) => {
+    const { context, page } = await newPersona(browser, USERS.manager, {
+        viewport: { width: 1280, height: 800 },
+    });
+    const vueErrors = [];
+    page.on("pageerror", (error) => {
+        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
+    });
+    try {
+        await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
+        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
+        const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+        await expect(sidebar).toBeVisible();
+        const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
+        expect(width, "Styled sidebar must have bounded desktop width").toBeGreaterThan(60);
+        expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
+        const mounted = await page.evaluate(() => Boolean(
+            window.frappe?.pages?.["retailedge-business-hub"]?._retailedgeBusinessHub?._instance
+        ));
+        expect(mounted, "Business Hub should mount its Vue app").toBeTruthy();
+        expect(vueErrors).toEqual([]);
+    } finally {
+        await context.close().catch(() => {});
+    }
+});
+
+test("Vue runtime contract: Professional Selling preserves nested template refs", async ({ browser }) => {
+    const { context, page } = await newPersona(browser, USERS.sales, {
+        viewport: { width: 1280, height: 800 },
+    });
+    const vueErrors = [];
+    page.on("pageerror", (error) => {
+        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
+    });
+    try {
+        await openProductPage(page, "professional-selling", "Professional Selling");
+        await expect(page.locator(".retailedge-professional-selling-root .edge-app-shell")).toBeVisible();
+        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
+        await expect(page.locator(".professional-selling-load-error")).toHaveCount(0);
+        await page.waitForFunction(() => Boolean(
+            window.frappe?.pages?.["professional-selling"]?._retailedgeProfessionalSellingApp
+                ?._instance?.proxy?.$refs?.sellingRecords
+        ), null, { timeout: 20_000 });
+        expect(vueErrors).toEqual([]);
+    } finally {
+        await context.close().catch(() => {});
+    }
 });
