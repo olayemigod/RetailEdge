@@ -38,11 +38,27 @@ def inspect(bench: Path) -> list[dict[str, object]]:
         raise RuntimeError(f"Missing or invalid Frappe assets manifest: {manifest_path}") from error
 
     source_dir = bench / "apps" / "retailedge" / "retailedge" / "public" / "js"
-    bundles = (SHARED_BUNDLE, *sorted(set(REQUIRED_PRODUCT_BUNDLES) | set(discover_vue_product_bundles(source_dir))))
+    required = set(REQUIRED_PRODUCT_BUNDLES) | set(discover_vue_product_bundles(source_dir))
+    # Indirect Vue imports may come through a JS entrypoint, with no direct
+    # .vue import in its source. Check *all* compiled RetailEdge JS bundles
+    # for embedded Vue runtime signatures, even when no bridge is required.
+    published = {
+        name
+        for name, value in manifest.items()
+        if name.endswith(".bundle.js")
+        and isinstance(value, str)
+        and value.startswith("/assets/retailedge/dist/js/")
+    }
+    bundles = (SHARED_BUNDLE, *sorted(required | published))
     rows = []
     for bundle in bundles:
         url = manifest.get(bundle)
-        row: dict[str, object] = {"asset": bundle, "manifest_url": url or "", "status": "missing"}
+        row: dict[str, object] = {
+            "asset": bundle,
+            "manifest_url": url or "",
+            "status": "missing",
+            "requires_bridge": bundle in required,
+        }
         if isinstance(url, str) and url.startswith("/assets/") and "/dist/js/" in url:
             output = bench / "sites" / url.lstrip("/")
             if output.is_file():
@@ -68,7 +84,9 @@ def validate_bridge_contract(rows: list[dict[str, object]]) -> list[str]:
         bundle = str(row["asset"])
         if row.get("status") != "present":
             issues.append(f"{bundle}: compiled asset is missing")
-        elif not row.get("bridge_marker") or row.get("vnode_signature") or row.get("app_signature"):
+            continue
+        embedded_vue = row.get("vnode_signature") or row.get("app_signature")
+        if embedded_vue or (row.get("requires_bridge") and not row.get("bridge_marker")):
             issues.append(
                 f"{bundle}: compiled Vue runtime mismatch "
                 f"(bridge={row.get('bridge_marker')}, vnode={row.get('vnode_signature')}, "
