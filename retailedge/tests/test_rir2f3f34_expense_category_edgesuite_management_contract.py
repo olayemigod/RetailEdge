@@ -6,15 +6,11 @@ from pathlib import Path
 
 from retailedge import expense_category_setup
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SETUP_BACKEND = ROOT / "retailedge/page/retailedge_setup/retailedge_setup.py"
 SETUP_UI = ROOT / "public/js/retailedge_setup/RetailEdgeSetup.vue"
 MANAGER_UI = ROOT / "public/js/retailedge_setup/ExpenseCategoryManager.vue"
-CATEGORY_CONTROLLER = (
-	ROOT
-	/ "retailedge/doctype/retailedge_expense_category/retailedge_expense_category.py"
-)
+CATEGORY_CONTROLLER = ROOT / "retailedge/doctype/retailedge_expense_category/retailedge_expense_category.py"
 DOC = ROOT.parent / "docs/rir2f3f34_expense_category_edgesuite_management.md"
 
 
@@ -41,7 +37,7 @@ def test_expense_category_permissions_allow_governed_manager_maintenance():
 	meta_path = ROOT / "retailedge/doctype/retailedge_expense_category/retailedge_expense_category.json"
 	meta = json.loads(meta_path.read_text(encoding="utf-8"))
 	by_role = {row["role"]: row for row in meta.get("permissions", [])}
-	for role in ("RetailEdgeManager",  "Accounts Manager"):
+	for role in ("RetailEdgeManager", "Accounts Manager"):
 		assert by_role[role].get("read") == 1
 		assert by_role[role].get("create") == 1
 		assert by_role[role].get("write") == 1
@@ -86,9 +82,7 @@ def test_new_edgesuite_category_requires_explicit_company():
 
 
 def test_account_and_cost_center_queries_are_company_dependent_and_filtered():
-	source = inspect.getsource(
-		expense_category_setup.search_expense_category_manager_options
-	)
+	source = inspect.getsource(expense_category_setup.search_expense_category_manager_options)
 	assert '"root_type": "Expense"' in source
 	assert '"is_group": 0' in source
 	assert '"disabled": 0' in source
@@ -128,7 +122,7 @@ def test_setup_consumes_expense_category_route_options_inside_edgesuite():
 	assert "options.setup_action" in source
 	assert "this.openExpenseCategoryManager(" in source
 	assert "frappe.route_options = null" in source
-	assert '<ExpenseCategoryManager' in source
+	assert "<ExpenseCategoryManager" in source
 
 
 def test_expense_category_resource_does_not_use_native_list_or_new_form():

@@ -75,19 +75,27 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 
 	def test_purchase_register_next_action_is_permission_and_state_aware(self):
 		self.assertEqual(
-			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=100, can_pay_supplier=True)["key"],
+			purchase_reporting._purchase_register_next_action(
+				is_return=False, outstanding=100, can_pay_supplier=True
+			)["key"],
 			"pay-supplier",
 		)
 		self.assertEqual(
-			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=100, can_pay_supplier=False)["key"],
+			purchase_reporting._purchase_register_next_action(
+				is_return=False, outstanding=100, can_pay_supplier=False
+			)["key"],
 			"review-payable",
 		)
 		self.assertEqual(
-			purchase_reporting._purchase_register_next_action(is_return=False, outstanding=0, can_pay_supplier=True)["key"],
+			purchase_reporting._purchase_register_next_action(
+				is_return=False, outstanding=0, can_pay_supplier=True
+			)["key"],
 			"complete",
 		)
 		self.assertEqual(
-			purchase_reporting._purchase_register_next_action(is_return=True, outstanding=0, can_pay_supplier=True)["key"],
+			purchase_reporting._purchase_register_next_action(
+				is_return=True, outstanding=0, can_pay_supplier=True
+			)["key"],
 			"review-return",
 		)
 		source = inspect.getsource(purchase_reporting._build_purchase_register_dataset)

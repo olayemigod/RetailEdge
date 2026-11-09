@@ -7,7 +7,6 @@ from frappe.permissions import add_permission, update_permission_property
 
 from retailedge.branch_context import GLOBAL_BRANCH_ACCESS_ROLES
 
-
 RETAILEDGE_ROLE_NAMES = (
 	"RetailEdgeCashier",
 	"RetailEdgeManager",

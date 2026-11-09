@@ -5,7 +5,6 @@ from unittest import TestCase
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 OVERVIEW_TARGET = "assets-control"
 APPROVED_NATIVE_TARGETS = ["Asset", "Asset Category"]
@@ -55,7 +54,8 @@ class TestFixedAssetsNavigationContract(TestCase):
 
 		self.assertNotIn("required_roles", group)
 		self.assertIn('if target_type == "DocType":', navigation_source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', navigation_source)
+		self.assertIn("_has_permission_cached(", navigation_source)
+		self.assertIn('target, "read", permission_cache', navigation_source)
 		self.assertIn('"target": "Asset"', workspace_source)
 		self.assertIn('"target": "Asset Category"', workspace_source)
 		self.assertIn('frappe.has_permission(doctype, "read")', workspace_source)

@@ -1,7 +1,6 @@
 import unittest
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -27,7 +26,7 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 			"qty: Number(row.suggested_transfer_qty",
 		):
 			self.assertIn(token, component)
-		self.assertIn('prefill: { type: Object, default: () => ({}) }', dialog)
+		self.assertIn("prefill: { type: Object, default: () => ({}) }", dialog)
 		self.assertIn("await this.applyPrefill()", dialog)
 		self.assertIn("await this.setSourceWarehouse(sourceWarehouse)", dialog)
 		self.assertIn("await this.setTargetWarehouse(targetWarehouse)", dialog)
@@ -44,8 +43,8 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 		self.assertIn('@sort-change="changeSort"', component)
 		self.assertIn("sort_field", component)
 		self.assertIn("sort_direction", component)
-		self.assertIn('window.open(`/app/item/${encodeURIComponent(payload.value)}`', component)
-		self.assertIn('window.open(`/app/warehouse/${encodeURIComponent(payload.value)}`', component)
+		self.assertIn("window.open(`/app/item/${encodeURIComponent(payload.value)}`", component)
+		self.assertIn("window.open(`/app/warehouse/${encodeURIComponent(payload.value)}`", component)
 		self.assertIn('window.open("/app/stock-entry", "_blank", "noopener,noreferrer")', component)
 		self.assertIn("never create or submit Stock Entries automatically", component)
 		self.assertIn("R10 does not recalculate margin", component)
@@ -54,7 +53,10 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 
 		# Secondary export/print is shared EdgeSuite UI and server-authorized. The
 		# browser never loops report pages to build a hidden full dataset.
-		self.assertIn('exportMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view_export" }', component)
+		self.assertIn(
+			'exportMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view_export" }',
+			component,
+		)
 		self.assertIn(':loadDataset="loadExportDataset"', component)
 		self.assertIn(':formats="exportFormats"', component)
 		self.assertIn('@export-start="onExportStart"', component)

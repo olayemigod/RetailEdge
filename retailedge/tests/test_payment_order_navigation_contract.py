@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -21,10 +20,13 @@ class TestPaymentOrderNavigationContract(TestCase):
 		self.assertLess(supplier_payables, payment_orders)
 		self.assertLess(payment_orders, accounts_payable)
 		self.assertEqual(group.count('"label": "Payment Orders"'), 1)
-		self.assertIn('"target_type": "DocType", "target": "Payment Order"', group)
+		payment_order_item = group[payment_orders:accounts_payable]
+		self.assertIn('"target_type": "DocType"', payment_order_item)
+		self.assertIn('"target": "Payment Order"', payment_order_item)
 
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 
 	def test_retailedge_does_not_wrap_native_payment_order_posting(self):
 		source = (APP_ROOT / "edgesuite_ui.py").read_text()

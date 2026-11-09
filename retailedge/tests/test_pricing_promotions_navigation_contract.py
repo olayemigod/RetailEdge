@@ -5,7 +5,6 @@ from unittest import TestCase
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 OVERVIEW_TARGET = "pricing-promotions-control"
 APPROVED_NATIVE_TARGETS = [
@@ -53,11 +52,7 @@ class TestPricingPromotionsNavigationContract(TestCase):
 
 	def test_pricing_promotions_workspace_has_tabs_lists_filters_and_create_actions(self):
 		workspace = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "pricing_promotions"
-			/ "PricingPromotionsWorkspace.vue"
+			APP_ROOT / "public" / "js" / "pricing_promotions" / "PricingPromotionsWorkspace.vue"
 		).read_text()
 		backend = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		bundle = (APP_ROOT / "public" / "js" / "pricing_promotions_workspace.bundle.js").read_text()
@@ -82,7 +77,6 @@ class TestPricingPromotionsNavigationContract(TestCase):
 		self.assertIn("_promote_pricing_promotions_ownership", master)
 		self.assertIn('"pricing_promotions_ownership"] = "application_workspace"', master)
 
-
 	def test_pricing_promotions_remains_permission_aware_and_erpnext_authoritative(self):
 		navigation_source = (APP_ROOT / "edgesuite_ui.py").read_text()
 		workspace_source = (APP_ROOT / "native_visual_workspaces.py").read_text()
@@ -93,7 +87,8 @@ class TestPricingPromotionsNavigationContract(TestCase):
 		self.assertNotIn("required_roles", group)
 		self.assertIn('"target_type": "Page"', group)
 		self.assertIn('if target_type == "DocType":', navigation_source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', navigation_source)
+		self.assertIn("_has_permission_cached(", navigation_source)
+		self.assertIn('target, "read", permission_cache', navigation_source)
 		for target in APPROVED_NATIVE_TARGETS:
 			self.assertIn(f'"target": "{target}"', workspace_source)
 		self.assertIn('frappe.has_permission(doctype, "read")', workspace_source)

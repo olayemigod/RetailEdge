@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -39,6 +38,7 @@ def test_role_normalization_uses_only_canonical_cashier():
 	assert "RETAILEDGE_ROLE_ALIASES" not in setup_roles
 	assert "RETAILEDGE_COMPATIBILITY_ROLE_NAMES" not in setup_roles
 
+
 def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
 	roles = _roles("retailedge/page/document_output_sharing/document_output_sharing.json")
 	for role in (
@@ -55,7 +55,6 @@ def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
 		assert role in roles
 
 
-
 def test_professional_purchasing_keeps_purchase_authority_role_scoped():
 	roles = _roles("retailedge/page/professional_purchasing/professional_purchasing.json")
 	for role in (
@@ -68,9 +67,6 @@ def test_professional_purchasing_keeps_purchase_authority_role_scoped():
 		assert role in roles
 	for role in (
 		"RetailEdgeManager",
-
 		"RetailEdgeBranchManager",
-
 	):
 		assert role not in roles
-

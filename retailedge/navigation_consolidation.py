@@ -12,7 +12,6 @@ from retailedge.master_experience import (
 from retailedge.printing_navigation import normalize_printing_navigation
 from retailedge.user_readiness import get_retailedge_user_readiness
 
-
 SHIFT_RECONCILIATION_TARGET = "pos-closing-variance"
 SHIFT_REVIEW_GROUP_KEYS = {
 	"review-approvals",
@@ -81,11 +80,7 @@ def _consolidate_shift_review_navigation(navigation_groups: list[dict[str, Any]]
 		# Keep the consolidated cash-control entry close to Action Centre / other
 		# operational review work rather than among low-level historical reports.
 		insert_at = next(
-			(
-				index + 1
-				for index, item in enumerate(cleaned)
-				if item.get("target") == "action-center"
-			),
+			(index + 1 for index, item in enumerate(cleaned) if item.get("target") == "action-center"),
 			0,
 		)
 		cleaned.insert(insert_at, consolidated)
@@ -113,11 +108,7 @@ def _prioritize_sales_navigation(navigation_groups: list[dict[str, Any]]) -> Non
 
 		group["items"] = [
 			make_sale,
-			*[
-				item
-				for item in items
-				if item is not make_sale
-			],
+			*[item for item in items if item is not make_sale],
 		]
 		return
 

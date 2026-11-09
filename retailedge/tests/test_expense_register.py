@@ -131,7 +131,9 @@ class TestExpenseRegister(unittest.TestCase):
 				)
 			)
 
-	@patch("retailedge.expense_register._apply_operating_context_filters", side_effect=lambda filters: filters)
+	@patch(
+		"retailedge.expense_register._apply_operating_context_filters", side_effect=lambda filters: filters
+	)
 	@patch("retailedge.expense_register._build_query_filters", return_value={"company": "Demo Company"})
 	@patch("retailedge.expense_register._can_view_other_cashiers", return_value=False)
 	@patch("retailedge.expense_register._get_summary")
@@ -208,10 +210,13 @@ class TestExpenseRegister(unittest.TestCase):
 	@patch("retailedge.expense_register.can_view_consolidated_business_expenses", return_value=True)
 	@patch("retailedge.expense_register._find_expense_accounts")
 	@patch("retailedge.expense_register.frappe.get_list")
-	def test_consolidated_category_search_includes_expense_account_labels(self, mock_get_list, mock_accounts, _mock_consolidated):
+	def test_consolidated_category_search_includes_expense_account_labels(
+		self, mock_get_list, mock_accounts, _mock_consolidated
+	):
 		mock_get_list.return_value = []
 		mock_accounts.return_value = [frappe._dict(name="Office Rent - DC", account_name="Office Rent")]
 		from retailedge.expense_register import _search_categories
+
 		options = _search_categories(
 			txt="Office",
 			company="Demo Company",

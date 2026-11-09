@@ -3,13 +3,9 @@ from __future__ import annotations
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
-
 DOCTYPE = "Company"
 PERMLEVEL = 0
-CASHIER_ROLES = (
-	"RetailEdgeCashier",
-
-)
+CASHIER_ROLES = ("RetailEdgeCashier",)
 
 
 def _has_custom_permission(role: str) -> bool:

@@ -5,7 +5,6 @@ from unittest import TestCase
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 APPROVED_NATIVE_TARGETS = [
 	("DocType", "Budget"),
@@ -42,11 +41,12 @@ class TestBudgetingCostControlNavigationContract(TestCase):
 		group_end = source.index('"key": "setup"', group_start)
 		group = source[group_start:group_end]
 
-		self.assertIn('"target_type": "DocType", "target": "Budget"', group)
-		self.assertIn('"target_type": "Report", "target": "Budget Variance Report"', group)
-		self.assertIn('"target_type": "DocType", "target": "Cost Center"', group)
+		self.assertIn('"target": "Budget"', group)
+		self.assertIn('"target": "Budget Variance Report"', group)
+		self.assertIn('"target": "Cost Center"', group)
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 		self.assertIn('if target_type == "Report":', source)
 		self.assertIn("get_report_doc(report_name)", source)
 

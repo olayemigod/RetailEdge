@@ -15,11 +15,8 @@ def get_cashier_expense_dashboard_roles() -> set[str]:
 		"Accounts Manager",
 		"Accounts User",
 		"RetailEdgeManager",
-
 		"RetailEdgeBranchManager",
-
 		"RetailEdgeAuditor",
-
 	}
 
 
@@ -142,9 +139,7 @@ def _build_dashboard_filters(filters):
 	if not isinstance(filters, dict):
 		return {}
 
-	company = str(
-		filters.get("company") or frappe.defaults.get_user_default("Company") or ""
-	).strip()
+	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(
 			"Company is required before loading the RetailEdge Cashier Expense dashboard.",

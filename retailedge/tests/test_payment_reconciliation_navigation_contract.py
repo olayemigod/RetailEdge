@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -21,13 +20,15 @@ class TestPaymentReconciliationNavigationContract(TestCase):
 		self.assertLess(payments, payment_reconciliation)
 		self.assertLess(payment_reconciliation, bank_transactions)
 		self.assertEqual(group.count('"label": "Payment Reconciliation"'), 1)
-		self.assertIn(
-			'"target_type": "DocType", "target": "Payment Reconciliation"',
-			group,
-		)
+		item = group[payment_reconciliation:bank_transactions]
+		self.assertIn('"target_type": "DocType"', item)
+		self.assertIn('"target": "Payment Reconciliation"', item)
+		self.assertIn('"mode": "native_fallback"', item)
+		self.assertIn('"required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))', item)
 
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 
 	def test_retailedge_does_not_wrap_native_reconciliation_or_refund_posting(self):
 		source = (APP_ROOT / "edgesuite_ui.py").read_text()

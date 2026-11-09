@@ -21,13 +21,10 @@ CONTROLLED_POSTING_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 }
 DIRECT_CAPTURE_ROLES = CONTROLLED_POSTING_ROLES | {
 	"RetailEdgeCashier",
-
 }
 
 
@@ -117,7 +114,9 @@ def _defer_direct_cashier_expense_posting(doc, message: str, *, posting_ready: b
 			"ledger_status": "Pending Ledger",
 			"posting_ready": 1 if posting_ready else 0,
 			"posting_block_reason": None if posting_ready else message,
-			"user_message": _("Expense recorded against the till. Accounting posting is pending: {0}").format(message),
+			"user_message": _("Expense recorded against the till. Accounting posting is pending: {0}").format(
+				message
+			),
 		},
 		update_modified=False,
 	)
@@ -169,7 +168,8 @@ def attempt_direct_cashier_expense_posting(expense_doc_or_name) -> dict[str, Any
 	if not preview.get("posting_ready"):
 		return _defer_direct_cashier_expense_posting(
 			doc,
-			preview.get("posting_block_reason") or _("Cashier Expense is not yet ready for accounting posting."),
+			preview.get("posting_block_reason")
+			or _("Cashier Expense is not yet ready for accounting posting."),
 			posting_ready=False,
 		)
 	permissions = get_cashier_expense_posting_permissions(doc, settings=settings, automatic=True)
@@ -325,9 +325,9 @@ def _build_journal_entry(doc, preview: dict[str, Any]):
 	journal.voucher_type = "Journal Entry"
 	journal.company = doc.company
 	journal.posting_date = doc.expense_date
-	journal.user_remark = preview.get("remarks") or _(
-		"Cashier Expense {0} - {1}"
-	).format(doc.name, doc.expense_category)
+	journal.user_remark = preview.get("remarks") or _("Cashier Expense {0} - {1}").format(
+		doc.name, doc.expense_category
+	)
 
 	if getattr(doc, "branch", None) and frappe.get_meta(POSTING_DOCUMENT_TYPE).has_field("retailedge_branch"):
 		journal.retailedge_branch = doc.branch

@@ -355,16 +355,13 @@ def seed_rc3_personas() -> dict:
 	_ensure_customer()
 	_ensure_item()
 	branch_quotations = {
-		branch_name: _ensure_branch_quotation(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_quotation(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 	branch_sales_invoices = {
-		branch_name: _ensure_branch_sales_invoice(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_sales_invoice(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 	branch_cashier_expenses = {
-		branch_name: _ensure_branch_cashier_expense(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_cashier_expense(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 
 	frappe.db.commit()

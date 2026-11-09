@@ -5,8 +5,12 @@ from frappe.tests import IntegrationTestCase
 
 from retailedge.navigation_consolidation import get_retailedge_business_hub_context
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
-from retailedge.patches.ensure_retailedge_cashier_operational_permissions import execute as ensure_cashier_operational_permissions
-from retailedge.patches.ensure_retailedge_manager_payment_entry_read import execute as ensure_manager_payment_entry_read
+from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
+	execute as ensure_cashier_operational_permissions,
+)
+from retailedge.patches.ensure_retailedge_manager_payment_entry_read import (
+	execute as ensure_manager_payment_entry_read,
+)
 from retailedge.report_center import get_reports_centre_context
 from retailedge.setup_roles import ensure_retailedge_roles
 from retailedge.tests.rc3_browser_fixture import (
@@ -23,7 +27,6 @@ from retailedge.tests.upgrade_validation_fixture import (
 	_ensure_fiscal_year,
 	_ensure_transaction_masters,
 )
-
 
 BUSINESS_HUB_USERS = (
 	"permission-cashier@example.com",
@@ -42,40 +45,179 @@ BRANCH_SCOPED_PERSONAS = {
 
 ROLE_PAGE_EXPECTATIONS = {
 	"permission-cashier@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "make-sale", "cashier-expenses", "expense-register"},
-		"denied": {"professional-selling", "professional-purchasing", "record-purchase", "stock-position", "transfer-stock", "banking-readiness", "payment-management", "retail-settings"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"cashier-expenses",
+			"expense-register",
+		},
+		"denied": {
+			"professional-selling",
+			"professional-purchasing",
+			"record-purchase",
+			"stock-position",
+			"transfer-stock",
+			"banking-readiness",
+			"payment-management",
+			"retail-settings",
+		},
 	},
 	"permission-retail-manager@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "make-sale", "professional-selling", "sales-invoice-register", "record-purchase", "purchase-register", "stock-position", "transfer-stock", "stock-adjustment", "banking-readiness", "branch-assignments"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"record-purchase",
+			"purchase-register",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+			"banking-readiness",
+			"branch-assignments",
+		},
 		"denied": {"professional-purchasing", "payment-management", "retail-settings"},
 	},
 	"permission-branch-manager@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "make-sale", "professional-selling", "sales-invoice-register", "record-purchase", "purchase-register", "stock-position", "transfer-stock", "stock-adjustment", "banking-readiness", "branch-assignments"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"record-purchase",
+			"purchase-register",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+			"banking-readiness",
+			"branch-assignments",
+		},
 		"denied": {"professional-purchasing", "payment-management", "retail-settings"},
 	},
 	"permission-auditor@example.com": {
-		"allowed": {"reports-centre", "sales-invoice-register", "purchase-register", "stock-position", "cashier-expenses", "expense-register", "branch-assignments"},
-		"denied": {"retailedge-business-hub", "make-sale", "professional-selling", "professional-purchasing", "record-purchase", "transfer-stock", "stock-adjustment", "banking-readiness", "payment-management", "retail-settings"},
+		"allowed": {
+			"reports-centre",
+			"sales-invoice-register",
+			"purchase-register",
+			"stock-position",
+			"cashier-expenses",
+			"expense-register",
+			"branch-assignments",
+		},
+		"denied": {
+			"retailedge-business-hub",
+			"make-sale",
+			"professional-selling",
+			"professional-purchasing",
+			"record-purchase",
+			"transfer-stock",
+			"stock-adjustment",
+			"banking-readiness",
+			"payment-management",
+			"retail-settings",
+		},
 	},
 	"permission-accounts@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "make-sale", "professional-selling", "sales-invoice-register", "professional-purchasing", "record-purchase", "purchase-register", "cashier-expenses", "expense-register", "banking-readiness", "payment-management"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"professional-purchasing",
+			"record-purchase",
+			"purchase-register",
+			"cashier-expenses",
+			"expense-register",
+			"banking-readiness",
+			"payment-management",
+		},
 		"denied": {"stock-position", "transfer-stock", "stock-adjustment", "retail-settings"},
 	},
 	"permission-stock@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "stock-position", "transfer-stock", "stock-adjustment"},
-		"denied": {"make-sale", "professional-selling", "sales-invoice-register", "professional-purchasing", "record-purchase", "purchase-register", "banking-readiness", "payment-management", "retail-settings"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+		},
+		"denied": {
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"professional-purchasing",
+			"record-purchase",
+			"purchase-register",
+			"banking-readiness",
+			"payment-management",
+			"retail-settings",
+		},
 	},
 	"permission-sales@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "make-sale", "professional-selling", "sales-invoice-register"},
-		"denied": {"professional-purchasing", "record-purchase", "purchase-register", "stock-position", "transfer-stock", "stock-adjustment", "banking-readiness", "payment-management", "retail-settings"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+		},
+		"denied": {
+			"professional-purchasing",
+			"record-purchase",
+			"purchase-register",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+			"banking-readiness",
+			"payment-management",
+			"retail-settings",
+		},
 	},
 	"permission-purchase@example.com": {
-		"allowed": {"retailedge-business-hub", "reports-centre", "professional-purchasing", "record-purchase", "purchase-register"},
-		"denied": {"make-sale", "professional-selling", "sales-invoice-register", "stock-position", "transfer-stock", "stock-adjustment", "banking-readiness", "payment-management", "retail-settings"},
+		"allowed": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"professional-purchasing",
+			"record-purchase",
+			"purchase-register",
+		},
+		"denied": {
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+			"banking-readiness",
+			"payment-management",
+			"retail-settings",
+		},
 	},
 	"permission-no-access@example.com": {
 		"allowed": set(),
-		"denied": {"retailedge-business-hub", "reports-centre", "make-sale", "professional-selling", "sales-invoice-register", "professional-purchasing", "record-purchase", "purchase-register", "stock-position", "transfer-stock", "stock-adjustment", "cashier-expenses", "expense-register", "banking-readiness", "payment-management", "branch-assignments", "retail-settings"},
+		"denied": {
+			"retailedge-business-hub",
+			"reports-centre",
+			"make-sale",
+			"professional-selling",
+			"sales-invoice-register",
+			"professional-purchasing",
+			"record-purchase",
+			"purchase-register",
+			"stock-position",
+			"transfer-stock",
+			"stock-adjustment",
+			"cashier-expenses",
+			"expense-register",
+			"banking-readiness",
+			"payment-management",
+			"branch-assignments",
+			"retail-settings",
+		},
 	},
 }
 
@@ -194,7 +336,6 @@ class PersonaPageApiAccessTests(IntegrationTestCase):
 				if user in BRANCH_SCOPED_PERSONAS:
 					self.assertEqual(context.get("context", {}).get("company"), COMPANY)
 					self.assertTrue(context.get("context", {}).get("branch"))
-
 
 	def test_role_page_matrix_allows_expected_modules_and_denies_unrelated_modules(self):
 		for user, expectation in ROLE_PAGE_EXPECTATIONS.items():

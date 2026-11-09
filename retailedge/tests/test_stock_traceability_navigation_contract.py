@@ -20,7 +20,12 @@ class TestStockTraceabilityNavigationContract(unittest.TestCase):
 
 	def test_traceability_uses_edgesuite_overview_and_keeps_native_fallbacks_ordered(self):
 		self.assertIn(
-			{"label": "Stock Traceability", "target_type": "Page", "target": OVERVIEW_TARGET, "icon": "search"},
+			{
+				"label": "Stock Traceability",
+				"target_type": "Page",
+				"target": OVERVIEW_TARGET,
+				"icon": "search",
+			},
 			self.stock_items,
 		)
 		self.assertIn(
@@ -31,10 +36,14 @@ class TestStockTraceabilityNavigationContract(unittest.TestCase):
 			{"label": "Serial Numbers", "target_type": "DocType", "target": "Serial No", "icon": "clipboard"},
 			self.stock_items,
 		)
-		self.assertLess(self.stock_labels.index("Stock Locations"), self.stock_labels.index("Stock Traceability"))
+		self.assertLess(
+			self.stock_labels.index("Stock Locations"), self.stock_labels.index("Stock Traceability")
+		)
 		self.assertLess(self.stock_labels.index("Stock Traceability"), self.stock_labels.index("Batches"))
 		self.assertLess(self.stock_labels.index("Batches"), self.stock_labels.index("Serial Numbers"))
-		self.assertLess(self.stock_labels.index("Serial Numbers"), self.stock_labels.index("Stock Movement History"))
+		self.assertLess(
+			self.stock_labels.index("Serial Numbers"), self.stock_labels.index("Stock Movement History")
+		)
 
 	def test_traceability_targets_have_one_business_home_and_keep_internal_bundle_hidden(self):
 		all_targets = [item["target"] for group in NAVIGATION_GROUPS for item in group["items"]]
@@ -60,11 +69,12 @@ class TestStockTraceabilityNavigationContract(unittest.TestCase):
 		navigation_source = (APP_ROOT / "edgesuite_ui.py").read_text()
 		workspace_source = (APP_ROOT / "native_visual_workspaces.py").read_text()
 		self.assertIn(
-			'return _doctype_exists_cached(target, target_cache) and _has_permission_cached(target, "read", permission_cache)',
+			"return _doctype_exists_cached(target, target_cache) and _has_permission_cached(",
 			navigation_source,
 		)
+		self.assertIn('target, "read", permission_cache', navigation_source)
 		self.assertIn('frappe.has_permission(doctype, "read")', workspace_source)
-		self.assertIn("get_report_doc(source[\"target\"])", workspace_source)
+		self.assertIn('get_report_doc(source["target"])', workspace_source)
 		for report in REPORT_TARGETS:
 			self.assertIn(f'"target": "{report}"', workspace_source)
 

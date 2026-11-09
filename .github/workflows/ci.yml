@@ -164,6 +164,11 @@ jobs:
           bench build --app retailedge
           bench --site retail-ci.localhost migrate
 
+      - name: Audit compiled Vue bridge runtime signatures
+        working-directory: frappe-bench
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/audit_vue_bundle_artifacts.py" --bench . --markdown-summary --strict
+
       - name: Verify EdgeSuite UI asset contract
         working-directory: frappe-bench
         run: |

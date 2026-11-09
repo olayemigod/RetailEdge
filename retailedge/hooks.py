@@ -15,6 +15,9 @@ required_apps = ["edgesuite_ui"]
 # must not be skipped: subsequent model/Page patches could widen access.
 never_skip_patches = ["retailedge.patches.consolidate_duplicate_retailedge_roles"]
 
+# Reject hosted builds whose compiled Vue templates bypass the shared EdgeSuite runtime.
+after_build = "retailedge.vue_runtime_build_guard.verify_retailedge_after_build"
+
 # EdgeSuite product availability is product-owned. RetailEdge explicitly
 # publishes its descriptor rather than relying on installation alone.
 edgesuite_product_availability_providers = [

@@ -12,7 +12,6 @@ from retailedge.bank_transaction_matching import (
 )
 from retailedge.professional_sales_invoice import get_sales_return_outstanding_policy
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_JS = APP_ROOT / "public" / "js"
 
@@ -41,11 +40,7 @@ class _Doc(dict):
 class WorkflowIntegrityAuditTests(unittest.TestCase):
 	def test_cashier_expense_posting_is_merchant_governed_and_journal_entry_only(self):
 		settings_path = (
-			APP_ROOT
-			/ "retailedge"
-			/ "doctype"
-			/ "retailedge_settings"
-			/ "retailedge_settings.json"
+			APP_ROOT / "retailedge" / "doctype" / "retailedge_settings" / "retailedge_settings.json"
 		)
 		settings = json.loads(settings_path.read_text(encoding="utf-8"))
 		fields = {field["fieldname"]: field for field in settings["fields"]}
@@ -64,7 +59,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		posting_source = (APP_ROOT / "cashier_expense_accounting.py").read_text(encoding="utf-8")
 		self.assertIn('"ledger_status": "Pending Ledger"', posting_source)
 		self.assertIn("get_effective_cashier_expense_posting_roles", posting_source)
-		self.assertNotIn("and posting_role", (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8"))
+		self.assertNotIn(
+			"and posting_role", (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8")
+		)
 
 	def test_historical_cashier_expense_readiness_is_backfilled_without_posting(self):
 		patches = (APP_ROOT / "patches.txt").read_text(encoding="utf-8")
@@ -72,11 +69,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 			"retailedge.patches.backfill_cashier_expense_posting_readiness",
 			patches,
 		)
-		patch_source = (
-			APP_ROOT
-			/ "patches"
-			/ "backfill_cashier_expense_posting_readiness.py"
-		).read_text(encoding="utf-8")
+		patch_source = (APP_ROOT / "patches" / "backfill_cashier_expense_posting_readiness.py").read_text(
+			encoding="utf-8"
+		)
 		self.assertIn("build_cashier_expense_posting_preview", patch_source)
 		self.assertIn('"ledger_status": ["!=", "Posted"]', patch_source)
 		self.assertIn('"posting_ready": 1 if preview.get("posting_ready") else 0', patch_source)
@@ -86,7 +81,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 	def test_cashier_workflow_and_ledger_statuses_remain_distinct(self):
 		accounting = (APP_ROOT / "cashier_expense_accounting.py").read_text(encoding="utf-8")
 		detail = (APP_ROOT / "cashier_expense_detail.py").read_text(encoding="utf-8")
-		self.assertIn('workflow_active = bool(_get_active_workflow("RetailEdge Cashier Expense"))', accounting)
+		self.assertIn(
+			'workflow_active = bool(_get_active_workflow("RetailEdge Cashier Expense"))', accounting
+		)
 		self.assertIn('new_status=previous_status if workflow_active else "Posted"', accounting)
 		self.assertIn('"ledger_status": "Posted"', accounting)
 		self.assertIn('"workflow_status_preserved": workflow_active', accounting)
@@ -111,7 +108,10 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertIn("journal_entries_by_bank_transaction", source)
 		self.assertIn("find_journal_entry_candidates_for_bank_transaction", source)
 		self.assertIn('"journal_entry_match": "Journal Entry Match"', source)
-		self.assertIn('"Journal Entry"', source.split("def get_review_creation_block_reason", 1)[1].split("return", 1)[0])
+		self.assertIn(
+			'"Journal Entry"',
+			source.split("def get_review_creation_block_reason", 1)[1].split("return", 1)[0],
+		)
 		self.assertNotIn(
 			"Outflow transactions are not eligible for customer receipt bank matching in this phase.",
 			source,
@@ -186,12 +186,17 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 	def test_journal_entry_candidates_can_reach_review_with_live_revalidation(self):
 		workflow = (APP_ROOT / "bank_transaction_match_workflow.py").read_text(encoding="utf-8")
 		self.assertIn("find_journal_entry_candidates_for_bank_transaction", workflow)
-		self.assertIn('candidate_doctype not in {"Sales Invoice", "Payment Entry", "Journal Entry"}', workflow)
+		self.assertIn(
+			'candidate_doctype not in {"Sales Invoice", "Payment Entry", "Journal Entry"}', workflow
+		)
 		self.assertIn('elif candidate_doctype == "Journal Entry":', workflow)
 		self.assertIn('"Journal Entry Account"', workflow)
 		self.assertIn('"Submitted Journal Entry Amount"', workflow)
 		self.assertIn('"journal_entry_match"', workflow)
-		self.assertIn('cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry", "Journal Entry"}', workflow)
+		self.assertIn(
+			'cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry", "Journal Entry"}',
+			" ".join(workflow.split()),
+		)
 		self.assertIn("doc.payment_event_source = candidate.get", workflow)
 		self.assertIn("doc.payment_account = candidate.get", workflow)
 
@@ -202,7 +207,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertIn("Multiple compatible draft Payment Entries already exist", source)
 		self.assertIn('"existing": bool(existing)', source)
 		self.assertIn('"reused": bool(existing)', source)
-		reuse_body = source.split("def _find_exact_reusable_payment_draft(", 1)[1].split("@frappe.whitelist", 1)[0]
+		reuse_body = source.split("def _find_exact_reusable_payment_draft(", 1)[1].split(
+			"@frappe.whitelist", 1
+		)[0]
 		self.assertNotIn(".save()", reuse_body)
 		self.assertNotIn(".submit()", reuse_body)
 
@@ -237,10 +244,14 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertEqual(policy["update_outstanding_for_self"], 1)
 
 	def test_credit_note_completion_explains_outstanding_treatment(self):
-		ui = (PUBLIC_JS / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue").read_text(encoding="utf-8")
+		ui = (PUBLIC_JS / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue").read_text(
+			encoding="utf-8"
+		)
 		self.assertIn("Credit Note outstanding treatment", ui)
 		self.assertIn("preview.return_outstanding_policy?.message", ui)
-		self.assertIn("This Credit Note will reduce the outstanding balance of the source invoice when submitted.", ui)
+		self.assertIn(
+			"This Credit Note will reduce the outstanding balance of the source invoice when submitted.", ui
+		)
 		self.assertIn("later reconciliation or refund", ui)
 
 	def test_selling_lineage_routes_existing_documents_and_reuses_drafts(self):
@@ -254,7 +265,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 		self.assertIn("openExistingLinkedDocument", ui)
 
 	def test_completion_draft_save_action_is_in_footer_only(self):
-		ui = (PUBLIC_JS / "professional_selling" / "StandardSellingCompletionDialog.vue").read_text(encoding="utf-8")
+		ui = (PUBLIC_JS / "professional_selling" / "StandardSellingCompletionDialog.vue").read_text(
+			encoding="utf-8"
+		)
 		self.assertEqual(ui.count("Save Draft Changes"), 1)
 		footer = ui.split("<template #footer>", 1)[1]
 		self.assertIn("Save Draft Changes", footer)
@@ -277,7 +290,9 @@ class WorkflowIntegrityAuditTests(unittest.TestCase):
 			page_dir = APP_ROOT / "retailedge" / "page" / page_name
 			self.assertTrue((page_dir / f"{page_name}.json").exists())
 			self.assertTrue((page_dir / f"{page_name}.js").exists())
-		purchasing_ui = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text(encoding="utf-8")
+		purchasing_ui = (PUBLIC_JS / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text(
+			encoding="utf-8"
+		)
 		self.assertIn('frappe.set_route("purchase-receipt-history")', purchasing_ui)
 		self.assertIn('frappe.set_route("rfq-history")', purchasing_ui)
 		self.assertIn('frappe.set_route("supplier-quotation-history")', purchasing_ui)

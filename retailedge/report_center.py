@@ -7,7 +7,6 @@ from frappe import _
 
 from retailedge.master_experience import get_retailedge_business_hub_context
 
-
 REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "sales",

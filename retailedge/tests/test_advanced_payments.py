@@ -184,7 +184,6 @@ class TestAdvancedPayments(unittest.TestCase):
 		self.assertEqual(doc.branch, "Lagos")
 		self.assertEqual(result["branch"], "Lagos")
 
-
 	@patch("retailedge.advanced_payments._assert_create_payment_entry")
 	def test_customer_advance_rejects_invoice_references(self, _mock_create_permission):
 		with self.assertRaises(frappe.ValidationError):

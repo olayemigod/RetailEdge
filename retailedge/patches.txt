@@ -2,6 +2,7 @@
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://frappeframework.com/docs/v14/user/en/database-migrations
 retailedge.patches.migrate_price_list_governance_v2
+retailedge.patches.consolidate_duplicate_retailedge_roles
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
@@ -25,7 +26,6 @@ retailedge.patches.install_customer_portal_menu
 retailedge.patches.install_supplier_portal_menu
 retailedge.patches.install_supplier_document_intake_menu
 retailedge.patches.normalize_retailedge_role_assignments
-retailedge.patches.consolidate_duplicate_retailedge_roles
 retailedge.patches.remove_stale_accounts_reviewer_page_roles
 retailedge.patches.reconcile_core_page_role_access
 retailedge.patches.ensure_retailedge_manager_payment_entry_read

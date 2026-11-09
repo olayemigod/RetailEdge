@@ -36,11 +36,8 @@ BANK_TRANSACTION_MATCH_WORKFLOW_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 }
 
 NO_MATCH_CANDIDATE_MESSAGE = "No match candidate found."
@@ -108,9 +105,7 @@ def switch_bank_transaction_match_candidate(match_name, selected_row, filters=No
 			"Change the confirmed decision first, then choose another candidate."
 		)
 	if status in {"Rejected", "Cancelled"}:
-		frappe.throw(
-			f"Bank Match Review is {status}. Reopen it before switching candidates."
-		)
+		frappe.throw(f"Bank Match Review is {status}. Reopen it before switching candidates.")
 	if status not in {"", "Draft", "Suggested", "Needs Review", "Reopened"}:
 		frappe.throw(f"Bank Match Review status {status} does not allow candidate switching.")
 
@@ -139,9 +134,7 @@ def switch_bank_transaction_match_candidate(match_name, selected_row, filters=No
 		confirmed_only=False,
 	)
 	if conflict:
-		frappe.throw(
-			f"Selected Payment Entry already has active Bank Match Review {conflict.get('name')}."
-		)
+		frappe.throw(f"Selected Payment Entry already has active Bank Match Review {conflict.get('name')}.")
 
 	if (
 		cstr(doc.suggested_document_type).strip() == selected_type
@@ -1026,11 +1019,12 @@ def get_ambiguous_payment_entry_review_candidates(bank_transaction_name, filters
 		match_record = cstr(candidate.get("match_record")).strip()
 		if cstr(candidate.get("decision_status")).strip() == "Confirmed" and match_record:
 			confirmed_bank_transaction = cstr(
-				frappe.db.get_value(
-					"RetailEdge Bank Transaction Match", match_record, "bank_transaction"
-				)
+				frappe.db.get_value("RetailEdge Bank Transaction Match", match_record, "bank_transaction")
 			).strip()
-			if confirmed_bank_transaction and confirmed_bank_transaction != cstr(bank_transaction_name).strip():
+			if (
+				confirmed_bank_transaction
+				and confirmed_bank_transaction != cstr(bank_transaction_name).strip()
+			):
 				continue
 
 		identity = (
@@ -1068,6 +1062,7 @@ def get_ambiguous_payment_entry_review_candidates(bank_transaction_name, filters
 	)
 	return rows
 
+
 def _candidate_from_revalidated_row(row):
 	row = frappe._dict(row or {})
 	if cstr(row.get("candidate_changed_reason")).strip():
@@ -1087,8 +1082,7 @@ def _candidate_from_revalidated_row(row):
 			"customer": row.get("customer"),
 			"customer_display": row.get("customer"),
 			"party": row.get("party") or row.get("customer"),
-			"party_type": row.get("party_type")
-			or ("Customer" if document_type == "Sales Invoice" else None),
+			"party_type": row.get("party_type") or ("Customer" if document_type == "Sales Invoice" else None),
 			"candidate_amount": flt(row.get("candidate_amount")),
 			"amount_difference": flt(row.get("amount_difference")),
 			"amount_scenario": row.get("amount_scenario"),
@@ -1457,7 +1451,9 @@ def _validate_locked_candidate_from_selected_row(row):
 		candidate["candidate_amount"] = entry_amount
 		candidate["amount_difference"] = amount_diff
 		candidate["amount_scenario"] = (
-			"Submitted Journal Entry Amount" if amount_diff <= amount_tolerance else "Journal Entry Amount Variance"
+			"Submitted Journal Entry Amount"
+			if amount_diff <= amount_tolerance
+			else "Journal Entry Amount Variance"
 		)
 		candidate["amount_scenario_label"] = get_amount_scenario_label(candidate["amount_scenario"])
 		candidate["candidate_category"] = "journal_entry_match"
@@ -1637,18 +1633,22 @@ def _revalidate_suggestion_row(row, filters=None, is_selected=False):
 	candidate_filters = frappe._dict(_coerce_json_payload(filters))
 	candidate_filters["include_exception_candidates"] = 1
 	candidate_filters["include_confirmed_matches"] = 1
-	candidates = find_sales_invoice_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=candidate_filters,
-		limit=20,
-	) + find_payment_entry_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=candidate_filters,
-		limit=20,
-	) + find_journal_entry_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=candidate_filters,
-		limit=20,
+	candidates = (
+		find_sales_invoice_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=candidate_filters,
+			limit=20,
+		)
+		+ find_payment_entry_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=candidate_filters,
+			limit=20,
+		)
+		+ find_journal_entry_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=candidate_filters,
+			limit=20,
+		)
 	)
 	explicit_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
 	explicit_name = cstr(row.get("candidate_name") or row.get("suggested_document")).strip()
@@ -2468,18 +2468,22 @@ def _resolve_matching_candidate(
 		return None
 
 	search_filters = None
-	candidates = find_sales_invoice_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=search_filters,
-		limit=20,
-	) + find_payment_entry_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=search_filters,
-		limit=20,
-	) + find_journal_entry_candidates_for_bank_transaction(
-		bank_transaction_name,
-		filters=search_filters,
-		limit=20,
+	candidates = (
+		find_sales_invoice_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=search_filters,
+			limit=20,
+		)
+		+ find_payment_entry_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=search_filters,
+			limit=20,
+		)
+		+ find_journal_entry_candidates_for_bank_transaction(
+			bank_transaction_name,
+			filters=search_filters,
+			limit=20,
+		)
 	)
 	candidates.sort(
 		key=lambda row: (
@@ -2498,14 +2502,14 @@ def _resolve_matching_candidate(
 		)
 	)
 
-
 	return candidates[0] if candidates else None
 
 
 def _ensure_valid_candidate(candidate):
 	candidate = frappe._dict(candidate or {})
 	if (
-		cstr(candidate.get("document_type")).strip() not in {"Sales Invoice", "Payment Entry", "Journal Entry"}
+		cstr(candidate.get("document_type")).strip()
+		not in {"Sales Invoice", "Payment Entry", "Journal Entry"}
 		or not cstr(candidate.get("document_name")).strip()
 	):
 		frappe.throw(

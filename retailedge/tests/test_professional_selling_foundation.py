@@ -57,6 +57,17 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		# _permission itself is covered above as the frappe.has_permission path.
 		self.assertIn('_permission(doctype, "read")', source)
 
+	def test_retail_cashier_and_hub_loaders_use_unique_edgesuite_runtime(self):
+		"""Avoid asset-manifest collision with legacy CoreEdge edgeui.bundle.js."""
+		for path in (
+			"retailedge/page/professional_selling/professional_selling.js",
+			"public/js/retailedge_business_hub_page.js",
+			"public/js/retailedge_product_menu.bundle.js",
+		):
+			with self.subTest(path=path):
+				source = self.read(path)
+				self.assertIn('"edgesuite_ui.bundle.js"', source)
+				self.assertNotIn('"edgeui.bundle.js"', source)
 	def test_page_uses_edgesuite_single_shell(self):
 		loader = self.read("retailedge/page/professional_selling/professional_selling.js")
 		bundle = self.read("public/js/professional_selling.bundle.js")

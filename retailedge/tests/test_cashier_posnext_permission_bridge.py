@@ -6,7 +6,6 @@ from unittest.mock import call, patch
 
 from retailedge.patches import ensure_retailedge_cashier_posnext_permissions as permission_patch
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 PATCHES = APP_ROOT / "patches.txt"
 
