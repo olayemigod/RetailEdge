@@ -91,12 +91,12 @@ class TestRoleConsolidationPermissionSafety(unittest.TestCase):
 			should_never_skip("retailedge.patches.unrelated_patch", set(hooks.never_skip_patches))
 		)
 
-	def test_role_consolidation_runs_before_model_permission_sync(self):
+	def test_role_consolidation_runs_after_model_permission_and_page_sync(self):
 		patches = (Path(migration.__file__).parents[1] / "patches.txt").read_text(encoding="utf-8")
 		pre_model_sync, post_model_sync = patches.split("[post_model_sync]", maxsplit=1)
 		name = "retailedge.patches.consolidate_duplicate_retailedge_roles"
-		self.assertIn(name, pre_model_sync)
-		self.assertNotIn(name, post_model_sync)
+		self.assertNotIn(name, pre_model_sync)
+		self.assertIn(name, post_model_sync)
 
 	def test_permission_conflict_report_exposes_exact_grants_without_mutation(self):
 		rows = {

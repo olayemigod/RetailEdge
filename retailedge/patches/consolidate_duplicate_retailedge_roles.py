@@ -312,7 +312,7 @@ def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) 
 		)
 		if not canonical_name:
 			continue
-		# The global preflight confirmed these rows have identical grants.
+		# The global preflight confirmed the canonical row covers this grant.
 		# Delete only the duplicate legacy row; never union privileges.
 		frappe.db.delete(doctype, {"name": row.name})
 
@@ -320,10 +320,12 @@ def _merge_duplicate_permission_rows(doctype: str, legacy: str, canonical: str) 
 def execute() -> None:
 	"""Merge only fully verified equivalent roles, or abort the upgrade.
 
-	Frappe v16 synchronizes DocPerm and Page metadata during migration.
-	Returning after a failed preflight would allow subsequent patches and
-	model sync to change existing merchant authorization. A hard error
-	instead stops the atomic migration until the conflicts are reconciled.
+	Frappe v16 synchronizes app-owned DocPerm and Page metadata before this
+	patch. That removes obsolete standard aliases and installs the canonical
+	policy before authorization links are compared, while merchant Custom
+	DocPerm rows and Role security policy remain available to the fail-closed
+	checks below. A hard error stops the atomic migration until any remaining
+	merchant-managed conflicts are reconciled.
 	"""
 	_assert_permission_equivalence_before_merge()
 	_assert_role_policy_equivalence_before_merge()
