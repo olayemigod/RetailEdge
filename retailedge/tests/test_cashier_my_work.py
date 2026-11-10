@@ -114,6 +114,26 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertFalse(context["navigation_groups"])
 		self.assertNotIn("home_route", context["context"])
 
+	def test_cashier_page_is_present_in_installed_app_before_frappe_getpage(self):
+		"""A database Page row must never point at a missing standard Page directory.
+
+		Switching to a RetailEdge checkout that lacks this feature while keeping
+		the existing site database produces FileNotFoundError in Frappe's
+		Page.load_assets() before the cashier UI is even initialized.
+		"""
+		from frappe.desk.desk_page import getpage
+
+		folder = PAGE_JSON.parent
+		for asset in ("cashier_my_work.json", "cashier_my_work.js", "cashier_my_work.py"):
+			self.assertTrue((folder / asset).is_file(), asset)
+		page = frappe.get_doc("Page", "cashier-my-work")
+		self.assertEqual(page.module, "RetailEdge")
+		self.assertEqual(page.standard, "Yes")
+		self.assertTrue(page.is_permitted(), "CI Administrator must be able to load Page assets")
+		# This is the *same* backend path used by the cashier route:
+		# frappe.desk.desk_page.getpage -> Page.load_assets -> os.listdir.
+		self.assertIsNotNone(getpage("cashier-my-work"))
+
 	def test_page_contract_uses_product_brand_historical_date_and_real_empty_state(self):
 		page_json = PAGE_JSON.read_text(encoding="utf-8")
 		page_js = PAGE_JS.read_text(encoding="utf-8")
