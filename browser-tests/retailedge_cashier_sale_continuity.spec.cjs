@@ -76,8 +76,32 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		const reloadedRow = page.locator(".unfinished-sales__row").filter({ hasText: seededDraft.name }).first();
 		await expect(reloadedRow).toBeVisible();
 		await reloadedRow.getByRole("button", { name: "Resume Sale", exact: true }).click();
-		await expect(page.getByRole("button", { name: "Update Draft", exact: true })).toBeVisible();
+		const updateDraft = page.getByRole("button", { name: "Update Draft", exact: true });
+		await expect(updateDraft).toBeVisible();
 		await expect(page.getByRole("button", { name: "Cancel Edit", exact: true })).toBeVisible();
+
+		// Acceptance must prove persistence, not merely show an Edit button.
+		// Use the seeded CI-only Sales Invoice and leave it in Draft: no sale is submitted.
+		const savedNote = `Cashier saved-sale persistence QA ${seededDraft.name}`;
+		await page.locator(".make-sale-form textarea").fill(savedNote);
+		await expect(updateDraft).toBeEnabled({ timeout: 25_000 });
+		await updateDraft.click();
+		await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
+		await expect.poll(async () => {
+			const persisted = await apiGet(
+				context,
+				"retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview",
+				{ name: seededDraft.name },
+			);
+			if (!persisted.response.ok()) throw new Error(persisted.text);
+			return {
+				remarks: persisted.payload.message?.remarks,
+				docstatus: Number(persisted.payload.message?.docstatus),
+			};
+		}, { timeout: 25_000 }).toEqual({ remarks: savedNote, docstatus: 0 });
+
+		await page.reload({ waitUntil: "domcontentloaded" });
+		await expect(page.locator(".unfinished-sales__row").filter({ hasText: seededDraft.name }).first()).toBeVisible({ timeout: 25_000 });
 	} finally {
 		await context.close();
 	}
