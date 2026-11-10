@@ -203,7 +203,10 @@ test("cashier can post a real partial receipt linked to the exact submitted test
 	// The browser fixture creates this invoice and its Cash mode on an
 	// ephemeral CI site. Do not run this posting test on retail.local or
 	// any merchant/production site.
-	if (process.env.RETAILEDGE_CASHIER_POSTING_QA !== "ephemeral-ci-only") {
+	if (
+		process.env.RETAILEDGE_CASHIER_POSTING_QA !== "ephemeral-ci-only"
+		|| new URL(BASE_URL).hostname !== "retail-browser.localhost"
+	) {
 		test.skip(true, "Posting acceptance is restricted to an ephemeral seeded CI site.");
 	}
 	const { context, page } = await newCashier(browser);
