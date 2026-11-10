@@ -66,6 +66,16 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		self.assertIn('v-if="document.can_create"', component)
 		self.assertIn('v-if="document.can_read"', component)
 
+	def test_no_selling_document_permission_has_a_clear_user_message(self):
+		page = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		self.assertIn('v-if="!documents.length"', page)
+		self.assertIn('title="Selling documents unavailable"', page)
+		self.assertIn('review your selling permissions', page)
+		self.assertIn('v-if="documents.some((row) => row.can_read)"', page)
+		# Do not grant any native selling or accounting rights in the page just
+		# to make a restricted Branch Manager's document cards appear.
+		self.assertIn("allDocuments.filter((row) => row?.available && (row.can_read || row.can_create))", page)
+
 	def test_retail_cashier_and_hub_loaders_use_unique_edgesuite_runtime(self):
 		"""Avoid asset-manifest collision with legacy CoreEdge edgeui.bundle.js."""
 		for path in (
