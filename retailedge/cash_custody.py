@@ -267,6 +267,7 @@ def get_cash_custody_snapshot(
 	pos_profile: str | None = None,
 	cashier: str | None = None,
 	exclude_payment_entry: str | None = None,
+	expense_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Return shift cash after recognised expenses and submitted deposits only."""
 	base = get_shift_cash_snapshot(
@@ -274,6 +275,7 @@ def get_cash_custody_snapshot(
 		company=company,
 		pos_profile=pos_profile,
 		user=cashier,
+		expense_name=expense_name,
 	)
 	deposits = get_submitted_cash_deposits(
 		opening_shift=opening_shift,
