@@ -7,7 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt, getdate, nowdate
 
-from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cash_custody import get_cash_custody_snapshot
+from retailedge.cashier_context import get_current_cashier_context
 from retailedge.operating_context import get_operating_context
 from retailedge.setup_roles import user_has_retailedge_role
 
@@ -200,25 +201,27 @@ def _current_shift_payload(*, cashier_context: dict[str, Any], company: str, use
 		"opening_cash": 0.0,
 		"cash_sales": 0.0,
 		"prior_expenses": 0.0,
+		"cash_deposits": 0.0,
 		"available_cash": 0.0,
 		"message": cashier_context.get("message"),
 	}
 	if not cashier_context.get("linked_pos_opening_shift"):
 		return shift
 
-	snapshot = get_shift_cash_snapshot(
+	snapshot = get_cash_custody_snapshot(
 		opening_shift=cashier_context.get("linked_pos_opening_shift"),
 		company=company or None,
 		pos_profile=cashier_context.get("pos_profile"),
-		user=user,
+		cashier=user,
 	)
 	shift.update(
 		{
 			"open": True,
 			"opening_cash": flt(snapshot.get("opening_cash")),
 			"cash_sales": flt(snapshot.get("cash_sales")),
-			"prior_expenses": flt(snapshot.get("prior_expenses")),
-			"available_cash": flt(snapshot.get("available_before")),
+			"prior_expenses": flt(snapshot.get("cashier_expenses")),
+			"cash_deposits": flt(snapshot.get("submitted_deposits")),
+			"available_cash": flt(snapshot.get("available_cash")),
 			"message": snapshot.get("message") or shift.get("message"),
 		}
 	)
@@ -270,6 +273,7 @@ def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
 			"opening_cash": 0.0,
 			"cash_sales": 0.0,
 			"prior_expenses": 0.0,
+			"cash_deposits": 0.0,
 			"available_cash": 0.0,
 			"message": _("Shift position is available for today only."),
 		}
