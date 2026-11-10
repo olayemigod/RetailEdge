@@ -2,8 +2,11 @@ const RECEIPT_METHOD = "retailedge.thermal_receipt.get_thermal_receipt_payload";
 const RETAILEDGE_PRODUCT_KEY = "retailedge";
 
 function sharedPrintAdapter() {
-	const runtime = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
-	return runtime?.print || runtime?.getAdapter?.("print") || null;
+	const browser = typeof window !== "undefined" ? window : null;
+	const runtime = browser?.EdgeSuiteUI;
+	// POSNext exposes the same EdgeSuite printing adapter through its
+	// lightweight print bundle; Desk normally exposes it through EdgeSuiteUI.
+	return browser?.EdgeSuitePrint || runtime?.print || runtime?.getAdapter?.("print") || null;
 }
 
 function callReceiptPayload(document, name) {
