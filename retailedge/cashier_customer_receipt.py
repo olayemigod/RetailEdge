@@ -274,6 +274,32 @@ def _preview_payload(invoice: Any, branch: str, currency: str, receipt: dict[str
 	}
 
 
+def _verified_receivable_account(account: str, company: str, currency: str) -> dict[str, Any]:
+	"""Verify the exact invoice account before constructing the native receipt.
+
+	ERPNext 16.51.1 only calls its generic Permission-checked
+	get_account_details() when Paid From/To metadata is missing.
+	Cashiers use a tightly scoped, server-validated payment workflow
+	and must not gain generic Payment Entry permissions.
+	"""
+	account = str(account or "").strip()
+	row = frappe.db.get_value(
+		"Account",
+		account,
+		["company", "account_type", "account_currency", "is_group", "disabled"],
+		as_dict=True,
+	)
+	if not row or (
+		str(row.get("company") or "") != company
+		or str(row.get("account_type") or "") != "Receivable"
+		or str(row.get("account_currency") or "") != currency
+		or cint(row.get("is_group"))
+		or cint(row.get("disabled"))
+	):
+		frappe.throw(_("The invoice receivable account is not available for this Company and currency."))
+	return dict(row)
+
+
 def _build_payment_entry(invoice: Any, branch: str, receipt: dict[str, Any]):
 	payment = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)
 	payment.payment_type = "Receive"
@@ -284,6 +310,22 @@ def _build_payment_entry(invoice: Any, branch: str, receipt: dict[str, Any]):
 	payment.mode_of_payment = receipt["mode_of_payment"]
 	payment.paid_from = invoice.debit_to
 	payment.paid_to = receipt["mode"]["account"]
+	# Supply validated accounting metadata up front. In ERPNext v16.51.1,
+	# missing metadata triggers get_account_details(), a whitelisted helper
+	# that checks unrestricted Payment Entry Read permission. The invoice
+	# scope, Company, account type and currency were checked server-side.
+	company_currency = str(_company_currency(invoice.company) or "")
+	receivable = _verified_receivable_account(invoice.debit_to, invoice.company, company_currency)
+	mode = receipt["mode"]
+	if (
+		str(mode.get("account_type") or "") not in {"Cash", "Bank"}
+		or str(mode.get("account_currency") or "") != company_currency
+	):
+		frappe.throw(_("The receiving payment account is not available for this Company and currency."))
+	payment.paid_from_account_type = receivable["account_type"]
+	payment.paid_from_account_currency = receivable["account_currency"]
+	payment.paid_to_account_type = mode["account_type"]
+	payment.paid_to_account_currency = mode["account_currency"]
 	payment.paid_amount = receipt["amount"]
 	payment.received_amount = receipt["amount"]
 	payment.reference_no = receipt["reference_no"] or invoice.name
