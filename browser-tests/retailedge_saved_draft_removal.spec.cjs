@@ -7,6 +7,7 @@ const COMPANY = "RetailEdge Upgrade CI";
 const BRANCH = "RetailEdge RC3 Lagos";
 const CUSTOMER = "RetailEdge Upgrade Customer";
 const ITEM = "RE-UPGRADE-SERVICE";
+const ALTERNATE_ITEM = "RE-UPGRADE-SERVICE-ALT";
 
 if (!PASSWORD) {
 	throw new Error("RETAILEDGE_BROWSER_PASSWORD is required for saved-draft removal acceptance.");
@@ -80,7 +81,7 @@ test("Make Sale persists removed saved-draft row and recalculated total after re
 					remarks: "Browser acceptance: saved draft row removal",
 					items: [
 						{ item_code: ITEM, qty: 1, rate: 1000 },
-						{ item_code: ITEM, qty: 2, rate: 1000 },
+						{ item_code: ALTERNATE_ITEM, qty: 2, rate: 1000 },
 					],
 				}),
 			}

@@ -9,6 +9,7 @@ from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
 	CUSTOMER,
 	ITEM,
+	ITEM_GROUP,
 	PRICE_LIST,
 	_ensure_customer,
 	_ensure_item,
@@ -23,6 +24,7 @@ BRANCHES = (
 )
 BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
 EXPENSE_CATEGORY = "Browser Working Branch Expense"
+ALTERNATE_ITEM = "RE-UPGRADE-SERVICE-ALT"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -206,6 +208,21 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 	return str(result["name"])
 
 
+def _ensure_alternate_item() -> None:
+	if frappe.db.exists("Item", ALTERNATE_ITEM):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Item",
+			"item_code": ALTERNATE_ITEM,
+			"item_name": "RetailEdge Upgrade Alternate Service",
+			"item_group": ITEM_GROUP,
+			"stock_uom": "Nos",
+			"is_stock_item": 0,
+		}
+	).insert(ignore_permissions=True)
+
+
 def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	"""Seed a deterministic ERPNext draft for list/read-scope acceptance only."""
 	marker = f"RetailEdge browser Working Branch fixture: {branch_name}"
@@ -360,6 +377,7 @@ def seed_rc3_personas() -> dict:
 	# browser acceptance isolates read/list governance rather than creation UX.
 	_ensure_customer()
 	_ensure_item()
+	_ensure_alternate_item()
 	branch_quotations = {
 		branch_name: _ensure_branch_quotation(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
