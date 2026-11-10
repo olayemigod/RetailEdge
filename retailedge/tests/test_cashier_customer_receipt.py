@@ -98,7 +98,10 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 
 	@patch("retailedge.cashier_customer_receipt._payment_branch_field", return_value="retailedge_branch")
 	@patch("retailedge.cashier_customer_receipt.frappe.new_doc")
-	def test_payment_entry_is_exactly_bound_to_the_invoice(self, mock_new_doc, _mock_branch_field):
+	@patch("retailedge.cashier_customer_receipt._verified_receivable_account", return_value={
+		"account_type": "Receivable", "account_currency": "NGN"
+	})
+	def test_payment_entry_is_exactly_bound_to_the_invoice(self, mock_receivable, mock_new_doc, _mock_branch_field):
 		payment = _PaymentStub()
 		mock_new_doc.return_value = payment
 		invoice = SimpleNamespace(
@@ -112,7 +115,7 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		receipt = {
 			"posting_date": "2026-10-30",
 			"mode_of_payment": "Cash",
-			"mode": {"account": "Cash - RC", "account_type": "Cash"},
+			"mode": {"account": "Cash - RC", "account_type": "Cash", "account_currency": "NGN"},
 			"amount": 50000,
 			"reference_no": "",
 			"reference_date": "2026-10-30",
@@ -126,11 +129,69 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		self.assertEqual(payment.party, "CUST-001")
 		self.assertEqual(payment.paid_from, "Debtors - RC")
 		self.assertEqual(payment.paid_to, "Cash - RC")
+		self.assertEqual(payment.paid_from_account_type, "Receivable")
+		self.assertEqual(payment.paid_to_account_type, "Cash")
+		self.assertEqual(payment.paid_from_account_currency, "NGN")
+		self.assertEqual(payment.paid_to_account_currency, "NGN")
+		mock_receivable.assert_called_once_with("Debtors - RC", "RetailEdge Consulting", "NGN")
 		self.assertEqual(payment.retailedge_branch, "Ketu")
 		self.assertEqual(len(payment.references), 1)
 		self.assertEqual(payment.references[0].reference_doctype, "Sales Invoice")
 		self.assertEqual(payment.references[0].reference_name, "ACC-SINV-2026-00038")
 		self.assertEqual(payment.references[0].allocated_amount, 50000)
+
+	def test_receivable_account_must_match_invoice_company_currency_and_type(self):
+		from retailedge.cashier_customer_receipt import _verified_receivable_account
+
+		valid = {"company": "RetailEdge Consulting", "account_type": "Receivable",
+			"account_currency": "NGN", "is_group": 0, "disabled": 0}
+		with patch("retailedge.cashier_customer_receipt.frappe.db.get_value", return_value=valid):
+			self.assertEqual(
+				_verified_receivable_account("Debtors - RC", "RetailEdge Consulting", "NGN")["account_type"],
+				"Receivable",
+			)
+		for field, invalid in (
+			("company", "Unrelated Company"),
+			("account_type", "Bank"),
+			("account_currency", "USD"),
+			("is_group", 1),
+			("disabled", 1),
+		):
+			with self.subTest(field=field), patch(
+				"retailedge.cashier_customer_receipt.frappe.db.get_value",
+				return_value={**valid, field: invalid},
+			):
+				with self.assertRaises(frappe.ValidationError):
+					_verified_receivable_account("Debtors - RC", "RetailEdge Consulting", "NGN")
+
+	def test_native_v16_account_metadata_is_complete_before_payment_insert(self):
+		# ERPNext 16.51.1 Payment Entry.set_missing_values calls a whitelisted
+		# get_account_details() if either account metadata field is unset.
+		# That function explicitly requires generic Payment Entry Read rights,
+		# which cashiers must never receive.
+		from retailedge.cashier_customer_receipt import _build_payment_entry
+
+		with (
+			patch("retailedge.cashier_customer_receipt.frappe.new_doc") as new_doc,
+			patch("retailedge.cashier_customer_receipt._payment_branch_field", return_value=None),
+			patch("retailedge.cashier_customer_receipt._verified_receivable_account", return_value={
+				"account_type": "Receivable", "account_currency": "NGN",
+			}),
+		):
+			new_doc.return_value = _PaymentStub()
+			payment = _build_payment_entry(
+				SimpleNamespace(name="ACC-SINV-QA", company="RetailEdge Consulting",
+					customer="CUST-QA", debit_to="Debtors - RC", due_date=None,
+					grand_total=200000, currency="NGN"),
+				"Branch A",
+				{"posting_date": "2026-11-10", "mode_of_payment": "Cash",
+					"mode": {"account": "Cash - RC", "account_type": "Cash", "account_currency": "NGN"},
+					"amount": 100, "reference_no": "", "reference_date": "2026-11-10",
+					"outstanding": 200000},
+			)
+			for key in ("paid_from_account_type", "paid_from_account_currency",
+					"paid_to_account_type", "paid_to_account_currency"):
+				self.assertTrue(getattr(payment, key, None), key)
 
 	def test_posting_exception_keeps_native_document_hooks_and_ledger_posting(self):
 		payment = _PaymentStub()
