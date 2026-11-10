@@ -6,7 +6,8 @@ from frappe.model.document import Document
 from frappe.utils import cint, flt, today
 
 from retailedge.branch_context import apply_branch_context_to_doc
-from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cash_custody import get_cash_custody_snapshot
+from retailedge.cashier_context import get_current_cashier_context
 from retailedge.operating_context import (
 	get_operational_branch_scope,
 	resolve_operational_branch,
@@ -322,18 +323,18 @@ class RetailEdgeCashierExpense(Document):
 				)
 			return
 
-		snapshot = get_shift_cash_snapshot(
+		snapshot = get_cash_custody_snapshot(
 			opening_shift=self.linked_pos_opening_shift,
 			company=self.company,
 			pos_profile=self.pos_profile,
-			user=self.cashier,
+			cashier=self.cashier,
 			expense_name=None if self.is_new() else self.name,
 		)
 		self.shift_opening_cash_amount = snapshot.get("opening_cash", 0)
 		self.shift_cash_sales_amount = snapshot.get("cash_sales", 0)
-		self.prior_shift_expense_amount = snapshot.get("prior_expenses", 0)
-		self.available_shift_cash_before_expense = snapshot.get("available_before", 0)
-		self.available_shift_cash_after_expense = flt(snapshot.get("available_before", 0)) - flt(self.amount)
+		self.prior_shift_expense_amount = snapshot.get("cashier_expenses", 0)
+		self.available_shift_cash_before_expense = snapshot.get("available_cash", 0)
+		self.available_shift_cash_after_expense = flt(snapshot.get("available_cash", 0)) - flt(self.amount)
 		self.cash_balance_source = snapshot.get("source")
 		if snapshot.get("message"):
 			self.cash_control_message = snapshot["message"]
