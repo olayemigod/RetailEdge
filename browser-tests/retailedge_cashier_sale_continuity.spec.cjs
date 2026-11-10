@@ -38,6 +38,19 @@ async function apiGet(context, method, params = {}) {
 	return { response, payload, text };
 }
 
+async function apiPost(context, page, method, form = {}) {
+	const csrf = await page.evaluate(() => window.frappe?.csrf_token || "");
+	expect(csrf, `Missing Frappe CSRF token for ${method}`).toBeTruthy();
+	const response = await context.request.post(`${BASE_URL}/api/method/${method}`, {
+		headers: { "X-Frappe-CSRF-Token": csrf },
+		form,
+	});
+	const text = await response.text();
+	let payload = {};
+	try { payload = JSON.parse(text); } catch (_error) {}
+	return { response, payload, text };
+}
+
 async function openProductPage(page, route, title) {
 	await page.goto(`${BASE_URL}/app/${route}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 	await page.getByRole("heading", { name: title, exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
@@ -181,6 +194,83 @@ test("cashier unpaid Sales Invoice exposes the constrained Receive Payment workf
 		await expect(page.getByRole("heading", { name: unpaid.name, exact: true })).toBeVisible();
 		await expect(page.getByText("Invoice outstanding", { exact: true }).first()).toBeVisible();
 		await expect(page.getByRole("button", { name: "Review Payment", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
+test("cashier can post a real partial receipt linked to the exact submitted test invoice", async ({ browser }) => {
+	// The browser fixture creates this invoice and its Cash mode on an
+	// ephemeral CI site. Do not run this posting test on retail.local or
+	// any merchant/production site.
+	if (process.env.RETAILEDGE_CASHIER_POSTING_QA !== "ephemeral-ci-only") {
+		test.skip(true, "Posting acceptance is restricted to an ephemeral seeded CI site.");
+	}
+	const { context, page } = await newCashier(browser);
+	try {
+		const invoices = await apiGet(context, "retailedge.professional_selling.get_professional_selling_list", {
+			document: "sales-invoice", status: "Unpaid", start: "0", page_length: "30",
+		});
+		expect(invoices.response.ok(), invoices.text).toBeTruthy();
+		const unpaid = (invoices.payload.message?.rows || []).find(
+			(row) => Number(row.docstatus || 0) === 1
+				&& !Number(row.is_return || 0) && Number(row.outstanding_amount || 0) > 200,
+		);
+		expect(unpaid, "Seeded submitted invoice with enough outstanding balance is required").toBeTruthy();
+
+		await openProductPage(page, "professional-selling", "Professional Selling");
+		const initial = await apiGet(
+			context, "retailedge.cashier_customer_receipt.get_cashier_customer_receipt_context",
+			{ sales_invoice: unpaid.name },
+		);
+		expect(initial.response.ok(), initial.text).toBeTruthy();
+		expect(initial.payload.message?.branch).toBe(BRANCH);
+		const outstanding = Number(initial.payload.message.invoice_outstanding);
+		const modeName = "RetailEdge Browser Cash Receipt";
+		const modes = await apiGet(context, "retailedge.cashier_customer_receipt.search_cashier_customer_receipt_modes", {
+			sales_invoice: unpaid.name, txt: modeName,
+		});
+		expect(modes.response.ok(), modes.text).toBeTruthy();
+		expect(modes.payload.message?.some(row => row.value === modeName)).toBeTruthy();
+
+		const values = {
+			posting_date: initial.payload.message.defaults.posting_date,
+			mode_of_payment: modeName,
+			amount: 100,
+			reference_no: "",
+			reference_date: initial.payload.message.defaults.reference_date,
+		};
+		const review = await apiGet(context, "retailedge.cashier_customer_receipt.preview_cashier_customer_receipt", {
+			sales_invoice: unpaid.name, values: JSON.stringify(values),
+		});
+		expect(review.response.ok(), review.text).toBeTruthy();
+		const reviewed = review.payload.message || {};
+		expect(reviewed.sales_invoice).toBe(unpaid.name);
+		expect(reviewed.can_post).toBe(true);
+		expect(Number(reviewed.payment_amount)).toBe(100);
+		expect(Number(reviewed.remaining_after_payment)).toBeCloseTo(outstanding - 100, 2);
+
+		const posted = await apiPost(context, page, "retailedge.cashier_customer_receipt.post_cashier_customer_receipt", {
+			sales_invoice: unpaid.name,
+			values: JSON.stringify(values),
+			expected_invoice_modified: reviewed.expected_invoice_modified,
+			expected_outstanding_amount: reviewed.expected_outstanding_amount,
+		});
+		expect(posted.response.ok(), posted.text).toBeTruthy();
+		expect(posted.payload.message?.sales_invoice).toBe(unpaid.name);
+		expect(posted.payload.message?.payment_reference).toBeTruthy();
+		expect(posted.payload.message?.posting_status).toBe("Posted");
+		expect(Number(posted.payload.message?.payment_amount)).toBe(100);
+		expect(Number(posted.payload.message?.invoice_outstanding)).toBeCloseTo(outstanding - 100, 2);
+
+		// The second read must reflect authoritative ERPNext invoice/ledger truth,
+		// not only the immediate in-memory response to the posted Payment Entry.
+		const after = await apiGet(
+			context, "retailedge.cashier_customer_receipt.get_cashier_customer_receipt_context",
+			{ sales_invoice: unpaid.name },
+		);
+		expect(after.response.ok(), after.text).toBeTruthy();
+		expect(Number(after.payload.message?.invoice_outstanding)).toBeCloseTo(outstanding - 100, 2);
 	} finally {
 		await context.close();
 	}
