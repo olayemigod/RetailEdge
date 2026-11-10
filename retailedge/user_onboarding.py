@@ -24,7 +24,7 @@ PERSONAS = (
 	{
 		"value": "RetailEdgeBranchManager",
 		"label": "Branch Manager",
-		"description": "Manage day-to-day activity for assigned Branches.",
+		"description": "Manage day-to-day activity in assigned Branches. Quotation, Order, Delivery and Invoice access also requires the appropriate selling permissions.",
 		"branch_role": "Manager",
 		"pos_default": False,
 	},
