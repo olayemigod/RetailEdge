@@ -9,6 +9,7 @@ from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
 	CUSTOMER,
 	ITEM,
+	ITEM_GROUP,
 	PRICE_LIST,
 	_ensure_customer,
 	_ensure_item,
@@ -26,6 +27,7 @@ EXPENSE_CATEGORY = "Browser Working Branch Expense"
 CASHIER_USER = "browser-cashier@example.com"
 CASHIER_UNFINISHED_MARKER = "RetailEdge browser cashier unfinished sale fixture"
 CASHIER_RECEIPT_MARKER = "RetailEdge browser cashier unpaid receipt fixture"
+SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -241,6 +243,22 @@ def _sales_invoice_values(branch_name: str, marker: str) -> dict:
 	}
 
 
+def _ensure_second_item() -> None:
+	"""Use a distinct Item master so saved-draft row removal is meaningful."""
+	if frappe.db.exists("Item", SECOND_ITEM):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Item",
+			"item_code": SECOND_ITEM,
+			"item_name": "RetailEdge Upgrade Second Service",
+			"item_group": ITEM_GROUP,
+			"stock_uom": "Nos",
+			"is_stock_item": 0,
+		}
+	).insert(ignore_permissions=True)
+
+
 def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	"""Seed a deterministic ERPNext draft for list/read-scope acceptance only."""
 	marker = f"RetailEdge browser Working Branch fixture: {branch_name}"
@@ -417,6 +435,7 @@ def seed_rc3_personas() -> dict:
 	# browser acceptance isolates read/list governance rather than creation UX.
 	_ensure_customer()
 	_ensure_item()
+	_ensure_second_item()
 	branch_quotations = {
 		branch_name: _ensure_branch_quotation(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
