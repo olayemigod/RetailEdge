@@ -537,7 +537,7 @@ export default {
 				branch: this.details?.branch || this.branchName || "",
 			};
 			try {
-				const result = await printRetailReceipt({
+				await printRetailReceipt({
 					document: this.selectedDocumentKey,
 					name: this.details.name,
 					...printerContext,
