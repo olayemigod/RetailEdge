@@ -32,3 +32,14 @@ def test_saved_draft_item_removal_is_exposed_without_weakening_submit_boundaries
 		assert 'title="Remove item"' in dialog
 		assert "draftItems.length <= 1" in dialog
 		assert "items: [...this.draftItems, ...additions]" in dialog
+
+
+def test_browser_draft_removal_uses_a_real_distinct_seeded_item():
+	"""Regression: duplicate Item identity collapses/removes the wrong saved row."""
+	browser_test = _read("../browser-tests/retailedge_saved_draft_removal.spec.cjs")
+	fixture = _read("tests/rc3_browser_fixture.py")
+	assert 'const SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"' in browser_test
+	assert '{ item_code: SECOND_ITEM, qty: 2, rate: 1000 }' in browser_test
+	assert 'SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"' in fixture
+	assert "def _ensure_second_item()" in fixture
+	assert "_ensure_second_item()" in fixture.split("def seed_rc3_personas()", 1)[1]
