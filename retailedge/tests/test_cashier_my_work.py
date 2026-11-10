@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.cashier_self_service import (
+	_current_shift_payload,
 	_invoices_for_date,
 	_normalize_activity,
 	_resolve_work_date,
@@ -57,6 +58,32 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertEqual(_resolve_work_date("2026-10-01"), "2026-10-01")
 		with self.assertRaises(frappe.ValidationError):
 			_resolve_work_date("2026-10-31")
+
+
+	@patch("retailedge.cashier_self_service.get_cash_custody_snapshot")
+	def test_current_shift_uses_submitted_deposits_once(self, custody):
+		custody.return_value = {
+			"opening_cash": 10000,
+			"cash_sales": 3000,
+			"cashier_expenses": 1000,
+			"submitted_deposits": 2000,
+			"available_cash": 10000,
+			"available_before_deposits": 12000,
+		}
+		context = {"linked_pos_opening_shift": "POSA-OS-26-0000009", "pos_profile": "POS-1"}
+		first = _current_shift_payload(cashier_context=context, company="Test", user="cashier@example.com")
+		second = _current_shift_payload(cashier_context=context, company="Test", user="cashier@example.com")
+		for row in (first, second):
+			self.assertTrue(row["open"])
+			self.assertEqual(row["cash_deposits"], 2000)
+			self.assertEqual(row["available_cash"], 10000)
+			self.assertEqual(row["prior_expenses"], 1000)
+		custody.assert_called_with(
+			opening_shift="POSA-OS-26-0000009",
+			company="Test",
+			pos_profile="POS-1",
+			cashier="cashier@example.com",
+		)
 
 	def test_activity_summary_separates_sales_and_returns(self):
 		summary, activity = _normalize_activity(
@@ -152,6 +179,7 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertIn('productLogo', component)
 		self.assertIn('EdgeInput', component)
 		self.assertIn('label="Work date"', component)
+		self.assertIn('shift.cash_deposits', component)
 		self.assertIn('work_date: this.selectedDate', component)
 		self.assertIn('No activity for this day.', component)
 		self.assertIn('window.open(item.target, "_blank", "noopener,noreferrer")', component)
