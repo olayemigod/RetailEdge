@@ -108,3 +108,71 @@ Business Hub heading at the cashier landing route, but the accepted cashier
 home is now My Work. A focused test now opens `cashier-my-work` directly
 while preserving negative Banking Readiness checks; do not weaken restricted
 page denial tests to make smoke green. No production merge/deployment.
+
+## Cashier and Branch Manager acceptance findings — 10 November 2026
+
+Operator confirmation: **saved sale resume/edit/update passes** on the local bench.
+Cashier **Receive Payment fails with "No permission for Payment Entry"**.
+Branch Manager opens Professional Selling, but the Quotation, Sales Order,
+Delivery Note and Sales Invoice cards/lists are not visible.
+
+### Cashier native Payment Entry failure: reproduced in CI
+
+An exact-head browser acceptance test against a real ERPNext 16.51.1
+Payment Entry reproduced the user's error. The traceback enters
+`cashier_customer_receipt._post_native_payment -> payment.insert ->
+Payment Entry.validate -> set_missing_values -> get_account_details`.
+ERPNext's `get_account_details` requires **generic Payment Entry Read**
+permission even though RetailEdge's constrained cashier receipt intentionally
+does not grant any general Payment Entry rights. The earlier
+`ignore_permissions=True` on insertion does not waive this separate
+whitelisted account-details helper check.
+
+The bounded correction verifies the exact invoice Debtors/Receivable account,
+Company, account type, currency, active/non-group state and the already
+resolved receiving Cash/Bank Mode of Payment. It then supplies the native
+`paid_from_account_currency`, `paid_from_account_type`,
+`paid_to_account_currency`, and `paid_to_account_type` before calling
+ERPNext Payment Entry insertion. Consequently the native
+`set_missing_values` does not invoke the generic account-details helper.
+ERPNext still controls the document's validation, submission, reference
+allocation, GL and payment ledger. Cross-Branch identity, invoice read,
+posting-mode, workflow and invoice concurrency checks stay server-enforced.
+**Do not grant Payment Entry DocPerm to cashiers** as a workaround.
+
+Acceptance requires a green ephemeral-CI real POST test (partial receipt,
+posted Payment Entry and outstanding reduction), followed by one local cashier
+UI review/confirmation on a deliberately safe test invoice. A previous CI
+`saved sale` test also timed out with an Update Draft button disabled even
+though the local operator confirmed the workflow passes; diagnose test
+setup/preview readiness separately rather than declaring the feature broken
+or disabling governance.
+
+### Branch Manager: DocType rights are independent of the product role
+
+The source and v16.51.1 native DocPerm matrix confirm that
+`RetailEdgeBranchManager` grants branch-operating context but **does not
+implicitly grant** Quotation, Sales Order, Delivery Note or Sales Invoice
+rights. Professional Selling intentionally renders only capabilities for
+which Frappe reports `can_read` or `can_create`. An operator with just
+that product role therefore gets an empty document area. This is a native
+role-configuration gap and a deficient empty state, **not grounds to bypass
+native permissions**.
+
+To enable authorized selling for a Branch Manager, an administrator should
+choose the appropriate *native* Roles/Role Permission Manager configuration,
+and retain Company/Branch scope. Frappe/ERPNext 16.51.1 `Sales User`
+covers Quotation, Sales Order and Delivery Note; **Sales Invoice instead
+requires explicitly governed invoice rights**. A broad `Accounts User`
+role also permits Journal Entry creation, so do **not** automatically assign
+it merely to make the invoice card appear. For read-only oversight, configure
+a scoped native read-only Role for the exact four document types rather than
+granting transactional submit privileges.
+
+The page now visibly explains lack of selling-document access without
+granting roles. Verify with the existing restricted Branch Manager persona
+and a separately authorized manager persona; negative cross-branch/Advanced
+access checks remain essential. If the user already has native rights but
+the cards are still empty, inspect the exact `get_professional_selling_context`
+and `get_professional_sales_invoice_capability` responses and refresh the
+Frappe role cache instead of inventing documents or replacing filters.
