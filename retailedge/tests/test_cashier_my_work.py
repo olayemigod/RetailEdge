@@ -121,7 +121,7 @@ class TestCashierMyWork(unittest.TestCase):
 		the existing site database produces FileNotFoundError in Frappe's
 		Page.load_assets() before the cashier UI is even initialized.
 		"""
-		from frappe.desk.desk_page import getpage
+		from frappe.desk.desk_page import get
 
 		folder = PAGE_JSON.parent
 		for asset in ("cashier_my_work.json", "cashier_my_work.js", "cashier_my_work.py"):
@@ -133,8 +133,8 @@ class TestCashierMyWork(unittest.TestCase):
 			self.assertEqual(page.module, "RetailEdge")
 			self.assertEqual(page.standard, "Yes")
 			self.assertTrue(page.is_permitted())
-			# Same backend route: getpage -> Page.load_assets -> os.listdir.
-			self.assertIsNotNone(getpage("cashier-my-work"))
+			# Same backend path: getpage -> get -> Page.load_assets -> os.listdir.
+			self.assertIsNotNone(get("cashier-my-work"))
 		finally:
 			frappe.set_user(previous_user)
 
