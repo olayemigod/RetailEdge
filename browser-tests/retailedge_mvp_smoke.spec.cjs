@@ -189,6 +189,19 @@ test("RetailEdge branch manager reaches Shift Reconciliation", async ({
   }
 });
 
+test("Branch Manager without native sales roles sees an actionable selling access explanation", async ({ browser }) => {
+  const { context, page } = await newPersona(browser, USERS.branchManager);
+  try {
+    await openProductPage(page, "professional-selling", "Professional Selling");
+    await expect(page.getByText("Selling documents unavailable", { exact: true })).toBeVisible();
+    await expect(page.getByText(/review your selling permissions/i).first()).toBeVisible();
+    await expect(page.locator(".selling-stage")).toHaveCount(0);
+    await expect(page.locator(".selling-record-tab")).toHaveCount(0);
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
 test("Accounts User reaches Shift Reconciliation", async ({ browser }) => {
   const { context, page } = await newPersona(browser, USERS.accounts);
   try {
