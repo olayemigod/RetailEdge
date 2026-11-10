@@ -126,13 +126,17 @@ class TestCashierMyWork(unittest.TestCase):
 		folder = PAGE_JSON.parent
 		for asset in ("cashier_my_work.json", "cashier_my_work.js", "cashier_my_work.py"):
 			self.assertTrue((folder / asset).is_file(), asset)
-		page = frappe.get_doc("Page", "cashier-my-work")
-		self.assertEqual(page.module, "RetailEdge")
-		self.assertEqual(page.standard, "Yes")
-		self.assertTrue(page.is_permitted(), "CI Administrator must be able to load Page assets")
-		# This is the *same* backend path used by the cashier route:
-		# frappe.desk.desk_page.getpage -> Page.load_assets -> os.listdir.
-		self.assertIsNotNone(getpage("cashier-my-work"))
+		previous_user = frappe.session.user
+		try:
+			frappe.set_user("Administrator")
+			page = frappe.get_doc("Page", "cashier-my-work")
+			self.assertEqual(page.module, "RetailEdge")
+			self.assertEqual(page.standard, "Yes")
+			self.assertTrue(page.is_permitted())
+			# Same backend route: getpage -> Page.load_assets -> os.listdir.
+			self.assertIsNotNone(getpage("cashier-my-work"))
+		finally:
+			frappe.set_user(previous_user)
 
 	def test_page_contract_uses_product_brand_historical_date_and_real_empty_state(self):
 		page_json = PAGE_JSON.read_text(encoding="utf-8")
