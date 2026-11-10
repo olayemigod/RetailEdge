@@ -9,7 +9,7 @@ from retailedge.cashier_expense_snapshot import refresh_cashier_expense_cash_sna
 
 class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 	@patch("retailedge.cashier_expense_snapshot.frappe.db.set_value")
-	@patch("retailedge.cashier_expense_snapshot.get_shift_cash_snapshot")
+	@patch("retailedge.cashier_expense_snapshot.get_cash_custody_snapshot")
 	@patch("retailedge.cashier_expense_snapshot.frappe.get_doc")
 	@patch("retailedge.cashier_expense_snapshot.frappe.session", SimpleNamespace(user="Administrator"))
 	def test_submitted_refresh_clears_warning_but_preserves_historical_money(
@@ -41,8 +41,8 @@ class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 		mock_snapshot.return_value = {
 			"opening_cash": 100000,
 			"cash_sales": 0,
-			"prior_expenses": 4500,
-			"available_before": 95500,
+			"cashier_expenses": 4500,
+			"available_cash": 95500,
 			"source": "opening_shift.balance_details + sales_invoice.posa_pos_opening_shift + retailedge_expenses",
 			"message": None,
 		}
@@ -68,7 +68,7 @@ class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 		self.assertNotIn("posting_reference", values)
 
 	@patch("retailedge.cashier_expense_snapshot.frappe.db.set_value")
-	@patch("retailedge.cashier_expense_snapshot.get_shift_cash_snapshot")
+	@patch("retailedge.cashier_expense_snapshot.get_cash_custody_snapshot")
 	@patch("retailedge.cashier_expense_snapshot.frappe.get_doc")
 	@patch("retailedge.cashier_expense_snapshot.frappe.session", SimpleNamespace(user="Administrator"))
 	def test_draft_refresh_recomputes_full_snapshot(self, mock_get_doc, mock_snapshot, mock_set_value):
@@ -85,8 +85,8 @@ class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 		mock_snapshot.return_value = {
 			"opening_cash": 100000,
 			"cash_sales": 5000,
-			"prior_expenses": 4500,
-			"available_before": 100500,
+			"cashier_expenses": 4500,
+			"available_cash": 100500,
 			"source": "resolved source",
 			"message": None,
 		}
@@ -103,7 +103,7 @@ class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 		self.assertIsNone(values["cash_control_message"])
 
 	@patch("retailedge.cashier_expense_snapshot.frappe.db.set_value")
-	@patch("retailedge.cashier_expense_snapshot.get_shift_cash_snapshot")
+	@patch("retailedge.cashier_expense_snapshot.get_cash_custody_snapshot")
 	@patch("retailedge.cashier_expense_snapshot.frappe.get_doc")
 	@patch("retailedge.cashier_expense_snapshot.frappe.session", SimpleNamespace(user="Administrator"))
 	def test_submitted_refresh_preserves_money_and_writes_unresolved_warning(
@@ -130,8 +130,8 @@ class TestCashierExpenseSnapshotRefresh(unittest.TestCase):
 		mock_snapshot.return_value = {
 			"opening_cash": 0,
 			"cash_sales": 0,
-			"prior_expenses": 0,
-			"available_before": 0,
+			"cashier_expenses": 0,
+			"available_cash": 0,
 			"source": "unresolved",
 			"message": "Cash sales could not be safely resolved for this POS schema.",
 		}
