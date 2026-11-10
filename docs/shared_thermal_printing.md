@@ -45,3 +45,48 @@ for opening it.
 
 Printer failure does not alter, cancel, or roll back the Sales Invoice/POS Invoice. A completed ERP
 transaction remains completed and the user may reconnect and reprint.
+
+## Browser tabs and the Document Output page
+
+**Print Receipt** on **Professional Selling → Print & Share → Document Output & Sharing**
+uses the same EdgeSuite shared direct receipt adapter as POSNext; it does not
+call Web Serial itself. **Print Document** is different: it uses the normal
+browser/Frappe print preview, not the saved MPT-II serial connection.
+
+When using a supported EdgeSuite tab-handoff build, a POSNext tab and a Desk
+Document Output tab on the **same HTTPS origin** may safely share the
+authorized printer, but each tab has its own live serial-port object. A
+browser-level exclusive lease coordinates handoff of the *idle* connection;
+a busy print must not be interrupted. A page with an outdated EdgeSuite
+bundle, a different origin (HTTP vs HTTPS, another hostname or port), or an
+external Windows/phone Bluetooth connection may not participate.
+
+RetailEdge restores the binding by the document's server-authorized
+Company/Branch print profile, and verifies that the restored connection
+matches the **exact profile** before sending any data. A generic Bluetooth
+Serial Port Profile service UUID is not a unique printer identity. If a
+different tab still owns the printer, show its actionable error and do
+not navigate automatically into another competing setup tab.
+
+QA matrix:
+- Set up MPT-II at `https://retail.local/app/edge-printing`; test the
+  physical printer and leave the setup tab connected but idle.
+- Open Document Output & Sharing from Professional Selling; select a
+  submitted Sales Invoice and click **Print Receipt**, not **Print Document**.
+  Verify the 58mm paper receipt and that the saved source invoice is unchanged.
+- Without closing the Desk tab, print the same submitted invoice from POSNext
+  and back from Document Output. Confirm each tab releases the idle port, no
+  Windows Bluetooth socket collision, no wrong-branch output or duplicate
+  transaction.
+- Switch browser tab focus before and after printing. Confirm a busy
+  in-flight job is not stolen by another tab. Check a restricted cashier's
+  positive and negative document print permissions.
+- Independently verify browser Print Document/PDF/WhatsApp remains unaffected.
+  Test light/dark UI feedback. Do not interpret `bytesWritten` alone as
+  physical output.
+
+Dependency: EdgeSuite UI cross-tab handoff is proposed in shared Draft PR #53.
+This RetailEdge fix is backward compatible, but full two-tab physical
+acceptance requires the tested EdgeSuite candidate and RetailEdge candidate
+on the same `retail.local` bench. The current RetailEdge CI pinned shared
+platform baseline is not silently changed by this slice.
