@@ -7,7 +7,12 @@ from frappe.utils import cstr
 from retailedge.branch_context import resolve_branch_from_pos_profile
 from retailedge.branch_performance import _coerce_filters, assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
-from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope, validate_operating_branch
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operating_context,
+	get_operational_branch_scope,
+	validate_operating_branch,
+)
 from retailedge.reporting.date_ranges import get_preset_dates
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	execute as execute_branch_performance_report,
@@ -21,11 +26,7 @@ MAX_BRANCH_SETUP_SCAN = 100
 
 
 def _default_company() -> str:
-	return cstr(
-		frappe.defaults.get_user_default("Company")
-		or frappe.defaults.get_global_default("company")
-		or ""
-	)
+	return cstr((get_operating_context() or {}).get("company") or "")
 
 
 def _filters(value=None) -> frappe._dict:

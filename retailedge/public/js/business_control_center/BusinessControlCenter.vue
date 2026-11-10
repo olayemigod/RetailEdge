@@ -107,12 +107,6 @@
 					<div v-else class="control-empty">No separate financial signals are visible for the current scope.</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Operational Sources" description="These existing Action Centre sources were excluded by permission or scope rules.">
-					<div class="source-list">
-						<div v-for="source in unavailableSources" :key="source.key" class="source-row"><strong>{{ sourceLabel(source.key) }}</strong><small>{{ source.reason }}</small></div>
-					</div>
-				</EdgeDashboardSection>
-
 				<EdgeDashboardSection title="Control rules" description="Management follow-up never changes the accounting or operational truth." span="2">
 					<div class="control-note">
 						<strong>Follow-up is tracking, not resolution.</strong>
@@ -193,7 +187,6 @@ export default {
 		critical() { return this.items.filter((item) => item.severity === "danger"); },
 		warnings() { return this.items.filter((item) => item.severity === "warning"); },
 		financialSignals() { return this.items.filter((item) => item.source === "r9_early_warning"); },
-		unavailableSources() { return Object.values(this.actionCenter.sources || {}).filter((source) => !source.available); },
 	},
 	created() {
 		const components = runtimeComponents();
@@ -269,8 +262,16 @@ export default {
 				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
 				this.earlyWarning = result.early_warning || { available: true, metadata: {} };
 				this.resetLazyDetails();
-				try { this.capabilities = await getDashboardCapabilities(FILE_CAPABILITY_KEY, this.filters); }
-				catch (_error) { this.capabilities = { can_view: true, can_print: false, can_export: false }; }
+				if (this.earlyWarning.available === false) {
+					// Owner-level export/print is unavailable for this operational-only
+					// view. Do not call an owner-dashboard capability endpoint that is
+					// expected to reject this user's narrower Branch scope and raise a
+					// misleading global permission dialog.
+					this.capabilities = { can_view: true, can_print: false, can_export: false };
+				} else {
+					try { this.capabilities = await getDashboardCapabilities(FILE_CAPABILITY_KEY, this.filters); }
+					catch (_error) { this.capabilities = { can_view: true, can_print: false, can_export: false }; }
+				}
 			} catch (error) { this.error = errorMessage(error, "Business Control Centre failed to load."); }
 			finally { this.loading = false; }
 		},

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 import frappe
 
@@ -9,7 +10,6 @@ from retailedge.bank_transaction_matching import assert_can_access_bank_transact
 from retailedge.dashboard_capabilities import get_dashboard_capabilities
 from retailedge.native_visual_workspaces import WORKSPACES
 from retailedge.reporting_capabilities import _REPORT_SPECS, get_report_capabilities
-
 
 DASHBOARD_PAGE_SCOPES = {
 	"owner-dashboard": "owner-dashboard",
@@ -29,6 +29,16 @@ NATIVE_WORKSPACE_BY_PAGE = {
 
 REPORT_PAGE_TARGETS = frozenset(_REPORT_SPECS)
 BANK_MATCHING_PAGE = "bank-matching-reconciliation"
+PAGE_READ_PREREQUISITES = {
+	"project-operations": ("Project",),
+}
+PAGE_REPORT_PREREQUISITES = {
+	"pos-closing-variance": ("RetailEdge Cash Shift Verification",),
+	"unmatched-bank-transactions": ("RetailEdge Unmatched Bank Transactions",),
+	"unmatched-bank-payments": ("RetailEdge Unmatched Bank Payment Events",),
+	"reconciliation-handoff": ("RetailEdge Reconciliation Handoff",),
+	"daily-sales-audit-register": ("RetailEdge Daily Sales Audit Register",),
+}
 
 
 def _quiet_probe(callback: Callable[[], bool]) -> bool:
@@ -54,9 +64,19 @@ def _page_is_permitted(page_name: str) -> bool:
 
 def _report_is_permitted(report_name: str) -> bool:
 	def probe() -> bool:
-		from frappe.desk.query_report import get_report_doc
-
-		return bool(get_report_doc(report_name))
+		if not frappe.db.exists("Report", report_name):
+			return False
+		report = frappe.get_doc("Report", report_name)
+		if report.disabled or not report.is_permitted():
+			return False
+		return bool(
+			report.ref_doctype
+			and frappe.has_permission(
+				report.ref_doctype,
+				ptype="report",
+				user=frappe.session.user,
+			)
+		)
 
 	return _quiet_probe(probe)
 
@@ -126,6 +146,17 @@ def _page_is_functionally_available(
 		return _quiet_probe(
 			lambda: bool(assert_can_access_bank_transaction_matching(user=frappe.session.user))
 		)
+
+	for doctype in PAGE_READ_PREREQUISITES.get(page_name, ()):
+		if not _quiet_probe(
+			lambda doctype=doctype: bool(frappe.db.exists("DocType", doctype))
+			and bool(frappe.has_permission(doctype, ptype="read", user=frappe.session.user))
+		):
+			return False
+
+	for report_name in PAGE_REPORT_PREREQUISITES.get(page_name, ()):
+		if not _report_is_permitted(report_name):
+			return False
 
 	# Re-check ordinary Page permission at the final composition boundary. This is
 	# intentionally redundant for master-registry links and also protects Pages that

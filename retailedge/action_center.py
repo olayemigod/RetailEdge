@@ -15,6 +15,7 @@ from retailedge.customer_receivables import get_customer_receivables
 from retailedge.customer_sales_action_summary import get_customer_sales_action_summary
 from retailedge.expense_register import get_expense_register
 from retailedge.inventory_health import get_inventory_action_summary
+from retailedge.operating_context import get_operating_context
 from retailedge.planning_intelligence import get_planning_action_summary
 from retailedge.reporting_scope import validate_report_scope
 from retailedge.supplier_payables import get_supplier_payables
@@ -27,12 +28,9 @@ DUE_SCOPES = {"all", "due"}
 
 @frappe.whitelist()
 def get_action_center_context() -> dict[str, Any]:
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	default_branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
-		or frappe.defaults.get_user_default("Branch")
-		or ""
-	).strip()
+	operating_context = get_operating_context() or {}
+	company = str(operating_context.get("company") or "").strip()
+	default_branch = str(operating_context.get("branch") or "").strip()
 	branch = (
 		_resolve_action_center_default_branch(company, default_branch, user=frappe.session.user)
 		if company
@@ -133,7 +131,8 @@ def _resolve_action_center_branch(company: str, branch: str, *, user: str) -> st
 @frappe.whitelist()
 def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
-	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	operating_context = get_operating_context() or {}
+	company = str(filters.get("company") or operating_context.get("company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
 	branch = _resolve_action_center_branch(
@@ -317,6 +316,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 
 
 def _safe_source(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
 		return {"available": True, "key": key, "payload": loader() or {}}
 	except frappe.PermissionError:
@@ -331,6 +331,12 @@ def _safe_source(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, An
 			"key": key,
 			"reason": _("This action source could not be evaluated safely for the current scope."),
 		}
+	finally:
+		# A provider may catch its own nested permission/validation exception and
+		# return a reduced payload. Its server-side Frappe messages must still not
+		# escape as a global browser dialog; the source availability payload is the
+		# user-facing contract for this composition boundary.
+		frappe.local.message_log = previous_messages
 
 
 def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:

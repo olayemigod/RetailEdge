@@ -52,7 +52,9 @@ def _ensure_user(email: str, first_name: str, roles: tuple[str, ...]) -> None:
 	user.user_type = "System User"
 	user.save(ignore_permissions=True)
 	update_password(email, PASSWORD, logout_all_sessions=True)
-	frappe.defaults.set_user_default("Company", COMPANY, user=email)
+	# Frappe scrubs default keys during lookup; use the canonical lowercase key so
+	# a global ``company`` default cannot shadow the persona's assigned Company.
+	frappe.defaults.set_user_default("company", COMPANY, user=email)
 
 
 def _ensure_secondary_item() -> None:

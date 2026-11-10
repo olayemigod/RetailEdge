@@ -9,9 +9,14 @@ from frappe.utils import cint, flt, nowdate
 
 from retailedge.branch_performance_dashboard import (
 	_resolve_option_branch_scope as _resolve_pos_option_branch_scope,
+)
+from retailedge.branch_performance_dashboard import (
 	_search_cashiers as _search_scoped_cashiers,
+)
+from retailedge.branch_performance_dashboard import (
 	_search_pos_profiles as _search_scoped_pos_profiles,
 )
+from retailedge.operating_context import get_operating_context
 from retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register import (
 	get_columns,
 	get_data,
@@ -27,12 +32,9 @@ MAX_LINK_RESULTS = 20
 
 @frappe.whitelist()
 def get_daily_sales_audit_page_context() -> dict[str, Any]:
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
-		or frappe.defaults.get_user_default("Branch")
-		or ""
-	).strip()
+	operating_context = get_operating_context() or {}
+	company = str(operating_context.get("company") or "").strip()
+	branch = str(operating_context.get("branch") or "").strip()
 	return {
 		"default_filters": {
 			"company": company,
@@ -62,7 +64,7 @@ def search_daily_sales_audit_page_options(
 ) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
-	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	company = str(company or (get_operating_context() or {}).get("company") or "").strip()
 	branch = str(branch or "").strip()
 	pos_profile = str(pos_profile or "").strip()
 	like = f"%{txt}%"

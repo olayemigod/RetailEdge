@@ -86,6 +86,7 @@ def build_business_control_export_dataset(filters: dict[str, Any] | str | None =
 
 
 def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
 		return get_control_early_warning(filters)
 	except frappe.PermissionError:
@@ -101,6 +102,8 @@ def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
 		# financial-intelligence source must not take down the canonical operational
 		# Action Centre. Keep the source failure visible instead of fabricating data.
 		return _unavailable_early_warning(str(exc) or _("Financial intelligence is temporarily unavailable for this scope."))
+	finally:
+		frappe.local.message_log = previous_messages
 
 
 def _unavailable_early_warning(reason: str, *, permission_isolated: bool = False) -> dict[str, Any]:

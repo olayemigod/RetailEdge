@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 from retailedge.report_center import get_reports_centre_context
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "report_center.py"
 MASTER = ROOT / "master_experience.py"
@@ -115,7 +114,7 @@ def test_reports_centre_omits_pages_user_cannot_open(
 	report_available,
 ):
 	master.return_value = _master_context(native_desk=False)
-	page_available.side_effect = lambda target: target in {
+	page_available.side_effect = lambda target, **_context: target in {
 		"sales-invoice-register",
 		"stock-position",
 		"cash-movement",
@@ -130,6 +129,25 @@ def test_reports_centre_omits_pages_user_cannot_open(
 
 	assert targets == {"sales-invoice-register", "stock-position", "cash-movement"}
 	assert report_available.call_count == 0
+
+
+@patch("retailedge.report_center._can_open_report", return_value=False)
+@patch("retailedge.report_center._can_open_page", return_value=False)
+@patch("retailedge.report_center.get_retailedge_business_hub_context")
+def test_reports_centre_checks_page_business_capability_in_active_operating_scope(
+	master,
+	page_available,
+	_report_available,
+):
+	master.return_value = _master_context(native_desk=False)
+
+	get_reports_centre_context()
+
+	page_available.assert_any_call(
+		"sales-invoice-register",
+		company="Demo Company",
+		branch="Lagos",
+	)
 
 
 def test_reports_centre_uses_native_non_throwing_access_contracts():

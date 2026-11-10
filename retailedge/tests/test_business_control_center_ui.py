@@ -35,6 +35,7 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn("item.follow_up_supported === false", source)
 		self.assertIn("Financial intelligence is unavailable for this scope", source)
 		self.assertIn("operational Action Centre controls remain available", source)
+		self.assertNotIn("Unavailable Operational Sources", source)
 
 	def test_assignment_picker_uses_permission_aware_scope_query(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
@@ -77,6 +78,8 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn('"business-control-center": lambda filters', files)
 		self.assertIn('return "owner-dashboard" if scope_key == "business-control-center"', files)
 		self.assertIn("build_business_control_export_dataset", files)
+		self.assertIn("if (this.earlyWarning.available === false)", page)
+		self.assertIn("this.capabilities = { can_view: true, can_print: false, can_export: false }", page)
 
 	def test_native_drill_through_obeys_backend_open_mode(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()

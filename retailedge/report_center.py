@@ -519,13 +519,20 @@ def get_reports_centre_context() -> dict[str, Any]:
 	master = get_retailedge_business_hub_context() or {}
 	access = dict(master.get("access") or {})
 	context = dict(master.get("context") or {})
+	company = str(context.get("company") or "").strip()
+	branch = str(context.get("branch") or "").strip()
 	can_use_native_desk = bool(access.get("can_use_native_desk"))
 	groups: list[dict[str, Any]] = []
 
 	for group in REPORT_GROUPS:
 		items = []
 		for spec in group["items"]:
-			resolved = _resolve_report_item(spec, can_use_native_desk=can_use_native_desk)
+			resolved = _resolve_report_item(
+				spec,
+				can_use_native_desk=can_use_native_desk,
+				company=company,
+				branch=branch,
+			)
 			if resolved:
 				items.append(resolved)
 		if not items:
@@ -562,7 +569,13 @@ def get_reports_centre_context() -> dict[str, Any]:
 	}
 
 
-def _resolve_report_item(spec: dict[str, Any], *, can_use_native_desk: bool) -> dict[str, Any] | None:
+def _resolve_report_item(
+	spec: dict[str, Any],
+	*,
+	can_use_native_desk: bool,
+	company: str = "",
+	branch: str = "",
+) -> dict[str, Any] | None:
 	target_type = str(spec.get("target_type") or "").strip()
 	target = str(spec.get("target") or "").strip()
 	if not target:
@@ -571,7 +584,7 @@ def _resolve_report_item(spec: dict[str, Any], *, can_use_native_desk: bool) -> 
 		return None
 
 	if target_type == "Page":
-		if not _can_open_page(target):
+		if not _can_open_page(target, company=company, branch=branch):
 			return None
 	elif target_type == "Report":
 		if not _can_open_report(target):
@@ -590,11 +603,20 @@ def _resolve_report_item(spec: dict[str, Any], *, can_use_native_desk: bool) -> 
 	}
 
 
-def _can_open_page(target: str) -> bool:
+def _can_open_page(target: str, *, company: str = "", branch: str = "") -> bool:
 	try:
 		if not frappe.db.exists("Page", target):
 			return False
-		return bool(frappe.get_doc("Page", target).is_permitted())
+		if not frappe.get_doc("Page", target).is_permitted():
+			return False
+		# Import lazily because master experience composition also uses the final
+		# navigation filter. Reports Centre must apply the same business-capability
+		# boundary instead of advertising Pages that reject the user after opening.
+		from retailedge.navigation_visibility import _page_is_functionally_available
+
+		return bool(
+			_page_is_functionally_available(target, company=company, branch=branch)
+		)
 	except Exception:
 		return False
 

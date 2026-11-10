@@ -12,6 +12,29 @@ class TestActionCenter(unittest.TestCase):
 	def setUp(self):
 		frappe.session.user = "Administrator"
 
+	@patch("retailedge.action_center._resolve_action_center_default_branch")
+	@patch("retailedge.action_center.get_operating_context")
+	def test_context_uses_authoritative_operating_company_and_branch(
+		self,
+		operating_context,
+		resolve_branch,
+	):
+		operating_context.return_value = {
+			"company": "Assigned Company",
+			"branch": "Assigned Branch",
+		}
+		resolve_branch.return_value = "Assigned Branch"
+
+		context = action_center.get_action_center_context()
+
+		self.assertEqual(context["default_filters"]["company"], "Assigned Company")
+		self.assertEqual(context["default_filters"]["branch"], "Assigned Branch")
+		resolve_branch.assert_called_once_with(
+			"Assigned Company",
+			"Assigned Branch",
+			user="Administrator",
+		)
+
 	@patch("retailedge.action_center.get_bank_exception_summary")
 	@patch("retailedge.action_center.get_supplier_payables")
 	@patch("retailedge.action_center.get_customer_receivables")
@@ -226,12 +249,31 @@ class TestActionCenter(unittest.TestCase):
 			self.assertFalse(result["sources"][source]["available"])
 
 	def test_validation_failure_isolated_to_one_source(self):
+		frappe.local.message_log = ["existing"]
+
+		def denied_source():
+			frappe.local.message_log.append("permission probe noise")
+			raise frappe.ValidationError("scope too broad")
+
 		result = action_center._safe_source(
 			"receivables",
-			lambda: (_ for _ in ()).throw(frappe.ValidationError("scope too broad")),
+			denied_source,
 		)
 		self.assertFalse(result["available"])
 		self.assertNotIn("scope too broad", result["reason"])
+		self.assertEqual(frappe.local.message_log, ["existing"])
+
+	def test_nested_provider_messages_are_isolated_even_when_source_returns_payload(self):
+		frappe.local.message_log = ["existing"]
+
+		def reduced_source():
+			frappe.local.message_log.append("nested provider permission noise")
+			return {"summary": []}
+
+		result = action_center._safe_source("stock_position", reduced_source)
+
+		self.assertTrue(result["available"])
+		self.assertEqual(frappe.local.message_log, ["existing"])
 
 	@patch("retailedge.action_center.validate_report_scope")
 	def test_explicit_branch_is_validated_before_composition(self, validate_scope):

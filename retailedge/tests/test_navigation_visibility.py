@@ -8,6 +8,7 @@ import frappe
 from retailedge.navigation_visibility import (
 	_page_is_functionally_available,
 	_quiet_probe,
+	_report_is_permitted,
 	filter_context_for_runtime_capabilities,
 )
 
@@ -107,6 +108,48 @@ class TestNavigationVisibility(unittest.TestCase):
 	def test_bank_matching_link_is_hidden_when_server_boundary_rejects_user(self, access):
 		access.side_effect = frappe.PermissionError("blocked")
 		self.assertFalse(_page_is_functionally_available("bank-matching-reconciliation"))
+
+	@patch("retailedge.navigation_visibility._page_is_permitted", return_value=True)
+	@patch("retailedge.navigation_visibility.frappe.has_permission", return_value=False)
+	@patch("retailedge.navigation_visibility.frappe.db.exists", return_value=True)
+	def test_project_operations_is_hidden_without_native_project_read(
+		self,
+		_exists,
+		has_permission,
+		_page_permitted,
+	):
+		self.assertFalse(_page_is_functionally_available("project-operations"))
+		has_permission.assert_called_once_with(
+			"Project",
+			ptype="read",
+			user=frappe.session.user,
+		)
+
+	@patch("retailedge.navigation_visibility._report_is_permitted", return_value=False)
+	def test_managed_review_page_is_hidden_without_underlying_report_access(self, report_permitted):
+		self.assertFalse(_page_is_functionally_available("unmatched-bank-payments"))
+		report_permitted.assert_called_once_with("RetailEdge Unmatched Bank Payment Events")
+
+	@patch("retailedge.navigation_visibility.frappe.has_permission", return_value=False)
+	@patch("retailedge.navigation_visibility.frappe.get_doc")
+	@patch("retailedge.navigation_visibility.frappe.db.exists", return_value=True)
+	def test_report_discovery_requires_reference_doctype_report_permission(
+		self,
+		_exists,
+		get_doc,
+		has_permission,
+	):
+		report = get_doc.return_value
+		report.disabled = False
+		report.is_permitted.return_value = True
+		report.ref_doctype = "Sales Invoice"
+
+		self.assertFalse(_report_is_permitted("RetailEdge Unmatched Bank Payment Events"))
+		has_permission.assert_called_once_with(
+			"Sales Invoice",
+			ptype="report",
+			user=frappe.session.user,
+		)
 
 	def test_quiet_probe_restores_message_log_when_permission_probe_fails(self):
 		original = list(getattr(frappe.local, "message_log", []) or [])
