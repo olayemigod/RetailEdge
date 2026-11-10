@@ -22,9 +22,6 @@ PERSONAS = {
 	"permission-cashier@example.com": ("Permission Cashier", ("RetailEdgeCashier",)),
 	"permission-retail-manager@example.com": ("Permission Retail Manager", ("RetailEdgeManager",)),
 	"permission-branch-manager@example.com": ("Permission Branch Manager", ("RetailEdgeBranchManager",)),
-	"permission-selling-branch-manager@example.com": (
-		"Permission Selling Branch Manager", ("RetailEdgeBranchManager", "Sales User", "Accounts User"),
-	),
 	"permission-auditor@example.com": ("Permission Auditor", ("RetailEdgeAuditor",)),
 	"permission-accounts@example.com": ("Permission Accounts", ("Accounts User",)),
 	"permission-stock@example.com": ("Permission Stock", ("Stock User",)),
@@ -175,17 +172,24 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				with self.subTest(user=user, doctype=doctype):
 					self.assert_permissions(user, doctype, {"read": False})
 
-	def test_branch_manager_selling_visibility_uses_erpnext_native_roles(self):
-		# RetailEdgeBranchManager is a branch-context role, not an undocumented
-		# blanket sale/account permission. A merchant deliberately combines it
-		# with Sales User and Accounts User (or a custom native read-only role).
+	def test_branch_manager_selling_visibility_is_independent_of_product_role(self):
+		# Branch Manager alone is a branch-context role. Native Sales User grants
+		# Quote, Order, and Delivery read; native Accounts User grants Invoice
+		# read BUT also grants generic Journal Entry creation. Do not add it
+		# automatically just to make the invoice tile visible. Merchants must
+		# configure a suitably scoped native Role/DocPerm for invoice rights.
 		bare = "permission-branch-manager@example.com"
-		composed = "permission-selling-branch-manager@example.com"
+		sales = "permission-sales@example.com"
+		accounts = "permission-accounts@example.com"
 		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
 			with self.subTest(doctype=doctype):
 				self.assert_permissions(bare, doctype, {"read": False})
-				self.assert_permissions(composed, doctype, {"read": True})
-		self.assert_permissions(composed, "Journal Entry", {"create": False, "write": False, "submit": False})
+		for doctype in ("Quotation", "Sales Order", "Delivery Note"):
+			self.assert_permissions(sales, doctype, {"read": True})
+		self.assert_permissions(sales, "Sales Invoice", {"read": False})
+		self.assert_permissions(accounts, "Sales Invoice", {"read": True})
+		# A blanket Accounts User grant is NOT a read-only fix.
+		self.assert_permissions(accounts, "Journal Entry", {"create": True})
 
 	def test_retailedge_managers_do_not_gain_journal_entry_posting_authority(self):
 		for user in (
