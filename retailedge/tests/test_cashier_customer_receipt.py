@@ -101,7 +101,10 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 	@patch("retailedge.cashier_customer_receipt._verified_receivable_account", return_value={
 		"account_type": "Receivable", "account_currency": "NGN"
 	})
-	def test_payment_entry_is_exactly_bound_to_the_invoice(self, mock_receivable, mock_new_doc, _mock_branch_field):
+	@patch("retailedge.cashier_customer_receipt._company_currency", return_value="NGN")
+	def test_payment_entry_is_exactly_bound_to_the_invoice(
+		self, _mock_currency, mock_receivable, mock_new_doc, _mock_branch_field
+	):
 		payment = _PaymentStub()
 		mock_new_doc.return_value = payment
 		invoice = SimpleNamespace(
@@ -174,6 +177,7 @@ class TestCashierCustomerReceipt(unittest.TestCase):
 		with (
 			patch("retailedge.cashier_customer_receipt.frappe.new_doc") as new_doc,
 			patch("retailedge.cashier_customer_receipt._payment_branch_field", return_value=None),
+			patch("retailedge.cashier_customer_receipt._company_currency", return_value="NGN"),
 			patch("retailedge.cashier_customer_receipt._verified_receivable_account", return_value={
 				"account_type": "Receivable", "account_currency": "NGN",
 			}),
