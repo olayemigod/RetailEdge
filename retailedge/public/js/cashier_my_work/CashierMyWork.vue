@@ -104,6 +104,7 @@
 							<div><span>Opening cash</span><strong>{{ money(shift.opening_cash) }}</strong></div>
 							<div><span>Cash sales</span><strong>{{ money(shift.cash_sales) }}</strong></div>
 							<div><span>Expenses</span><strong>{{ money(shift.prior_expenses) }}</strong></div>
+							<div><span>Cash deposits</span><strong>{{ money(shift.cash_deposits) }}</strong></div>
 							<div><span>Available cash</span><strong>{{ money(shift.available_cash) }}</strong></div>
 						</div>
 						<div v-else class="cashier-work-empty compact">
