@@ -47,7 +47,12 @@
 					<EdgeStatusBadge :status="shipping.available ? 'Active' : 'Warning'" />
 				</section>
 
-				<div class="selling-flow" aria-label="Professional selling documents">
+				<EdgeEmptyState
+					v-if="!documents.length"
+					title="Selling documents unavailable"
+					description="Your current access does not include Quotations, Sales Orders, Delivery Notes or Sales Invoices. Ask your administrator to review your selling permissions."
+				/>
+				<div v-else class="selling-flow" aria-label="Professional selling documents">
 					<section v-for="(document, index) in documents" :key="document.key" class="edge-panel selling-stage">
 						<div class="stage-heading">
 							<span class="stage-number">{{ index + 1 }}</span>
@@ -72,6 +77,7 @@
 				</div>
 
 				<ProfessionalSellingRecords
+					v-if="documents.some((row) => row.can_read)"
 					ref="sellingRecords"
 					:documents="documents"
 					:canUseNativeDesk="canUseNativeDesk"
