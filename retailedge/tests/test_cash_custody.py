@@ -44,6 +44,33 @@ class TestCashCustody(unittest.TestCase):
 		self.assertEqual(result["available_cash"], 35000)
 		self.assertEqual(result["submitted_deposit_count"], 2)
 
+
+	@patch("retailedge.cash_custody.get_submitted_cash_deposits", return_value=[{"paid_amount": 2000}])
+	@patch("retailedge.cash_custody.get_shift_cash_snapshot")
+	def test_editing_expense_excludes_self_but_never_submitted_deposits(self, snapshot, deposits):
+		snapshot.return_value = {
+			"opening_cash": 10000, "cash_sales": 3000, "prior_expenses": 1000,
+			"available_before": 12000, "source": "shift", "message": None,
+		}
+		position = get_cash_custody_snapshot(
+			opening_shift="POSA-OS-26-0000009", company="Retail Co",
+			pos_profile="POS-1", cashier="cashier@example.com",
+			expense_name="EXP-1",
+		)
+		self.assertEqual(position["available_cash"], 10000)
+		snapshot.assert_called_once_with(
+			opening_shift="POSA-OS-26-0000009", company="Retail Co",
+			pos_profile="POS-1", user="cashier@example.com", expense_name="EXP-1",
+		)
+
+	def test_expense_document_uses_submitted_deposit_aware_custody(self):
+		controller = (APP_ROOT / "retailedge" / "doctype" / "retailedge_cashier_expense" / "retailedge_cashier_expense.py").read_text(encoding="utf-8")
+		context = (APP_ROOT / "cashier_context.py").read_text(encoding="utf-8")
+		self.assertIn("get_cash_custody_snapshot(", controller)
+		self.assertIn('snapshot.get("available_cash", 0)', controller)
+		self.assertIn("get_cash_custody_snapshot(", context)
+		self.assertIn('snapshot.get("available_cash", 0.0)', context)
+
 	def test_non_deposit_payment_entry_is_not_custody_gated(self):
 		doc = SimpleNamespace(
 			doctype="Payment Entry",
