@@ -204,6 +204,10 @@ jobs:
           exit 1
 
       - name: Run RetailEdge RC3 browser persona acceptance
+        env:
+          # Explicitly enable genuine accounting mutations only in this
+          # workflow's freshly created, seeded and disposable CI site.
+          RETAILEDGE_CASHIER_POSTING_QA: ephemeral-ci-only
         run: |
           npx playwright test \
             browser-tests/retailedge_mvp_smoke.spec.cjs \
