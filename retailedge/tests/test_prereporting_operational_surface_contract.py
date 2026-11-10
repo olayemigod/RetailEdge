@@ -11,10 +11,10 @@ from retailedge.master_experience import (
 	PROFESSIONAL_SELLING_ITEM,
 	PROMOTED_R4_PAGE_TARGETS,
 	_promote_browser_approved_r4_pages,
-	_promote_stock_movement_history,
 	_promote_payment_management,
 	_promote_professional_purchasing,
 	_promote_professional_selling,
+	_promote_stock_movement_history,
 )
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +22,12 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 	def test_professional_selling_is_promoted_when_page_is_permitted(self):
-		groups = [{"key": "sell", "items": [{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice"}]}]
+		groups = [
+			{
+				"key": "sell",
+				"items": [{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice"}],
+			}
+		]
 		with patch("retailedge.master_experience._can_open_page", return_value=True):
 			_promote_professional_selling(groups)
 
@@ -87,12 +92,23 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 		self.assertEqual(groups[0]["items"][0]["target_type"], "Page")
 		self.assertEqual(groups[0]["items"][0]["target"], "stock-movement-history")
 
-
 	def test_promoted_pages_are_standard_and_role_restricted(self):
 		page_paths = {
-			"professional-selling": APP_ROOT / "retailedge" / "page" / "professional_selling" / "professional_selling.json",
-			"professional-purchasing": APP_ROOT / "retailedge" / "page" / "professional_purchasing" / "professional_purchasing.json",
-			"payment-management": APP_ROOT / "retailedge" / "page" / "payment_management" / "payment_management.json",
+			"professional-selling": APP_ROOT
+			/ "retailedge"
+			/ "page"
+			/ "professional_selling"
+			/ "professional_selling.json",
+			"professional-purchasing": APP_ROOT
+			/ "retailedge"
+			/ "page"
+			/ "professional_purchasing"
+			/ "professional_purchasing.json",
+			"payment-management": APP_ROOT
+			/ "retailedge"
+			/ "page"
+			/ "payment_management"
+			/ "payment_management.json",
 		}
 		for page_name, path in page_paths.items():
 			with self.subTest(page=page_name):

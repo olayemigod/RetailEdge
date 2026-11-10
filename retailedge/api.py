@@ -64,10 +64,10 @@ from retailedge.bank_transaction_match_workflow import (
 	create_or_get_bank_transaction_match as _create_or_get_bank_transaction_match,
 )
 from retailedge.bank_transaction_match_workflow import (
-	get_bank_match_review_queue_summary as _get_bank_match_review_queue_summary,
+	get_ambiguous_payment_entry_review_candidates as _get_ambiguous_payment_entry_review_candidates,
 )
 from retailedge.bank_transaction_match_workflow import (
-	get_ambiguous_payment_entry_review_candidates as _get_ambiguous_payment_entry_review_candidates,
+	get_bank_match_review_queue_summary as _get_bank_match_review_queue_summary,
 )
 from retailedge.bank_transaction_match_workflow import (
 	mark_bank_transaction_match_needs_review as _mark_bank_transaction_match_needs_review,
@@ -82,10 +82,10 @@ from retailedge.bank_transaction_match_workflow import (
 	reopen_bank_transaction_match as _reopen_bank_transaction_match,
 )
 from retailedge.bank_transaction_match_workflow import (
-	switch_bank_transaction_match_candidate as _switch_bank_transaction_match_candidate,
+	run_bank_transaction_auto_match as _run_bank_transaction_auto_match,
 )
 from retailedge.bank_transaction_match_workflow import (
-	run_bank_transaction_auto_match as _run_bank_transaction_auto_match,
+	switch_bank_transaction_match_candidate as _switch_bank_transaction_match_candidate,
 )
 from retailedge.bank_transaction_matching import (
 	assert_can_access_bank_transaction_matching as _assert_can_access_bank_transaction_matching,
@@ -389,20 +389,15 @@ TRANSACTION_BRANCH_ATTRIBUTION_MANAGER_ROLES = (
 	"System Manager",
 	"Accounts Manager",
 	"RetailEdgeManager",
-
 	"RetailEdgeAuditor",
-
 )
 RETAILEDGE_VERIFICATION_ROLES = (
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 )
 
 
@@ -1334,7 +1329,6 @@ def _assert_can_prepare_edgepay_posting():
 		"System Manager",
 		"Accounts Manager",
 		"RetailEdgeManager",
-
 		"Accounts User",
 	}
 	if not user_roles.intersection(allowed_roles):

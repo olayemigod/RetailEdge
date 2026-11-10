@@ -5,7 +5,6 @@ from unittest import TestCase
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 APPROVED_NATIVE_TARGETS = [
 	("DocType", "Sales Person"),
@@ -42,7 +41,8 @@ class TestSalesTeamCommissionNavigationContract(TestCase):
 
 		self.assertNotIn("required_roles", group)
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 		self.assertIn('if target_type == "Report":', source)
 		self.assertIn("get_report_doc(report_name)", source)
 

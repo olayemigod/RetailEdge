@@ -7,7 +7,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
-from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope, validate_operating_branch
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operational_branch_scope,
+	validate_operating_branch,
+)
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -20,11 +24,8 @@ _ALLOWED_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 }
 _ACCOUNT_TYPES = ("Cash", "Bank")
 _MOVEMENT_TYPES = ("Money In", "Money Out", "Transfer", "Adjustment")
@@ -406,9 +407,8 @@ def _build_sql_context() -> dict[str, str]:
 		branch_parts.append(f"NULLIF({alias}.retailedge_branch, '')")
 
 	expense_source_expression = "0"
-	if (
-		_doctype_has_field("RetailEdge Cashier Expense", "posting_reference")
-		and _doctype_has_field("RetailEdge Cashier Expense", "posting_reference_type")
+	if _doctype_has_field("RetailEdge Cashier Expense", "posting_reference") and _doctype_has_field(
+		"RetailEdge Cashier Expense", "posting_reference_type"
 	):
 		joins.append(
 			"LEFT JOIN `tabRetailEdge Cashier Expense` ce "
@@ -420,9 +420,8 @@ def _build_sql_context() -> dict[str, str]:
 		expense_source_expression = "(ce.name IS NOT NULL)"
 		if _doctype_has_field("RetailEdge Cashier Expense", "branch"):
 			branch_parts.append("NULLIF(ce.branch, '')")
-	if (
-		_doctype_has_field("RetailEdge Business Expense", "posting_reference")
-		and _doctype_has_field("RetailEdge Business Expense", "posting_reference_type")
+	if _doctype_has_field("RetailEdge Business Expense", "posting_reference") and _doctype_has_field(
+		"RetailEdge Business Expense", "posting_reference_type"
 	):
 		joins.append(
 			"LEFT JOIN `tabRetailEdge Business Expense` be "

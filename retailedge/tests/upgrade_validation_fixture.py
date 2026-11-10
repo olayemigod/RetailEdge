@@ -390,7 +390,10 @@ def verify_upgrade_fixture() -> dict:
 	).splitlines()
 	assert selling_precedence == EXPECTED_SELLING_PRECEDENCE
 	assert buying_precedence == EXPECTED_BUYING_PRECEDENCE
-	assert int(frappe.db.get_single_value("RetailEdge Settings", "enable_assigned_price_list_switching") or 0) == 0
+	assert (
+		int(frappe.db.get_single_value("RetailEdge Settings", "enable_assigned_price_list_switching") or 0)
+		== 0
+	)
 	for fieldname in (
 		"allow_price_list_switch_from_party_default",
 		"allow_price_list_switch_from_pos_default",

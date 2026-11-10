@@ -9,16 +9,13 @@ from retailedge.cashier_expense import append_cashier_expense_action_log, user_h
 from retailedge.utils.settings import get_retailedge_settings
 from retailedge.workflow_readiness import _get_active_workflow
 
-
 CASHIER_EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 
 POSTING_REFRESH_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"RetailEdgeManager",
-
 	"RetailEdgeAuditor",
-
 }
 
 
@@ -49,7 +46,9 @@ def get_cashier_expense_posting_settings():
 		"remark_template": getattr(settings, "cashier_expense_posting_remark_template", None)
 		or "RetailEdge Cashier Expense {expense_name} - {expense_category}",
 		"default_payable_account": getattr(settings, "default_cashier_expense_payable_account", None) or None,
-		"posting_workflow_state": str(getattr(settings, "cashier_expense_posting_workflow_state", None) or "").strip(),
+		"posting_workflow_state": str(
+			getattr(settings, "cashier_expense_posting_workflow_state", None) or ""
+		).strip(),
 		"posting_roles": configured_roles,
 		"posting_roles_configured": bool(configured_roles),
 	}
@@ -113,8 +112,7 @@ def search_cashier_expense_posting_workflow_states(
 	states = [
 		str(row.state or "").strip()
 		for row in rows
-		if str(row.state or "").strip()
-		and (not needle or needle in str(row.state).lower())
+		if str(row.state or "").strip() and (not needle or needle in str(row.state).lower())
 	]
 	start = max(0, cint(start))
 	page_len = max(1, min(cint(page_len) or 20, 100))
@@ -125,18 +123,19 @@ def cashier_expense_workflow_posting_reasons(doc, settings=None) -> list[str]:
 	settings = settings or get_effective_cashier_expense_posting_settings(doc)
 	workflow = _get_active_workflow(CASHIER_EXPENSE_DOCTYPE)
 	if not workflow:
-		if settings["require_approval_before_posting"] and str(getattr(doc, "expense_status", None) or "") != "Pending Ledger":
+		if (
+			settings["require_approval_before_posting"]
+			and str(getattr(doc, "expense_status", None) or "") != "Pending Ledger"
+		):
 			return ["Controlled Posting requires approval and Pending Ledger status before posting."]
-		if not settings["require_approval_before_posting"] and str(getattr(doc, "expense_status", None) or "") not in {"Submitted", "Pending Ledger"}:
+		if not settings["require_approval_before_posting"] and str(
+			getattr(doc, "expense_status", None) or ""
+		) not in {"Submitted", "Pending Ledger"}:
 			return ["Direct Posting requires a submitted cashier expense before accounting posting."]
 		return []
 
 	state_field = str(workflow.get("workflow_state_field") or "workflow_state").strip()
-	current_state = str(
-		getattr(doc, state_field, None)
-		or getattr(doc, "workflow_state", None)
-		or ""
-	).strip()
+	current_state = str(getattr(doc, state_field, None) or getattr(doc, "workflow_state", None) or "").strip()
 	allowed_state = str(settings.get("posting_workflow_state") or "").strip()
 	if not allowed_state:
 		return [
@@ -151,7 +150,9 @@ def cashier_expense_workflow_posting_reasons(doc, settings=None) -> list[str]:
 			"doc_status": "1",
 		},
 	):
-		return [f"Configured posting Workflow State {allowed_state} is not a submitted state in the active Cashier Expense Workflow."]
+		return [
+			f"Configured posting Workflow State {allowed_state} is not a submitted state in the active Cashier Expense Workflow."
+		]
 	if cint(getattr(doc, "docstatus", 0)) != 1:
 		return ["Cashier Expense must be submitted before accounting posting."]
 	if current_state != allowed_state:
@@ -302,7 +303,9 @@ def refresh_pending_cashier_expense_posting_readiness(filters=None):
 		if filters.get(fieldname):
 			query_filters[fieldname] = filters[fieldname]
 
-	rows = frappe.get_all("RetailEdge Cashier Expense", filters=query_filters, fields=["name"], limit_page_length=0)
+	rows = frappe.get_all(
+		"RetailEdge Cashier Expense", filters=query_filters, fields=["name"], limit_page_length=0
+	)
 	updated = 0
 	blocked = 0
 	for row in rows:
@@ -322,7 +325,9 @@ def assert_can_refresh_posting_readiness(user=None):
 
 def _assert_refresh_access(user=None):
 	if not user_has_any_role(user=user, roles=POSTING_REFRESH_ROLES):
-		frappe.throw("You do not have permission to refresh cashier expense posting readiness.", frappe.PermissionError)
+		frappe.throw(
+			"You do not have permission to refresh cashier expense posting readiness.", frappe.PermissionError
+		)
 
 
 def _coerce_expense_doc(expense_doc_or_name):

@@ -28,7 +28,6 @@ def get_reviewer_roles() -> set[str]:
 def get_cashier_roles() -> set[str]:
 	return {
 		"RetailEdgeCashier",
-
 	}
 
 
@@ -71,14 +70,17 @@ def append_cashier_expense_action_log(
 		doc = frappe.get_doc("RetailEdge Cashier Expense", doc_or_name)
 
 	context_text = _serialise_log_context(context)
-	next_idx = frappe.db.count(
-		"RetailEdge Cashier Expense Action Log",
-		{
-			"parent": doc.name,
-			"parenttype": "RetailEdge Cashier Expense",
-			"parentfield": "action_logs",
-		},
-	) + 1
+	next_idx = (
+		frappe.db.count(
+			"RetailEdge Cashier Expense Action Log",
+			{
+				"parent": doc.name,
+				"parenttype": "RetailEdge Cashier Expense",
+				"parentfield": "action_logs",
+			},
+		)
+		+ 1
+	)
 	log_row = frappe.get_doc(
 		{
 			"doctype": "RetailEdge Cashier Expense Action Log",
@@ -283,7 +285,9 @@ def get_cashier_expenses_for_variance(filters=None, include_rejected=True):
 
 	include_rejected = filters.get("include_rejected", include_rejected)
 	if "include_rejected" not in filters and include_rejected is True:
-		include_rejected = bool(getattr(settings, "include_rejected_cashier_expenses_in_cash_check", include_rejected))
+		include_rejected = bool(
+			getattr(settings, "include_rejected_cashier_expenses_in_cash_check", include_rejected)
+		)
 
 	query_filters = _build_variance_filters(
 		filters,

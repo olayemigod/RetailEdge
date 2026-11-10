@@ -3,12 +3,8 @@ from __future__ import annotations
 import frappe
 from frappe.permissions import add_permission, update_permission_property
 
-
 PERMLEVEL = 0
-CASHIER_ROLES = (
-	"RetailEdgeCashier",
-
-)
+CASHIER_ROLES = ("RetailEdgeCashier",)
 
 READ_SELECT_DOCTYPES = (
 	"Branch",

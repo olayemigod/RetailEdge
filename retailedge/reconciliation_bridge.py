@@ -91,7 +91,6 @@ DEFAULT_RECONCILIATION_EXECUTION_ROLES = (
 	"System Manager",
 	"Accounts Manager",
 	"RetailEdgeManager",
-
 )
 
 ERPNext_NATIVE_RECONCILIATION_METHOD = (
@@ -225,10 +224,10 @@ def _sales_invoice_native_reconciliation_safety(match_doc, invoice_name):
 	linked_payment_entries = get_payment_entries_for_sales_invoice(invoice_name) or []
 	if linked_payment_entries:
 		payment_entry_names = ", ".join(
-				cstr(row.get("payment_entry")).strip()
-				for row in linked_payment_entries
-				if cstr(row.get("payment_entry")).strip()
-			)
+			cstr(row.get("payment_entry")).strip()
+			for row in linked_payment_entries
+			if cstr(row.get("payment_entry")).strip()
+		)
 		return {
 			"safe": False,
 			"status": TARGET_AMBIGUOUS,
@@ -258,15 +257,26 @@ def _journal_entry_reconciliation_context(match_doc):
 	name = cstr(match_doc.get("suggested_document")).strip()
 	if not name or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
 		return {}
-	entry_fields = ["name", "posting_date", "company", "docstatus", "voucher_type", "cheque_no", "user_remark"]
+	entry_fields = [
+		"name",
+		"posting_date",
+		"company",
+		"docstatus",
+		"voucher_type",
+		"cheque_no",
+		"user_remark",
+	]
 	if has_field("Journal Entry", "clearance_date"):
 		entry_fields.append("clearance_date")
-	entry = frappe.db.get_value(
-		"Journal Entry",
-		name,
-		entry_fields,
-		as_dict=True,
-	) or {}
+	entry = (
+		frappe.db.get_value(
+			"Journal Entry",
+			name,
+			entry_fields,
+			as_dict=True,
+		)
+		or {}
+	)
 	if not entry:
 		return {"candidate_missing": True}
 	if cstr(entry.get("voucher_type")).strip() == "Opening Entry":
@@ -368,7 +378,9 @@ def _journal_entry_readiness(match_doc):
 		return READINESS_EXCEPTION, "Account unresolved."
 	if account_status == "mismatch":
 		return READINESS_EXCEPTION, "Account mismatch."
-	if cint_or_zero(match_doc.get("branch_match_available")) and not cint_or_zero(match_doc.get("branch_match")):
+	if cint_or_zero(match_doc.get("branch_match_available")) and not cint_or_zero(
+		match_doc.get("branch_match")
+	):
 		return READINESS_EXCEPTION, "Branch mismatch."
 	return READINESS_READY, "Submitted Journal Entry is ready for reconciliation review."
 
@@ -440,7 +452,9 @@ def _load_match_for_preflight(match_name):
 	normalized_bank_transaction = normalize_bank_transaction(row.get("bank_transaction"))
 	bank_direction = cstr(normalized_bank_transaction.get("direction")).strip()
 	if bank_direction not in {"Inflow", "Outflow"}:
-		frappe.throw("Bank Transaction direction could not be determined safely for reconciliation preflight.")
+		frappe.throw(
+			"Bank Transaction direction could not be determined safely for reconciliation preflight."
+		)
 	candidate = {
 		"document_type": row.get("suggested_document_type"),
 		"document_name": row.get("suggested_document"),
@@ -735,10 +749,16 @@ def build_reconciliation_preflight(match_doc):
 		blocking_reason = blocking_reason or "This match is not confirmed or still needs review."
 	elif status == PREFLIGHT_EXCEPTION:
 		recommended_action = "Investigate the exception before attempting ERPNext reconciliation."
-		blocking_reason = blocking_reason or target.get("blocking_reason") or "A conflicting or unsafe condition was detected."
+		blocking_reason = (
+			blocking_reason
+			or target.get("blocking_reason")
+			or "A conflicting or unsafe condition was detected."
+		)
 	else:
 		recommended_action = target.get("recommended_action") or "Do not reconcile this row from RetailEdge."
-		blocking_reason = blocking_reason or target.get("blocking_reason") or "This row is not eligible for reconciliation."
+		blocking_reason = (
+			blocking_reason or target.get("blocking_reason") or "This row is not eligible for reconciliation."
+		)
 
 	return {
 		"status": status,
@@ -748,7 +768,8 @@ def build_reconciliation_preflight(match_doc):
 		"bank_transaction_date": match_doc.get("bank_transaction_date") or match_doc.get("transaction_date"),
 		"bank_account": match_doc.get("bank_account"),
 		"bank_amount": flt(match_doc.get("bank_transaction_amount") or match_doc.get("bank_amount")),
-		"suggested_document_type": match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype"),
+		"suggested_document_type": match_doc.get("suggested_document_type")
+		or match_doc.get("candidate_doctype"),
 		"suggested_document": match_doc.get("suggested_document") or match_doc.get("candidate_name"),
 		"candidate_category": match_doc.get("candidate_category") or match_doc.get("candidate_type"),
 		"candidate_doctype": match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype"),
@@ -757,7 +778,9 @@ def build_reconciliation_preflight(match_doc):
 		"candidate_account": match_doc.get("candidate_account") or match_doc.get("payment_account"),
 		"candidate_amount": flt(match_doc.get("candidate_amount")),
 		"payment_event_source": match_doc.get("payment_event_source"),
-		"payment_event_amount": flt(match_doc.get("payment_event_amount") or match_doc.get("candidate_amount")),
+		"payment_event_amount": flt(
+			match_doc.get("payment_event_amount") or match_doc.get("candidate_amount")
+		),
 		"amount_difference": flt(match_doc.get("amount_difference")),
 		"canonical_bank_account": match_doc.get("resolved_bank_account"),
 		"canonical_payment_account": match_doc.get("resolved_payment_account"),
@@ -792,8 +815,13 @@ def reconcile_confirmed_bank_match(match_name, dry_run=True):
 	result["dry_run"] = False
 	result["execution_attempted"] = False
 	result["execution_deferred"] = True
-	result["recommended_action"] = preflight.get("recommended_action") or "Use ERPNext Bank Reconciliation manually."
-	result["notes"] = ((preflight.get("notes") or "") + " Live execution remains controlled by the RetailEdge execution gate and explicit final confirmation.").strip()
+	result["recommended_action"] = (
+		preflight.get("recommended_action") or "Use ERPNext Bank Reconciliation manually."
+	)
+	result["notes"] = (
+		(preflight.get("notes") or "")
+		+ " Live execution remains controlled by the RetailEdge execution gate and explicit final confirmation."
+	).strip()
 	return result
 
 
@@ -812,7 +840,9 @@ def _coerce_json_list(value):
 
 def _payment_event_identity(match_doc, preflight):
 	source = cstr(preflight.get("payment_event_source") or match_doc.get("payment_event_source")).strip()
-	candidate_doctype = cstr(preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")).strip()
+	candidate_doctype = cstr(
+		preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")
+	).strip()
 	candidate_name = cstr(preflight.get("candidate_name") or match_doc.get("suggested_document")).strip()
 	details = _match_candidate_details(match_doc) if hasattr(match_doc, "get") else {}
 	row_reference = cstr(
@@ -842,11 +872,21 @@ def _amounts_differ(bank_amount, candidate_amount, amount_difference=None):
 
 def _block_code_for_preflight(preflight, match_doc):
 	status = preflight.get("status")
-	candidate_doctype = cstr(preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")).strip()
+	candidate_doctype = cstr(
+		preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")
+	).strip()
 	candidate_name = cstr(preflight.get("candidate_name") or match_doc.get("suggested_document")).strip()
 	bank_transaction = cstr(preflight.get("bank_transaction") or match_doc.get("bank_transaction")).strip()
-	account_status = cstr(preflight.get("account_resolution_status") or match_doc.get("account_resolution_status")).strip().lower()
-	blocking_reason = cstr(preflight.get("blocking_reason") or match_doc.get("blocking_reason") or match_doc.get("exception_reason")).lower()
+	account_status = (
+		cstr(preflight.get("account_resolution_status") or match_doc.get("account_resolution_status"))
+		.strip()
+		.lower()
+	)
+	blocking_reason = cstr(
+		preflight.get("blocking_reason")
+		or match_doc.get("blocking_reason")
+		or match_doc.get("exception_reason")
+	).lower()
 	decision_status = cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip()
 	payment_identity = _payment_event_identity(match_doc, preflight)
 	candidate_docstatus = match_doc.get("candidate_docstatus")
@@ -857,7 +897,12 @@ def _block_code_for_preflight(preflight, match_doc):
 		return BLOCK_UNCONFIRMED
 	if not bank_transaction or match_doc.get("bank_transaction_missing"):
 		return BLOCK_MISSING_BANK_TRANSACTION
-	if not candidate_doctype or not candidate_name or match_doc.get("candidate_missing") or match_doc.get("candidate_exists") is False:
+	if (
+		not candidate_doctype
+		or not candidate_name
+		or match_doc.get("candidate_missing")
+		or match_doc.get("candidate_exists") is False
+	):
 		return BLOCK_MISSING_SOURCE_DOCUMENT
 	if candidate_doctype not in {"Payment Entry", "Sales Invoice", "Journal Entry"}:
 		return BLOCK_UNSUPPORTED_CANDIDATE_TYPE
@@ -865,7 +910,9 @@ def _block_code_for_preflight(preflight, match_doc):
 		return BLOCK_CANDIDATE_INVALID
 	if "mismatch" in account_status or ("account" in blocking_reason and "mismatch" in blocking_reason):
 		return BLOCK_BANK_ACCOUNT_MISMATCH
-	if _amounts_differ(preflight.get("bank_amount"), preflight.get("candidate_amount"), preflight.get("amount_difference")):
+	if _amounts_differ(
+		preflight.get("bank_amount"), preflight.get("candidate_amount"), preflight.get("amount_difference")
+	):
 		return BLOCK_AMOUNT_MISMATCH
 	if status == PREFLIGHT_READY:
 		return BLOCK_NONE
@@ -889,7 +936,10 @@ def _readiness_group_for_preflight(preflight, block_code):
 		return READINESS_GROUP_READY
 	if block_code == BLOCK_ALREADY_HANDLED:
 		return READINESS_GROUP_ALREADY_HANDLED
-	if preflight.get("status") == PREFLIGHT_NEEDS_REVIEW or block_code in {BLOCK_UNCONFIRMED, BLOCK_DATE_REFERENCE_CONCERN}:
+	if preflight.get("status") == PREFLIGHT_NEEDS_REVIEW or block_code in {
+		BLOCK_UNCONFIRMED,
+		BLOCK_DATE_REFERENCE_CONCERN,
+	}:
 		return READINESS_GROUP_NEEDS_REVIEW
 	return READINESS_GROUP_BLOCKED
 
@@ -1049,7 +1099,9 @@ def _split_roles(value):
 				parts.append(role)
 		return parts or list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
 	if isinstance(value, (list, tuple, set)):
-		return [cstr(role).strip() for role in value if cstr(role).strip()] or list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
+		return [cstr(role).strip() for role in value if cstr(role).strip()] or list(
+			DEFAULT_RECONCILIATION_EXECUTION_ROLES
+		)
 	return list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
 
 
@@ -1067,14 +1119,26 @@ def _safe_enabled(value, default=True):
 
 def get_reconciliation_execution_settings_snapshot(settings=None):
 	settings = get_retailedge_settings() if settings is None else settings
-	enable_execution = _safe_enabled(_settings_value(settings, "enable_bank_reconciliation_execution", None), default=False)
-	require_dry_run = _safe_enabled(_settings_value(settings, "require_reconciliation_dry_run_before_execution", None), default=True)
-	require_second_approval = _safe_enabled(_settings_value(settings, "require_second_approval_for_reconciliation_execution", None), default=True)
+	enable_execution = _safe_enabled(
+		_settings_value(settings, "enable_bank_reconciliation_execution", None), default=False
+	)
+	require_dry_run = _safe_enabled(
+		_settings_value(settings, "require_reconciliation_dry_run_before_execution", None), default=True
+	)
+	require_second_approval = _safe_enabled(
+		_settings_value(settings, "require_second_approval_for_reconciliation_execution", None), default=True
+	)
 	return {
 		"enable_bank_reconciliation_execution": enable_execution,
 		"require_reconciliation_dry_run_before_execution": require_dry_run,
-		"minimum_reconciliation_readiness_status": cstr(_settings_value(settings, "minimum_reconciliation_readiness_status", READINESS_GROUP_READY) or READINESS_GROUP_READY).strip() or READINESS_GROUP_READY,
-		"allowed_reconciliation_execution_roles": _split_roles(_settings_value(settings, "allowed_reconciliation_execution_roles", None)),
+		"minimum_reconciliation_readiness_status": cstr(
+			_settings_value(settings, "minimum_reconciliation_readiness_status", READINESS_GROUP_READY)
+			or READINESS_GROUP_READY
+		).strip()
+		or READINESS_GROUP_READY,
+		"allowed_reconciliation_execution_roles": _split_roles(
+			_settings_value(settings, "allowed_reconciliation_execution_roles", None)
+		),
 		"require_second_approval_for_reconciliation_execution": require_second_approval,
 	}
 
@@ -1085,19 +1149,26 @@ def _user_has_allowed_reconciliation_execution_role(user, allowed_roles):
 	return bool(user_roles.intersection(set(allowed_roles or [])))
 
 
-def _execution_gate_result(status, block_reasons, warnings, dry_run_result, settings_snapshot, user, can_execute=False):
+def _execution_gate_result(
+	status, block_reasons, warnings, dry_run_result, settings_snapshot, user, can_execute=False
+):
 	block_reasons = [reason for reason in block_reasons if reason]
 	warnings = [warning for warning in warnings if warning]
 	if can_execute:
 		safe_next_step = "Execution may proceed only after final operator confirmation."
 	else:
-		safe_next_step = block_reasons[0] if block_reasons else "Resolve the listed gate requirements before reconciliation execution."
+		safe_next_step = (
+			block_reasons[0]
+			if block_reasons
+			else "Resolve the listed gate requirements before reconciliation execution."
+		)
 	return {
 		"can_execute": bool(can_execute),
 		"status": status,
 		"block_reasons": block_reasons,
 		"warnings": warnings,
-		"dry_run_status": (dry_run_result or {}).get("readiness_group") or (dry_run_result or {}).get("eligibility_status"),
+		"dry_run_status": (dry_run_result or {}).get("readiness_group")
+		or (dry_run_result or {}).get("eligibility_status"),
 		"dry_run_block_reason": (dry_run_result or {}).get("block_reason"),
 		"required_roles": settings_snapshot.get("allowed_reconciliation_execution_roles") or [],
 		"settings_snapshot": settings_snapshot,
@@ -1112,13 +1183,18 @@ def _execution_gate_result(status, block_reasons, warnings, dry_run_result, sett
 
 def _execution_gate_message(status, can_execute, block_reasons):
 	if can_execute:
-		return "Execution gate passed. Final operator confirmation is required before reconciliation execution."
+		return (
+			"Execution gate passed. Final operator confirmation is required before reconciliation execution."
+		)
 	if status == EXECUTION_GATE_SETTINGS_DISABLED:
 		return "Reconciliation execution is disabled in RetailEdge Settings. No execution was performed."
 	if status == EXECUTION_GATE_PERMISSION_DENIED:
 		return "You do not have an allowed role for reconciliation execution. No execution was performed."
 	if status == EXECUTION_GATE_NEEDS_APPROVAL:
-		return (block_reasons or ["Second approval is required before reconciliation execution. No execution was performed."])[0]
+		return (
+			block_reasons
+			or ["Second approval is required before reconciliation execution. No execution was performed."]
+		)[0]
 	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
 
 
@@ -1131,11 +1207,34 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 	user = user or frappe.session.user
 
 	if not match_doc:
-		return _execution_gate_result(EXECUTION_GATE_BLOCKED, ["Bank Match Review was not found."], warnings, dry_run_result, settings_snapshot, user)
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			["Bank Match Review was not found."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
 	if not settings_snapshot["enable_bank_reconciliation_execution"]:
-		return _execution_gate_result(EXECUTION_GATE_SETTINGS_DISABLED, ["Bank reconciliation execution is disabled in RetailEdge Settings."], warnings, dry_run_result, settings_snapshot, user)
-	if not _user_has_allowed_reconciliation_execution_role(user, settings_snapshot["allowed_reconciliation_execution_roles"]):
-		return _execution_gate_result(EXECUTION_GATE_PERMISSION_DENIED, ["User does not have an allowed reconciliation execution role."], warnings, dry_run_result, settings_snapshot, user)
+		return _execution_gate_result(
+			EXECUTION_GATE_SETTINGS_DISABLED,
+			["Bank reconciliation execution is disabled in RetailEdge Settings."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+	if not _user_has_allowed_reconciliation_execution_role(
+		user, settings_snapshot["allowed_reconciliation_execution_roles"]
+	):
+		return _execution_gate_result(
+			EXECUTION_GATE_PERMISSION_DENIED,
+			["User does not have an allowed reconciliation execution role."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
 
 	execution_status = cstr(match_doc.get("execution_status")).strip()
 	if execution_status in {EXECUTION_STATUS_EXECUTED, EXECUTION_STATUS_ALREADY_HANDLED}:
@@ -1160,7 +1259,9 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 		)
 
 	if cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip() != "Confirmed":
-		block_reasons.append("Bank Match Review must be confirmed before reconciliation execution can be considered.")
+		block_reasons.append(
+			"Bank Match Review must be confirmed before reconciliation execution can be considered."
+		)
 	if not cstr(match_doc.get("bank_transaction")).strip():
 		block_reasons.append("Candidate-lock identity is incomplete: Bank Transaction is missing.")
 	if not cstr(match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype")).strip():
@@ -1170,18 +1271,32 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 
 	if settings_snapshot["require_reconciliation_dry_run_before_execution"] or dry_run_result is None:
 		dry_run_result = build_reconciliation_readiness_result(match_doc)
-	dry_run_status = (dry_run_result or {}).get("readiness_group") or (dry_run_result or {}).get("eligibility_status")
+	dry_run_status = (dry_run_result or {}).get("readiness_group") or (dry_run_result or {}).get(
+		"eligibility_status"
+	)
 	minimum_status = settings_snapshot["minimum_reconciliation_readiness_status"]
 	if minimum_status != READINESS_GROUP_READY:
-		warnings.append("RetailEdge only treats Ready as execution-eligible, even if settings name another minimum status.")
+		warnings.append(
+			"RetailEdge only treats Ready as execution-eligible, even if settings name another minimum status."
+		)
 	if dry_run_status != READINESS_GROUP_READY:
-		block_reasons.append((dry_run_result or {}).get("block_reason") or f"Dry-run readiness must be Ready before execution can be considered. Current status: {dry_run_status or 'Unknown'}.")
+		block_reasons.append(
+			(dry_run_result or {}).get("block_reason")
+			or f"Dry-run readiness must be Ready before execution can be considered. Current status: {dry_run_status or 'Unknown'}."
+		)
 	if (dry_run_result or {}).get("block_reason"):
 		block_reasons.append((dry_run_result or {}).get("block_reason"))
 	if dry_run_status == READINESS_GROUP_ALREADY_HANDLED:
 		block_reasons.append("This match already appears handled or reconciled.")
 	if block_reasons:
-		return _execution_gate_result(EXECUTION_GATE_BLOCKED, list(dict.fromkeys(block_reasons)), warnings, dry_run_result, settings_snapshot, user)
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			list(dict.fromkeys(block_reasons)),
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
 	if settings_snapshot["require_second_approval_for_reconciliation_execution"]:
 		approval = build_reconciliation_approval_state(match_doc, user=user, settings=settings_snapshot)
 		if not approval.get("is_satisfied"):
@@ -1193,7 +1308,9 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 				settings_snapshot,
 				user,
 			)
-	return _execution_gate_result(EXECUTION_GATE_ALLOWED, [], warnings, dry_run_result, settings_snapshot, user, can_execute=True)
+	return _execution_gate_result(
+		EXECUTION_GATE_ALLOWED, [], warnings, dry_run_result, settings_snapshot, user, can_execute=True
+	)
 
 
 @frappe.whitelist()
@@ -1208,9 +1325,15 @@ def check_reconciliation_execution_gate_for_matches(match_names, user=None):
 		"total_count": len(results),
 		"allowed_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_ALLOWED),
 		"blocked_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_BLOCKED),
-		"needs_approval_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_NEEDS_APPROVAL),
-		"settings_disabled_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_SETTINGS_DISABLED),
-		"permission_denied_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_PERMISSION_DENIED),
+		"needs_approval_count": sum(
+			1 for row in results if row.get("status") == EXECUTION_GATE_NEEDS_APPROVAL
+		),
+		"settings_disabled_count": sum(
+			1 for row in results if row.get("status") == EXECUTION_GATE_SETTINGS_DISABLED
+		),
+		"permission_denied_count": sum(
+			1 for row in results if row.get("status") == EXECUTION_GATE_PERMISSION_DENIED
+		),
 		"results": results,
 		"message": f"Checked reconciliation execution gate for {len(results)} match(es). No reconciliation was executed.",
 	}
@@ -1242,16 +1365,36 @@ def _safe_operator_text(message, max_length=600):
 		if "traceback" in lower or lower.startswith("file ") or lower.startswith("at "):
 			continue
 		lines.append(clean)
-	return _safe_execution_message(" ".join(lines) or "Execution details were hidden for operator safety.", max_length=max_length)
+	return _safe_execution_message(
+		" ".join(lines) or "Execution details were hidden for operator safety.", max_length=max_length
+	)
 
 
-def _execution_result(status, message, match_doc=None, dry_run_result=None, gate_result=None, execution_reference=None, error_summary=None):
+def _execution_result(
+	status,
+	message,
+	match_doc=None,
+	dry_run_result=None,
+	gate_result=None,
+	execution_reference=None,
+	error_summary=None,
+):
 	match_doc = frappe._dict(match_doc or {})
 	dry_run_result = dry_run_result or {}
 	gate_result = gate_result or {}
-	candidate_doctype = cstr(match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype") or dry_run_result.get("candidate_doctype")).strip()
-	candidate_name = cstr(match_doc.get("suggested_document") or match_doc.get("candidate_name") or dry_run_result.get("candidate_name")).strip()
-	payment_identity = _payment_event_identity(match_doc, dry_run_result) if match_doc or dry_run_result else ""
+	candidate_doctype = cstr(
+		match_doc.get("suggested_document_type")
+		or match_doc.get("candidate_doctype")
+		or dry_run_result.get("candidate_doctype")
+	).strip()
+	candidate_name = cstr(
+		match_doc.get("suggested_document")
+		or match_doc.get("candidate_name")
+		or dry_run_result.get("candidate_name")
+	).strip()
+	payment_identity = (
+		_payment_event_identity(match_doc, dry_run_result) if match_doc or dry_run_result else ""
+	)
 	return {
 		"status": status,
 		"execution_status": status,
@@ -1264,7 +1407,8 @@ def _execution_result(status, message, match_doc=None, dry_run_result=None, gate
 		"candidate_doctype": candidate_doctype,
 		"candidate_name": candidate_name,
 		"payment_event_identity": payment_identity,
-		"dry_run_status_at_execution": dry_run_result.get("readiness_group") or dry_run_result.get("eligibility_status"),
+		"dry_run_status_at_execution": dry_run_result.get("readiness_group")
+		or dry_run_result.get("eligibility_status"),
 		"gate_status_at_execution": gate_result.get("status"),
 		"gate_can_execute": bool(gate_result.get("can_execute")),
 	}
@@ -1288,7 +1432,11 @@ def _update_execution_audit(match_name, result, user=None):
 	if result.get("execution_status") == EXECUTION_STATUS_EXECUTED:
 		values["executed_by"] = user or frappe.session.user
 		values["executed_on"] = now_datetime()
-	values = {fieldname: value for fieldname, value in values.items() if has_field("RetailEdge Bank Transaction Match", fieldname)}
+	values = {
+		fieldname: value
+		for fieldname, value in values.items()
+		if has_field("RetailEdge Bank Transaction Match", fieldname)
+	}
 	if values:
 		frappe.db.set_value("RetailEdge Bank Transaction Match", match_name, values)
 
@@ -1297,11 +1445,13 @@ def _bank_transaction_payment_links(bank_transaction):
 	doc = frappe.get_doc("Bank Transaction", bank_transaction)
 	links = []
 	for row in getattr(doc, "payment_entries", []) or []:
-		links.append({
-			"payment_document": cstr(getattr(row, "payment_document", "")).strip(),
-			"payment_entry": cstr(getattr(row, "payment_entry", "")).strip(),
-			"allocated_amount": flt(getattr(row, "allocated_amount", 0)),
-		})
+		links.append(
+			{
+				"payment_document": cstr(getattr(row, "payment_document", "")).strip(),
+				"payment_entry": cstr(getattr(row, "payment_entry", "")).strip(),
+				"allocated_amount": flt(getattr(row, "allocated_amount", 0)),
+			}
+		)
 	return doc, links
 
 
@@ -1312,20 +1462,56 @@ def _bank_transaction_link_state(match_doc, target_doctype, target_name):
 	try:
 		doc, links = _bank_transaction_payment_links(bank_transaction)
 	except Exception:
-		return {"state": "missing", "message": f"Blocked: Bank Transaction {bank_transaction} was not found or could not be read."}
-	same_links = [row for row in links if row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name]
-	other_links = [row for row in links if not (row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name)]
+		return {
+			"state": "missing",
+			"message": f"Blocked: Bank Transaction {bank_transaction} was not found or could not be read.",
+		}
+	same_links = [
+		row
+		for row in links
+		if row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name
+	]
+	other_links = [
+		row
+		for row in links
+		if not (row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name)
+	]
 	if same_links:
-		return {"state": "already_handled", "message": f"Already handled: this Bank Transaction is already reconciled to the reviewed {target_doctype}.", "doc": doc, "links": links}
+		return {
+			"state": "already_handled",
+			"message": f"Already handled: this Bank Transaction is already reconciled to the reviewed {target_doctype}.",
+			"doc": doc,
+			"links": links,
+		}
 	if other_links:
-		return {"state": "conflict", "message": "Conflict: this Bank Transaction appears reconciled to a different target. Do not retry. Review manually.", "doc": doc, "links": links}
-	if cstr(getattr(doc, "status", "")).strip() == "Reconciled" or flt(getattr(doc, "unallocated_amount", 0)) <= 0:
-		return {"state": "conflict", "message": "Conflict: this Bank Transaction appears reconciled without the reviewed target. Do not retry. Review manually.", "doc": doc, "links": links}
-	return {"state": "ready", "message": "Ready: Bank Transaction has no conflicting reconciliation links.", "doc": doc, "links": links}
+		return {
+			"state": "conflict",
+			"message": "Conflict: this Bank Transaction appears reconciled to a different target. Do not retry. Review manually.",
+			"doc": doc,
+			"links": links,
+		}
+	if (
+		cstr(getattr(doc, "status", "")).strip() == "Reconciled"
+		or flt(getattr(doc, "unallocated_amount", 0)) <= 0
+	):
+		return {
+			"state": "conflict",
+			"message": "Conflict: this Bank Transaction appears reconciled without the reviewed target. Do not retry. Review manually.",
+			"doc": doc,
+			"links": links,
+		}
+	return {
+		"state": "ready",
+		"message": "Ready: Bank Transaction has no conflicting reconciliation links.",
+		"doc": doc,
+		"links": links,
+	}
 
 
 def _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_result):
-	candidate_doctype = cstr(match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype")).strip()
+	candidate_doctype = cstr(
+		match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype")
+	).strip()
 	candidate_name = cstr(match_doc.get("suggested_document") or match_doc.get("candidate_name")).strip()
 	target_doctype = cstr(dry_run_result.get("erpnext_target_doctype")).strip()
 	target_name = cstr(dry_run_result.get("erpnext_target_name")).strip()
@@ -1335,16 +1521,34 @@ def _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_resul
 
 
 def _execute_native_reconciliation(match_doc, dry_run_result):
-	bank_transaction = cstr(match_doc.get("bank_transaction") or dry_run_result.get("bank_transaction")).strip()
+	bank_transaction = cstr(
+		match_doc.get("bank_transaction") or dry_run_result.get("bank_transaction")
+	).strip()
 	target_doctype = cstr(dry_run_result.get("erpnext_target_doctype")).strip()
 	target_name = cstr(dry_run_result.get("erpnext_target_name")).strip()
 	if target_doctype not in NATIVE_EXECUTION_DOCTYPES:
-		return _execution_result(EXECUTION_STATUS_BLOCKED, f"RetailEdge cannot execute native reconciliation for {target_doctype or 'this target type'}.", match_doc=match_doc, dry_run_result=dry_run_result)
+		return _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			f"RetailEdge cannot execute native reconciliation for {target_doctype or 'this target type'}.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+		)
 	link_state = _bank_transaction_link_state(match_doc, target_doctype, target_name)
 	if link_state.get("state") == "already_handled":
-		return _execution_result(EXECUTION_STATUS_ALREADY_HANDLED, link_state.get("message"), match_doc=match_doc, dry_run_result=dry_run_result, execution_reference=f"Bank Transaction {bank_transaction} -> {target_doctype} {target_name}")
+		return _execution_result(
+			EXECUTION_STATUS_ALREADY_HANDLED,
+			link_state.get("message"),
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			execution_reference=f"Bank Transaction {bank_transaction} -> {target_doctype} {target_name}",
+		)
 	if link_state.get("state") != "ready":
-		return _execution_result(EXECUTION_STATUS_BLOCKED, link_state.get("message") or "Bank Transaction has a reconciliation conflict.", match_doc=match_doc, dry_run_result=dry_run_result)
+		return _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			link_state.get("message") or "Bank Transaction has a reconciliation conflict.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+		)
 	voucher = {"payment_doctype": target_doctype, "payment_name": target_name}
 	if target_doctype == "Journal Entry":
 		voucher["amount"] = flt(dry_run_result.get("candidate_amount") or dry_run_result.get("bank_amount"))
@@ -1352,15 +1556,37 @@ def _execute_native_reconciliation(match_doc, dry_run_result):
 	method(bank_transaction, json.dumps([voucher]))
 	post_state = _bank_transaction_link_state(match_doc, target_doctype, target_name)
 	if post_state.get("state") not in {"already_handled", "ready"}:
-		return _execution_result(EXECUTION_STATUS_FAILED, "ERPNext reconciliation call completed, but RetailEdge could not verify the confirmed target link.", match_doc=match_doc, dry_run_result=dry_run_result, error_summary=post_state.get("message"))
+		return _execution_result(
+			EXECUTION_STATUS_FAILED,
+			"ERPNext reconciliation call completed, but RetailEdge could not verify the confirmed target link.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			error_summary=post_state.get("message"),
+		)
 	if post_state.get("state") == "ready":
 		_, links = _bank_transaction_payment_links(bank_transaction)
-		if not any(row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name for row in links):
-			return _execution_result(EXECUTION_STATUS_FAILED, "ERPNext reconciliation did not leave a verifiable Bank Transaction payment link.", match_doc=match_doc, dry_run_result=dry_run_result)
-	return _execution_result(EXECUTION_STATUS_EXECUTED, f"Reconciliation executed through ERPNext Bank Reconciliation for the confirmed {target_doctype} candidate.", match_doc=match_doc, dry_run_result=dry_run_result, execution_reference=f"Bank Transaction {bank_transaction} -> {target_doctype} {target_name}")
+		if not any(
+			row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name
+			for row in links
+		):
+			return _execution_result(
+				EXECUTION_STATUS_FAILED,
+				"ERPNext reconciliation did not leave a verifiable Bank Transaction payment link.",
+				match_doc=match_doc,
+				dry_run_result=dry_run_result,
+			)
+	return _execution_result(
+		EXECUTION_STATUS_EXECUTED,
+		f"Reconciliation executed through ERPNext Bank Reconciliation for the confirmed {target_doctype} candidate.",
+		match_doc=match_doc,
+		dry_run_result=dry_run_result,
+		execution_reference=f"Bank Transaction {bank_transaction} -> {target_doctype} {target_name}",
+	)
 
 
-def _execution_summary_safe_next_step(status, retryable, already_handled, has_conflict, gate_result=None, link_state=None):
+def _execution_summary_safe_next_step(
+	status, retryable, already_handled, has_conflict, gate_result=None, link_state=None
+):
 	gate_result = gate_result or {}
 	link_state = link_state or {}
 	if already_handled:
@@ -1391,15 +1617,36 @@ def _execution_summary_result(match_doc, dry_run_result=None, gate_result=None, 
 	dry_run_result = dry_run_result or {}
 	gate_result = gate_result or {}
 	link_state = link_state or {}
-	execution_status = cstr(match_doc.get("execution_status") or EXECUTION_STATUS_NOT_EXECUTED).strip() or EXECUTION_STATUS_NOT_EXECUTED
-	candidate_doctype = cstr(match_doc.get("suggested_document_type") or match_doc.get("execution_candidate_doctype") or dry_run_result.get("candidate_doctype")).strip()
-	candidate_name = cstr(match_doc.get("suggested_document") or match_doc.get("execution_candidate_name") or dry_run_result.get("candidate_name")).strip()
-	already_handled = execution_status == EXECUTION_STATUS_ALREADY_HANDLED or link_state.get("state") == "already_handled"
+	execution_status = (
+		cstr(match_doc.get("execution_status") or EXECUTION_STATUS_NOT_EXECUTED).strip()
+		or EXECUTION_STATUS_NOT_EXECUTED
+	)
+	candidate_doctype = cstr(
+		match_doc.get("suggested_document_type")
+		or match_doc.get("execution_candidate_doctype")
+		or dry_run_result.get("candidate_doctype")
+	).strip()
+	candidate_name = cstr(
+		match_doc.get("suggested_document")
+		or match_doc.get("execution_candidate_name")
+		or dry_run_result.get("candidate_name")
+	).strip()
+	already_handled = (
+		execution_status == EXECUTION_STATUS_ALREADY_HANDLED or link_state.get("state") == "already_handled"
+	)
 	has_conflict = link_state.get("state") == "conflict"
-	retryable = execution_status in {EXECUTION_STATUS_FAILED, EXECUTION_STATUS_BLOCKED} and gate_result.get("status") == EXECUTION_GATE_ALLOWED and bool(gate_result.get("can_execute")) and link_state.get("state") == "ready" and _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_result)
+	retryable = (
+		execution_status in {EXECUTION_STATUS_FAILED, EXECUTION_STATUS_BLOCKED}
+		and gate_result.get("status") == EXECUTION_GATE_ALLOWED
+		and bool(gate_result.get("can_execute"))
+		and link_state.get("state") == "ready"
+		and _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_result)
+	)
 	return {
 		"match_name": match_doc.get("name") or dry_run_result.get("review_name"),
-		"match_status": cstr(match_doc.get("decision_status") or match_doc.get("review_status") or "").strip(),
+		"match_status": cstr(
+			match_doc.get("decision_status") or match_doc.get("review_status") or ""
+		).strip(),
 		"execution_status": execution_status,
 		"executed_by": match_doc.get("executed_by"),
 		"executed_on": match_doc.get("executed_on"),
@@ -1408,18 +1655,29 @@ def _execution_summary_result(match_doc, dry_run_result=None, gate_result=None, 
 		"execution_error_summary": _safe_operator_text(match_doc.get("execution_error_summary")),
 		"dry_run_status_at_execution": match_doc.get("dry_run_status_at_execution"),
 		"gate_status_at_execution": match_doc.get("gate_status_at_execution"),
-		"current_dry_run_status": dry_run_result.get("readiness_group") or dry_run_result.get("eligibility_status"),
+		"current_dry_run_status": dry_run_result.get("readiness_group")
+		or dry_run_result.get("eligibility_status"),
 		"current_gate_status": gate_result.get("status"),
 		"bank_transaction": match_doc.get("bank_transaction") or dry_run_result.get("bank_transaction"),
 		"candidate_doctype": candidate_doctype,
 		"candidate_name": candidate_name,
-		"payment_event_identity": match_doc.get("execution_payment_event_identity") or _payment_event_identity(match_doc, dry_run_result),
+		"payment_event_identity": match_doc.get("execution_payment_event_identity")
+		or _payment_event_identity(match_doc, dry_run_result),
 		"retryable": bool(retryable),
 		"already_handled": bool(already_handled),
 		"has_conflict": bool(has_conflict),
 		"conflict_message": _safe_operator_text(link_state.get("message") if has_conflict else ""),
-		"safe_next_step": _execution_summary_safe_next_step(execution_status, retryable, already_handled, has_conflict, gate_result=gate_result, link_state=link_state),
-		"gate_block_reasons": [_safe_operator_text(reason) for reason in gate_result.get("block_reasons", [])],
+		"safe_next_step": _execution_summary_safe_next_step(
+			execution_status,
+			retryable,
+			already_handled,
+			has_conflict,
+			gate_result=gate_result,
+			link_state=link_state,
+		),
+		"gate_block_reasons": [
+			_safe_operator_text(reason) for reason in gate_result.get("block_reasons", [])
+		],
 		"execution_attempted": False,
 	}
 
@@ -1429,15 +1687,32 @@ def get_reconciliation_execution_summary(match_name, user=None):
 	assert_can_access_bank_transaction_matching(user=user)
 	match_doc = _load_match_for_preflight(match_name)
 	if not match_doc:
-		return {"match_name": cstr(match_name).strip(), "execution_status": EXECUTION_STATUS_BLOCKED, "retryable": False, "already_handled": False, "has_conflict": False, "safe_next_step": "Blocked: Bank Match Review was not found.", "execution_attempted": False}
+		return {
+			"match_name": cstr(match_name).strip(),
+			"execution_status": EXECUTION_STATUS_BLOCKED,
+			"retryable": False,
+			"already_handled": False,
+			"has_conflict": False,
+			"safe_next_step": "Blocked: Bank Match Review was not found.",
+			"execution_attempted": False,
+		}
 	dry_run_result = build_reconciliation_readiness_result(match_doc)
 	gate_result = check_reconciliation_execution_gate(match_name, user=user, dry_run_result=dry_run_result)
 	link_state = {}
 	if _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_result):
-		link_state = _bank_transaction_link_state(match_doc, cstr(dry_run_result.get("erpnext_target_doctype")).strip(), cstr(dry_run_result.get("erpnext_target_name")).strip())
+		link_state = _bank_transaction_link_state(
+			match_doc,
+			cstr(dry_run_result.get("erpnext_target_doctype")).strip(),
+			cstr(dry_run_result.get("erpnext_target_name")).strip(),
+		)
 	elif dry_run_result.get("erpnext_target_doctype") or dry_run_result.get("erpnext_target_name"):
-		link_state = {"state": "conflict", "message": "Conflict: current dry-run target does not match the stored reviewed candidate. Do not retry."}
-	return _execution_summary_result(match_doc, dry_run_result=dry_run_result, gate_result=gate_result, link_state=link_state)
+		link_state = {
+			"state": "conflict",
+			"message": "Conflict: current dry-run target does not match the stored reviewed candidate. Do not retry.",
+		}
+	return _execution_summary_result(
+		match_doc, dry_run_result=dry_run_result, gate_result=gate_result, link_state=link_state
+	)
 
 
 @frappe.whitelist()
@@ -1445,12 +1720,20 @@ def retry_reconciliation_execution_for_match(match_name, confirm=False):
 	assert_can_access_bank_transaction_matching()
 	if not _confirm_flag_enabled(confirm):
 		match_doc = _load_match_for_preflight(match_name)
-		return _execution_result(EXECUTION_STATUS_BLOCKED, "Explicit final confirmation is required before retrying reconciliation execution.", match_doc=match_doc)
+		return _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			"Explicit final confirmation is required before retrying reconciliation execution.",
+			match_doc=match_doc,
+		)
 	summary = get_reconciliation_execution_summary(match_name)
 	if not summary.get("retryable"):
 		match_doc = _load_match_for_preflight(match_name)
-		status = EXECUTION_STATUS_ALREADY_HANDLED if summary.get("already_handled") else EXECUTION_STATUS_BLOCKED
-		result = _execution_result(status, summary.get("safe_next_step") or "Retry is not safe for this match.", match_doc=match_doc)
+		status = (
+			EXECUTION_STATUS_ALREADY_HANDLED if summary.get("already_handled") else EXECUTION_STATUS_BLOCKED
+		)
+		result = _execution_result(
+			status, summary.get("safe_next_step") or "Retry is not safe for this match.", match_doc=match_doc
+		)
 		_update_execution_audit(match_name, result, user=frappe.session.user)
 		return result
 	return execute_reconciliation_for_match(match_name, confirm=True)
@@ -1462,27 +1745,57 @@ def execute_reconciliation_for_match(match_name, confirm=False):
 	match_doc = _load_match_for_preflight(match_name)
 	user = frappe.session.user
 	if not _confirm_flag_enabled(confirm):
-		result = _execution_result(EXECUTION_STATUS_BLOCKED, "Explicit final confirmation is required before reconciliation execution.", match_doc=match_doc)
+		result = _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			"Explicit final confirmation is required before reconciliation execution.",
+			match_doc=match_doc,
+		)
 		_update_execution_audit(match_name, result, user=user)
 		return result
 	if not match_doc:
 		return _execution_result(EXECUTION_STATUS_BLOCKED, "Bank Match Review was not found.")
-	if cstr(match_doc.get("execution_status")).strip() in {EXECUTION_STATUS_EXECUTED, EXECUTION_STATUS_ALREADY_HANDLED}:
-		result = _execution_result(EXECUTION_STATUS_ALREADY_HANDLED, "This Bank Match Review execution has already been handled.", match_doc=match_doc, execution_reference=match_doc.get("execution_reference"))
+	if cstr(match_doc.get("execution_status")).strip() in {
+		EXECUTION_STATUS_EXECUTED,
+		EXECUTION_STATUS_ALREADY_HANDLED,
+	}:
+		result = _execution_result(
+			EXECUTION_STATUS_ALREADY_HANDLED,
+			"This Bank Match Review execution has already been handled.",
+			match_doc=match_doc,
+			execution_reference=match_doc.get("execution_reference"),
+		)
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	dry_run_result = build_reconciliation_readiness_result(match_doc)
 	gate_result = check_reconciliation_execution_gate(match_name, user=user, dry_run_result=dry_run_result)
 	if not gate_result.get("can_execute") or gate_result.get("status") != EXECUTION_GATE_ALLOWED:
-		result = _execution_result(EXECUTION_STATUS_BLOCKED, gate_result.get("message") or "Reconciliation execution gate blocked this match.", match_doc=match_doc, dry_run_result=dry_run_result, gate_result=gate_result)
+		result = _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			gate_result.get("message") or "Reconciliation execution gate blocked this match.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			gate_result=gate_result,
+		)
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	if cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip() != "Confirmed":
-		result = _execution_result(EXECUTION_STATUS_BLOCKED, "Bank Match Review must be Confirmed before execution.", match_doc=match_doc, dry_run_result=dry_run_result, gate_result=gate_result)
+		result = _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			"Bank Match Review must be Confirmed before execution.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			gate_result=gate_result,
+		)
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	if not _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_result):
-		result = _execution_result(EXECUTION_STATUS_BLOCKED, "Execution target does not match the stored reviewed candidate. RetailEdge will not substitute another candidate.", match_doc=match_doc, dry_run_result=dry_run_result, gate_result=gate_result)
+		result = _execution_result(
+			EXECUTION_STATUS_BLOCKED,
+			"Execution target does not match the stored reviewed candidate. RetailEdge will not substitute another candidate.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			gate_result=gate_result,
+		)
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	try:
@@ -1491,6 +1804,13 @@ def execute_reconciliation_for_match(match_name, confirm=False):
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	except Exception as exc:
-		result = _execution_result(EXECUTION_STATUS_FAILED, "Reconciliation execution failed. Review setup and try again after the issue is resolved.", match_doc=match_doc, dry_run_result=dry_run_result, gate_result=gate_result, error_summary=_safe_execution_message(exc))
+		result = _execution_result(
+			EXECUTION_STATUS_FAILED,
+			"Reconciliation execution failed. Review setup and try again after the issue is resolved.",
+			match_doc=match_doc,
+			dry_run_result=dry_run_result,
+			gate_result=gate_result,
+			error_summary=_safe_execution_message(exc),
+		)
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result

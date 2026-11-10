@@ -4,16 +4,11 @@ import ast
 import json
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 EDGESUITE = APP_ROOT / "edgesuite_ui.py"
 SUPPLIER_REVIEW = APP_ROOT / "supplier_document_review.py"
 SUPPLIER_REVIEW_PAGE = (
-	APP_ROOT
-	/ "retailedge"
-	/ "page"
-	/ "supplier_document_review"
-	/ "supplier_document_review.json"
+	APP_ROOT / "retailedge" / "page" / "supplier_document_review" / "supplier_document_review.json"
 )
 CUSTOMER_360 = APP_ROOT / "public" / "js" / "customer_360" / "Customer360.vue"
 
@@ -26,11 +21,8 @@ AUTHORITATIVE_SUPPLIER_REVIEW_ROLES = {
 }
 RETAILEDGE_GENERAL_ROLES = {
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 }
 
 

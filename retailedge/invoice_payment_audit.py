@@ -10,17 +10,13 @@ from retailedge.branch_profile import get_branch_profile_defaults
 from retailedge.cashier_expense import user_has_any_role
 from retailedge.utils.settings import get_retailedge_settings
 
-
 INVOICE_PAYMENT_AUDIT_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 }
 PAYMENT_AUDIT_STATUSES = (
 	"Credit",
@@ -56,7 +52,9 @@ def get_invoice_payment_audit_settings():
 	return {
 		"enabled": bool(getattr(settings, "enable_invoice_payment_audit", 1)),
 		"include_draft_invoices": bool(getattr(settings, "invoice_payment_audit_include_draft_invoices", 0)),
-		"include_cancelled_invoices": bool(getattr(settings, "invoice_payment_audit_include_cancelled_invoices", 0)),
+		"include_cancelled_invoices": bool(
+			getattr(settings, "invoice_payment_audit_include_cancelled_invoices", 0)
+		),
 		"tolerance_amount": flt(getattr(settings, "invoice_payment_audit_tolerance_amount", 0)),
 		"check_expected_account": bool(getattr(settings, "invoice_payment_audit_check_expected_account", 1)),
 		"check_payment_rows": bool(getattr(settings, "invoice_payment_audit_check_payment_rows", 1)),
@@ -76,18 +74,46 @@ def classify_payment_method(mode_of_payment=None, account=None, row=None):
 		if part
 	)
 	if not text:
-		return {"category": "Other", "confidence": "Low", "reason": "No payment method or account was available."}
+		return {
+			"category": "Other",
+			"confidence": "Low",
+			"reason": "No payment method or account was available.",
+		}
 	if any(token in text for token in ("cash", "petty cash")):
-		return {"category": "Cash", "confidence": "High", "reason": "Cash keyword matched mode of payment or account."}
+		return {
+			"category": "Cash",
+			"confidence": "High",
+			"reason": "Cash keyword matched mode of payment or account.",
+		}
 	if any(token in text for token in ("mobile", "money", "momo", "wallet")):
-		return {"category": "Mobile Money", "confidence": "High", "reason": "Mobile money keyword matched mode of payment or account."}
+		return {
+			"category": "Mobile Money",
+			"confidence": "High",
+			"reason": "Mobile money keyword matched mode of payment or account.",
+		}
 	if any(token in text for token in ("card", "pos", "terminal")):
-		return {"category": "Card / POS", "confidence": "High", "reason": "Card/POS keyword matched mode of payment or account."}
+		return {
+			"category": "Card / POS",
+			"confidence": "High",
+			"reason": "Card/POS keyword matched mode of payment or account.",
+		}
 	if any(token in text for token in ("bank", "transfer")):
-		return {"category": "Bank Transfer", "confidence": "High", "reason": "Bank/transfer keyword matched mode of payment or account."}
+		return {
+			"category": "Bank Transfer",
+			"confidence": "High",
+			"reason": "Bank/transfer keyword matched mode of payment or account.",
+		}
 	if "credit" in text:
-		return {"category": "Credit", "confidence": "Medium", "reason": "Credit keyword matched mode of payment or account."}
-	return {"category": "Other", "confidence": "Low", "reason": "No standard payment category keyword matched."}
+		return {
+			"category": "Credit",
+			"confidence": "Medium",
+			"reason": "Credit keyword matched mode of payment or account.",
+		}
+	return {
+		"category": "Other",
+		"confidence": "Low",
+		"reason": "No standard payment category keyword matched.",
+	}
 
 
 def get_expected_payment_account_for_invoice(invoice_doc, payment_category=None, mode_of_payment=None):
@@ -278,7 +304,9 @@ def audit_sales_invoice_payment(invoice_name, use_payment_entries=True):
 			mode_of_payment=payment_entry.get("mode_of_payment"),
 			account=payment_entry.get("paid_to") or payment_entry.get("paid_from"),
 		)
-		payment_method_counter[classification.get("category")] += flt(payment_entry.get("reference_allocated_amount"))
+		payment_method_counter[classification.get("category")] += flt(
+			payment_entry.get("reference_allocated_amount")
+		)
 		evidence_links.append(payment_entry.get("payment_entry"))
 		expected = get_expected_payment_account_for_invoice(
 			invoice_doc,
@@ -296,10 +324,18 @@ def audit_sales_invoice_payment(invoice_name, use_payment_entries=True):
 		messages.extend(expected.get("messages") or [])
 
 	is_cancelled = cint(getattr(invoice_doc, "docstatus", 0)) == 2
-	is_credit = expected_payment_amount > tolerance and paid_amount <= tolerance and outstanding_amount >= expected_payment_amount - tolerance
+	is_credit = (
+		expected_payment_amount > tolerance
+		and paid_amount <= tolerance
+		and outstanding_amount >= expected_payment_amount - tolerance
+	)
 	is_partially_paid = paid_amount > tolerance and outstanding_amount > tolerance
 	rows_missing = (
-		(cint(getattr(invoice_doc, "is_pos", 0)) or paid_amount > tolerance or outstanding_amount <= tolerance)
+		(
+			cint(getattr(invoice_doc, "is_pos", 0))
+			or paid_amount > tolerance
+			or outstanding_amount <= tolerance
+		)
 		and not payment_rows
 		and not payment_entries
 		and not is_credit
@@ -309,9 +345,16 @@ def audit_sales_invoice_payment(invoice_name, use_payment_entries=True):
 	if (payment_rows or payment_entries) and settings.get("check_payment_rows"):
 		if payment_rows and abs(net_payment_row_amount - paid_amount) > tolerance and paid_amount > tolerance:
 			amount_mismatch = True
-		if payment_entries and abs(payment_entry_amount - paid_amount) > tolerance and paid_amount > tolerance:
+		if (
+			payment_entries
+			and abs(payment_entry_amount - paid_amount) > tolerance
+			and paid_amount > tolerance
+		):
 			amount_mismatch = True
-		if abs(effective_payment_amount - expected_payment_amount) > tolerance and outstanding_amount <= tolerance:
+		if (
+			abs(effective_payment_amount - expected_payment_amount) > tolerance
+			and outstanding_amount <= tolerance
+		):
 			amount_mismatch = True
 	if amount_mismatch:
 		issues.append("Payment amount mismatch exceeds the configured tolerance.")
@@ -369,7 +412,9 @@ def audit_sales_invoice_payment(invoice_name, use_payment_entries=True):
 		classification = "Pending Verification"
 	elif outstanding_amount <= tolerance and effective_payment_amount > tolerance:
 		audit_status = "Ready for Verification" if not messages and not issues else "Fully Paid Pending Audit"
-		classification = "Ready for Verification" if audit_status == "Ready for Verification" else "Pending Verification"
+		classification = (
+			"Ready for Verification" if audit_status == "Ready for Verification" else "Pending Verification"
+		)
 	elif paid_amount > tolerance or payment_entries:
 		audit_status = "Pending Verification"
 		classification = "Pending Verification"
@@ -387,7 +432,9 @@ def audit_sales_invoice_payment(invoice_name, use_payment_entries=True):
 		issue_count=len(_unique_non_empty(issues)),
 	)
 	if account_summary["expected_accounts"] and not account_summary["actual_accounts"]:
-		messages.append("Expected branch payment accounts were found, but no actual payment accounts were present in the audit evidence.")
+		messages.append(
+			"Expected branch payment accounts were found, but no actual payment accounts were present in the audit evidence."
+		)
 
 	return {
 		"invoice": invoice_name,
@@ -433,7 +480,9 @@ def get_invoice_payment_audit_list(filters=None, limit=500):
 			continue
 		if filters.get("risk_level") and result.get("payment_risk_level") != filters.get("risk_level"):
 			continue
-		if filters.get("payment_category") and filters.get("payment_category") not in result.get("payment_method_summary", {}):
+		if filters.get("payment_category") and filters.get("payment_category") not in result.get(
+			"payment_method_summary", {}
+		):
 			continue
 		if cint(filters.get("only_issues")) and not result.get("issues"):
 			continue
@@ -442,7 +491,9 @@ def get_invoice_payment_audit_list(filters=None, limit=500):
 
 
 def get_invoice_payment_audit_summary(filters=None):
-	rows = get_invoice_payment_audit_list(filters=filters, limit=(frappe._dict(filters or {})).get("limit") or 500)
+	rows = get_invoice_payment_audit_list(
+		filters=filters, limit=(frappe._dict(filters or {})).get("limit") or 500
+	)
 	summary = {
 		"total_invoice_count": len(rows),
 		"total_invoice_amount": 0.0,
@@ -502,7 +553,9 @@ def _get_candidate_invoices(filters, settings, limit=500):
 	if not has_doctype("Sales Invoice"):
 		return []
 	query_filters = {}
-	if settings.get("include_draft_invoices") and (settings.get("include_cancelled_invoices") or cint(filters.get("include_cancelled"))):
+	if settings.get("include_draft_invoices") and (
+		settings.get("include_cancelled_invoices") or cint(filters.get("include_cancelled"))
+	):
 		query_filters["docstatus"] = ["in", [0, 1, 2]]
 	elif settings.get("include_draft_invoices"):
 		query_filters["docstatus"] = ["in", [0, 1]]
@@ -563,7 +616,11 @@ def _get_candidate_invoices(filters, settings, limit=500):
 
 def _resolve_invoice_branch(invoice_doc):
 	messages = []
-	branch = getattr(invoice_doc, "retailedge_branch", None) if has_field("Sales Invoice", "retailedge_branch") else None
+	branch = (
+		getattr(invoice_doc, "retailedge_branch", None)
+		if has_field("Sales Invoice", "retailedge_branch")
+		else None
+	)
 	source = "Sales Invoice.retailedge_branch" if branch else None
 	if not branch and has_field("Sales Invoice", "branch"):
 		branch = getattr(invoice_doc, "branch", None)
@@ -642,7 +699,12 @@ def _score_payment_risk(
 		return "High"
 	if issue_count > 1:
 		return "High"
-	if split_payment or rows_missing or is_partially_paid or audit_status in {"Pending Verification", "Fully Paid Pending Audit"}:
+	if (
+		split_payment
+		or rows_missing
+		or is_partially_paid
+		or audit_status in {"Pending Verification", "Fully Paid Pending Audit"}
+	):
 		return "Medium"
 	return "Low"
 

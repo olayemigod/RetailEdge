@@ -22,11 +22,8 @@ BRANCH_PERFORMANCE_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 	"RetailEdgeAuditor",
-
 }
 PAYMENT_CATEGORY_ORDER = ("Cash", "Bank Transfer", "Card / POS", "Mobile Money", "Other")
 BANK_SALES_PAYMENT_CATEGORIES = ("Bank Transfer", "Card / POS", "Mobile Money")

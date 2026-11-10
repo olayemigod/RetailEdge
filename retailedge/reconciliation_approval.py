@@ -18,7 +18,6 @@ DEFAULT_APPROVAL_ROLES = (
 	"System Manager",
 	"Accounts Manager",
 	"RetailEdgeManager",
-
 )
 
 
@@ -82,7 +81,9 @@ def _candidate_identity(match_doc):
 		"payment_row_index": cstr(
 			match_doc.get("payment_row_index") or match_doc.get("payment_row_reference")
 		).strip(),
-		"bank_amount": round(flt(match_doc.get("bank_amount") or match_doc.get("bank_transaction_amount")), 6),
+		"bank_amount": round(
+			flt(match_doc.get("bank_amount") or match_doc.get("bank_transaction_amount")), 6
+		),
 		"candidate_amount": round(flt(match_doc.get("candidate_amount")), 6),
 		"payment_account": cstr(
 			match_doc.get("resolved_payment_account") or match_doc.get("payment_account")
@@ -417,13 +418,15 @@ def approve_reconciliation_for_match(match_name, approval_note=None):
 	_refresh_match_candidate_context(doc)
 
 	# Import lazily to avoid a module cycle: reconciliation_bridge imports approval-state helpers.
-	from retailedge.reconciliation_bridge import build_reconciliation_readiness_result, _load_match_for_preflight
+	from retailedge.reconciliation_bridge import (
+		_load_match_for_preflight,
+		build_reconciliation_readiness_result,
+	)
 
 	readiness = build_reconciliation_readiness_result(_load_match_for_preflight(match_name))
 	if cstr(readiness.get("readiness_group")).strip() != "Ready":
 		frappe.throw(
-			readiness.get("block_reason")
-			or "This match is not currently ready for reconciliation approval."
+			readiness.get("block_reason") or "This match is not currently ready for reconciliation approval."
 		)
 
 	now = now_datetime()

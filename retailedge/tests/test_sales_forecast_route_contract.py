@@ -9,7 +9,6 @@ from retailedge.navigation_consolidation import (
 	_normalize_sales_forecast_route,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ALIAS_PAGE = ROOT / "retailedge" / "page" / "retailedge_sales_forecast"
 ALIAS_JSON = ALIAS_PAGE / "retailedge_sales_forecast.json"

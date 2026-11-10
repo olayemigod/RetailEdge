@@ -3,9 +3,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from retailedge import business_expense
-from retailedge import master_experience
-
+from retailedge import business_expense, master_experience
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "public/js/business_expenses/BusinessExpenses.vue"
@@ -65,7 +63,7 @@ def test_business_expenses_page_is_edgesuite_only_and_workflow_dynamic():
 
 def test_final_navigation_promotes_business_expenses_owner_and_removes_raw_category():
 	source = inspect.getsource(master_experience)
-	assert 'BUSINESS_EXPENSE_ITEM' in source
+	assert "BUSINESS_EXPENSE_ITEM" in source
 	assert '"target": "business-expenses"' in source
 	assert "_promote_business_expense_ownership(navigation_groups)" in source
 	assert "EXPENSE_CATEGORY_NATIVE_PEER_DOCTYPE" in source

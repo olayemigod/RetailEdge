@@ -65,6 +65,10 @@ test("Make Sale persists removed saved-draft row and recalculated total after re
 		expect(formContext.defaults.company).toBe(COMPANY);
 		expect(formContext.defaults.branch).toBe(BRANCH);
 		expect(formContext.defaults.warehouse).toBeTruthy();
+		// The browser merchant fixture must select an NGN price list for its NGN
+		// company/receivables, not inherit an unrelated site's Standard Selling currency.
+		expect(formContext.pricing.price_list).toBe("RetailEdge Upgrade Selling");
+		expect(formContext.pricing.currency).toBe("NGN");
 
 		const draft = await apiPost(
 			context,

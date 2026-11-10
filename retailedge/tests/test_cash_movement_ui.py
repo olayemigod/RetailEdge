@@ -20,9 +20,7 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertNotIn("RetailEdgeCashier", roles)
 
 	def test_page_mounts_only_one_edgesuite_shell(self):
-		page = (
-			APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.js"
-		).read_text()
+		page = (APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.js").read_text()
 		bundle = (APP_ROOT / "public" / "js" / "cash_movement.bundle.js").read_text()
 		self.assertIn('const EDGEUI_ASSET = "edgesuite_ui.bundle.js"', page)
 		self.assertIn('const CASH_MOVEMENT_ASSET = "cash_movement.bundle.js"', page)
@@ -40,8 +38,8 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertIn(':pageSizes="[25, 50, 100]"', component)
 		self.assertIn("Posted accounting entries only", component)
 		self.assertIn("this.reportProvider.load", component)
-		self.assertIn("this.filters.branch = \"\"", component)
-		self.assertIn("this.filters.account = \"\"", component)
+		self.assertIn('this.filters.branch = ""', component)
+		self.assertIn('this.filters.account = ""', component)
 		self.assertNotIn("<table", component)
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)

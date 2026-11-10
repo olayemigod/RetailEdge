@@ -177,6 +177,10 @@ jobs:
           compgen -G "sites/assets/frappe/dist/js/desk.bundle*.js" > /dev/null
           compgen -G "sites/assets/frappe/dist/css/desk.bundle*.css" > /dev/null
 
+      - name: Verify product SFCs use the shared EdgeSuite Vue runtime
+        working-directory: frappe-bench
+        run: |
+          python "$GITHUB_WORKSPACE/scripts/audit_vue_bundle_artifacts.py" --bench . --strict
       - name: Install Playwright Chromium
         run: |
           npm install --no-save --package-lock=false @playwright/test@1.55.0

@@ -49,9 +49,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 
 	def test_navigation_targets_are_not_duplicated_across_business_groups(self):
 		targets = [
-			(item["target_type"], item["target"])
-			for group in NAVIGATION_GROUPS
-			for item in group["items"]
+			(item["target_type"], item["target"]) for group in NAVIGATION_GROUPS for item in group["items"]
 		]
 		self.assertEqual(len(targets), len(set(targets)))
 
@@ -104,11 +102,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 
 	def test_business_navigation_excludes_technical_and_edgepay_surfaces(self):
 		keys = {group["key"] for group in NAVIGATION_GROUPS}
-		targets = {
-			item["target"]
-			for group in NAVIGATION_GROUPS
-			for item in group["items"]
-		}
+		targets = {item["target"] for group in NAVIGATION_GROUPS for item in group["items"]}
 		self.assertNotIn("administration", keys)
 		self.assertNotIn("RetailEdge Bank Match Batch Job", targets)
 		self.assertNotIn("Error Log", targets)
@@ -211,11 +205,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 
 	def test_business_hub_uses_one_edgesuite_navigation_surface(self):
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "RetailEdgeBusinessHub.vue"
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 		).read_text()
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
 		self.assertIn(':hideNativeSidebar="true"', component)
@@ -225,16 +215,12 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertNotIn("Professional business menu", component)
 		self.assertNotIn("navigation-grid", component)
 		self.assertIn("suppressNativePageChrome", controller)
-		self.assertIn('data-retailedge-shell-suppressed', controller)
-		self.assertIn('pageHead.hide()', controller)
+		self.assertIn("data-retailedge-shell-suppressed", controller)
+		self.assertIn("pageHead.hide()", controller)
 
 	def test_business_hub_and_waffle_share_short_lived_context_request(self):
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "RetailEdgeBusinessHub.vue"
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 		).read_text()
 		menu = (APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js").read_text()
 		for source in (component, menu):

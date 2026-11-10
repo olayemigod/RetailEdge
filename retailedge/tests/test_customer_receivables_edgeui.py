@@ -32,7 +32,7 @@ class RetailEdgeCustomerReceivablesEdgeUITests(unittest.TestCase):
 	def test_provider_is_bounded_and_governed(self):
 		source = BUNDLE.read_text()
 		self.assertIn("createBoundedPaginatedReportProvider", source)
-		self.assertIn('key: REPORT_KEY', source)
+		self.assertIn("key: REPORT_KEY", source)
 		self.assertIn('const REPORT_KEY = "customer-receivables"', source)
 		self.assertIn("maxDatasetRows: 2000", source)
 		self.assertIn("retailedge.reporting_actions.get_report_export_data", source)

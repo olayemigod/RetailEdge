@@ -4,8 +4,12 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
-from retailedge.patches.ensure_retailedge_cashier_operational_permissions import execute as ensure_cashier_operational_permissions
-from retailedge.patches.ensure_retailedge_manager_payment_entry_read import execute as ensure_manager_payment_entry_read
+from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
+	execute as ensure_cashier_operational_permissions,
+)
+from retailedge.patches.ensure_retailedge_manager_payment_entry_read import (
+	execute as ensure_manager_payment_entry_read,
+)
 from retailedge.setup_roles import MANAGEMENT_READ_DOCTYPES, ensure_retailedge_roles
 from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
@@ -13,7 +17,6 @@ from retailedge.tests.upgrade_validation_fixture import (
 	_ensure_fiscal_year,
 	_ensure_transaction_masters,
 )
-
 
 PERSONAS = {
 	"permission-cashier@example.com": ("Permission Cashier", ("RetailEdgeCashier",)),
@@ -209,13 +212,18 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 		for doctype in ("Item", "Warehouse", "Stock Entry"):
 			with self.subTest(doctype=doctype):
 				self.assert_permissions(user, doctype, {"read": True})
-
 	def test_native_sales_user_retains_sales_workflow_authority_only(self):
 		user = "permission-sales@example.com"
 		for doctype in ("Quotation", "Sales Order", "Delivery Note"):
 			with self.subTest(doctype=doctype):
 				self.assert_permissions(user, doctype, {"read": True, "create": True, "write": True})
-		for doctype in ("Sales Invoice", "Purchase Order", "Purchase Invoice", "Stock Entry", "Journal Entry"):
+		for doctype in (
+			"Sales Invoice",
+			"Purchase Order",
+			"Purchase Invoice",
+			"Stock Entry",
+			"Journal Entry",
+		):
 			with self.subTest(doctype=doctype):
 				self.assert_permissions(user, doctype, {"read": False, "create": False})
 

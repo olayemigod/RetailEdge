@@ -26,9 +26,7 @@ NO_BRANCH_SCOPE_SENTINEL = "__never__"
 CONTROLLED_COMPANY_WIDE_ROLES = {
 	"System Manager",
 	"RetailEdgeManager",
-
 	"RetailEdgeAuditor",
-
 	"Sales Manager",
 }
 
@@ -183,6 +181,7 @@ def get_customer_receivables(
 	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
 	from retailedge.report_sorting import apply_materialized_report_sort
+
 	resolved = _coerce_filters(filters)
 	dataset = _build_customer_receivables_dataset(resolved)
 	apply_materialized_report_sort(dataset, sort, "customer-receivables")
@@ -435,14 +434,18 @@ def _assert_controlled_sales_invoice_scope(filters: frappe._dict) -> None:
 			)
 		if not _sales_invoice_branch_field():
 			frappe.throw(
-				_("Sales Invoice branch attribution is unavailable; controlled receivables access cannot be applied safely."),
+				_(
+					"Sales Invoice branch attribution is unavailable; controlled receivables access cannot be applied safely."
+				),
 				frappe.PermissionError,
 			)
 		return
 	if roles.intersection(CONTROLLED_COMPANY_WIDE_ROLES):
 		return
 	frappe.throw(
-		_("Customer Receivables requires native Sales Invoice access or an active RetailEdge Branch assignment."),
+		_(
+			"Customer Receivables requires native Sales Invoice access or an active RetailEdge Branch assignment."
+		),
 		frappe.PermissionError,
 	)
 

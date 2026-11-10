@@ -5,9 +5,7 @@ from frappe.permissions import add_permission, update_permission_property
 
 MANAGER_ROLES = (
 	"RetailEdgeManager",
-
 	"RetailEdgeBranchManager",
-
 )
 DOCTYPE = "Payment Entry"
 PERMLEVEL = 0

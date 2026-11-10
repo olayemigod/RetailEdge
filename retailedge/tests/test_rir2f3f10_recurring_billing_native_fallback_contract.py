@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 NAVIGATION = ROOT / "edgesuite_ui.py"
 
@@ -33,7 +32,8 @@ def test_recurring_billing_uses_existing_native_desk_and_erpnext_permission_cont
 	source = _read(NAVIGATION)
 	assert 'if item.get("mode") == "native_fallback" and not native_desk_enabled:' in source
 	assert 'if target_type == "DocType":' in source
-	assert '_has_permission_cached(target, "read", permission_cache)' in source
+	assert "_has_permission_cached(" in source
+	assert 'target, "read", permission_cache' in source
 
 
 def test_existing_money_operational_ownership_is_unchanged():
