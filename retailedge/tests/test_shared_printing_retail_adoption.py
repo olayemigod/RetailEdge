@@ -116,9 +116,10 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_connected_printer_must_match_resolved_profile_binding(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
-			'adapter.bindingStore?.get?.(profile.name)',
 			'adapter.devices?.bindingMatchesStatus?.(profile.name, current || {})',
-			'portInfoMatchesBinding(current.portInfo || {}, binding.portInfo || {})',
+			'adapter.devices?.bindingMatchesStatus?.(',
+			'restored?.status || {}',
+			'if (!restored?.status?.connected || !restoredMatchesBinding)',
 			'if (currentMatchesBinding) return { transport, status: current };',
 			'await adapter.disconnect(transport)',
 			'adapter.devices?.connectBoundUsb',
@@ -127,6 +128,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("if (current?.connected) return current;", source)
+		self.assertNotIn("portInfoMatchesBinding", source)
 
 	def test_usb_profile_has_safe_normal_system_print_fallback_message(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
