@@ -418,15 +418,17 @@ test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({
   }
 });
 
-test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({
+test("canonical RetailEdge cashier reaches My Work but not banking control pages", async ({
   browser,
 }) => {
   const { context, page } = await newPersona(browser, USERS.cashier);
   try {
+    // The cashier home is now My Work; Business Hub may redirect to it.
+    // Test the authorized operational landing route, not the old home title.
     await openProductPage(
       page,
-      "retailedge-business-hub",
-      "Business Hub",
+      "cashier-my-work",
+      "My Work",
       "Home"
     );
 
