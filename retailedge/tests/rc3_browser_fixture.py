@@ -115,6 +115,7 @@ def _ensure_branch_profile(
 	*,
 	default_warehouse: str = "",
 	is_default: bool = False,
+	default_selling_price_list: str = "",
 ) -> None:
 	profile_name = f"RC3 {branch_name}"
 	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
@@ -122,6 +123,9 @@ def _ensure_branch_profile(
 		changed = False
 		if (profile.default_warehouse or "") != default_warehouse:
 			profile.default_warehouse = default_warehouse or None
+			changed = True
+		if (profile.default_selling_price_list or "") != default_selling_price_list:
+			profile.default_selling_price_list = default_selling_price_list or None
 			changed = True
 		if int(profile.enabled or 0) != 1:
 			profile.enabled = 1
@@ -141,6 +145,7 @@ def _ensure_branch_profile(
 			"branch": branch_name,
 			"is_default_for_company": 1 if is_default else 0,
 			"default_warehouse": default_warehouse or None,
+			"default_selling_price_list": default_selling_price_list or None,
 			"notes": "Deterministic RC3 browser/persona fixture.",
 		}
 	).insert(ignore_permissions=True)
@@ -322,6 +327,7 @@ def seed_rc3_personas() -> dict:
 			branch_name,
 			default_warehouse=warehouses[branch_name],
 			is_default=index == 0,
+			default_selling_price_list=PRICE_LIST if index == 0 else "",
 		)
 
 	# Printing acceptance uses Administrator so seed the same deterministic
