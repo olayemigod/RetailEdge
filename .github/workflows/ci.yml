@@ -60,6 +60,9 @@ jobs:
           node-version: "24"
           check-latest: true
 
+      - name: Validate RetailEdge receipt printing tab ownership
+        run: node retailedge/tests/test_thermal_receipt_tab_handoff.mjs
+
       - name: Install bench prerequisites
         run: |
           for source in /etc/apt/sources.list.d/*; do
