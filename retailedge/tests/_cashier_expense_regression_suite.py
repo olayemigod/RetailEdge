@@ -335,7 +335,7 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			doc.validate_cash_availability()
 
 	@patch(
-		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_shift_cash_snapshot"
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_cash_custody_snapshot"
 	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
@@ -345,8 +345,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		mock_snapshot.return_value = {
 			"opening_cash": 1000,
 			"cash_sales": 0,
-			"prior_expenses": 200,
-			"available_before": 800,
+			"cashier_expenses": 200,
+			"submitted_deposits": 0,
+			"available_cash": 800,
 			"source": "opening_shift.payments",
 			"message": None,
 		}
