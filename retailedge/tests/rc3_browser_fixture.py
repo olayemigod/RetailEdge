@@ -27,6 +27,7 @@ EXPENSE_CATEGORY = "Browser Working Branch Expense"
 CASHIER_USER = "browser-cashier@example.com"
 CASHIER_UNFINISHED_MARKER = "RetailEdge browser cashier unfinished sale fixture"
 CASHIER_RECEIPT_MARKER = "RetailEdge browser cashier unpaid receipt fixture"
+CASHIER_TEST_MODE = "RetailEdge Browser Cash Receipt"
 SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"
 
 EXTRA_PERSONAS = {
@@ -334,6 +335,52 @@ def _ensure_cashier_receivable_invoice(branch_name: str) -> str:
 	return str(invoice.name)
 
 
+def _ensure_cashier_test_mode() -> str:
+	"""CI-only cash mode bound to a real native Company cash ledger account.
+
+	This helper runs exclusively inside the browser-persona fixture on an
+	ephemeral CI site. It must never be invoked by application startup or migrate.
+	"""
+	cash_account = frappe.db.get_value(
+		"Account",
+		{"company": COMPANY, "account_type": "Cash", "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if not cash_account:
+		frappe.throw(f"Browser receipt fixture: no enabled Cash ledger account in {COMPANY}.")
+	if frappe.db.exists("Mode of Payment", CASHIER_TEST_MODE):
+		mode = frappe.get_doc("Mode of Payment", CASHIER_TEST_MODE)
+	else:
+		mode = frappe.get_doc(
+		{
+			"doctype": "Mode of Payment",
+			"mode_of_payment": CASHIER_TEST_MODE,
+			"type": "Cash",
+			"enabled": 1,
+		}
+		)
+	changed = bool(not mode.name or not frappe.db.exists("Mode of Payment", CASHIER_TEST_MODE))
+	if int(mode.enabled or 0) != 1:
+		mode.enabled = 1
+		changed = True
+	if str(mode.type or "") != "Cash":
+		mode.type = "Cash"
+		changed = True
+	row = next((row for row in mode.accounts or [] if row.company == COMPANY), None)
+	if not row:
+		mode.append("accounts", {"company": COMPANY, "default_account": cash_account})
+		changed = True
+	elif str(row.default_account or "") != str(cash_account):
+		row.default_account = cash_account
+		changed = True
+	if changed:
+		if mode.is_new():
+			mode.insert(ignore_permissions=True)
+		else:
+			mode.save(ignore_permissions=True)
+	return CASHIER_TEST_MODE
+
+
 def _ensure_expense_category() -> str:
 	if frappe.db.exists("RetailEdge Expense Category", EXPENSE_CATEGORY):
 		return EXPENSE_CATEGORY
@@ -444,6 +491,7 @@ def seed_rc3_personas() -> dict:
 	}
 	cashier_unfinished_sale = _ensure_cashier_unfinished_sale(BRANCHES[0])
 	cashier_receivable_invoice = _ensure_cashier_receivable_invoice(BRANCHES[0])
+	cashier_receipt_mode = _ensure_cashier_test_mode()
 	branch_cashier_expenses = {
 		branch_name: _ensure_branch_cashier_expense(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
@@ -458,6 +506,7 @@ def seed_rc3_personas() -> dict:
 		"branch_sales_invoices": branch_sales_invoices,
 		"cashier_unfinished_sale": cashier_unfinished_sale,
 		"cashier_receivable_invoice": cashier_receivable_invoice,
+		"cashier_receipt_mode": cashier_receipt_mode,
 		"branch_cashier_expenses": branch_cashier_expenses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
