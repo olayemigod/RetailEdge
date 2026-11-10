@@ -119,9 +119,12 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		mock_item_pricing,
 	):
 		doc = _DraftSalesInvoice()
+		# Mimic a site whose generic currency default differs from the merchant.
+		doc.currency = "INR"
 		mock_new_doc.return_value = doc
 		mock_price_context.return_value = {
 			"price_list": "Retail Selling",
+			"currency": "NGN",
 			"source": "user_default",
 			"allow_rate_change": True,
 		}
@@ -152,6 +155,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertEqual(doc.customer, "CUST-001")
 		self.assertEqual(doc.branch, "Lagos")
 		self.assertEqual(doc.selling_price_list, "Retail Selling")
+		self.assertEqual(doc.currency, "NGN")
 		self.assertEqual(str(doc.posting_date), "2026-08-15")
 		self.assertEqual(doc.remarks, "Guided draft")
 		self.assertEqual(len(doc.items), 2)
