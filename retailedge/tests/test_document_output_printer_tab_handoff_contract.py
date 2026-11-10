@@ -25,3 +25,12 @@ def test_document_output_requires_exact_resolved_printer_after_handoff():
     assert "portInfoMatchesBinding" not in source
     assert 'current?.connected && (sharedMatch || legacySerialMatch)' not in source
     assert '"RETAIL_PRINTER_SETUP_REQUIRED"' in source
+
+
+def test_document_output_distinguishes_direct_receipts_from_browser_printing():
+    output = OUTPUT.read_text(encoding="utf-8")
+
+    assert "Print Document opens the browser printer selection." in output
+    assert "Print Receipt uses your saved receipt printer." in output
+    assert "Receipt sent to printer. Check the paper output." in output
+    assert 'receipt copy/copies printed.' not in output
