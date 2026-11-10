@@ -322,6 +322,11 @@ def _create_simple_sales_invoice_draft(
 	doc = frappe.new_doc(SALES_INVOICE_DOCTYPE)
 	doc.company = company
 	doc.customer = customer
+	# A server-governed Selling Price List supplies the transaction currency.
+	# Do not let the site's unrelated default currency override the selected
+	# Price List and produce a draft incompatible with the Company receivable.
+	if pricing_context.get("currency"):
+		doc.currency = pricing_context["currency"]
 	doc.posting_date = getdate(values.get("posting_date") or nowdate())
 	doc.update_stock = update_stock
 	if pricing_context.get("price_list"):
