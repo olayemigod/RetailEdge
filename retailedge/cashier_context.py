@@ -1046,11 +1046,14 @@ def get_shift_cash_snapshot(
 def get_cashier_expense_entry_context(user: str | None = None, company: str | None = None) -> dict[str, object]:
 	settings = _safe_settings()
 	context = get_current_cashier_context(user=user, company=company)
-	snapshot = get_shift_cash_snapshot(
+	# Late import avoids cashier_context <-> cash_custody module initialization cycle.
+	from retailedge.cash_custody import get_cash_custody_snapshot
+
+	snapshot = get_cash_custody_snapshot(
 		opening_shift=context.get("linked_pos_opening_shift"),
 		company=context.get("company"),
 		pos_profile=context.get("pos_profile"),
-		user=context.get("user"),
+		cashier=context.get("user"),
 	)
 
 	message_parts = [part for part in [context.get("message"), snapshot.get("message")] if part]
@@ -1058,9 +1061,9 @@ def get_cashier_expense_entry_context(user: str | None = None, company: str | No
 		**context,
 		"shift_opening_cash_amount": snapshot.get("opening_cash", 0.0),
 		"shift_cash_sales_amount": snapshot.get("cash_sales", 0.0),
-		"prior_shift_expense_amount": snapshot.get("prior_expenses", 0.0),
-		"available_shift_cash_before_expense": snapshot.get("available_before", 0.0),
-		"available_shift_cash_after_expense": snapshot.get("available_before", 0.0),
+		"prior_shift_expense_amount": snapshot.get("cashier_expenses", 0.0),
+		"available_shift_cash_before_expense": snapshot.get("available_cash", 0.0),
+		"available_shift_cash_after_expense": snapshot.get("available_cash", 0.0),
 		"cash_balance_source": snapshot.get("source"),
 		"cash_control_message": "\n".join(message_parts) if message_parts else None,
 		"settings": {
