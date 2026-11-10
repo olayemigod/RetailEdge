@@ -60,8 +60,9 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		"get_current_cashier_context(user=frappe.session.user)",
 		"include_cashier_expenses_in_pos_closing",
 			'precision = frappe.get_cached_value("System Settings", None, "currency_precision") or 3',
-			'base_expected = flt(cash_row.get("expected_amount"), precision) + flt(previous_total, precision)',
-			"cash_row.expected_amount = flt(base_expected - current_total, precision)",
+			'"retailedge_cash_deposit_total"',
+			"get_submitted_cash_deposits(",
+			"cash_row.expected_amount = flt(base_expected - current_total - deposit_total, precision)",
 		):
 			self.assertIn(contract, source)
 		for forbidden in (
@@ -114,6 +115,7 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 			hooks,
 		)
 
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary", return_value={"total": 0, "count": 0})
 	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row_from_rows")
 	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
 	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
@@ -124,6 +126,7 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		mock_settings,
 		mock_summary,
 		mock_cash_row,
+		mock_deposits,
 	):
 		mock_meta.return_value.has_field.return_value = True
 		mock_settings.return_value = SimpleNamespace(
@@ -163,6 +166,7 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		)
 		self.assertEqual(row["expected_amount"], 950)
 
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary", return_value={"total": 0, "count": 0})
 	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row")
 	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
 	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
@@ -173,6 +177,7 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		mock_settings,
 		mock_summary,
 		mock_cash_row,
+		mock_deposits,
 	):
 		mock_meta.return_value.has_field.return_value = True
 		mock_settings.return_value = SimpleNamespace(
@@ -207,6 +212,81 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		apply_retailedge_cashier_expenses_to_closing_shift(doc)
 		self.assertEqual(row.expected_amount, 1050)
 		self.assertEqual(row.difference, 0)
+
+
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary")
+	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row_from_rows")
+	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
+	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
+	@patch("retailedge.pos_cashier_expense.frappe.get_meta")
+	def test_preview_reconciles_submitted_deposit_and_expense_once(
+		self, meta, settings, expense_summary, cash_row, deposit_summary
+	):
+		meta.return_value.has_field.return_value = True
+		settings.return_value = SimpleNamespace(
+			enable_cashier_expense_workflow=1,
+			enable_cashier_expense_pos_integration=1,
+			include_cashier_expenses_in_pos_closing=1,
+		)
+		expense_summary.return_value = {"total": 1000, "count": 1}
+		deposit_summary.return_value = {"total": 2000, "count": 1}
+		row = {"mode_of_payment": "Cash", "expected_amount": 13000, "closing_amount": 10000}
+		cash_row.return_value = row
+		payload = {
+			"pos_opening_shift": "POSA-OS-26-0000009", "pos_profile": "POS-1",
+			"payment_reconciliation": [row],
+			"retailedge_cashier_expense_total": 0, "retailedge_cash_deposit_total": 0,
+		}
+		for _ in range(3):
+			apply_retailedge_cashier_expenses_to_closing_data(payload)
+			self.assertEqual(row["expected_amount"], 10000)
+			self.assertEqual(row["difference"], 0)
+		self.assertEqual(payload["retailedge_cash_deposit_count"], 1)
+		self.assertEqual(payload["retailedge_cash_deposit_total"], 2000)
+		deposit_summary.assert_called_with("POSA-OS-26-0000009")
+
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary")
+	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row")
+	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
+	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
+	@patch("retailedge.pos_cashier_expense.frappe.get_meta")
+	def test_native_closing_validation_reconciles_deposit_once(
+		self, meta, settings, expense_summary, cash_row, deposit_summary
+	):
+		meta.return_value.has_field.return_value = True
+		settings.return_value = SimpleNamespace(
+			enable_cashier_expense_workflow=1,
+			enable_cashier_expense_pos_integration=1,
+			include_cashier_expenses_in_pos_closing=1,
+		)
+		expense_summary.return_value = {"total": 1000, "count": 1}
+		deposit_summary.return_value = {"total": 2000, "count": 1}
+		row = frappe._dict(expected_amount=13000, closing_amount=10000)
+		cash_row.return_value = row
+		doc = SimpleNamespace(
+			doctype="POS Closing Shift", pos_opening_shift="POSA-OS-26-0000009",
+			pos_profile="POS-1", retailedge_cashier_expense_total=0,
+			retailedge_cash_deposit_total=0,
+		)
+		for _ in range(3):
+			apply_retailedge_cashier_expenses_to_closing_shift(doc)
+			self.assertEqual(row.expected_amount, 10000)
+			self.assertEqual(row.difference, 0)
+		self.assertEqual(doc.retailedge_cash_deposit_total, 2000)
+
+	@patch("retailedge.pos_cashier_expense.get_submitted_cash_deposits")
+	@patch("retailedge.pos_cashier_expense.frappe.db.get_value")
+	def test_submitted_deposits_are_exact_shift_company_cashier_scoped(self, get_value, deposits):
+		from retailedge.pos_cashier_expense import _get_submitted_shift_deposit_summary
+		get_value.return_value = {"company": "RetailEdge Upgrade CI", "user": "browser-cashier@example.com"}
+		deposits.return_value = [{"paid_amount": 2000}]
+		result = _get_submitted_shift_deposit_summary("POSA-OS-26-0000009")
+		self.assertEqual(result, {"total": 2000, "count": 1})
+		deposits.assert_called_once_with(
+			opening_shift="POSA-OS-26-0000009",
+			company="RetailEdge Upgrade CI",
+			cashier="browser-cashier@example.com",
+		)
 
 
 if __name__ == "__main__":
