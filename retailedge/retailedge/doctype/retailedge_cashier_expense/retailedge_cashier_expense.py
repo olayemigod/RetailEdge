@@ -28,6 +28,9 @@ class RetailEdgeCashierExpense(Document):
 		self.set_cashier_defaults()
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=False)
 		self.apply_expense_category()
+		# Serialize expenses and deposits against the same POS opening-shift row
+		# before reading available cash. The lock is held until transaction commit.
+		self.lock_shift_cash_for_validation()
 		self.apply_shift_cash_snapshot()
 
 	def validate(self):
@@ -308,6 +311,28 @@ class RetailEdgeCashierExpense(Document):
 		self._expense_category_context = context
 		return context
 
+	def lock_shift_cash_for_validation(self):
+		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
+			return
+		opening_shift = str(getattr(self, "linked_pos_opening_shift", None) or "").strip()
+		if not opening_shift:
+			return  # validate_open_shift_requirement applies the merchant shift policy.
+		rows = frappe.db.sql(
+			"""SELECT name, company, pos_profile, user, status
+			FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE""",
+			(opening_shift,),
+			as_dict=True,
+		)
+		if not rows or rows[0].get("status") != "Open":
+			frappe.throw(_("Cashier expenses require a valid open POS shift."))
+		shift = rows[0]
+		if (
+			(self.company and self.company != shift.get("company"))
+			or (self.pos_profile and self.pos_profile != shift.get("pos_profile"))
+			or (self.cashier and self.cashier != shift.get("user"))
+		):
+			frappe.throw(_("Cashier expense Company, POS Profile and cashier must match the open shift."))
+
 	def apply_shift_cash_snapshot(self):
 		settings = get_retailedge_settings()
 		if not self.linked_pos_opening_shift:
@@ -330,6 +355,7 @@ class RetailEdgeCashierExpense(Document):
 			cashier=self.cashier,
 			expense_name=None if self.is_new() else self.name,
 		)
+		self._cash_sales_verified = bool(snapshot.get("cash_sales_verified", False))
 		self.shift_opening_cash_amount = snapshot.get("opening_cash", 0)
 		self.shift_cash_sales_amount = snapshot.get("cash_sales", 0)
 		self.prior_shift_expense_amount = snapshot.get("cashier_expenses", 0)
@@ -371,8 +397,14 @@ class RetailEdgeCashierExpense(Document):
 			frappe.throw("Expense Account could not be resolved from the selected Expense Category.")
 
 	def validate_cash_availability(self):
+		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
+			return
 		if not self.linked_pos_opening_shift:
 			return
+		if getattr(self, "_cash_sales_verified", True) is False:
+			frappe.throw(
+				_("Cash receipts for this shift could not be verified. No till expense can be recorded until reconciliation is restored.")
+			)
 
 		available = flt(self.available_shift_cash_before_expense)
 		amount = flt(self.amount)
