@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import frappe
+
 from retailedge.cash_custody import (
 	CASH_DEPOSIT_TYPE,
 	get_cash_custody_snapshot,
@@ -97,6 +99,31 @@ class TestCashCustody(unittest.TestCase):
 		with patch("retailedge.cash_custody.frappe.db.sql") as mock_sql:
 			validate_cash_deposit_before_submit(doc)
 		mock_sql.assert_not_called()
+
+	@patch("retailedge.cash_custody.validate_cash_deposit_bank_destination")
+	@patch("retailedge.cash_custody._get_account", return_value={})
+	@patch("retailedge.cash_custody._validate_cash_custody_branch", return_value="Main")
+	@patch("retailedge.cash_custody.has_doctype", return_value=True)
+	@patch("retailedge.cash_custody.frappe.db.exists", return_value=True)
+	@patch("retailedge.cash_custody.frappe.db.sql", return_value=[])
+	@patch("retailedge.cash_custody.get_cash_custody_snapshot")
+	def test_cash_deposit_fails_closed_when_cash_receipts_unverified(
+		self, snapshot, shift_lock, _exists, _has_doctype, _branch, _account, _destination
+	):
+		doc = SimpleNamespace(
+			doctype="Payment Entry", name="PE-1", company="Demo Company",
+			retailedge_branch="Main", retailedge_cashier="cashier@example.com",
+			retailedge_pos_opening_shift="OPEN-1",
+			retailedge_cash_custody_type=CASH_DEPOSIT_TYPE,
+			payment_type="Internal Transfer", paid_from="Cash - DEMO",
+			paid_to="Bank - DEMO", paid_amount=100, received_amount=100,
+		)
+		snapshot.return_value = {"available_cash": 1000, "cash_sales_verified": False}
+		with self.assertRaises(frappe.ValidationError):
+			validate_cash_deposit_before_submit(doc)
+		self.assertIn("FOR UPDATE", shift_lock.call_args.args[0])
+		snapshot.return_value = {"available_cash": 1000, "cash_sales_verified": True}
+		self.assertIsNone(validate_cash_deposit_before_submit(doc))
 
 	def test_custody_contract_preserves_erpnext_accounting_truth(self):
 		source = (APP_ROOT / "cash_custody.py").read_text(encoding="utf-8")
