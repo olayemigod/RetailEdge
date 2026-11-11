@@ -55,17 +55,25 @@ def _has_custom_permission(doctype: str, role: str) -> bool:
 	)
 
 
-def _ensure_permission_row(doctype: str, role: str) -> None:
+def _ensure_permission_row(doctype: str, role: str, *, initial_permission: str = "read") -> None:
 	if not _has_custom_permission(doctype, role):
-		add_permission(doctype, role, PERMLEVEL)
+		# Frappe add_permission defaults to Read. Explicitly create Select-only
+		# rows without briefly granting Account document access.
+		add_permission(doctype, role, PERMLEVEL, ptype=initial_permission)
 
 
 def _grant(doctype: str, role: str, properties: tuple[str, ...]) -> None:
 	if not frappe.db.exists("DocType", doctype):
 		return
-	_ensure_permission_row(doctype, role)
+	select_only = properties == ("select",)
+	_ensure_permission_row(doctype, role, initial_permission="select" if select_only else "read")
 	for property_name in properties:
 		update_permission_property(doctype, role, PERMLEVEL, property_name, 1)
+	if select_only:
+		# Reconcile older sites where add_permission() created Account Read = 1.
+		# Only the RetailEdgeCashier DocPerm is changed. Other native roles and
+		# user-level Account permissions remain under normal Frappe governance.
+		update_permission_property(doctype, role, PERMLEVEL, "read", 0)
 
 
 def execute():
