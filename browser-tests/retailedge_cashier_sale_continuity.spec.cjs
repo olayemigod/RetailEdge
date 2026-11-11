@@ -138,7 +138,12 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		});
 		await updateDraft.click();
 		try {
-			await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
+			// The saved Draft returns to the Review & Submit panel, which
+			// intentionally shares .make-sale-form with the edit form. Check
+			// the actual form lifecycle, not the shared styling class.
+			await expect(page.locator("form.make-sale-form")).toHaveCount(0, { timeout: 25_000 });
+			await expect(page.locator('section.make-sale-form[aria-label="Review and submit sale"]')).toBeVisible();
+			await expect(page.getByRole("button", { name: "Edit Sale", exact: true })).toBeVisible();
 		} catch (error) {
 			const saveErrors = await page.locator(".guided-invoice-error").allTextContents();
 			throw new Error(`${error.message}\nSaved draft server responses: ${JSON.stringify(draftUpdateFailures.slice(-4))}\nVisible save errors: ${JSON.stringify(saveErrors)}`);
