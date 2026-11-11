@@ -218,6 +218,16 @@ def _sales_invoice_values(branch_name: str, marker: str) -> dict:
 	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
 	income = _first_leaf_account(COMPANY, root_type="Income")
 	cost_center = _first_cost_center(COMPANY)
+	# Seed an actual Company/Branch-authorised warehouse for every CI invoice.
+	# An omitted warehouse is filled from ERPNext's Company default (Stores),
+	# which may not be a valid Stock Location in the cashier's operating Branch.
+	warehouse = frappe.db.get_value(
+		"Warehouse",
+		{"warehouse_name": f"{branch_name} Stock", "company": COMPANY, "is_group": 0},
+		"name",
+	)
+	if not warehouse:
+		frappe.throw(f"Browser Sales Invoice fixture has no Stock Location for Branch {branch_name}.")
 	return {
 		"doctype": "Sales Invoice",
 		"company": COMPANY,
@@ -230,6 +240,7 @@ def _sales_invoice_values(branch_name: str, marker: str) -> dict:
 		"price_list_currency": currency,
 		"plc_conversion_rate": 1,
 		"debit_to": receivable,
+		"set_warehouse": warehouse,
 		"remarks": marker,
 		"retailedge_branch": branch_name,
 		"items": [
@@ -237,6 +248,7 @@ def _sales_invoice_values(branch_name: str, marker: str) -> dict:
 				"item_code": ITEM,
 				"qty": 2,
 				"rate": 1250,
+				"warehouse": warehouse,
 				"income_account": income,
 				"cost_center": cost_center,
 			}
