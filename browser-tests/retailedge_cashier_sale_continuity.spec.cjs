@@ -122,8 +122,27 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		} catch (error) {
 			throw new Error(`${error.message}\\nCommercial preview HTTP failures: ${JSON.stringify(commercialPreviewFailures.slice(-4))}`);
 		}
+		// Prove the update was persisted, not just that the button became enabled.
+		// If the server rejects the update, surface the actual failure rather than
+		// timing out on an unchanged Edit form.
+		const draftUpdateFailures = [];
+		page.on("response", async (response) => {
+			if (!response.url().includes("/api/method/retailedge.sales_commercial_draft_update.update_sales_invoice_draft_with_commercial_terms")) return;
+			const body = await response.json().catch(() => ({}));
+			draftUpdateFailures.push({
+				status: response.status(),
+				exc_type: String(body.exc_type || "").slice(0, 180),
+				exception: String(body.exception || "").slice(0, 700),
+				server_messages: String(body._server_messages || "").slice(0, 800),
+			});
+		});
 		await updateDraft.click();
-		await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
+		try {
+			await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
+		} catch (error) {
+			const saveErrors = await page.locator(".guided-invoice-error").allTextContents();
+			throw new Error(`${error.message}\nSaved draft server responses: ${JSON.stringify(draftUpdateFailures.slice(-4))}\nVisible save errors: ${JSON.stringify(saveErrors)}`);
+		}
 		await expect.poll(async () => {
 			const persisted = await apiGet(
 				context,
