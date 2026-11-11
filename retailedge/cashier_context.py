@@ -995,6 +995,7 @@ def get_shift_cash_snapshot(
 	pos_profile: str | None = None,
 	user: str | None = None,
 	expense_name: str | None = None,
+	for_cash_validation: bool = False,
 ) -> dict[str, object]:
 	settings = _safe_settings()
 	opening_shift_doc = _coerce_doc("POS Opening Shift", opening_shift)
@@ -1049,15 +1050,32 @@ def get_shift_cash_snapshot(
 		if expense_name:
 			filters["name"] = ["!=", expense_name]
 		try:
-			expenses = frappe.get_all(
-				"RetailEdge Cashier Expense",
-				filters=filters,
-				fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
-				limit_page_length=0,
-			)
+			if for_cash_validation:
+				# Current/locking read after the opening-shift FOR UPDATE lock.
+				# Ordinary get_all may reuse a REPEATABLE READ snapshot from before
+				# the lock wait and undercount another cashier expense.
+				all_rows = frappe.db.sql(
+					"""SELECT name, amount, expense_status, cash_source, cash_movement_status
+					FROM `tabRetailEdge Cashier Expense`
+					WHERE linked_pos_opening_shift = %s AND docstatus != 2
+					FOR UPDATE""",
+					(opening_shift_doc.name,),
+					as_dict=True,
+				)
+				expenses = [
+					row for row in all_rows
+					if row.get("expense_status") in statuses
+					and (not expense_name or row.get("name") != expense_name)
+				]
+			else:
+				expenses = frappe.get_all(
+					"RetailEdge Cashier Expense",
+					filters=filters,
+					fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
+					limit_page_length=0,
+				)
 		except Exception:
-			# Silent zero expenses would allow overspending when the database
-			# cannot provide the true shift liability. Fail closed on every path.
+			# An unknown previous expense balance must never be treated as zero.
 			frappe.throw("Cannot verify previous till expenses. Please retry or contact your administrator.")
 		result["prior_expenses"] = sum(
 			flt(row.amount)
