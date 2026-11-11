@@ -6,6 +6,14 @@ from frappe.permissions import add_permission, update_permission_property
 PERMLEVEL = 0
 CASHIER_ROLES = ("RetailEdgeCashier",)
 
+# ERPNext get_party_account() checks Select (when no Account Read role is
+# present) while calculating a Sales Invoice. A cashier may select the
+# receivable account configured for an authorised Company, but must not gain
+# general ledger/Account record read or accounting mutation permissions.
+SELECT_ONLY_DOCTYPES = (
+	"Account",
+)
+
 READ_SELECT_DOCTYPES = (
 	"Branch",
 	"POS Profile",
@@ -68,6 +76,9 @@ def execute():
 
 		for doctype in READ_SELECT_DOCTYPES:
 			_grant(doctype, role, ("read", "select"))
+
+		for doctype in SELECT_ONLY_DOCTYPES:
+			_grant(doctype, role, ("select",))
 
 		for doctype in SELLING_DOCUMENTS:
 			_grant(doctype, role, SELLING_DOCUMENT_PERMISSIONS)
