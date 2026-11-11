@@ -627,7 +627,7 @@ def get_shift_cash_sales(
 				# every Mode of Payment whose underlying ledger is typed Cash.
 				if str(mode_name or "").strip() != str(cash_mode or "").strip():
 					continue
-				if cash_account and account_name and account_name != cash_account:
+				if cash_account and account_name != cash_account:
 					continue
 				amount = flt(row_dict.get("base_amount") if row_dict.get("base_amount") is not None else row_dict.get("amount"))
 				if amount <= 0 and not (amount < 0 and getattr(invoice, "is_return", 0)):
@@ -645,6 +645,11 @@ def get_shift_cash_sales(
 				matched_invoices += 1
 				matched_payments += invoice_payment_matches
 				matched_invoice_names.add(invoice.name)
+
+		# Partial reads cannot authorise money leaving the physical till.
+		if not invoice_query_succeeded or invoice_processing_failed:
+			result["message"] = "Cannot verify all submitted shift invoices. Till spending is temporarily unavailable."
+			return result
 
 		payment_entry_result = _get_shift_cash_payment_entries(
 			window=window,
@@ -750,7 +755,7 @@ def _get_shift_cash_payment_entries(window, cash_mode=None, cash_account=None, m
 	try:
 		payment_rows = frappe.get_all("Payment Entry", filters=query_filters, fields=list(dict.fromkeys(fields)), limit_page_length=0)
 	except Exception:
-		return result
+		frappe.throw("Cannot verify cash receipts for the shift. No new till expense can be recorded.")
 	if not payment_rows:
 		return result
 
