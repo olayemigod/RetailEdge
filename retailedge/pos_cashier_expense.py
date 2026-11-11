@@ -266,11 +266,12 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 
 	closing_data["retailedge_cashier_expense_count"] = cint(summary["count"])
 	if not cash_row:
+		_require_cash_reconciliation_for_movements(
+			current_total, previous_total, deposit_total, previous_deposit_total,
+		)
 		closing_data["retailedge_cashier_expense_total"] = previous_total
 		closing_data["retailedge_cash_deposit_total"] = previous_deposit_total
 		closing_data["retailedge_cash_deposit_count"] = cint(deposit["count"])
-		if deposit_total:
-			frappe.throw(_("Cash reconciliation row was not found; cannot account for submitted cash deposits."))
 		closing_data["retailedge_cashier_expense_note"] = (
 			_("Cashier expenses could not be applied because the POS cash reconciliation row was not found.")
 			if current_total
@@ -302,6 +303,15 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 		else None
 	)
 	return closing_data
+
+
+def _require_cash_reconciliation_for_movements(*amounts) -> None:
+	"""Prevent closing a till with unaccounted expense/deposit movements."""
+	if any(flt(amount) != 0 for amount in amounts):
+		frappe.throw(
+			_("The cash payment method is missing from this shift's reconciliation. "
+			  "Review its cash payment row before closing.")
+		)
 
 
 def _cashier_expense_closing_integration_enabled(settings=None) -> bool:
@@ -355,12 +365,13 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		frappe.throw(_("POS Closing Shift cash-deposit fields are not installed. Migrate RetailEdge before closing the shift."))
 	cash_row = _find_cash_reconciliation_row(doc, pos_profile=pos_profile)
 	if not cash_row:
+		_require_cash_reconciliation_for_movements(
+			current_total, previous_total, deposit_total, previous_deposit_total,
+		)
 		doc.retailedge_cashier_expense_total = previous_total
 		if meta.has_field("retailedge_cash_deposit_total"):
 			doc.retailedge_cash_deposit_total = previous_deposit_total
 			doc.retailedge_cash_deposit_count = cint(deposit["count"])
-		if deposit_total:
-			frappe.throw(_("Cash reconciliation row was not found; cannot account for submitted cash deposits."))
 		doc.retailedge_cashier_expense_count = cint(summary["count"])
 		doc.retailedge_cashier_expense_note = (
 			_("Cashier expenses could not be applied because the POS cash reconciliation row was not found.")
