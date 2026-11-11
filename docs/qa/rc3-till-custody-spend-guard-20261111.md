@@ -12,6 +12,7 @@ A production shift reported negative expected cash despite all cashier expenses 
 - Deduct change given to customers from cash tender before recognising available funds.
 - Count incoming Payment Entries only when explicitly linked to the exact POS opening shift, `payment_type=Receive`, and paid into that till's payment method/account. Company, Branch and time window alone are insufficient proof of till receipt.
 - Never treat an incomplete invoice scan or failed expense/receipt query as zero liability. Mark unresolved cash sales unverified and refuse the new till expense with a business-readable error.
+- Closing preview and native validation must refuse a shift if the POS cash reconciliation row is missing while current or previously applied till expenses/deposits are nonzero; an informational warning must never hide an unapplied cash movement. Zero-cash-movement shifts may remain cashless.
 - Serialize new expenses and submitted deposits on the `POS Opening Shift` row. Read previous cash expenses and submitted deposits with current `FOR UPDATE` queries after this lock so a repeatable-read transaction cannot authorise concurrent overspending using an old read view.
 - Keep submitted expense review/ledger transitions functional without changing their saved historical monetary snapshot. Other cash sources are not charged to the POS Till.
 - Require an opening shift for a POS Till expense even when a merchant allows a non-till expense without an open shift.
