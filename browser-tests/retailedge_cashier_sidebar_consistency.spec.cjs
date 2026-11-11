@@ -33,9 +33,12 @@ async function finalNavigation(context) {
 async function unpaidSalesInvoices(context) {
 	const params = new URLSearchParams({
 		document: "sales-invoice",
-		status: "Unpaid",
+		// Another isolated browser acceptance posts a partial receipt against the
+		// seeded invoice, legitimately changing its ERPNext status to Partly Paid.
+		// Remaining outstanding amount, not the literal Unpaid status, governs this action.
+		status: "All",
 		start: "0",
-		page_length: "20",
+		page_length: "100",
 	});
 	const response = await context.request.get(
 		`${BASE_URL}/api/method/retailedge.professional_selling.get_professional_selling_list?${params.toString()}`
