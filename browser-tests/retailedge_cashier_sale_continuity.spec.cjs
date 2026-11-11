@@ -97,7 +97,13 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		// Use the seeded CI-only Sales Invoice and leave it in Draft: no sale is submitted.
 		const savedNote = `Cashier saved-sale persistence QA ${seededDraft.name}`;
 		await page.locator(".make-sale-form textarea").fill(savedNote);
-		await expect(updateDraft).toBeEnabled({ timeout: 25_000 });
+		// Keep enough on-screen diagnostic evidence to distinguish missing stock
+		// context from a rejected commercial preview (without bypassing either).
+		await expect.poll(async () => ({
+			enabled: await updateDraft.isEnabled(),
+			commercialError: (await page.locator(".sales-commercial-summary__error").allTextContents()).join(" | "),
+			context: (await page.locator(".guided-invoice-context").allTextContents()).join(" | "),
+		}), { timeout: 25_000 }).toMatchObject({ enabled: true, commercialError: "" });
 		await updateDraft.click();
 		await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
 		await expect.poll(async () => {
