@@ -214,6 +214,52 @@ class TestCashierExpensePOSPolicyContract(unittest.TestCase):
 		self.assertEqual(row.difference, 0)
 
 
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary", return_value={"total": 0, "count": 0})
+	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row_from_rows", return_value=None)
+	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary", return_value={"total": 1000, "count": 1})
+	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
+	@patch("retailedge.pos_cashier_expense.frappe.get_meta")
+	def test_preview_rejects_till_expenses_when_cash_reconciliation_row_is_missing(
+		self, meta, settings, _summary, _cash_row, _deposit_summary
+	):
+		meta.return_value.has_field.return_value = True
+		settings.return_value = SimpleNamespace(
+			enable_cashier_expense_workflow=1,
+			enable_cashier_expense_pos_integration=1,
+			include_cashier_expenses_in_pos_closing=1,
+		)
+		payload = {
+			"pos_opening_shift": "OPEN-NO-CASH",
+			"pos_profile": "POS-1",
+			"payment_reconciliation": [],
+			"retailedge_cashier_expense_total": 0,
+			"retailedge_cash_deposit_total": 0,
+		}
+		with self.assertRaises(frappe.ValidationError):
+			apply_retailedge_cashier_expenses_to_closing_data(payload)
+
+	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary", return_value={"total": 0, "count": 0})
+	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row", return_value=None)
+	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary", return_value={"total": 1000, "count": 1})
+	@patch("retailedge.pos_cashier_expense.get_retailedge_settings")
+	@patch("retailedge.pos_cashier_expense.frappe.get_meta")
+	def test_native_close_rejects_till_expenses_when_cash_reconciliation_row_is_missing(
+		self, meta, settings, _summary, _cash_row, _deposit_summary
+	):
+		meta.return_value.has_field.return_value = True
+		settings.return_value = SimpleNamespace(
+			enable_cashier_expense_workflow=1,
+			enable_cashier_expense_pos_integration=1,
+			include_cashier_expenses_in_pos_closing=1,
+		)
+		doc = SimpleNamespace(
+			doctype="POS Closing Shift", pos_opening_shift="OPEN-NO-CASH",
+			pos_profile="POS-1", retailedge_cashier_expense_total=0,
+			retailedge_cash_deposit_total=0,
+		)
+		with self.assertRaises(frappe.ValidationError):
+			apply_retailedge_cashier_expenses_to_closing_shift(doc)
+
 	@patch("retailedge.pos_cashier_expense._get_submitted_shift_deposit_summary")
 	@patch("retailedge.pos_cashier_expense._find_cash_reconciliation_row_from_rows")
 	@patch("retailedge.pos_cashier_expense._build_pos_closing_cashier_expense_summary")
