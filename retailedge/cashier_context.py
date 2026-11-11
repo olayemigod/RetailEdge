@@ -1063,7 +1063,7 @@ def get_shift_cash_snapshot(
 					as_dict=True,
 				)
 				expenses = [
-					row for row in all_rows
+					frappe._dict(row) for row in all_rows
 					if row.get("expense_status") in statuses
 					and (not expense_name or row.get("name") != expense_name)
 				]
