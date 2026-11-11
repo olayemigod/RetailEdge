@@ -97,7 +97,8 @@ class TestCashierShiftCashSalesResolution(unittest.TestCase):
 
 		self.assertEqual(result["cash_sales"], 0.0)
 		self.assertEqual(result["source"], "unresolved")
-		self.assertIn("could not be safely resolved", result["message"])
+		self.assertIn("Cannot verify", result["message"])
+		self.assertIn("Till spending is temporarily unavailable", result["message"])
 
 
 if __name__ == "__main__":
