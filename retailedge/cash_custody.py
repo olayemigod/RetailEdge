@@ -403,6 +403,10 @@ def validate_cash_deposit_before_submit(doc, method=None):
 		exclude_payment_entry=getattr(doc, "name", None),
 		for_spending_validation=True,
 	)
+	if not custody.get("cash_sales_verified"):
+		frappe.throw(
+			_("Cash receipts for this shift could not be verified. No till cash deposit can be submitted until reconciliation is restored.")
+		)
 	if amount > flt(custody.get("available_cash")):
 		frappe.throw(
 			_("This deposit can no longer be submitted because available shift cash is {0}.").format(
