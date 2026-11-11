@@ -31,6 +31,13 @@ class TestCashierOperationalPermissionBaseline(unittest.TestCase):
 
 		self.assertIn('_grant(doctype, role, ("read", "select"))', source)
 
+	def test_cashier_account_permission_is_select_only_for_native_sales_invoice_calculation(self):
+		source = PATCH.read_text(encoding="utf-8")
+		self.assertIn('SELECT_ONLY_DOCTYPES = (\n\t"Account",\n)', source)
+		self.assertIn('_grant(doctype, role, ("select",))', source)
+		self.assertNotIn('"Account",\n\t"Branch"', source)
+		self.assertNotIn('_grant("Account", role, ("read", "select"))', source)
+
 	def test_cashier_sales_invoice_authority_is_bounded(self):
 		source = PATCH.read_text(encoding="utf-8")
 
