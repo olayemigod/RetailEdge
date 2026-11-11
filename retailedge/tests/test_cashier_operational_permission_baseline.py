@@ -35,6 +35,9 @@ class TestCashierOperationalPermissionBaseline(unittest.TestCase):
 		source = PATCH.read_text(encoding="utf-8")
 		self.assertIn('SELECT_ONLY_DOCTYPES = (\n\t"Account",\n)', source)
 		self.assertIn('_grant(doctype, role, ("select",))', source)
+		self.assertIn('add_permission(doctype, role, PERMLEVEL, ptype=initial_permission)', source)
+		self.assertIn('initial_permission="select" if select_only else "read"', source)
+		self.assertIn('update_permission_property(doctype, role, PERMLEVEL, "read", 0)', source)
 		self.assertNotIn('"Account",\n\t"Branch"', source)
 		self.assertNotIn('_grant("Account", role, ("read", "select"))', source)
 
