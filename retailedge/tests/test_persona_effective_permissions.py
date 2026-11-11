@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from erpnext.accounts.party import get_party_account
 
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
 from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
@@ -145,6 +146,25 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				doctype,
 				{"read": False, "create": False, "write": False, "submit": False, "cancel": False},
 			)
+
+	def test_cashier_can_select_company_receivable_account_without_ledger_read(self):
+		user = "permission-cashier@example.com"
+		self.assert_permissions(
+			user, "Account",
+			{"select": True, "read": False, "write": False, "create": False,
+			 "submit": False, "delete": False},
+		)
+		account = frappe.db.get_value("Company", COMPANY, "default_receivable_account")
+		self.assertTrue(account, "The isolated fixture needs a Company receivable account.")
+		self.assertTrue(frappe.has_permission("Account", "select", doc=account, user=user))
+		self.assertFalse(frappe.has_permission("Account", "read", doc=account, user=user))
+		prior_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.only_has_select_perm("Account"))
+			self.assertEqual(get_party_account("Customer", None, COMPANY), account)
+		finally:
+			frappe.set_user(prior_user)
 
 	def test_retailedge_management_roles_get_only_context_master_read_by_default(self):
 		users = (
