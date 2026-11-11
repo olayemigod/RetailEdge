@@ -289,6 +289,7 @@ def get_cash_custody_snapshot(
 	return {
 		"opening_cash": flt(base.get("opening_cash")),
 		"cash_sales": flt(base.get("cash_sales")),
+		"cash_sales_verified": bool(base.get("cash_sales_verified", False)),
 		"cashier_expenses": flt(base.get("prior_expenses")),
 		"submitted_deposits": deposit_amount,
 		"submitted_deposit_count": len(deposits),
