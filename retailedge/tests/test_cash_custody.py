@@ -61,7 +61,24 @@ class TestCashCustody(unittest.TestCase):
 		snapshot.assert_called_once_with(
 			opening_shift="POSA-OS-26-0000009", company="Retail Co",
 			pos_profile="POS-1", user="cashier@example.com", expense_name="EXP-1",
+			for_cash_validation=False,
 		)
+
+	@patch("retailedge.cash_custody.get_submitted_cash_deposits", return_value=[{"paid_amount": 2000}])
+	@patch("retailedge.cash_custody.get_shift_cash_snapshot")
+	def test_spend_gate_uses_current_locked_read_for_expenses_and_deposits(self, snapshot, deposits):
+		snapshot.return_value = {
+			"opening_cash": 10000, "cash_sales": 0, "prior_expenses": 1000,
+			"available_before": 9000, "cash_sales_verified": True,
+		}
+		position = get_cash_custody_snapshot(
+			opening_shift="OPEN-1", company="Retail Co", cashier="cashier@example.com",
+			for_spending_validation=True,
+		)
+		self.assertEqual(position["available_cash"], 7000)
+		self.assertTrue(position["cash_sales_verified"])
+		self.assertTrue(snapshot.call_args.kwargs["for_cash_validation"])
+		self.assertTrue(deposits.call_args.kwargs["for_cash_validation"])
 
 	def test_expense_document_uses_submitted_deposit_aware_custody(self):
 		controller = (APP_ROOT / "retailedge" / "doctype" / "retailedge_cashier_expense" / "retailedge_cashier_expense.py").read_text(encoding="utf-8")
