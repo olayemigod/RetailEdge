@@ -422,7 +422,7 @@ class RetailEdgeCashierExpense(Document):
 		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
 			return
 		if not self.linked_pos_opening_shift:
-			return
+			frappe.throw(_("POS Till expenses require an open shift with verified cash availability."))
 		if getattr(self, "_cash_sales_verified", True) is False:
 			frappe.throw(
 				_("Cash receipts for this shift could not be verified. No till expense can be recorded until reconciliation is restored.")
