@@ -268,6 +268,7 @@ def get_cash_custody_snapshot(
 	cashier: str | None = None,
 	exclude_payment_entry: str | None = None,
 	expense_name: str | None = None,
+	for_spending_validation: bool = False,
 ) -> dict[str, Any]:
 	"""Return shift cash after recognised expenses and submitted deposits only."""
 	base = get_shift_cash_snapshot(
@@ -276,12 +277,14 @@ def get_cash_custody_snapshot(
 		pos_profile=pos_profile,
 		user=cashier,
 		expense_name=expense_name,
+		for_cash_validation=for_spending_validation,
 	)
 	deposits = get_submitted_cash_deposits(
 		opening_shift=opening_shift,
 		company=company,
 		cashier=cashier,
 		exclude_payment_entry=exclude_payment_entry,
+		for_cash_validation=for_spending_validation,
 	)
 	deposit_amount = sum(flt(row.get("paid_amount")) for row in deposits)
 	available_before_deposits = flt(base.get("available_before"))
@@ -306,6 +309,7 @@ def get_submitted_cash_deposits(
 	company: str | None = None,
 	cashier: str | None = None,
 	exclude_payment_entry: str | None = None,
+	for_cash_validation: bool = False,
 ) -> list[dict[str, Any]]:
 	if not opening_shift or not has_doctype(PAYMENT_ENTRY_DOCTYPE):
 		return []
@@ -324,13 +328,40 @@ def get_submitted_cash_deposits(
 		filters["retailedge_cashier"] = cashier
 	if exclude_payment_entry:
 		filters["name"] = ["!=", exclude_payment_entry]
-	rows = frappe.get_all(
-		PAYMENT_ENTRY_DOCTYPE,
-		filters=filters,
-		fields=["name", "paid_amount", "paid_from", "paid_to", "posting_date", "retailedge_branch", "retailedge_cashier"],
-		order_by="posting_date asc, creation asc",
-		limit_page_length=0,
-	)
+	if for_cash_validation:
+		# Current read prevents a previously committed deposit disappearing
+		# behind a stale REPEATABLE READ view after the opening-shift row lock.
+		conditions = [
+			"docstatus = 1",
+			"payment_type = 'Internal Transfer'",
+			"retailedge_cash_custody_type = %s",
+			"retailedge_pos_opening_shift = %s",
+		]
+		params = [CASH_DEPOSIT_TYPE, opening_shift]
+		if company:
+			conditions.append("company = %s")
+			params.append(company)
+		if cashier:
+			conditions.append("retailedge_cashier = %s")
+			params.append(cashier)
+		if exclude_payment_entry:
+			conditions.append("name != %s")
+			params.append(exclude_payment_entry)
+		rows = frappe.db.sql(
+			"""SELECT name, paid_amount, paid_from, paid_to, posting_date,
+			retailedge_branch, retailedge_cashier FROM `tabPayment Entry`
+			WHERE """ + " AND ".join(conditions) + " ORDER BY posting_date, creation FOR UPDATE",
+			tuple(params),
+			as_dict=True,
+		)
+	else:
+		rows = frappe.get_all(
+			PAYMENT_ENTRY_DOCTYPE,
+			filters=filters,
+			fields=["name", "paid_amount", "paid_from", "paid_to", "posting_date", "retailedge_branch", "retailedge_cashier"],
+			order_by="posting_date asc, creation asc",
+			limit_page_length=0,
+		)
 	return [dict(row) for row in rows]
 
 
@@ -370,6 +401,7 @@ def validate_cash_deposit_before_submit(doc, method=None):
 		company=company,
 		cashier=cashier,
 		exclude_payment_entry=getattr(doc, "name", None),
+		for_spending_validation=True,
 	)
 	if amount > flt(custody.get("available_cash")):
 		frappe.throw(
