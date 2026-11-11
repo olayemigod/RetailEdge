@@ -28,10 +28,13 @@ class RetailEdgeCashierExpense(Document):
 		self.set_cashier_defaults()
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=False)
 		self.apply_expense_category()
-		# Serialize expenses and deposits against the same POS opening-shift row
-		# before reading available cash. The lock is held until transaction commit.
-		self.lock_shift_cash_for_validation()
-		self.apply_shift_cash_snapshot()
+		# A submitted document may later undergo review/ledger transitions.
+		# Revalidate custody only for a new or newly disbursed till movement;
+		# never rewrite an old expense's monetary snapshot during review.
+		self._requires_new_cash_check = self.requires_new_cash_check()
+		if self._requires_new_cash_check:
+			self.lock_shift_cash_for_validation()
+			self.apply_shift_cash_snapshot()
 
 	def validate(self):
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
@@ -311,6 +314,22 @@ class RetailEdgeCashierExpense(Document):
 		self._expense_category_context = context
 		return context
 
+	def requires_new_cash_check(self):
+		if self.is_new() or self.docstatus == 0:
+			return True
+		previous = self.get_doc_before_save()
+		if not previous or previous.docstatus == 0:
+			return True
+		# Only a new disbursement or a consequential monetary change can
+		# require cash that was not reserved on the original submission.
+		return bool(
+			flt(previous.get("amount")) != flt(self.amount)
+			or (
+				previous.get("cash_movement_status") != "Disbursed"
+				and self.cash_movement_status == "Disbursed"
+			)
+		)
+
 	def lock_shift_cash_for_validation(self):
 		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
 			return
@@ -397,6 +416,8 @@ class RetailEdgeCashierExpense(Document):
 			frappe.throw("Expense Account could not be resolved from the selected Expense Category.")
 
 	def validate_cash_availability(self):
+		if getattr(self, "_requires_new_cash_check", True) is False:
+			return
 		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
 			return
 		if not self.linked_pos_opening_shift:
