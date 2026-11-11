@@ -334,6 +334,45 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.validate_cash_availability()
 
+	def test_pos_till_requires_a_shift_even_if_other_expenses_may_be_unlinked(self):
+		doc = self._make_doc(amount=10, available_shift_cash_before_expense=1000)
+		with self.assertRaises(frappe.ValidationError):
+			doc.validate_cash_availability()
+
+	def test_review_does_not_revalidate_submitted_historical_cash(self):
+		doc = self._make_doc(
+			name="EXP-1", _is_new=False, docstatus=1, amount=100
+		)
+		doc.cash_movement_status = "Disbursed"
+		doc.get_doc_before_save = lambda: SimpleNamespace(
+			docstatus=1,
+			get=lambda field: {"amount": 100, "cash_movement_status": "Disbursed"}.get(field),
+		)
+		self.assertFalse(RetailEdgeCashierExpense.requires_new_cash_check(doc))
+
+	@patch("retailedge.cashier_context.get_shift_cash_sales", return_value={"cash_sales": 500, "source": "sales_invoice.payments", "message": None})
+	@patch("retailedge.cashier_context._safe_settings", return_value=_Settings())
+	@patch("retailedge.cashier_context.frappe.db.sql")
+	@patch("retailedge.cashier_context.frappe.get_all")
+	def test_spend_time_uses_current_locked_expense_rows(self, mock_get_all, mock_sql, _settings, _sales):
+		mock_sql.return_value = [
+			{"name": "EXP-1", "amount": 200, "expense_status": "Submitted", "cash_source": "POS Till", "cash_movement_status": "Disbursed"},
+			{"name": "EXP-2", "amount": 100, "expense_status": "Draft", "cash_source": "POS Till", "cash_movement_status": "Not Disbursed"},
+			{"name": "EXP-SELF", "amount": 100, "expense_status": "Draft", "cash_source": "POS Till", "cash_movement_status": "Not Disbursed"},
+		]
+		opening_shift = SimpleNamespace(
+			doctype="POS Opening Shift", name="OPEN-1",
+			payments=[_Row(mode_of_payment="Cash", amount=1000)],
+		)
+		position = get_shift_cash_snapshot(
+			opening_shift=opening_shift, expense_name="EXP-SELF", for_cash_validation=True,
+		)
+		self.assertEqual(position["prior_expenses"], 300)
+		self.assertEqual(position["available_before"], 1200)
+		self.assertTrue(position["cash_sales_verified"])
+		self.assertIn("FOR UPDATE", mock_sql.call_args.args[0])
+		mock_get_all.assert_not_called()
+
 	def test_unverified_sales_cannot_be_used_to_authorise_till_spending(self):
 		doc = self._make_doc(
 			linked_pos_opening_shift="OPEN-1", amount=10, available_shift_cash_before_expense=1000
