@@ -373,6 +373,7 @@ class RetailEdgeCashierExpense(Document):
 			pos_profile=self.pos_profile,
 			cashier=self.cashier,
 			expense_name=None if self.is_new() else self.name,
+			for_spending_validation=bool(getattr(self, "_requires_new_cash_check", False)),
 		)
 		self._cash_sales_verified = bool(snapshot.get("cash_sales_verified", False))
 		self.shift_opening_cash_amount = snapshot.get("opening_cash", 0)
