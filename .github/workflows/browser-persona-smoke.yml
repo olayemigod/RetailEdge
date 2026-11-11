@@ -175,7 +175,9 @@ jobs:
       - name: Install Playwright Chromium
         run: |
           npm install --no-save --package-lock=false @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
+          # ubuntu-24.04 GitHub runners already include Chromium runtime libraries.
+          # --with-deps invokes apt, reintroducing the failing Ubuntu mirror dependency.
+          npx playwright install chromium
 
       - name: Start Frappe web server
         working-directory: frappe-bench
