@@ -88,6 +88,20 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		await page.getByRole("heading", { name: "Make Sale", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		const reloadedRow = page.locator(".unfinished-sales__row").filter({ hasText: seededDraft.name }).first();
 		await expect(reloadedRow).toBeVisible();
+		// Record only API status/error information from the disposable CI site.
+		// This is diagnostics, not a bypass of commercial or permission checks.
+		const commercialPreviewFailures = [];
+		page.on("response", async (response) => {
+			if (!response.url().includes("/api/method/retailedge.sales_commercial_preview.get_sales_invoice_commercial_preview") || response.ok()) return;
+			const body = await response.json().catch(() => ({}));
+			commercialPreviewFailures.push({
+				status: response.status(),
+				exc_type: String(body.exc_type || "").slice(0, 180),
+				exception: String(body.exception || "").slice(0, 700),
+				message: String(body.message || "").slice(0, 500),
+				server_messages: String(body._server_messages || "").slice(0, 800),
+			});
+		});
 		await reloadedRow.getByRole("button", { name: "Resume Sale", exact: true }).click();
 		const updateDraft = page.getByRole("button", { name: "Update Draft", exact: true });
 		await expect(updateDraft).toBeVisible();
@@ -99,11 +113,15 @@ test("cashier can review and resume an unfinished saved sale after a fresh page 
 		await page.locator(".make-sale-form textarea").fill(savedNote);
 		// Keep enough on-screen diagnostic evidence to distinguish missing stock
 		// context from a rejected commercial preview (without bypassing either).
-		await expect.poll(async () => ({
-			enabled: await updateDraft.isEnabled(),
-			commercialError: (await page.locator(".sales-commercial-summary__error").allTextContents()).join(" | "),
-			context: (await page.locator(".guided-invoice-context").allTextContents()).join(" | "),
-		}), { timeout: 25_000 }).toMatchObject({ enabled: true, commercialError: "" });
+		try {
+			await expect.poll(async () => ({
+				enabled: await updateDraft.isEnabled(),
+				commercialError: (await page.locator(".sales-commercial-summary__error").allTextContents()).join(" | "),
+				context: (await page.locator(".guided-invoice-context").allTextContents()).join(" | "),
+			}), { timeout: 25_000 }).toMatchObject({ enabled: true, commercialError: "" });
+		} catch (error) {
+			throw new Error(`${error.message}\\nCommercial preview HTTP failures: ${JSON.stringify(commercialPreviewFailures.slice(-4))}`);
+		}
 		await updateDraft.click();
 		await expect(page.locator(".make-sale-form")).toHaveCount(0, { timeout: 25_000 });
 		await expect.poll(async () => {
