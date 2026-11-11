@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.tests.rc3_browser_fixture import _sales_invoice_values
+from retailedge.tests.upgrade_validation_fixture import COMPANY
 
 
 class TestRc3BrowserInvoiceFixture(unittest.TestCase):
@@ -28,7 +29,7 @@ class TestRc3BrowserInvoiceFixture(unittest.TestCase):
             "Warehouse",
             {
                 "warehouse_name": "RetailEdge RC3 Lagos Stock",
-                "company": "RetailEdge Upgrade Co",
+                "company": COMPANY,
                 "is_group": 0,
             },
             "name",
