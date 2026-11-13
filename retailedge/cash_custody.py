@@ -87,10 +87,21 @@ def ensure_cash_custody_custom_fields():
 	return custom_fields
 
 
+
+def require_cash_custody_fields_installed() -> None:
+	"""Read-only preflight: schema changes belong to migration, not cashier requests."""
+	if not has_doctype(PAYMENT_ENTRY_DOCTYPE) or any(
+		not has_field(PAYMENT_ENTRY_DOCTYPE, fieldname) for fieldname in CUSTODY_FIELD_DEFS
+	):
+		frappe.throw(
+			_("Cash Deposit is not ready on this site. Ask an administrator to complete setup before recording a deposit.")
+		)
+
+
 @frappe.whitelist()
 def get_cash_deposit_context() -> dict[str, Any]:
 	_assert_can_create_payment_entry()
-	ensure_cash_custody_custom_fields()
+	require_cash_custody_fields_installed()
 	context = get_current_cashier_context(user=frappe.session.user)
 	shift = str(context.get("linked_pos_opening_shift") or "").strip()
 	if not shift:
@@ -156,7 +167,7 @@ def search_cash_deposit_options(
 @frappe.whitelist(methods=["POST"])
 def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_payment_entry()
-	ensure_cash_custody_custom_fields()
+	require_cash_custody_fields_installed()
 	values = _coerce_values(values)
 	context = get_current_cashier_context(user=frappe.session.user)
 	company = str(context.get("company") or "").strip()
