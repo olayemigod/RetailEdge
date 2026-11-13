@@ -104,7 +104,7 @@ class ReconciliationBridgeTests(unittest.TestCase):
 			"enable_bank_reconciliation_execution": 1,
 			"require_reconciliation_dry_run_before_execution": 1,
 			"minimum_reconciliation_readiness_status": "Ready",
-			"allowed_reconciliation_execution_roles": "System Manager\nAccounts Manager\nRetailEdge Manager\nRetailEdgeManager",
+			"allowed_reconciliation_execution_roles": "System Manager\nAccounts Manager\nRetailEdgeManager",
 			"require_second_approval_for_reconciliation_execution": 0,
 		}
 		settings.update(overrides)

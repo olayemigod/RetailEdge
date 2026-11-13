@@ -11,6 +11,10 @@ app_home = "/desk/retailedge-business-hub"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# Frappe v16 supports bench migrate --skip-failing. This permission migration
+# must not be skipped: subsequent model/Page patches could widen access.
+never_skip_patches = ["retailedge.patches.consolidate_duplicate_retailedge_roles"]
+
 # Reject hosted builds whose compiled Vue templates bypass the shared EdgeSuite runtime.
 after_build = "retailedge.vue_runtime_build_guard.verify_retailedge_after_build"
 

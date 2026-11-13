@@ -287,6 +287,7 @@ def _ledger_snapshot(invoice: str) -> dict:
 
 def seed_upgrade_fixture() -> dict:
 	"""Create representative setup + submitted accounting truth on the frozen pre-MVP baseline."""
+	frappe.db.set_default("currency", "NGN")
 	company = _ensure_company()
 	_ensure_fiscal_year(COMPANY)
 	_ensure_transaction_masters()
@@ -378,7 +379,7 @@ def verify_upgrade_fixture() -> dict:
 	assert flt(invoice.outstanding_amount, 2) == flt(before["outstanding_amount"], 2)
 	assert after_ledger == before["ledger"]
 	assert frappe.db.exists("DocType", "RetailEdge Settings")
-	assert frappe.db.exists("Role", "RetailEdge Manager")
+	assert frappe.db.exists("Role", "RetailEdgeManager")
 
 	legacy_pricing = before["legacy_pricing"]
 	selling_precedence = str(
@@ -389,7 +390,10 @@ def verify_upgrade_fixture() -> dict:
 	).splitlines()
 	assert selling_precedence == EXPECTED_SELLING_PRECEDENCE
 	assert buying_precedence == EXPECTED_BUYING_PRECEDENCE
-	assert int(frappe.db.get_single_value("RetailEdge Settings", "enable_assigned_price_list_switching") or 0) == 0
+	assert (
+		int(frappe.db.get_single_value("RetailEdge Settings", "enable_assigned_price_list_switching") or 0)
+		== 0
+	)
 	for fieldname in (
 		"allow_price_list_switch_from_party_default",
 		"allow_price_list_switch_from_pos_default",

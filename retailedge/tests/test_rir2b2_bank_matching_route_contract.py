@@ -9,7 +9,6 @@ from unittest.mock import patch
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS, _get_permitted_navigation_groups
 from retailedge.workspace_home import HOME_WORKSPACE_ITEMS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -58,8 +57,8 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 			{
 				"Accounts Manager",
 				"Accounts User",
-				"RetailEdge Manager",
-				"RetailEdge Branch Manager",
+				"RetailEdgeManager",
+				"RetailEdgeBranchManager",
 			}.issubset(roles)
 		)
 
@@ -113,7 +112,9 @@ class TestRIR2B2BankMatchingRouteContract(unittest.TestCase):
 	def test_stock_movement_history_stays_report_authority_without_direct_compact_link(self):
 		base = _base_item("stock", "Stock Movement History")
 		fallback_targets = {(item.link_type, item.link_to) for item in HOME_WORKSPACE_ITEMS}
-		self.assertEqual((base["target_type"], base["target"]), ("Report", "RetailEdge Stock Movement History"))
+		self.assertEqual(
+			(base["target_type"], base["target"]), ("Report", "RetailEdge Stock Movement History")
+		)
 		self.assertNotIn(("Report", "RetailEdge Stock Movement History"), fallback_targets)
 		self.assertIn(("Page", "reports-centre"), fallback_targets)
 

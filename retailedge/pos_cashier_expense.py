@@ -7,6 +7,7 @@ from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import cint, flt, getdate
 
+from retailedge.cash_custody import get_submitted_cash_deposits
 from retailedge.cashier_context import get_current_cashier_context
 from retailedge.cashier_expense import user_is_reviewer
 from retailedge.cashier_expense_posting import get_cashier_expense_posting_settings
@@ -46,6 +47,20 @@ POS_CLOSING_CUSTOM_FIELDS = {
 			"label": "Cashier Expense Note",
 			"fieldtype": "Small Text",
 			"insert_after": "retailedge_cashier_expense_count",
+			"read_only": 1,
+		},
+		{
+			"fieldname": "retailedge_cash_deposit_total",
+			"label": "Submitted Cash Deposits",
+			"fieldtype": "Currency",
+			"insert_after": "retailedge_cashier_expense_note",
+			"read_only": 1,
+		},
+		{
+			"fieldname": "retailedge_cash_deposit_count",
+			"label": "Cash Deposit Count",
+			"fieldtype": "Int",
+			"insert_after": "retailedge_cash_deposit_total",
 			"read_only": 1,
 		},
 	]
@@ -239,6 +254,11 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 	)
 	current_total = flt(summary["total"])
 	previous_total = flt(closing_data.get("retailedge_cashier_expense_total", 0))
+	deposit = _get_submitted_shift_deposit_summary(resolved_opening_shift)
+	deposit_total = flt(deposit["total"])
+	previous_deposit_total = flt(closing_data.get("retailedge_cash_deposit_total", 0))
+	if deposit_total and not meta.has_field("retailedge_cash_deposit_total"):
+		frappe.throw(_("POS Closing Shift cash-deposit fields are not installed. Migrate RetailEdge before closing the shift."))
 	cash_row = _find_cash_reconciliation_row_from_rows(
 		closing_data.get("payment_reconciliation") or [],
 		pos_profile=pos_profile or None,
@@ -246,7 +266,12 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 
 	closing_data["retailedge_cashier_expense_count"] = cint(summary["count"])
 	if not cash_row:
+		_require_cash_reconciliation_for_movements(
+			current_total, previous_total, deposit_total, previous_deposit_total,
+		)
 		closing_data["retailedge_cashier_expense_total"] = previous_total
+		closing_data["retailedge_cash_deposit_total"] = previous_deposit_total
+		closing_data["retailedge_cash_deposit_count"] = cint(deposit["count"])
 		closing_data["retailedge_cashier_expense_note"] = (
 			_("Cashier expenses could not be applied because the POS cash reconciliation row was not found.")
 			if current_total
@@ -255,14 +280,20 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 		return closing_data
 
 	precision = frappe.get_cached_value("System Settings", None, "currency_precision") or 3
-	base_expected = flt(cash_row.get("expected_amount"), precision) + flt(previous_total, precision)
-	cash_row["expected_amount"] = flt(base_expected - current_total, precision)
+	base_expected = (
+		flt(cash_row.get("expected_amount"), precision)
+		+ flt(previous_total, precision)
+		+ flt(previous_deposit_total, precision)
+	)
+	cash_row["expected_amount"] = flt(base_expected - current_total - deposit_total, precision)
 	if cash_row.get("closing_amount") not in (None, ""):
 		cash_row["difference"] = flt(cash_row.get("closing_amount"), precision) - flt(
 			cash_row.get("expected_amount"), precision
 		)
 
 	closing_data["retailedge_cashier_expense_total"] = current_total
+	closing_data["retailedge_cash_deposit_total"] = deposit_total
+	closing_data["retailedge_cash_deposit_count"] = cint(deposit["count"])
 	closing_data["retailedge_cashier_expense_note"] = (
 		_(
 			"Expected POS cash includes {0} submitted Cashier Expense(s) totalling {1}. "
@@ -272,6 +303,15 @@ def apply_retailedge_cashier_expenses_to_closing_data(
 		else None
 	)
 	return closing_data
+
+
+def _require_cash_reconciliation_for_movements(*amounts) -> None:
+	"""Prevent closing a till with unaccounted expense/deposit movements."""
+	if any(flt(amount) != 0 for amount in amounts):
+		frappe.throw(
+			_("The cash payment method is missing from this shift's reconciliation. "
+			  "Review its cash payment row before closing.")
+		)
 
 
 def _cashier_expense_closing_integration_enabled(settings=None) -> bool:
@@ -302,6 +342,7 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 	opening_shift = str(getattr(doc, "pos_opening_shift", None) or "").strip()
 	pos_profile = str(getattr(doc, "pos_profile", None) or "").strip()
 	previous_total = flt(getattr(doc, "retailedge_cashier_expense_total", 0))
+	previous_deposit_total = flt(getattr(doc, "retailedge_cash_deposit_total", 0))
 
 	summary = {
 		"total": 0.0,
@@ -318,9 +359,19 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		)
 
 	current_total = flt(summary["total"]) if integration_enabled else 0.0
+	deposit = _get_submitted_shift_deposit_summary(opening_shift) if opening_shift else {"total": 0.0, "count": 0}
+	deposit_total = flt(deposit["total"])
+	if deposit_total and not meta.has_field("retailedge_cash_deposit_total"):
+		frappe.throw(_("POS Closing Shift cash-deposit fields are not installed. Migrate RetailEdge before closing the shift."))
 	cash_row = _find_cash_reconciliation_row(doc, pos_profile=pos_profile)
 	if not cash_row:
+		_require_cash_reconciliation_for_movements(
+			current_total, previous_total, deposit_total, previous_deposit_total,
+		)
 		doc.retailedge_cashier_expense_total = previous_total
+		if meta.has_field("retailedge_cash_deposit_total"):
+			doc.retailedge_cash_deposit_total = previous_deposit_total
+			doc.retailedge_cash_deposit_count = cint(deposit["count"])
 		doc.retailedge_cashier_expense_count = cint(summary["count"])
 		doc.retailedge_cashier_expense_note = (
 			_("Cashier expenses could not be applied because the POS cash reconciliation row was not found.")
@@ -330,13 +381,20 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		return
 
 	precision = frappe.get_cached_value("System Settings", None, "currency_precision") or 3
-	base_expected = flt(cash_row.get("expected_amount"), precision) + flt(previous_total, precision)
-	cash_row.expected_amount = flt(base_expected - current_total, precision)
+	base_expected = (
+		flt(cash_row.get("expected_amount"), precision)
+		+ flt(previous_total, precision)
+		+ flt(previous_deposit_total, precision)
+	)
+	cash_row.expected_amount = flt(base_expected - current_total - deposit_total, precision)
 	cash_row.difference = +flt(cash_row.get("closing_amount"), precision) - flt(
 		cash_row.expected_amount, precision
 	)
 
 	doc.retailedge_cashier_expense_total = current_total
+	if meta.has_field("retailedge_cash_deposit_total"):
+		doc.retailedge_cash_deposit_total = deposit_total
+		doc.retailedge_cash_deposit_count = cint(deposit["count"])
 	doc.retailedge_cashier_expense_count = cint(summary["count"])
 	if current_total:
 		doc.retailedge_cashier_expense_note = _(
@@ -349,6 +407,21 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		)
 	else:
 		doc.retailedge_cashier_expense_note = None
+
+
+def _get_submitted_shift_deposit_summary(opening_shift: str) -> dict[str, Any]:
+	"""Count only submitted, marked deposits belonging to this exact POS opening shift."""
+	if not opening_shift:
+		return {"total": 0.0, "count": 0}
+	shift = frappe.db.get_value(OPENING_DOCTYPE, opening_shift, ["company", "user"], as_dict=True)
+	if not shift or not shift.get("company") or not shift.get("user"):
+		frappe.throw(_("Cannot reconcile submitted cash deposits without a valid POS opening-shift owner and Company."))
+	rows = get_submitted_cash_deposits(
+		opening_shift=opening_shift,
+		company=shift["company"],
+		cashier=shift["user"],
+	)
+	return {"total": sum(flt(row["paid_amount"]) for row in rows), "count": len(rows)}
 
 
 def _build_pos_closing_cashier_expense_summary(

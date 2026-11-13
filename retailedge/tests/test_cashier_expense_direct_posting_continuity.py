@@ -79,11 +79,17 @@ class CashierExpenseDirectPostingContinuityTests(unittest.TestCase):
 		self.assertEqual(doc.ledger_status, "Pending Ledger")
 
 	@patch("retailedge.cashier_expense_detail.user_has_any_role", return_value=False)
-	@patch("retailedge.cashier_expense_detail.get_cashier_expense_posting_permissions", return_value={"can_post": False})
+	@patch(
+		"retailedge.cashier_expense_detail.get_cashier_expense_posting_permissions",
+		return_value={"can_post": False},
+	)
 	@patch("retailedge.cashier_expense_detail.frappe.has_permission", return_value=True)
 	@patch("retailedge.cashier_expense_detail.user_is_reviewer", return_value=True)
-	@patch("retailedge.cashier_expense_detail.frappe.get_roles", return_value=["RetailEdge Manager"])
-	@patch("retailedge.cashier_expense_detail.get_cashier_expense_posting_settings", return_value=_settings("Direct Posting"))
+	@patch("retailedge.cashier_expense_detail.frappe.get_roles", return_value=["RetailEdgeManager"])
+	@patch(
+		"retailedge.cashier_expense_detail.get_cashier_expense_posting_settings",
+		return_value=_settings("Direct Posting"),
+	)
 	def test_direct_submitted_expense_does_not_offer_approval_actions(
 		self,
 		_mock_settings,
@@ -110,7 +116,9 @@ class CashierExpenseDirectPostingContinuityTests(unittest.TestCase):
 			posting_mode_applied="Direct Posting",
 		)
 		workflow_readiness = {"source": "retailedge", "available_actions": []}
-		with patch("retailedge.cashier_expense_detail.frappe.session", SimpleNamespace(user="manager@example.com")):
+		with patch(
+			"retailedge.cashier_expense_detail.frappe.session", SimpleNamespace(user="manager@example.com")
+		):
 			actions = _workflow_actions(expense, doc=doc, workflow_readiness=workflow_readiness)
 
 		self.assertEqual(actions["posting_mode"], "Direct Posting")
@@ -123,13 +131,15 @@ class CashierExpenseDirectPostingContinuityTests(unittest.TestCase):
 		save_start = source.index("async saveDraft()")
 		submit_start = source.index("async submitDraft()", save_start)
 		save_segment = source[save_start:submit_start]
-		submit_segment = source[submit_start:source.index("formatAmount(value)", submit_start)]
+		submit_segment = source[submit_start : source.index("formatAmount(value)", submit_start)]
 
 		self.assertIn("this.draftResult = result || null", save_segment)
 		self.assertNotIn('this.$emit("saved"', save_segment)
 		self.assertIn('this.$emit("saved"', submit_segment)
-		self.assertIn("v-if=\"draftSaved\"", source)
-		self.assertIn('return this.postingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review"', source)
+		self.assertIn('v-if="draftSaved"', source)
+		self.assertIn(
+			'return this.postingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review"', source
+		)
 		self.assertIn("retailedge.cashier_expense_detail.submit_cashier_expense_for_review", source)
 
 	def test_detail_dialog_uses_effective_policy_for_badge_and_submit_wording(self):
@@ -137,7 +147,9 @@ class CashierExpenseDirectPostingContinuityTests(unittest.TestCase):
 		self.assertIn("effectivePostingMode()", source)
 		self.assertIn("submitActionLabel()", source)
 		self.assertIn('{{ actionBusy ? "Working..." : submitActionLabel }}', source)
-		self.assertIn('this.effectivePostingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review"', source)
+		self.assertIn(
+			'this.effectivePostingMode === "Direct Posting" ? "Submit Expense" : "Submit for Review"', source
+		)
 		self.assertIn('v-if="effectivePostingMode" class="workflow-mode"', source)
 
 	def test_detail_backend_gates_review_actions_to_controlled_posting(self):

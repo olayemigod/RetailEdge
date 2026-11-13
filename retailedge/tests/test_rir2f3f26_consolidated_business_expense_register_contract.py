@@ -9,7 +9,6 @@ import frappe
 from retailedge import business_expense_register as consolidated
 from retailedge import expense_register
 
-
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "public/js/expense_register/ExpenseRegisterReport.vue"
 DOC = ROOT.parent / "docs/rir2f3f26_consolidated_business_expense_register.md"
@@ -19,19 +18,15 @@ def test_consolidated_view_is_privileged_and_explicit():
 	with patch.object(
 		consolidated.frappe,
 		"get_roles",
-		return_value=["RetailEdge Manager"],
+		return_value=["RetailEdgeManager"],
 	):
-		assert consolidated.can_view_consolidated_business_expenses(
-			"manager@example.com"
-		)
+		assert consolidated.can_view_consolidated_business_expenses("manager@example.com")
 	with patch.object(
 		consolidated.frappe,
 		"get_roles",
-		return_value=["RetailEdge Cashier"],
+		return_value=["RetailEdgeCashier"],
 	):
-		assert not consolidated.can_view_consolidated_business_expenses(
-			"cashier@example.com"
-		)
+		assert not consolidated.can_view_consolidated_business_expenses("cashier@example.com")
 
 
 def test_expense_register_defaults_privileged_users_to_consolidated_without_changing_cashier_api():
@@ -76,14 +71,18 @@ def test_restricted_branch_scope_fails_closed_for_unattributed_accounting_rows()
 
 
 def test_category_master_without_account_mapping_excludes_ledger_instead_of_broadening():
-	with patch.object(consolidated.frappe.db, "exists", return_value=True), patch.object(
-		consolidated.frappe,
-		"has_permission",
-		return_value=True,
-	), patch.object(
-		consolidated.frappe.db,
-		"get_value",
-		return_value=frappe._dict(company="Demo Company", is_active=1, expense_account=""),
+	with (
+		patch.object(consolidated.frappe.db, "exists", return_value=True),
+		patch.object(
+			consolidated.frappe,
+			"has_permission",
+			return_value=True,
+		),
+		patch.object(
+			consolidated.frappe.db,
+			"get_value",
+			return_value=frappe._dict(company="Demo Company", is_active=1, expense_account=""),
+		),
 	):
 		resolved = consolidated._resolve_category_filter(category="Travel", company="Demo Company")
 	assert resolved["kind"] == "category"
@@ -108,10 +107,13 @@ def test_category_master_without_account_mapping_excludes_ledger_instead_of_broa
 
 
 def test_ledger_account_label_is_a_valid_consolidated_category_filter():
-	with patch.object(consolidated.frappe.db, "exists", return_value=False), patch.object(
-		consolidated,
-		"_find_expense_accounts",
-		return_value=[frappe._dict(name="Office Rent - DC", account_name="Office Rent")],
+	with (
+		patch.object(consolidated.frappe.db, "exists", return_value=False),
+		patch.object(
+			consolidated,
+			"_find_expense_accounts",
+			return_value=[frappe._dict(name="Office Rent - DC", account_name="Office Rent")],
+		),
 	):
 		resolved = consolidated._resolve_category_filter(category="Office Rent", company="Demo Company")
 	assert resolved == {
@@ -123,19 +125,22 @@ def test_ledger_account_label_is_a_valid_consolidated_category_filter():
 
 
 def test_ambiguous_ledger_account_label_fails_closed():
-	with patch.object(consolidated.frappe.db, "exists", return_value=False), patch.object(
-		consolidated,
-		"_find_expense_accounts",
-		return_value=[
-			frappe._dict(name="Office Rent - A", account_name="Office Rent"),
-			frappe._dict(name="Office Rent - B", account_name="Office Rent"),
-		],
+	with (
+		patch.object(consolidated.frappe.db, "exists", return_value=False),
+		patch.object(
+			consolidated,
+			"_find_expense_accounts",
+			return_value=[
+				frappe._dict(name="Office Rent - A", account_name="Office Rent"),
+				frappe._dict(name="Office Rent - B", account_name="Office Rent"),
+			],
+		),
 	):
 		try:
 			consolidated._resolve_category_filter(category="Office Rent", company="Demo Company")
 		except frappe.ValidationError:
 			return
-		assert False, "Ambiguous account labels must fail closed"
+		raise AssertionError("Ambiguous account labels must fail closed")
 
 
 def test_expense_register_ui_exposes_consolidated_and_cashier_only_modes():

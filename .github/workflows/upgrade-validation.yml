@@ -63,16 +63,7 @@ jobs:
           check-latest: true
 
       - name: Install bench prerequisites
-        run: |
-          for source in /etc/apt/sources.list.d/*; do
-            if sudo grep -q 'dl.google.com/linux/chrome-stable' "$source" 2>/dev/null; then
-              sudo rm -f "$source"
-            fi
-          done
-          sudo apt-get update
-          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
-          python -m pip install --upgrade frappe-bench
-          redis-cli -h 127.0.0.1 -p 6379 ping
+        run: bash scripts/ci/bootstrap_bench_prerequisites.sh
 
       - name: Create clean Frappe v16 bench
         run: |
@@ -88,7 +79,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7
+          ref: d50920b005da8dcf1bd1e35c1c88be8afedecfbf
           path: edgesuite-ui-source
 
       - name: Fetch application set
@@ -100,7 +91,7 @@ jobs:
           git -C apps/payments checkout cca07d9f9392e2ea0e521c5975151db9e4b6c321
           bench setup requirements --python payments
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "d50920b005da8dcf1bd1e35c1c88be8afedecfbf"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
 
       - name: Verify immutable platform candidate

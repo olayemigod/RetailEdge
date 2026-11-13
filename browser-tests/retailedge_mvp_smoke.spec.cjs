@@ -1,387 +1,708 @@
 const { test, expect } = require("@playwright/test");
 
-const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000";
-const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
+const BASE_URL =
+  process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000";
+const PASSWORD =
+  process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
 
 const USERS = {
-	sales: "browser-sales@example.com",
-	manager: "browser-manager@example.com",
-	branchManager: "browser-branch-manager@example.com",
-	cashier: "browser-cashier@example.com",
-	accounts: "browser-accounts@example.com",
-	stock: "browser-stock@example.com",
-	purchasing: "browser-purchasing@example.com",
+  sales: "browser-sales@example.com",
+  manager: "browser-manager@example.com",
+  branchManager: "browser-branch-manager@example.com",
+  cashier: "browser-cashier@example.com",
+  accounts: "browser-accounts@example.com",
+  stock: "browser-stock@example.com",
+  purchasing: "browser-purchasing@example.com",
+  auditor: "browser-auditor@example.com",
+  noAccess: "browser-no-access@example.com",
+  native: "browser-native@example.com",
 };
 
 async function login(context, user) {
-	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
-		form: { usr: user, pwd: PASSWORD },
-	});
-	expect(response.ok(), `login failed for ${user}`).toBeTruthy();
-	const payload = await response.json();
-	expect(String(payload.message || "")).toMatch(/Logged In/i);
+  const response = await context.request.post(`${BASE_URL}/api/method/login`, {
+    form: { usr: user, pwd: PASSWORD },
+  });
+  expect(response.ok(), `login failed for ${user}`).toBeTruthy();
+  const payload = await response.json();
+  // Frappe returns "No App" after a successful login when a System User has
+  // deliberately been given no module access. That is the expected no-access fixture.
+  expect(String(payload.message || "")).toMatch(/Logged In|No App/i);
 }
 
 async function routeDiagnostic(page, route) {
-	const body = (await page.locator("body").innerText().catch(() => "")).slice(0, 4000);
-	console.error(`ROUTE_DIAGNOSTIC route=/app/${route} url=${page.url()} body=${JSON.stringify(body)}`);
+  const body = (
+    await page
+      .locator("body")
+      .innerText()
+      .catch(() => "")
+  ).slice(0, 4000);
+  console.error(
+    `ROUTE_DIAGNOSTIC route=/app/${route} url=${page.url()} body=${JSON.stringify(
+      body
+    )}`
+  );
 }
 
 async function openProductPage(page, route, title, menuLabel) {
-	const runtimeErrors = [];
-	const pageErrorHandler = (error) => runtimeErrors.push(`pageerror: ${error.message}`);
-	const responseHandler = (response) => {
-		const type = response.request().resourceType();
-		if (["script", "stylesheet"].includes(type) && response.status() >= 400) {
-			runtimeErrors.push(`${response.status()} ${type}: ${response.url()}`);
-		}
-	};
-	page.on("pageerror", pageErrorHandler);
-	page.on("response", responseHandler);
+  const runtimeErrors = [];
+  const pageErrorHandler = (error) =>
+    runtimeErrors.push(`pageerror: ${error.message}`);
+  const responseHandler = (response) => {
+    const type = response.request().resourceType();
+    if (["script", "stylesheet"].includes(type) && response.status() >= 400) {
+      runtimeErrors.push(`${response.status()} ${type}: ${response.url()}`);
+    }
+  };
+  page.on("pageerror", pageErrorHandler);
+  page.on("response", responseHandler);
 
-	try {
-		await page.goto(`${BASE_URL}/app/${route}`, {
-			waitUntil: "domcontentloaded",
-			timeout: 30_000,
-		});
-		await page.waitForFunction(() => Boolean(window.frappe), null, { timeout: 20_000 }).catch(() => {});
+  try {
+    await page.goto(`${BASE_URL}/app/${route}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page
+      .waitForFunction(() => Boolean(window.frappe), null, { timeout: 20_000 })
+      .catch(() => {});
 
-		try {
-			await page.getByRole("heading", { name: title, exact: true }).first().waitFor({
-				state: "visible",
-				timeout: 20_000,
-			});
-		} catch (error) {
-			await routeDiagnostic(page, route);
-			throw error;
-		}
+    try {
+      await page
+        .getByRole("heading", { name: title, exact: true })
+        .first()
+        .waitFor({
+          state: "visible",
+          timeout: 20_000,
+        });
+    } catch (error) {
+      await routeDiagnostic(page, route);
+      throw error;
+    }
 
-		if (menuLabel) {
-			const productSidebar = page.locator(".edge-app-shell .edge-sidebar").first();
-			await expect(productSidebar).toBeAttached({ timeout: 15_000 });
-			await expect(productSidebar.getByText(menuLabel, { exact: true }).first()).toBeAttached({
-				timeout: 15_000,
-			});
-		}
-		await page.waitForTimeout(500);
-		expect(runtimeErrors, `runtime/asset errors on /app/${route}`).toEqual([]);
-	} finally {
-		page.off("pageerror", pageErrorHandler);
-		page.off("response", responseHandler);
-	}
+    if (menuLabel) {
+      const productSidebar = page
+        .locator(".edge-app-shell .edge-sidebar")
+        .first();
+      await expect(productSidebar).toBeAttached({ timeout: 15_000 });
+      await expect(
+        productSidebar.getByText(menuLabel, { exact: true }).first()
+      ).toBeAttached({
+        timeout: 15_000,
+      });
+    }
+    await page.waitForTimeout(500);
+    expect(runtimeErrors, `runtime/asset errors on /app/${route}`).toEqual([]);
+  } finally {
+    page.off("pageerror", pageErrorHandler);
+    page.off("response", responseHandler);
+  }
 }
 
 async function newPersona(browser, user, options = {}) {
-	const context = await browser.newContext({ baseURL: BASE_URL, ...options });
-	await login(context, user);
-	const page = await context.newPage();
-	return { context, page };
+  const context = await browser.newContext({ baseURL: BASE_URL, ...options });
+  await login(context, user);
+  const page = await context.newPage();
+  return { context, page };
 }
 
-test("canonical RetailEdge manager reaches Business Hub and Action Centre", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager);
-	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
-	} finally {
-		await context.close().catch(() => {});
-	}
+test("canonical RetailEdge manager reaches Business Hub and Action Centre", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager);
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    await openProductPage(
+      page,
+      "action-center",
+      "Action Centre",
+      "Operations Review"
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
 });
 
-test("RetailEdge manager reaches consolidated Shift Reconciliation with specialist workflows preserved", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager);
-	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
+test("RetailEdge manager reaches consolidated Shift Reconciliation with specialist workflows preserved", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager);
+  try {
+    await openProductPage(
+      page,
+      "pos-closing-variance",
+      "Shift Reconciliation",
+      "Operations Review"
+    );
 
-		const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
-		await expect(sidebar.getByText("Daily Sales Audit", { exact: true }).first()).toBeAttached();
-		await expect(sidebar.getByText("Cashier Expense Review", { exact: true }).first()).toBeAttached();
-		await expect(sidebar.getByText("Cash Shift Verification", { exact: true })).toHaveCount(0);
-		await expect(sidebar.getByText("Daily Sales Audit Register", { exact: true })).toHaveCount(0);
+    const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+    await expect(
+      sidebar.getByText("Daily Sales Audit", { exact: true }).first()
+    ).toBeAttached();
+    await expect(
+      sidebar.getByText("Cashier Expense Review", { exact: true }).first()
+    ).toBeAttached();
+    await expect(
+      sidebar.getByText("Cash Shift Verification", { exact: true })
+    ).toHaveCount(0);
+    await expect(
+      sidebar.getByText("Daily Sales Audit Register", { exact: true })
+    ).toHaveCount(0);
 
-		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
-		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
-		const nextActionOrEmptyState = page
-			.getByText("Next Action", { exact: true })
-			.first()
-			.or(page.getByText("No shift reconciliation found", { exact: true }).first());
-		await expect(nextActionOrEmptyState).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
+    await expect(
+      page.getByText("Date Range", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open Sales Audit Review", exact: true })
+    ).toBeVisible();
+    const nextActionOrEmptyState = page
+      .getByText("Next Action", { exact: true })
+      .first()
+      .or(
+        page.getByText("No shift reconciliation found", { exact: true }).first()
+      );
+    await expect(nextActionOrEmptyState).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
 });
 
-test("RetailEdge branch manager reaches Shift Reconciliation", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.branchManager);
-	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
-		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
+test("RetailEdge branch manager reaches Shift Reconciliation", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.branchManager);
+  try {
+    await openProductPage(
+      page,
+      "pos-closing-variance",
+      "Shift Reconciliation",
+      "Operations Review"
+    );
+    await expect(
+      page.getByText("Date Range", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Branch Manager without native sales roles sees an actionable selling access explanation", async ({ browser }) => {
+  const { context, page } = await newPersona(browser, USERS.branchManager);
+  try {
+    await openProductPage(page, "professional-selling", "Professional Selling");
+    await expect(page.getByText("Selling documents unavailable", { exact: true })).toBeVisible();
+    await expect(page.getByText(/review your selling permissions/i).first()).toBeVisible();
+    await expect(page.locator(".selling-stage")).toHaveCount(0);
+    await expect(page.locator(".selling-record-tab")).toHaveCount(0);
+  } finally {
+    await context.close().catch(() => {});
+  }
 });
 
 test("Accounts User reaches Shift Reconciliation", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.accounts);
-	try {
-		await openProductPage(page, "pos-closing-variance", "Shift Reconciliation", "Operations Review");
-		await expect(page.getByRole("button", { name: "Open Sales Audit Review", exact: true })).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
+  const { context, page } = await newPersona(browser, USERS.accounts);
+  try {
+    await openProductPage(
+      page,
+      "pos-closing-variance",
+      "Shift Reconciliation",
+      "Operations Review"
+    );
+    await expect(
+      page.getByRole("button", { name: "Open Sales Audit Review", exact: true })
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
 });
 
-test("RetailEdge cashier cannot open Shift Reconciliation", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.cashier);
-	try {
-		await page.goto(`${BASE_URL}/app/pos-closing-variance`, {
-			waitUntil: "domcontentloaded",
-			timeout: 30_000,
-		});
-		await page.waitForTimeout(1_000);
-		const body = await page.locator("body").innerText();
-		const titleVisible = await page
-			.getByRole("heading", { name: "Shift Reconciliation", exact: true })
-			.first()
-			.isVisible()
-			.catch(() => false);
-		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("RetailEdge manager sees one fuzzy Period on remaining control surfaces", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager);
-	try {
-		await openProductPage(page, "business-control-center", "Business Control Centre");
-		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
-		await expect(page.getByText("To Date", { exact: true })).toHaveCount(0);
-
-		await openProductPage(page, "stock-accounting-integrity", "Stock & Accounting Integrity");
-		await expect(page.getByText("Period", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
-		await expect(page.getByText("As On Date", { exact: true })).toHaveCount(0);
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager);
-	try {
-		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
-		const search = page.getByRole("searchbox", { name: "Find a report" });
-		await expect(search).toBeVisible();
-		await search.fill("cash");
-		const catalogue = page.locator(".reports-centre");
-		await expect(catalogue.getByText("Cash Movement", { exact: true }).first()).toBeVisible();
-		await expect(catalogue.getByText("Cash Commitments", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.cashier);
-	try {
-		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
-		const catalogue = page.locator(".reports-centre");
-		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
-		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("RetailEdge manager reaches Payment & Settlement Analysis from governed reporting", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager);
-	try {
-		await openProductPage(page, "payment-settlement-analysis", "Payment & Settlement Analysis", "Reports");
-		await expect(page.getByText("Payment Methods", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Analysis View", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Accounts User reaches Purchase Analysis with governed presets", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.accounts);
-	try {
-		await openProductPage(page, "purchase-analysis", "Purchase Analysis", "Reports");
-		await expect(page.getByText("Purchase Trend", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Purchase User reaches Supplier Performance with evidence-backed measures", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.purchasing);
-	try {
-		await openProductPage(page, "supplier-performance", "Supplier Performance", "Reports");
-		await expect(page.getByText("Current Outstanding", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Payables Basis", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText(/Current outstanding ·/).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Accounts User reaches Expense Analysis with governed presets", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.accounts);
-	try {
-		await openProductPage(page, "expense-analysis", "Expense Analysis", "Reports");
-		await expect(page.getByText("Expense Trend", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.cashier);
-	try {
-		await page.goto(`${BASE_URL}/app/payment-settlement-analysis`, {
-			waitUntil: "domcontentloaded",
-			timeout: 30_000,
-		});
-		await page.waitForTimeout(1_000);
-		const body = await page.locator("body").innerText();
-		const titleVisible = await page
-			.getByRole("heading", { name: "Payment & Settlement Analysis", exact: true })
-			.first()
-			.isVisible()
-			.catch(() => false);
-		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.cashier);
-	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-
-		await page.goto(`${BASE_URL}/app/banking-readiness`, {
-			waitUntil: "domcontentloaded",
-			timeout: 30_000,
-		});
-		await page.waitForTimeout(1_000);
-		const body = await page.locator("body").innerText();
-		const titleVisible = await page
-			.getByText("Banking Setup & Readiness", { exact: true })
-			.first()
-			.isVisible()
-			.catch(() => false);
-		expect(titleVisible).toBeFalsy();
-		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Accounts User reaches Action Centre and both banking EdgeSuite pages with reconciliation sidebar", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.accounts);
-	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "action-center", "Action Centre", "Operations Review");
-		await openProductPage(page, "banking-readiness", "Banking Setup & Readiness", "Banking & Reconciliation");
-		await openProductPage(page, "bank-matching-reconciliation", "Bank Matching & Reconciliation", "Banking & Reconciliation");
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Stock User reaches Business Hub and Stock Position", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.stock);
-	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		await openProductPage(page, "stock-position", "Stock Position", "Stock");
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-test("Business Hub remains usable at narrow mobile width", async ({ browser }) => {
-	const { context, page } = await newPersona(browser, USERS.manager, {
-		viewport: { width: 390, height: 844 },
-	});
-	try {
-		await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-		const overflow = await page.evaluate(
-			() => Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)
-		);
-		expect(overflow).toBeLessThanOrEqual(4);
-	} finally {
-		await context.close().catch(() => {});
-	}
-});
-
-
-test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not raw custom elements", async ({ browser }) => {
-    const { context, page } = await newPersona(browser, USERS.manager, {
-        viewport: { width: 1280, height: 800 },
+test("RetailEdge cashier cannot open Shift Reconciliation", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.cashier);
+  try {
+    await page.goto(`${BASE_URL}/app/pos-closing-variance`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
     });
-    const vueErrors = [];
-    page.on("pageerror", (error) => {
-        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
-    });
-    try {
-        await openProductPage(page, "retailedge-business-hub", "Business Hub", "Home");
-        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
-        const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
-        await expect(sidebar).toBeVisible();
-        const width = await sidebar.evaluate((el) => el.getBoundingClientRect().width);
-        expect(width, "Styled sidebar must have bounded desktop width").toBeGreaterThan(60);
-        expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
-        // Validate the real Business Hub component tree. Vue's private
-        // _instance property is not a stable production-build contract.
-        const hubAppRoot = page.locator(".retailedge-business-hub-app-root");
-        await expect(hubAppRoot.locator(".edge-app-shell")).toBeVisible();
-        await expect(hubAppRoot.locator(".edge-sidebar")).toBeVisible();
-        expect(vueErrors).toEqual([]);
-    } finally {
-        await context.close().catch(() => {});
-    }
+    await page.waitForTimeout(1_000);
+    const body = await page.locator("body").innerText();
+    const titleVisible = await page
+      .getByRole("heading", { name: "Shift Reconciliation", exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    expect(titleVisible).toBeFalsy();
+    expect(body).toMatch(
+      /not permitted|permission|access denied|not allowed|do not have access/i
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
 });
 
-test("Vue runtime contract: Professional Selling preserves nested template refs", async ({ browser }) => {
-    const { context, page } = await newPersona(browser, USERS.sales, {
-        viewport: { width: 1280, height: 800 },
+test("RetailEdge manager sees one fuzzy Period on remaining control surfaces", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager);
+  try {
+    await openProductPage(
+      page,
+      "business-control-center",
+      "Business Control Centre"
+    );
+    await expect(
+      page.getByText("Period", { exact: true }).first()
+    ).toBeVisible();
+    await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("To Date", { exact: true })).toHaveCount(0);
+
+    await openProductPage(
+      page,
+      "stock-accounting-integrity",
+      "Stock & Accounting Integrity"
+    );
+    await expect(
+      page.getByText("Period", { exact: true }).first()
+    ).toBeVisible();
+    await expect(page.getByText("From Date", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("As On Date", { exact: true })).toHaveCount(0);
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager);
+  try {
+    await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+    const search = page.getByRole("searchbox", { name: "Find a report" });
+    await expect(search).toBeVisible();
+    await search.fill("cash");
+    const catalogue = page.locator(".reports-centre");
+    await expect(
+      catalogue.getByText("Cash Movement", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      catalogue.getByText("Cash Commitments", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.cashier);
+  try {
+    await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+    const catalogue = page.locator(".reports-centre");
+    await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(
+      0
+    );
+    await expect(
+      catalogue.getByText("Expense Register", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("RetailEdge manager reaches Payment & Settlement Analysis from governed reporting", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager);
+  try {
+    await openProductPage(
+      page,
+      "payment-settlement-analysis",
+      "Payment & Settlement Analysis",
+      "Reports"
+    );
+    await expect(
+      page.getByText("Payment Methods", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText("Analysis View", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Accounts User reaches Purchase Analysis with governed presets", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.accounts);
+  try {
+    await openProductPage(
+      page,
+      "purchase-analysis",
+      "Purchase Analysis",
+      "Reports"
+    );
+    await expect(
+      page.getByText("Purchase Trend", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText("Group By", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Purchase User reaches Supplier Performance with evidence-backed measures", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.purchasing);
+  try {
+    await openProductPage(
+      page,
+      "supplier-performance",
+      "Supplier Performance",
+      "Reports"
+    );
+    await expect(
+      page.getByText("Current Outstanding", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText("Payables Basis", { exact: true }).first()
+    ).toBeVisible();
+    await expect(page.getByText(/Current outstanding ·/).first()).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Accounts User reaches Expense Analysis with governed presets", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.accounts);
+  try {
+    await openProductPage(
+      page,
+      "expense-analysis",
+      "Expense Analysis",
+      "Reports"
+    );
+    await expect(
+      page.getByText("Expense Trend", { exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByText("Group By", { exact: true }).first()
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.cashier);
+  try {
+    await page.goto(`${BASE_URL}/app/payment-settlement-analysis`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
     });
-    const vueErrors = [];
-    page.on("pageerror", (error) => {
-        if (/refs|failed to resolve component/i.test(error.message)) vueErrors.push(error.message);
+    await page.waitForTimeout(1_000);
+    const body = await page.locator("body").innerText();
+    const titleVisible = await page
+      .getByRole("heading", {
+        name: "Payment & Settlement Analysis",
+        exact: true,
+      })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    expect(titleVisible).toBeFalsy();
+    expect(body).toMatch(
+      /not permitted|permission|access denied|not allowed|do not have access/i
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("canonical RetailEdge cashier reaches My Work but not banking control pages", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.cashier);
+  try {
+    // The cashier home is now My Work; Business Hub may redirect to it.
+    // Test the authorized operational landing route, not the old home title.
+    await openProductPage(
+      page,
+      "cashier-my-work",
+      "My Work",
+      "Home"
+    );
+
+    await page.goto(`${BASE_URL}/app/banking-readiness`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
     });
-    try {
-        await openProductPage(page, "professional-selling", "Professional Selling");
-        await expect(page.locator(".retailedge-professional-selling-root .edge-app-shell")).toBeVisible();
-        await expect(page.locator("edgeappshell, edgepagelayout, edgepageheader")).toHaveCount(0);
-        await expect(page.locator(".professional-selling-load-error")).toHaveCount(0);
-        // Exercise the parent-to-child $refs.sellingRecords.selectDocument()
-        // path through its public UI behaviour, not private Vue internals.
-        const recordStages = page.locator(".selling-stage").filter({
-            has: page.getByRole("button", { name: "View records", exact: true }),
-        });
-        await expect(page.locator(".selling-records-panel")).toBeVisible();
-        const count = await recordStages.count();
-        expect(count, "Need two readable document types to prove tab switching").toBeGreaterThan(1);
-        const targetStage = recordStages.nth(1);
-        const documentLabel = (await targetStage.locator("h3").innerText()).trim();
-        const tab = page.locator(".selling-records-panel").getByRole("tab", {
-            name: documentLabel, exact: true,
-        });
-        await expect(tab).toBeVisible();
-        await expect(tab).toHaveAttribute("aria-selected", "false");
-        await targetStage.getByRole("button", { name: "View records", exact: true }).click();
-        await expect(tab).toHaveAttribute("aria-selected", "true");
-        expect(vueErrors).toEqual([]);
-    } finally {
-        await context.close().catch(() => {});
-    }
+    await page.waitForTimeout(1_000);
+    const body = await page.locator("body").innerText();
+    const titleVisible = await page
+      .getByText("Banking Setup & Readiness", { exact: true })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    expect(titleVisible).toBeFalsy();
+    expect(body).toMatch(
+      /not permitted|permission|access denied|not allowed|do not have access/i
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Accounts User reaches Action Centre and both banking EdgeSuite pages with reconciliation sidebar", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.accounts);
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    await openProductPage(
+      page,
+      "action-center",
+      "Action Centre",
+      "Operations Review"
+    );
+    await openProductPage(
+      page,
+      "banking-readiness",
+      "Banking Setup & Readiness",
+      "Banking & Reconciliation"
+    );
+    await openProductPage(
+      page,
+      "bank-matching-reconciliation",
+      "Bank Matching & Reconciliation",
+      "Banking & Reconciliation"
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Stock User reaches Business Hub and Stock Position", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.stock);
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    await openProductPage(page, "stock-position", "Stock Position", "Stock");
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Business Hub remains usable at narrow mobile width", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager, {
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    const overflow = await page.evaluate(() =>
+      Math.max(
+        0,
+        document.documentElement.scrollWidth -
+          document.documentElement.clientWidth
+      )
+    );
+    expect(overflow).toBeLessThanOrEqual(4);
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("RetailEdge auditor reaches governed reports but not operational Business Hub", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.auditor);
+  try {
+    await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
+    await page.goto(BASE_URL + "/app/retailedge-business-hub", {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(1_000);
+    const body = await page.locator("body").innerText();
+    await expect(
+      page.getByRole("heading", { name: "Business Hub", exact: true })
+    ).toHaveCount(0);
+    expect(body).toMatch(
+      /not permitted|permission|access denied|not allowed|do not have access/i
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("user without RetailEdge access is denied Page and direct context API access", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.noAccess);
+  try {
+    const response = await context.request.get(
+      BASE_URL +
+        "/api/method/retailedge.navigation_consolidation.get_retailedge_business_hub_context"
+    );
+    expect(response.status()).toBe(403);
+    await page.goto(BASE_URL + "/app/reports-centre", {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(1_000);
+    const body = await page.locator("body").innerText();
+    await expect(
+      page.getByRole("heading", { name: "Reports Centre", exact: true })
+    ).toHaveCount(0);
+    expect(body).toMatch(
+      /not permitted|permission|access denied|not allowed|do not have access/i
+    );
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("System Manager sees the Back to Desk advanced action", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.native);
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    await expect(
+      page.getByRole("link", {
+        name: "Back to Desk — Advanced ERPNext",
+        exact: true,
+      })
+    ).toBeVisible();
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Vue runtime contract: Business Hub renders a styled EdgeSuite shell, not raw custom elements", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.manager, {
+    viewport: { width: 1280, height: 800 },
+  });
+  const vueErrors = [];
+  page.on("pageerror", (error) => {
+    if (/refs|failed to resolve component/i.test(error.message))
+      vueErrors.push(error.message);
+  });
+  try {
+    await openProductPage(
+      page,
+      "retailedge-business-hub",
+      "Business Hub",
+      "Home"
+    );
+    await expect(
+      page.locator("edgeappshell, edgepagelayout, edgepageheader")
+    ).toHaveCount(0);
+    const sidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+    await expect(sidebar).toBeVisible();
+    const width = await sidebar.evaluate(
+      (el) => el.getBoundingClientRect().width
+    );
+    expect(
+      width,
+      "Styled sidebar must have bounded desktop width"
+    ).toBeGreaterThan(60);
+    expect(width, "Unstyled full-width fallback must fail").toBeLessThan(420);
+    // Validate the real Business Hub component tree. Vue's private
+    // _instance property is not a stable production-build contract.
+    const hubAppRoot = page.locator(".retailedge-business-hub-app-root");
+    await expect(hubAppRoot.locator(".edge-app-shell")).toBeVisible();
+    await expect(hubAppRoot.locator(".edge-sidebar")).toBeVisible();
+    expect(vueErrors).toEqual([]);
+  } finally {
+    await context.close().catch(() => {});
+  }
+});
+
+test("Vue runtime contract: Professional Selling preserves nested template refs", async ({
+  browser,
+}) => {
+  const { context, page } = await newPersona(browser, USERS.sales, {
+    viewport: { width: 1280, height: 800 },
+  });
+  const vueErrors = [];
+  page.on("pageerror", (error) => {
+    if (/refs|failed to resolve component/i.test(error.message))
+      vueErrors.push(error.message);
+  });
+  try {
+    await openProductPage(page, "professional-selling", "Professional Selling");
+    await expect(
+      page.locator(".retailedge-professional-selling-root .edge-app-shell")
+    ).toBeVisible();
+    await expect(
+      page.locator("edgeappshell, edgepagelayout, edgepageheader")
+    ).toHaveCount(0);
+    await expect(page.locator(".professional-selling-load-error")).toHaveCount(
+      0
+    );
+    // Exercise the parent-to-child $refs.sellingRecords.selectDocument()
+    // path through its public UI behaviour, not private Vue internals.
+    const recordStages = page.locator(".selling-stage").filter({
+      has: page.getByRole("button", { name: "View records", exact: true }),
+    });
+    await expect(page.locator(".selling-records-panel")).toBeVisible();
+    const count = await recordStages.count();
+    expect(
+      count,
+      "Need two readable document types to prove tab switching"
+    ).toBeGreaterThan(1);
+    const targetStage = recordStages.nth(1);
+    const documentLabel = (await targetStage.locator("h3").innerText()).trim();
+    const tab = page.locator(".selling-records-panel").getByRole("tab", {
+      name: documentLabel,
+      exact: true,
+    });
+    await expect(tab).toBeVisible();
+    await expect(tab).toHaveAttribute("aria-selected", "false");
+    await targetStage
+      .getByRole("button", { name: "View records", exact: true })
+      .click();
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(vueErrors).toEqual([]);
+  } finally {
+    await context.close().catch(() => {});
+  }
 });

@@ -64,12 +64,15 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertEqual(data.get("name"), "salesperson-performance-dashboard")
 		self.assertEqual(data.get("module"), "RetailEdge")
 		self.assertEqual(data.get("standard"), "Yes")
+		# Standard Page child rows are reloaded only when their metadata version
+		# advances; retaining the predecessor timestamp leaves legacy role rows.
+		self.assertGreater(data.get("modified"), "2026-07-06 00:00:00.000000")
 		roles = [row.get("role") for row in data.get("roles", [])]
 		for role in (
 			"System Manager",
 			"Accounts Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
 		):
 			self.assertIn(role, roles)
 

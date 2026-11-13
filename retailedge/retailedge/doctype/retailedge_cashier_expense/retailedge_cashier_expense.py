@@ -6,7 +6,8 @@ from frappe.model.document import Document
 from frappe.utils import cint, flt, today
 
 from retailedge.branch_context import apply_branch_context_to_doc
-from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cash_custody import get_cash_custody_snapshot
+from retailedge.cashier_context import get_current_cashier_context
 from retailedge.operating_context import (
 	get_operational_branch_scope,
 	resolve_operational_branch,
@@ -27,7 +28,13 @@ class RetailEdgeCashierExpense(Document):
 		self.set_cashier_defaults()
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=False)
 		self.apply_expense_category()
-		self.apply_shift_cash_snapshot()
+		# A submitted document may later undergo review/ledger transitions.
+		# Revalidate custody only for a new or newly disbursed till movement;
+		# never rewrite an old expense's monetary snapshot during review.
+		self._requires_new_cash_check = self.requires_new_cash_check()
+		if self._requires_new_cash_check:
+			self.lock_shift_cash_for_validation()
+			self.apply_shift_cash_snapshot()
 
 	def validate(self):
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
@@ -307,6 +314,44 @@ class RetailEdgeCashierExpense(Document):
 		self._expense_category_context = context
 		return context
 
+	def requires_new_cash_check(self):
+		if self.is_new() or self.docstatus == 0:
+			return True
+		previous = self.get_doc_before_save()
+		if not previous or previous.docstatus == 0:
+			return True
+		# Only a new disbursement or a consequential monetary change can
+		# require cash that was not reserved on the original submission.
+		return bool(
+			flt(previous.get("amount")) != flt(self.amount)
+			or (
+				previous.get("cash_movement_status") != "Disbursed"
+				and self.cash_movement_status == "Disbursed"
+			)
+		)
+
+	def lock_shift_cash_for_validation(self):
+		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
+			return
+		opening_shift = str(getattr(self, "linked_pos_opening_shift", None) or "").strip()
+		if not opening_shift:
+			return  # validate_open_shift_requirement applies the merchant shift policy.
+		rows = frappe.db.sql(
+			"""SELECT name, company, pos_profile, user, status
+			FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE""",
+			(opening_shift,),
+			as_dict=True,
+		)
+		if not rows or rows[0].get("status") != "Open":
+			frappe.throw(_("Cashier expenses require a valid open POS shift."))
+		shift = rows[0]
+		if (
+			(self.company and self.company != shift.get("company"))
+			or (self.pos_profile and self.pos_profile != shift.get("pos_profile"))
+			or (self.cashier and self.cashier != shift.get("user"))
+		):
+			frappe.throw(_("Cashier expense Company, POS Profile and cashier must match the open shift."))
+
 	def apply_shift_cash_snapshot(self):
 		settings = get_retailedge_settings()
 		if not self.linked_pos_opening_shift:
@@ -322,18 +367,20 @@ class RetailEdgeCashierExpense(Document):
 				)
 			return
 
-		snapshot = get_shift_cash_snapshot(
+		snapshot = get_cash_custody_snapshot(
 			opening_shift=self.linked_pos_opening_shift,
 			company=self.company,
 			pos_profile=self.pos_profile,
-			user=self.cashier,
+			cashier=self.cashier,
 			expense_name=None if self.is_new() else self.name,
+			for_spending_validation=bool(getattr(self, "_requires_new_cash_check", False)),
 		)
+		self._cash_sales_verified = bool(snapshot.get("cash_sales_verified", False))
 		self.shift_opening_cash_amount = snapshot.get("opening_cash", 0)
 		self.shift_cash_sales_amount = snapshot.get("cash_sales", 0)
-		self.prior_shift_expense_amount = snapshot.get("prior_expenses", 0)
-		self.available_shift_cash_before_expense = snapshot.get("available_before", 0)
-		self.available_shift_cash_after_expense = flt(snapshot.get("available_before", 0)) - flt(self.amount)
+		self.prior_shift_expense_amount = snapshot.get("cashier_expenses", 0)
+		self.available_shift_cash_before_expense = snapshot.get("available_cash", 0)
+		self.available_shift_cash_after_expense = flt(snapshot.get("available_cash", 0)) - flt(self.amount)
 		self.cash_balance_source = snapshot.get("source")
 		if snapshot.get("message"):
 			self.cash_control_message = snapshot["message"]
@@ -370,8 +417,16 @@ class RetailEdgeCashierExpense(Document):
 			frappe.throw("Expense Account could not be resolved from the selected Expense Category.")
 
 	def validate_cash_availability(self):
-		if not self.linked_pos_opening_shift:
+		if getattr(self, "_requires_new_cash_check", True) is False:
 			return
+		if (getattr(self, "cash_source", None) or "POS Till") != "POS Till":
+			return
+		if not self.linked_pos_opening_shift:
+			frappe.throw(_("POS Till expenses require an open shift with verified cash availability."))
+		if getattr(self, "_cash_sales_verified", True) is False:
+			frappe.throw(
+				_("Cash receipts for this shift could not be verified. No till expense can be recorded until reconciliation is restored.")
+			)
 
 		available = flt(self.available_shift_cash_before_expense)
 		amount = flt(self.amount)

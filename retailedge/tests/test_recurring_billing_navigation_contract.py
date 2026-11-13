@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,11 +23,16 @@ class TestRecurringBillingNavigationContract(TestCase):
 		self.assertLess(subscription_plans, bank_transactions)
 		self.assertEqual(group.count('"label": "Subscriptions"'), 1)
 		self.assertEqual(group.count('"label": "Subscription Plans"'), 1)
-		self.assertIn('"target_type": "DocType", "target": "Subscription"', group)
-		self.assertIn('"target_type": "DocType", "target": "Subscription Plan"', group)
+		subscription_item = group[subscriptions:subscription_plans]
+		subscription_plan_item = group[subscription_plans:bank_transactions]
+		self.assertIn('"target_type": "DocType"', subscription_item)
+		self.assertIn('"target": "Subscription"', subscription_item)
+		self.assertIn('"target_type": "DocType"', subscription_plan_item)
+		self.assertIn('"target": "Subscription Plan"', subscription_plan_item)
 
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 
 	def test_retailedge_does_not_wrap_native_subscription_generation(self):
 		source = (APP_ROOT / "edgesuite_ui.py").read_text()

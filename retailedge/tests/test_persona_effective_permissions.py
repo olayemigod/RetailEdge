@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from erpnext.accounts.party import get_party_account
 
+from retailedge.cash_custody import _get_account
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
-from retailedge.patches.ensure_retailedge_cashier_operational_permissions import execute as ensure_cashier_operational_permissions
-from retailedge.patches.ensure_retailedge_manager_payment_entry_read import execute as ensure_manager_payment_entry_read
+from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
+	execute as ensure_cashier_operational_permissions,
+)
+from retailedge.patches.ensure_retailedge_cashier_posnext_permissions import (
+	execute as ensure_cashier_posnext_permissions,
+)
+from retailedge.patches.ensure_retailedge_manager_payment_entry_read import (
+	execute as ensure_manager_payment_entry_read,
+)
 from retailedge.setup_roles import MANAGEMENT_READ_DOCTYPES, ensure_retailedge_roles
 from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
@@ -14,7 +23,6 @@ from retailedge.tests.upgrade_validation_fixture import (
 	_ensure_transaction_masters,
 )
 
-
 PERSONAS = {
 	"permission-cashier@example.com": ("Permission Cashier", ("RetailEdgeCashier",)),
 	"permission-retail-manager@example.com": ("Permission Retail Manager", ("RetailEdgeManager",)),
@@ -22,6 +30,9 @@ PERSONAS = {
 	"permission-auditor@example.com": ("Permission Auditor", ("RetailEdgeAuditor",)),
 	"permission-accounts@example.com": ("Permission Accounts", ("Accounts User",)),
 	"permission-stock@example.com": ("Permission Stock", ("Stock User",)),
+	"permission-sales@example.com": ("Permission Sales", ("Sales User",)),
+	"permission-purchase@example.com": ("Permission Purchase", ("Purchase User",)),
+	"permission-no-access@example.com": ("Permission No Access", ()),
 	"permission-global-manager@example.com": (
 		"Permission Global Manager",
 		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
@@ -58,6 +69,10 @@ def _ensure_permission_user(email: str, first_name: str, roles: tuple[str, ...])
 	user.set("roles", [{"role": role} for role in dict.fromkeys(roles)])
 	user.enabled = 1
 	user.user_type = "System User"
+	if user.meta.has_field("edgesuite_desk_access_level"):
+		user.edgesuite_desk_access_level = (
+			"Native Desk + EdgeSuite" if "System Manager" in roles else "EdgeSuite Only"
+		)
 	user.save(ignore_permissions=True)
 	frappe.defaults.set_user_default("Company", COMPANY, user=email)
 	frappe.clear_cache(user=email)
@@ -70,7 +85,7 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 		cls._original_user = frappe.session.user
 		frappe.set_user("Administrator")
 
-		ensure_retailedge_roles(migrate_alias_assignments=True)
+		ensure_retailedge_roles()
 		_ensure_company()
 		_ensure_fiscal_year(COMPANY)
 		_ensure_transaction_masters()
@@ -79,6 +94,8 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 		# their effective Frappe result instead of only their source text.
 		ensure_cashier_company_read()
 		ensure_cashier_operational_permissions()
+		# POSNext's migration bridge must never elevate cashier Account Read.
+		ensure_cashier_posnext_permissions()
 		ensure_manager_payment_entry_read()
 
 		for email, (first_name, roles) in PERSONAS.items():
@@ -109,29 +126,54 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				actual_roles = {row.role for row in frappe.get_doc("User", email).roles}
 				self.assertEqual(actual_roles, set(expected_roles))
 
-	def test_cashier_has_sales_authority_without_accounting_posting_authority(self):
+	def test_cashier_has_governed_selling_authority_without_accounting_posting_authority(self):
 		user = "permission-cashier@example.com"
 		self.assert_permissions(user, "Company", {"read": True, "write": False, "create": False})
 		self.assert_permissions(user, "Customer", {"read": True, "write": False, "create": False})
-		self.assert_permissions(
-			user,
-			"Sales Invoice",
-			{
-				"read": True,
-				"create": True,
-				"write": True,
-				"submit": True,
-				"cancel": False,
-				"delete": False,
-				"amend": False,
-			},
-		)
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			self.assert_permissions(
+				user,
+				doctype,
+				{
+					"read": True,
+					"create": True,
+					"write": True,
+					"submit": True,
+					"print": True,
+					"email": False,
+					"cancel": False,
+					"delete": False,
+					"amend": False,
+				},
+			)
 		for doctype in ("Payment Entry", "Journal Entry", "Purchase Invoice"):
 			self.assert_permissions(
 				user,
 				doctype,
 				{"read": False, "create": False, "write": False, "submit": False, "cancel": False},
 			)
+
+	def test_cashier_can_select_company_receivable_account_without_ledger_read(self):
+		user = "permission-cashier@example.com"
+		self.assert_permissions(
+			user, "Account",
+			{"select": True, "read": False, "write": False, "create": False,
+			 "submit": False, "delete": False},
+		)
+		account = frappe.db.get_value("Company", COMPANY, "default_receivable_account")
+		self.assertTrue(account, "The isolated fixture needs a Company receivable account.")
+		self.assertTrue(frappe.has_permission("Account", "select", doc=account, user=user))
+		self.assertFalse(frappe.has_permission("Account", "read", doc=account, user=user))
+		prior_user = frappe.session.user
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.only_has_select_perm("Account"))
+			self.assertEqual(get_party_account("Customer", None, COMPANY), account)
+			# Cash Deposit must use the same Account Select authority; the
+			# cashier must not need generic Account Read/ledger visibility.
+			self.assertEqual(_get_account(COMPANY, account, expected_type="Receivable")["account_type"], "Receivable")
+		finally:
+			frappe.set_user(prior_user)
 
 	def test_retailedge_management_roles_get_only_context_master_read_by_default(self):
 		users = (
@@ -159,6 +201,25 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 				with self.subTest(user=user, doctype=doctype):
 					self.assert_permissions(user, doctype, {"read": False})
 
+	def test_branch_manager_selling_visibility_is_independent_of_product_role(self):
+		# Branch Manager alone is a branch-context role. Native Sales User grants
+		# Quote, Order, and Delivery read; native Accounts User grants Invoice
+		# read BUT also grants generic Journal Entry creation. Do not add it
+		# automatically just to make the invoice tile visible. Merchants must
+		# configure a suitably scoped native Role/DocPerm for invoice rights.
+		bare = "permission-branch-manager@example.com"
+		sales = "permission-sales@example.com"
+		accounts = "permission-accounts@example.com"
+		for doctype in ("Quotation", "Sales Order", "Delivery Note", "Sales Invoice"):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(bare, doctype, {"read": False})
+		for doctype in ("Quotation", "Sales Order", "Delivery Note"):
+			self.assert_permissions(sales, doctype, {"read": True})
+		self.assert_permissions(sales, "Sales Invoice", {"read": False})
+		self.assert_permissions(accounts, "Sales Invoice", {"read": True})
+		# A blanket Accounts User grant is NOT a read-only fix.
+		self.assert_permissions(accounts, "Journal Entry", {"create": True})
+
 	def test_retailedge_managers_do_not_gain_journal_entry_posting_authority(self):
 		for user in (
 			"permission-retail-manager@example.com",
@@ -185,14 +246,54 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 			"Stock Reconciliation",
 			"Payment Entry",
 		):
-			self.assert_permissions(user, doctype, {"read": True})
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True})
 
 	def test_native_accounts_user_retains_erpnext_read_access(self):
 		user = "permission-accounts@example.com"
 		for doctype in ("Sales Invoice", "Purchase Invoice", "Payment Entry", "Journal Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True})
 
 	def test_native_stock_user_retains_erpnext_read_access(self):
 		user = "permission-stock@example.com"
 		for doctype in ("Item", "Warehouse", "Stock Entry"):
-			self.assert_permissions(user, doctype, {"read": True})
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True})
+	def test_native_sales_user_retains_sales_workflow_authority_only(self):
+		user = "permission-sales@example.com"
+		for doctype in ("Quotation", "Sales Order", "Delivery Note"):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True, "create": True, "write": True})
+		for doctype in (
+			"Sales Invoice",
+			"Purchase Order",
+			"Purchase Invoice",
+			"Stock Entry",
+			"Journal Entry",
+		):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": False, "create": False})
+
+	def test_native_purchase_user_retains_purchase_workflow_authority_only(self):
+		user = "permission-purchase@example.com"
+		for doctype in ("Supplier Quotation", "Purchase Order", "Purchase Receipt"):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": True, "create": True, "write": True})
+		self.assert_permissions(user, "Purchase Invoice", {"read": True, "create": False, "write": False})
+		for doctype in ("Quotation", "Sales Order", "Stock Entry", "Journal Entry"):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": False, "create": False})
+
+	def test_no_access_user_has_no_retailedge_or_native_transaction_authority(self):
+		user = "permission-no-access@example.com"
+		for doctype in (
+			"Company",
+			"Sales Invoice",
+			"Purchase Invoice",
+			"Stock Entry",
+			"Payment Entry",
+			"Journal Entry",
+		):
+			with self.subTest(doctype=doctype):
+				self.assert_permissions(user, doctype, {"read": False, "create": False, "write": False})

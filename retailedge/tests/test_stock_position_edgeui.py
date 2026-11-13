@@ -47,7 +47,13 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		self.assertEqual(payload["name"], "stock-position")
 		self.assertEqual(payload["title"], "Stock Position")
 		roles = {entry["role"] for entry in payload["roles"]}
-		for role in ("Stock User", "Stock Manager", "RetailEdge Manager", "RetailEdge Branch Manager", "RetailEdge Auditor"):
+		for role in (
+			"Stock User",
+			"Stock Manager",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
+			"RetailEdgeAuditor",
+		):
 			self.assertIn(role, roles)
 
 	def test_bin_source_is_permission_aware_and_hard_bounded(self):
@@ -79,7 +85,11 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			patch.object(
 				stock_position,
 				"get_operational_branch_scope",
-				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+				return_value={
+					"restricted": True,
+					"allowed_branches": ["Branch A"],
+					"source": "branch_assignment",
+				},
 			),
 			patch.object(stock_position.frappe, "has_permission", return_value=True),
 			patch.object(stock_position.frappe.db, "exists", return_value=True),
@@ -96,7 +106,11 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			patch.object(
 				stock_position,
 				"get_operational_branch_scope",
-				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+				return_value={
+					"restricted": True,
+					"allowed_branches": ["Branch A"],
+					"source": "branch_assignment",
+				},
 			),
 			patch.object(stock_position.frappe, "throw", side_effect=RuntimeError("denied")),
 		):
@@ -149,7 +163,11 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			patch.object(
 				stock_position,
 				"get_operational_branch_scope",
-				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+				return_value={
+					"restricted": True,
+					"allowed_branches": ["Branch A"],
+					"source": "branch_assignment",
+				},
 			),
 			patch.object(stock_position, "_assert_named_read"),
 			patch.object(stock_position.frappe.db, "get_value", return_value=("Scope Co", 0)),
@@ -192,9 +210,12 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		self.assertIn("show_costs = not should_hide_cost_price()", source)
 		self.assertIn("fields = list(_BASE_BIN_FIELDS)", source)
 		self.assertIn("if show_costs:\n\t\tfields.extend(_COST_BIN_FIELDS)", source)
-		self.assertLess(source.index("if show_costs:\n\t\tfields.extend(_COST_BIN_FIELDS)"), source.index('frappe.get_list(\n\t\t"Bin"'))
+		self.assertLess(
+			source.index("if show_costs:\n\t\tfields.extend(_COST_BIN_FIELDS)"),
+			source.index('frappe.get_list(\n\t\t"Bin"'),
+		)
 		module_source = self.read(BACKEND)
-		self.assertIn('from retailedge.cost_visibility import should_hide_cost_price', module_source)
+		self.assertIn("from retailedge.cost_visibility import should_hide_cost_price", module_source)
 		self.assertEqual(stock_position._COST_BIN_FIELDS, ("valuation_rate", "stock_value"))
 
 	def test_cost_columns_and_summary_are_removed_when_hidden(self):
@@ -212,24 +233,32 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		self.assertIn("Stock Value", visible_labels)
 
 	def test_stock_status_logic_preserves_negative_and_reserved_exceptions(self):
-		self.assertEqual(stock_position._row_stock_status({"actual_qty": -1, "available_qty": -1}), "Negative")
-		self.assertEqual(stock_position._row_stock_status({"actual_qty": 0, "available_qty": 0}), "Out of Stock")
-		self.assertEqual(stock_position._row_stock_status({"actual_qty": 5, "available_qty": 0}), "Fully Reserved")
+		self.assertEqual(
+			stock_position._row_stock_status({"actual_qty": -1, "available_qty": -1}), "Negative"
+		)
+		self.assertEqual(
+			stock_position._row_stock_status({"actual_qty": 0, "available_qty": 0}), "Out of Stock"
+		)
+		self.assertEqual(
+			stock_position._row_stock_status({"actual_qty": 5, "available_qty": 0}), "Fully Reserved"
+		)
 		self.assertEqual(stock_position._row_stock_status({"actual_qty": 5, "available_qty": 2}), "Available")
-		self.assertTrue(stock_position._matches_stock_status({"actual_qty": 5, "stock_status": "Available"}, "In Stock"))
+		self.assertTrue(
+			stock_position._matches_stock_status({"actual_qty": 5, "stock_status": "Available"}, "In Stock")
+		)
 
 	def test_frontend_uses_smart_cascades_shared_export_and_pagination(self):
 		component = self.read(COMPONENT)
 		for contract in (
 			"EdgeLinkField",
 			"EdgeExportMenu",
-			":loadDataset=\"loadExportDataset\"",
+			':loadDataset="loadExportDataset"',
 			"window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)",
 			"this.reportProvider?.export",
 			"search_stock_position_options",
 			"resolve_branch_warehouse_selection",
 			':pageSizes="[25, 50, 100]"',
-			":hideNativeSidebar=\"true\"",
+			':hideNativeSidebar="true"',
 			"Cost values hidden by cost-visibility settings",
 		):
 			self.assertIn(contract, component)
@@ -261,7 +290,10 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			"renderLoadError",
 		):
 			self.assertIn(contract, loader)
-		self.assertLess(loader.index("await requireAsync(EDGEUI_ASSET)"), loader.index("await requireAsync(STOCK_POSITION_ASSET)"))
+		self.assertLess(
+			loader.index("await requireAsync(EDGEUI_ASSET)"),
+			loader.index("await requireAsync(STOCK_POSITION_ASSET)"),
+		)
 
 		bundle = self.read(BUNDLE)
 		self.assertIn("window.EdgeSuiteUI", bundle)

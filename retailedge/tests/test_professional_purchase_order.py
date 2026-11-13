@@ -14,10 +14,10 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 		source = self.read("professional_purchase_order.py")
 		for contract in (
 			"create_professional_purchase_order_draft",
-			'frappe.new_doc(PURCHASE_ORDER_DOCTYPE)',
+			"frappe.new_doc(PURCHASE_ORDER_DOCTYPE)",
 			"_assert_can_create_purchase_order()",
 			"_validate_purchase_order_context(values, user=user)",
-			"_normalise_items(values.get(\"items\"))",
+			'_normalise_items(values.get("items"))',
 			"resolve_price_list_context",
 			"resolve_purchase_item_pricing",
 			"doc.insert()",
@@ -43,7 +43,7 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 			"_validate_transaction_context",
 			"_normalise_items",
 			"resolve_purchase_item_pricing",
-			'reference_doctype=PURCHASE_ORDER_ITEM_DOCTYPE',
+			"reference_doctype=PURCHASE_ORDER_ITEM_DOCTYPE",
 			'filters: dict[str, Any] = {"is_purchase_item": 1, "disabled": 0}',
 		):
 			self.assertIn(contract, source)
@@ -81,19 +81,19 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 
 	def test_purchase_order_dialog_defaults_native_fallback_closed(self):
 		dialog = self.read("public/js/professional_purchasing/ProfessionalPurchaseOrderDialog.vue")
-		self.assertIn('nativeFallbackEnabled: { type: Boolean, default: false }', dialog)
+		self.assertIn("nativeFallbackEnabled: { type: Boolean, default: false }", dialog)
 		self.assertIn("Advanced: Open Purchase Order", dialog)
 		self.assertNotIn("Advanced: Open in ERPNext", dialog)
 		self.assertNotIn("Open Full Form", dialog)
 
 	def test_edgesuite_only_overlay_disables_native_full_form_fallback(self):
 		source = self.read("public/js/professional_purchasing/ProfessionalPurchaseOrderOverlay.vue")
-		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', source)
-		self.assertIn('Boolean(access.can_use_native_desk)', source)
+		self.assertIn("const access = frappe.boot?.edgesuite_ui_access || {};", source)
+		self.assertIn("Boolean(access.can_use_native_desk)", source)
 		self.assertIn('const ACCESS_MODE = "edgesuite_only"', source)
 		self.assertIn('frappe.new_doc("Purchase Order")', source)
 		self.assertIn("if (!this.nativeFallbackEnabled) return;", source)
-		self.assertIn('retailedge-professional-purchasing-page-show', source)
+		self.assertIn("retailedge-professional-purchasing-page-show", source)
 
 	def test_page_controller_promotes_existing_new_po_action_to_guided_overlay(self):
 		source = self.read("retailedge/page/professional_purchasing/professional_purchasing.js")
@@ -122,23 +122,29 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 			"ADVANCED_PURCHASE_ORDER_LABEL,",
 		):
 			self.assertIn(contract, source)
-		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', source)
-		self.assertIn('Boolean(access.can_use_native_desk)', source)
-		self.assertIn('button.hidden = true', source)
+		self.assertIn("const access = frappe.boot?.edgesuite_ui_access || {};", source)
+		self.assertIn("Boolean(access.can_use_native_desk)", source)
+		self.assertIn("button.hidden = true", source)
 		self.assertIn('button.classList.contains("retailedge-po-reference")', source)
 
 	def test_purchase_order_bundle_is_product_local_and_compiled(self):
 		source = self.read("public/js/professional_purchase_order.bundle.js")
-		self.assertIn('ProfessionalPurchaseOrderOverlay.vue', source)
+		self.assertIn("ProfessionalPurchaseOrderOverlay.vue", source)
 		self.assertIn("window.mountRetailEdgeProfessionalPurchaseOrder", source)
 		self.assertIn("edgeUI.createEdgeApp", source)
 
 	def test_professional_purchasing_page_roles_are_not_broadened(self):
 		page = self.read("retailedge/page/professional_purchasing/professional_purchasing.json")
-		for role in ("System Manager", "Purchase User", "Purchase Manager", "Accounts User", "Accounts Manager"):
+		for role in (
+			"System Manager",
+			"Purchase User",
+			"Purchase Manager",
+			"Accounts User",
+			"Accounts Manager",
+		):
 			self.assertIn(role, page)
-		self.assertNotIn("RetailEdge Branch Manager", page)
-		self.assertNotIn("RetailEdge Manager", page)
+		self.assertNotIn("RetailEdgeBranchManager", page)
+		self.assertNotIn("RetailEdgeManager", page)
 
 
 if __name__ == "__main__":

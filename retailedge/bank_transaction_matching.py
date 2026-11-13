@@ -25,9 +25,7 @@ BANK_TRANSACTION_MATCHING_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
 }
 
@@ -111,7 +109,9 @@ AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES = {
 	"pos_payment_match",
 }
 
-REVIEW_CREATION_ELIGIBLE_CANDIDATE_CATEGORIES = set(AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES) | {"journal_entry_match"}
+REVIEW_CREATION_ELIGIBLE_CANDIDATE_CATEGORIES = set(AUTO_MATCH_ELIGIBLE_CANDIDATE_CATEGORIES) | {
+	"journal_entry_match"
+}
 
 
 def assert_can_access_bank_transaction_matching(user: str | None = None):
@@ -486,9 +486,7 @@ def _ambiguous_payment_entry_review_candidates(bank_transaction, candidates, set
 		candidate["identity_competing_candidates"] = competing_count
 		candidate["identity_review_reason"] = reason
 		candidate["reason"] = (
-			f"{candidate.get('reason')} {reason}".strip()
-			if candidate.get("reason")
-			else reason
+			f"{candidate.get('reason')} {reason}".strip() if candidate.get("reason") else reason
 		)
 		candidate["reasons"] = [*(candidate.get("reasons") or []), reason]
 		candidate["confidence"] = "Possible Match"
@@ -668,9 +666,7 @@ def find_payment_entry_candidates_for_bank_transaction(
 		]
 		if safe_results:
 			return safe_results[: int(limit or 20)]
-		ambiguous_results = _ambiguous_payment_entry_review_candidates(
-			bank_transaction, results, settings
-		)
+		ambiguous_results = _ambiguous_payment_entry_review_candidates(bank_transaction, results, settings)
 		if ambiguous_results:
 			return ambiguous_results[: int(limit or 20)]
 
@@ -684,16 +680,18 @@ def find_payment_entry_candidates_for_bank_transaction(
 	]
 	if safe_results:
 		return safe_results[: int(limit or 20)]
-	return _ambiguous_payment_entry_review_candidates(
-		bank_transaction, results, settings
-	)[: int(limit or 20)]
+	return _ambiguous_payment_entry_review_candidates(bank_transaction, results, settings)[: int(limit or 20)]
 
 
 def _payment_entry_match_rows(payment_entry, *, confirmed_only=False):
 	payment_entry = cstr(payment_entry).strip()
 	if not payment_entry or not has_doctype("RetailEdge Bank Transaction Match"):
 		return []
-	status_filter = ACTIVE_CONFIRMED_MATCH_STATUS if confirmed_only else ["not in", sorted(RELEASED_REVIEW_MATCH_STATUSES)]
+	status_filter = (
+		ACTIVE_CONFIRMED_MATCH_STATUS
+		if confirmed_only
+		else ["not in", sorted(RELEASED_REVIEW_MATCH_STATUSES)]
+	)
 	fields = [
 		"name",
 		"bank_transaction",
@@ -743,9 +741,7 @@ def _bank_transaction_match_leg(bank_transaction):
 		else frappe._dict(bank_transaction or {})
 	)
 	name = cstr(row.get("bank_transaction") or row.get("name")).strip()
-	account = cstr(
-		_resolve_bank_transaction_canonical_account(row).get("canonical_account")
-	).strip()
+	account = cstr(_resolve_bank_transaction_canonical_account(row).get("canonical_account")).strip()
 	return {
 		"bank_transaction": name,
 		"account": account,
@@ -771,9 +767,7 @@ def payment_entry_active_match_conflict(
 	payment_entry = cstr(payment_entry).strip()
 	if not payment_entry:
 		return None
-	payment_type = cstr(
-		frappe.db.get_value("Payment Entry", payment_entry, "payment_type")
-	).strip()
+	payment_type = cstr(frappe.db.get_value("Payment Entry", payment_entry, "payment_type")).strip()
 	rows = _payment_entry_match_rows(payment_entry, confirmed_only=confirmed_only)
 	if exclude_match:
 		rows = [row for row in rows if cstr(row.get("name")).strip() != cstr(exclude_match).strip()]
@@ -837,9 +831,19 @@ def candidate_document_has_active_confirmed_bank_match(document_type, document_n
 	if frappe.db.exists("RetailEdge Bank Transaction Match", filters):
 		return True
 	if document_type == "Sales Invoice":
-		return bool(frappe.db.exists("RetailEdge Bank Transaction Match", {"sales_invoice": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}))
+		return bool(
+			frappe.db.exists(
+				"RetailEdge Bank Transaction Match",
+				{"sales_invoice": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS},
+			)
+		)
 	if document_type == "Payment Entry":
-		return bool(frappe.db.exists("RetailEdge Bank Transaction Match", {"payment_entry": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS}))
+		return bool(
+			frappe.db.exists(
+				"RetailEdge Bank Transaction Match",
+				{"payment_entry": document_name, "decision_status": ACTIVE_CONFIRMED_MATCH_STATUS},
+			)
+		)
 	return False
 
 
@@ -989,7 +993,9 @@ def get_auto_match_status_for_row(row, settings=None):
 				category="manual_review",
 			)
 	elif suggested_document_type == "Journal Entry":
-		return manual("Journal Entry candidates require human review before reconciliation.", category="manual_review")
+		return manual(
+			"Journal Entry candidates require human review before reconciliation.", category="manual_review"
+		)
 	else:
 		return blocked(
 			"Unsupported accounting document type for auto-match.",
@@ -1290,7 +1296,6 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 		_finish_timing(debug_timings, "payment_entry_prefetch", start)
 
 
-
 def _journal_entry_branch_field():
 	for fieldname in ("retailedge_branch", "branch"):
 		if has_field("Journal Entry", fieldname):
@@ -1305,7 +1310,15 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 	start = _timing_bucket(debug_timings, "journal_entry_prefetch")
 	try:
 		fields = ["name", "posting_date", "company", "voucher_type"]
-		for fieldname in ("cheque_no", "cheque_date", "clearance_date", "user_remark", "remark", "total_debit", "total_credit"):
+		for fieldname in (
+			"cheque_no",
+			"cheque_date",
+			"clearance_date",
+			"user_remark",
+			"remark",
+			"total_debit",
+			"total_credit",
+		):
 			if has_field("Journal Entry", fieldname) and fieldname not in fields:
 				fields.append(fieldname)
 		branch_field = _journal_entry_branch_field()
@@ -1363,14 +1376,17 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 			date_filter = _date_range_filter(bank_transaction.get("transaction_date"), window)
 			candidates = []
 			for entry in entries:
-				if bank_transaction.get("company") and entry.get("company") != bank_transaction.get("company"):
+				if bank_transaction.get("company") and entry.get("company") != bank_transaction.get(
+					"company"
+				):
 					continue
 				if date_filter and entry.get("posting_date"):
 					posting_date = str(getdate(entry.get("posting_date")))
 					if posting_date < date_filter[1][0] or posting_date > date_filter[1][1]:
 						continue
 				matching_lines = [
-					line for line in accounts_by_parent.get(entry.get("name"), [])
+					line
+					for line in accounts_by_parent.get(entry.get("name"), [])
 					if cstr(line.get("account")).strip() == cstr(canonical).strip()
 				]
 				if not matching_lines:
@@ -1382,7 +1398,8 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 				if amount <= 0:
 					continue
 				party_lines = [
-					line for line in accounts_by_parent.get(entry.get("name"), [])
+					line
+					for line in accounts_by_parent.get(entry.get("name"), [])
 					if cstr(line.get("party")).strip()
 				]
 				candidate = frappe._dict(dict(entry))
@@ -1394,8 +1411,14 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 			candidates.sort(
 				key=lambda row: (
 					abs(flt(bank_transaction.get("amount")) - flt(row.get("_bank_line_amount"))),
-					abs((getdate(bank_transaction.get("transaction_date")) - getdate(row.get("posting_date"))).days)
-					if bank_transaction.get("transaction_date") and row.get("posting_date") else 9999,
+					abs(
+						(
+							getdate(bank_transaction.get("transaction_date"))
+							- getdate(row.get("posting_date"))
+						).days
+					)
+					if bank_transaction.get("transaction_date") and row.get("posting_date")
+					else 9999,
 					cstr(row.get("name")),
 				)
 			)
@@ -1407,7 +1430,9 @@ def _prefetch_journal_entry_context(context, bank_transactions, filters, setting
 def _build_journal_entry_candidate(bank_transaction, journal_entry):
 	candidate_amount = flt(journal_entry.get("_bank_line_amount"))
 	amount_difference = abs(flt(bank_transaction.get("amount")) - candidate_amount)
-	amount_scenario = "Submitted Journal Entry Amount" if amount_difference <= 0.01 else "Journal Entry Amount Variance"
+	amount_scenario = (
+		"Submitted Journal Entry Amount" if amount_difference <= 0.01 else "Journal Entry Amount Variance"
+	)
 	return {
 		"document_type": "Journal Entry",
 		"document_name": journal_entry.get("name"),
@@ -1437,15 +1462,17 @@ def _build_journal_entry_candidate(bank_transaction, journal_entry):
 def _build_scored_journal_entries(bank_transaction, journal_entries, filters, settings):
 	results = []
 	for journal_entry in journal_entries or []:
-		if candidate_document_has_active_confirmed_bank_match("Journal Entry", journal_entry.get("name")) and not cint(
-			filters.get("include_confirmed_matches")
-		):
+		if candidate_document_has_active_confirmed_bank_match(
+			"Journal Entry", journal_entry.get("name")
+		) and not cint(filters.get("include_confirmed_matches")):
 			continue
 		candidate = _build_journal_entry_candidate(bank_transaction, journal_entry)
 		_apply_exception_classification(bank_transaction, candidate, filters, settings)
 		if candidate.get("exception_only") and not cint(filters.get("include_exception_candidates")):
 			continue
-		active_review_match = _active_review_match_for_candidate("Journal Entry", candidate.get("document_name"))
+		active_review_match = _active_review_match_for_candidate(
+			"Journal Entry", candidate.get("document_name")
+		)
 		if active_review_match:
 			status = cstr(active_review_match.get("decision_status")).strip()
 			if status == "Confirmed":
@@ -1473,7 +1500,9 @@ def _build_scored_journal_entries(bank_transaction, journal_entries, filters, se
 	return results
 
 
-def find_journal_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
+def find_journal_entry_candidates_for_bank_transaction(
+	bank_transaction_name, filters=None, limit=20, context=None
+):
 	filters = frappe._dict(filters or {})
 	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
 	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
@@ -1695,7 +1724,13 @@ def _prefetch_active_review_context(context, debug_timings=None):
 					order_by="modified desc",
 				)
 			)
-			legacy_field = "sales_invoice" if doctype == "Sales Invoice" else "payment_entry" if doctype == "Payment Entry" else None
+			legacy_field = (
+				"sales_invoice"
+				if doctype == "Sales Invoice"
+				else "payment_entry"
+				if doctype == "Payment Entry"
+				else None
+			)
 			if legacy_field:
 				all_matches.extend(
 					frappe.get_all(
@@ -1993,6 +2028,7 @@ def _matching_row_passes_optional_filters(row, filters):
 			return False
 	return True
 
+
 def _matching_row_passes_post_suppression_filters(row, filters):
 	checks = {
 		"action_status": row.get("action_status"),
@@ -2020,6 +2056,7 @@ def _matching_row_passes_post_suppression_filters(row, filters):
 		if requested != cstr(value).strip():
 			return False
 	return True
+
 
 def suppress_duplicate_candidate_suggestions(rows, mark_duplicates=False):
 	"""Keep one normal suggestion per Sales Invoice/Payment Entry in the current result set."""

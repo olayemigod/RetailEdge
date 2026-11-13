@@ -128,7 +128,7 @@ class TestTransactionEntryPreference(unittest.TestCase):
 			self.assertIn(contract, selling)
 		for contract in (
 			"consumeSavedDraftHandoff",
-			"get_standard_sales_invoice_completion_preview",
+			"get_sales_invoice_submission_review",
 			"editingSavedDraft = true",
 			"syncPageFromDraftPreview(preview)",
 			"Return / Credit Note drafts remain in the governed return review",

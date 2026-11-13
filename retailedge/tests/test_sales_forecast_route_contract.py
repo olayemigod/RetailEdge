@@ -9,7 +9,6 @@ from retailedge.navigation_consolidation import (
 	_normalize_sales_forecast_route,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ALIAS_PAGE = ROOT / "retailedge" / "page" / "retailedge_sales_forecast"
 ALIAS_JSON = ALIAS_PAGE / "retailedge_sales_forecast.json"
@@ -25,7 +24,7 @@ def test_sales_forecast_page_uses_non_colliding_retailedge_route():
 	assert page["name"] == RETAILEDGE_SALES_FORECAST_TARGET
 	assert page["page_name"] == RETAILEDGE_SALES_FORECAST_TARGET
 	assert page["title"] == "Sales Forecast"
-	assert {row["role"] for row in page["roles"]} >= {"Sales User", "Sales Manager", "RetailEdge Manager"}
+	assert {row["role"] for row in page["roles"]} >= {"Sales User", "Sales Manager", "RetailEdgeManager"}
 	assert f'const PAGE_ROUTE = "{RETAILEDGE_SALES_FORECAST_TARGET}";' in loader
 	assert 'const SALES_FORECAST_ASSET = "sales_forecast.bundle.js";' in loader
 	assert "window.mountSalesForecast" in loader

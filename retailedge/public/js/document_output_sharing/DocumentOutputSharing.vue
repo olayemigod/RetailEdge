@@ -114,6 +114,7 @@
 							</div>
 						</div>
 
+						<p v-if="canDirectReceiptPrint" class="output-note">Print Document opens the browser printer selection. Print Receipt uses your saved receipt printer.</p>
 						<p v-if="previewError" class="preview-error" role="alert">{{ previewError }}</p>
 						<div class="preview-stage" :class="{ 'receipt-stage': receiptPreview }">
 							<EdgeLoadingState v-if="previewLoading && !previewHtml" message="Rendering document preview..." />
@@ -536,13 +537,14 @@ export default {
 				branch: this.details?.branch || this.branchName || "",
 			};
 			try {
-				const result = await printRetailReceipt({
+				await printRetailReceipt({
 					document: this.selectedDocumentKey,
 					name: this.details.name,
 					...printerContext,
 				});
 				frappe.show_alert({
-					message: __("{0} receipt copy/copies printed.", [result.copies || 1]),
+					// Web Serial acknowledges transmission, not actual paper output.
+					message: __("Receipt sent to printer. Check the paper output."),
 					indicator: "green",
 				});
 			} catch (error) {

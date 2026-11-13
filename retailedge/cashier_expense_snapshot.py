@@ -3,15 +3,11 @@ from __future__ import annotations
 import frappe
 from frappe.utils import flt
 
-from retailedge.cashier_context import get_shift_cash_snapshot
-
+from retailedge.cash_custody import get_cash_custody_snapshot
 
 SNAPSHOT_REFRESH_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
-	"RetailEdge Branch Manager",
-	"RetailEdge Auditor",
 	"RetailEdgeManager",
 	"RetailEdgeBranchManager",
 	"RetailEdgeAuditor",
@@ -57,11 +53,11 @@ def refresh_cashier_expense_cash_snapshot(expense_name: str) -> dict[str, object
 			frappe.PermissionError,
 		)
 
-	snapshot = get_shift_cash_snapshot(
+	snapshot = get_cash_custody_snapshot(
 		opening_shift=getattr(doc, "linked_pos_opening_shift", None),
 		company=getattr(doc, "company", None),
 		pos_profile=getattr(doc, "pos_profile", None),
-		user=getattr(doc, "cashier", None),
+		cashier=getattr(doc, "cashier", None),
 		expense_name=doc.name,
 	)
 
@@ -73,12 +69,12 @@ def refresh_cashier_expense_cash_snapshot(expense_name: str) -> dict[str, object
 	}
 	monetary_snapshot_preserved = int(getattr(doc, "docstatus", 0) or 0) != 0
 	if not monetary_snapshot_preserved:
-		available_before = flt(snapshot.get("available_before", 0))
+		available_before = flt(snapshot.get("available_cash", 0))
 		values.update(
 			{
 				"shift_opening_cash_amount": flt(snapshot.get("opening_cash", 0)),
 				"shift_cash_sales_amount": flt(snapshot.get("cash_sales", 0)),
-				"prior_shift_expense_amount": flt(snapshot.get("prior_expenses", 0)),
+				"prior_shift_expense_amount": flt(snapshot.get("cashier_expenses", 0)),
 				"available_shift_cash_before_expense": available_before,
 				"available_shift_cash_after_expense": available_before - flt(getattr(doc, "amount", 0)),
 			}

@@ -139,6 +139,9 @@ class TestCashierExpensePermissionDeferralAcceptance(IntegrationTestCase):
 				"expense_date": nowdate(),
 				"branch": BRANCH,
 				"payment_account": self.cash_account,
+				# This test checks ledger permission deferral without a POS shift.
+				# POS Till must always require a live shift and verified funds.
+				"cash_source": "Petty Cash",
 				"cost_center": self.cost_center,
 			}
 		)

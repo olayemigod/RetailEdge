@@ -14,7 +14,11 @@ from retailedge.bank_account_policy import (
 	validate_cash_deposit_bank_destination,
 )
 from retailedge.branch_context import has_doctype, has_field
-from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cashier_context import (
+	get_current_cashier_context,
+	get_shift_cash_snapshot,
+	resolve_cash_payment_account,
+)
 from retailedge.operating_context import (
 	get_operational_branch_scope,
 	resolve_operational_branch,
@@ -83,10 +87,21 @@ def ensure_cash_custody_custom_fields():
 	return custom_fields
 
 
+
+def require_cash_custody_fields_installed() -> None:
+	"""Read-only preflight: schema changes belong to migration, not cashier requests."""
+	if not has_doctype(PAYMENT_ENTRY_DOCTYPE) or any(
+		not has_field(PAYMENT_ENTRY_DOCTYPE, fieldname) for fieldname in CUSTODY_FIELD_DEFS
+	):
+		frappe.throw(
+			_("Cash Deposit is not ready on this site. Ask an administrator to complete setup before recording a deposit.")
+		)
+
+
 @frappe.whitelist()
 def get_cash_deposit_context() -> dict[str, Any]:
 	_assert_can_create_payment_entry()
-	ensure_cash_custody_custom_fields()
+	require_cash_custody_fields_installed()
 	context = get_current_cashier_context(user=frappe.session.user)
 	shift = str(context.get("linked_pos_opening_shift") or "").strip()
 	if not shift:
@@ -152,7 +167,7 @@ def search_cash_deposit_options(
 @frappe.whitelist(methods=["POST"])
 def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_payment_entry()
-	ensure_cash_custody_custom_fields()
+	require_cash_custody_fields_installed()
 	values = _coerce_values(values)
 	context = get_current_cashier_context(user=frappe.session.user)
 	company = str(context.get("company") or "").strip()
@@ -267,6 +282,8 @@ def get_cash_custody_snapshot(
 	pos_profile: str | None = None,
 	cashier: str | None = None,
 	exclude_payment_entry: str | None = None,
+	expense_name: str | None = None,
+	for_spending_validation: bool = False,
 ) -> dict[str, Any]:
 	"""Return shift cash after recognised expenses and submitted deposits only."""
 	base = get_shift_cash_snapshot(
@@ -274,12 +291,15 @@ def get_cash_custody_snapshot(
 		company=company,
 		pos_profile=pos_profile,
 		user=cashier,
+		expense_name=expense_name,
+		for_cash_validation=for_spending_validation,
 	)
 	deposits = get_submitted_cash_deposits(
 		opening_shift=opening_shift,
 		company=company,
 		cashier=cashier,
 		exclude_payment_entry=exclude_payment_entry,
+		for_cash_validation=for_spending_validation,
 	)
 	deposit_amount = sum(flt(row.get("paid_amount")) for row in deposits)
 	available_before_deposits = flt(base.get("available_before"))
@@ -287,6 +307,7 @@ def get_cash_custody_snapshot(
 	return {
 		"opening_cash": flt(base.get("opening_cash")),
 		"cash_sales": flt(base.get("cash_sales")),
+		"cash_sales_verified": bool(base.get("cash_sales_verified", False)),
 		"cashier_expenses": flt(base.get("prior_expenses")),
 		"submitted_deposits": deposit_amount,
 		"submitted_deposit_count": len(deposits),
@@ -303,6 +324,7 @@ def get_submitted_cash_deposits(
 	company: str | None = None,
 	cashier: str | None = None,
 	exclude_payment_entry: str | None = None,
+	for_cash_validation: bool = False,
 ) -> list[dict[str, Any]]:
 	if not opening_shift or not has_doctype(PAYMENT_ENTRY_DOCTYPE):
 		return []
@@ -321,13 +343,40 @@ def get_submitted_cash_deposits(
 		filters["retailedge_cashier"] = cashier
 	if exclude_payment_entry:
 		filters["name"] = ["!=", exclude_payment_entry]
-	rows = frappe.get_all(
-		PAYMENT_ENTRY_DOCTYPE,
-		filters=filters,
-		fields=["name", "paid_amount", "paid_from", "paid_to", "posting_date", "retailedge_branch", "retailedge_cashier"],
-		order_by="posting_date asc, creation asc",
-		limit_page_length=0,
-	)
+	if for_cash_validation:
+		# Current read prevents a previously committed deposit disappearing
+		# behind a stale REPEATABLE READ view after the opening-shift row lock.
+		conditions = [
+			"docstatus = 1",
+			"payment_type = 'Internal Transfer'",
+			"retailedge_cash_custody_type = %s",
+			"retailedge_pos_opening_shift = %s",
+		]
+		params = [CASH_DEPOSIT_TYPE, opening_shift]
+		if company:
+			conditions.append("company = %s")
+			params.append(company)
+		if cashier:
+			conditions.append("retailedge_cashier = %s")
+			params.append(cashier)
+		if exclude_payment_entry:
+			conditions.append("name != %s")
+			params.append(exclude_payment_entry)
+		rows = frappe.db.sql(
+			"""SELECT name, paid_amount, paid_from, paid_to, posting_date,
+			retailedge_branch, retailedge_cashier FROM `tabPayment Entry`
+			WHERE """ + " AND ".join(conditions) + " ORDER BY posting_date, creation FOR UPDATE",
+			tuple(params),
+			as_dict=True,
+		)
+	else:
+		rows = frappe.get_all(
+			PAYMENT_ENTRY_DOCTYPE,
+			filters=filters,
+			fields=["name", "paid_amount", "paid_from", "paid_to", "posting_date", "retailedge_branch", "retailedge_cashier"],
+			order_by="posting_date asc, creation asc",
+			limit_page_length=0,
+		)
 	return [dict(row) for row in rows]
 
 
@@ -350,9 +399,33 @@ def validate_cash_deposit_before_submit(doc, method=None):
 	if not has_doctype("POS Opening Shift") or not frappe.db.exists("POS Opening Shift", opening_shift):
 		frappe.throw(_("The linked POS opening shift no longer exists."))
 
-	# Serialize submissions for the same shift. The custody check below therefore
-	# sees any earlier deposit committed or still holding this row lock.
-	frappe.db.sql("SELECT name FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE", (opening_shift,))
+	# Lock and CURRENT-read the full opening-shift identity. A plain get_value
+	# after a row lock may still return a stale REPEATABLE READ snapshot after a
+	# concurrent POS close, so the status/ownership checks belong to this read.
+	shift_rows = frappe.db.sql(
+		"SELECT company, user, pos_profile, status, docstatus "
+		"FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE",
+		(opening_shift,),
+		as_dict=True,
+	)
+	if len(shift_rows) != 1:
+		frappe.throw(_("The linked POS opening shift is not available."))
+	shift = shift_rows[0]
+	if cint(shift.get("docstatus")) != 1 or str(shift.get("status") or "").strip() != "Open":
+		frappe.throw(_("Cash deposits can be submitted only while the linked POS shift is Open."))
+	if str(shift.get("company") or "").strip() != company or str(shift.get("user") or "").strip() != cashier:
+		frappe.throw(
+			_("The Cash Deposit company or cashier does not match its linked POS opening shift."),
+			frappe.PermissionError,
+		)
+	# A draft Payment Entry remains editable. Re-check the cash account from
+	# the exact locked shift, not just its Cash-type status, so a native edit
+	# cannot debit an unrelated Company cash account against this shift.
+	cash_account = resolve_cash_payment_account(
+		company=company, pos_profile=shift.get("pos_profile"), opening_shift=opening_shift,
+	).get("payment_account")
+	if not cash_account or str(getattr(doc, "paid_from", "") or "").strip() != str(cash_account).strip():
+		frappe.throw(_("The Cash Deposit source account no longer matches the linked POS shift."))
 	if getattr(doc, "payment_type", None) != "Internal Transfer":
 		frappe.throw(_("A RetailEdge cash deposit must remain an Internal Transfer."))
 	_get_account(company, getattr(doc, "paid_from", None), expected_type="Cash")
@@ -367,7 +440,12 @@ def validate_cash_deposit_before_submit(doc, method=None):
 		company=company,
 		cashier=cashier,
 		exclude_payment_entry=getattr(doc, "name", None),
+		for_spending_validation=True,
 	)
+	if not custody.get("cash_sales_verified"):
+		frappe.throw(
+			_("Cash receipts for this shift could not be verified. No till cash deposit can be submitted until reconciliation is restored.")
+		)
 	if amount > flt(custody.get("available_cash")):
 		frappe.throw(
 			_("This deposit can no longer be submitted because available shift cash is {0}.").format(
@@ -380,7 +458,14 @@ def _get_account(company: str, account: str | None, *, expected_type: str) -> di
 	account = str(account or "").strip()
 	if not account or not frappe.db.exists("Account", account):
 		frappe.throw(_("Account {0} does not exist.").format(account or "(blank)"))
-	if not frappe.has_permission("Account", "read", doc=account):
+	# ERPNext v16 Account Link resolution works with Select permission. RetailEdge
+	# cashiers receive Account Select-only, not ledger-wide Account Read. The
+	# document is still validated below for exact Company, type and currency;
+	# a Read-only native accountant also remains eligible for this operation.
+	if not (
+		frappe.has_permission("Account", "select", doc=account)
+		or frappe.has_permission("Account", "read", doc=account)
+	):
 		frappe.throw(_("You do not have permission to use Account {0}.").format(account), frappe.PermissionError)
 	fields = ["company", "is_group", "account_type", "account_currency"]
 	if has_field("Account", "disabled"):

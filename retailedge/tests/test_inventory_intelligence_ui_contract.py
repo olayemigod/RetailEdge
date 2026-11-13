@@ -3,7 +3,6 @@ from pathlib import Path
 
 from retailedge import inventory_health
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,18 +23,10 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 
 	def test_inventory_intelligence_page_uses_edgesuite_shell_and_shared_stock_searches(self):
 		page = (
-			APP_ROOT
-			/ "retailedge"
-			/ "page"
-			/ "inventory_intelligence"
-			/ "inventory_intelligence.js"
+			APP_ROOT / "retailedge" / "page" / "inventory_intelligence" / "inventory_intelligence.js"
 		).read_text(encoding="utf-8")
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "inventory_intelligence"
-			/ "InventoryIntelligenceCentre.vue"
+			APP_ROOT / "public" / "js" / "inventory_intelligence" / "InventoryIntelligenceCentre.vue"
 		).read_text(encoding="utf-8")
 		bundle = (APP_ROOT / "public" / "js" / "inventory_intelligence.bundle.js").read_text(encoding="utf-8")
 
@@ -61,7 +52,7 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 		self.assertIn("EdgeDropdown", component)
 		self.assertIn("Last ${days} days", component)
 		self.assertIn("historical estimation, not a forecast", component)
-		self.assertIn('window.open(`/app/item/${encodeURIComponent(payload.value)}`', component)
+		self.assertIn("window.open(`/app/item/${encodeURIComponent(payload.value)}`", component)
 		self.assertIn("sortable: true", component)
 		self.assertIn(':sort="sort"', component)
 		self.assertIn('@sort-change="changeSort"', component)
@@ -77,19 +68,15 @@ class TestInventoryIntelligenceUIContract(unittest.TestCase):
 
 	def test_inventory_intelligence_page_roles_match_stock_operational_scope(self):
 		page_json = (
-			APP_ROOT
-			/ "retailedge"
-			/ "page"
-			/ "inventory_intelligence"
-			/ "inventory_intelligence.json"
+			APP_ROOT / "retailedge" / "page" / "inventory_intelligence" / "inventory_intelligence.json"
 		).read_text(encoding="utf-8")
 		for role in (
 			"System Manager",
 			"Stock User",
 			"Stock Manager",
-			"RetailEdge Manager",
-			"RetailEdge Branch Manager",
-			"RetailEdge Auditor",
+			"RetailEdgeManager",
+			"RetailEdgeBranchManager",
+			"RetailEdgeAuditor",
 		):
 			self.assertIn(role, page_json)
 

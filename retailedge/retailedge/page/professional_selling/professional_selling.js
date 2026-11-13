@@ -31,6 +31,11 @@ function hideNativePageSidebar(wrapper) {
 	}
 }
 
+function clearNavigationCache() {
+	window.__retailedgeBusinessHubContextCache = null;
+	window.__retailedgeBusinessHubContextRequest = null;
+}
+
 function installRestrictedOperationalGuard() {
 	if (typeof window.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
 		throw new Error("RetailEdge EdgeSuite-only operational guard is unavailable.");
@@ -76,6 +81,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-professional-selling-root";
 		page.body.append(root);
+		clearNavigationCache();
 		wrapper._retailedgeProfessionalSellingApp = await window.mountRetailEdgeProfessionalSelling(root);
 	} catch (error) {
 		bootLoading.remove();
@@ -86,5 +92,6 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	installRestrictedOperationalGuard();
+	clearNavigationCache();
 	window.dispatchEvent(new CustomEvent("retailedge-professional-selling-page-show"));
 };

@@ -24,6 +24,7 @@ class _DraftPayment(SimpleNamespace):
 
 
 class TestProjectReceipts(unittest.TestCase):
+	@patch("retailedge.project_receipts.nowdate", return_value="2026-08-28")
 	@patch("retailedge.project_receipts._payment_branch_field", return_value="retailedge_branch")
 	@patch("retailedge.project_receipts.get_simple_payment_mode_details")
 	@patch("retailedge.project_receipts.get_party_details")
@@ -42,6 +43,7 @@ class TestProjectReceipts(unittest.TestCase):
 		mock_party_details,
 		mock_mode_details,
 		_mock_branch_field,
+		_mock_nowdate,
 	):
 		project = SimpleNamespace(
 			name="PROJ-0001", company="Demo Company", customer="CUST-001", cost_center="Main - DC"
@@ -70,6 +72,8 @@ class TestProjectReceipts(unittest.TestCase):
 		)
 
 		self.assertEqual(payment.insert_calls, 1)
+		self.assertEqual(str(payment.posting_date), "2026-08-28")
+		_mock_nowdate.assert_called_once_with()
 		self.assertEqual(payment.docstatus, 0)
 		self.assertEqual(payment.payment_type, "Receive")
 		self.assertEqual(payment.party_type, "Customer")

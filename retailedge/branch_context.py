@@ -4,10 +4,11 @@ import frappe
 
 from retailedge.integrations.branch_context import (
 	get_active_branch as _get_coreedge_active_branch,
+)
+from retailedge.integrations.branch_context import (
 	get_user_allowed_branches as _get_coreedge_allowed_branches,
 )
 from retailedge.integrations.coreedge import get_coreedge_status
-
 
 BRANCH_FIELD_CANDIDATES = ["branch", "set_branch", "service_branch", "retail_branch", "default_branch"]
 COMPANY_FIELD_CANDIDATES = ["company"]
@@ -26,7 +27,6 @@ DATE_FIELD_CANDIDATES = [
 GLOBAL_BRANCH_ACCESS_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
 }
 SUPPORTED_RETAILEDGE_BRANCH_DOCTYPES = (
@@ -129,7 +129,10 @@ def get_user_allowed_branches(user=None, company=None):
 				filters={
 					"user": user,
 					"allow": "Branch",
-					"applicable_for": ["in", [None, "", "RetailEdge Cashier Expense", "RetailEdge Daily Sales Audit"]],
+					"applicable_for": [
+						"in",
+						[None, "", "RetailEdge Cashier Expense", "RetailEdge Daily Sales Audit"],
+					],
 				},
 				fields=["for_value"],
 				limit_page_length=0,
@@ -144,7 +147,9 @@ def get_user_allowed_branches(user=None, company=None):
 				result["source"] = result["source"] or "User Permission"
 
 	try:
-		default_branch = frappe.defaults.get_user_default("Branch", user=user) or frappe.defaults.get_user_default("Branch")
+		default_branch = frappe.defaults.get_user_default(
+			"Branch", user=user
+		) or frappe.defaults.get_user_default("Branch")
 	except Exception:
 		default_branch = None
 	if default_branch:
@@ -250,7 +255,9 @@ def resolve_branch_from_opening_shift(opening_shift, company=None):
 		result["source"] = f"POS Opening Shift.{branch_field}"
 	elif getattr(doc, "retailedge_branch", None):
 		result["branch"] = getattr(doc, "retailedge_branch", None)
-		result["source"] = getattr(doc, "retailedge_branch_source", None) or "POS Opening Shift.retailedge_branch"
+		result["source"] = (
+			getattr(doc, "retailedge_branch_source", None) or "POS Opening Shift.retailedge_branch"
+		)
 	if not result["branch"] and result.get("pos_profile"):
 		profile_result = resolve_branch_from_pos_profile(result["pos_profile"], company=result.get("company"))
 		result["branch"] = profile_result.get("branch")
@@ -292,7 +299,9 @@ def resolve_branch_from_closing_shift(closing_shift, company=None):
 		result["source"] = f"POS Closing Shift.{branch_field}"
 	elif getattr(doc, "retailedge_branch", None):
 		result["branch"] = getattr(doc, "retailedge_branch", None)
-		result["source"] = getattr(doc, "retailedge_branch_source", None) or "POS Closing Shift.retailedge_branch"
+		result["source"] = (
+			getattr(doc, "retailedge_branch_source", None) or "POS Closing Shift.retailedge_branch"
+		)
 	if not result["branch"] and result.get("pos_opening_shift"):
 		opening_result = resolve_branch_from_opening_shift(
 			result["pos_opening_shift"], company=result.get("company")
@@ -329,7 +338,9 @@ def resolve_branch_from_user(user=None, company=None):
 	user = user or _current_user()
 	result = {"branch": None, "company": company, "source": None, "messages": []}
 	try:
-		default_branch = frappe.defaults.get_user_default("Branch", user=user) or frappe.defaults.get_user_default("Branch")
+		default_branch = frappe.defaults.get_user_default(
+			"Branch", user=user
+		) or frappe.defaults.get_user_default("Branch")
 	except Exception:
 		default_branch = None
 	if default_branch:
@@ -353,7 +364,9 @@ def resolve_branch_from_user(user=None, company=None):
 	return result
 
 
-def resolve_branch_from_branch_profile(company=None, branch=None, user=None, pos_profile=None, warehouse=None):
+def resolve_branch_from_branch_profile(
+	company=None, branch=None, user=None, pos_profile=None, warehouse=None
+):
 	result = {
 		"branch": branch,
 		"company": company,
@@ -444,10 +457,14 @@ def resolve_retailedge_branch_context(
 	else:
 		for resolver in (
 			lambda: _resolve_branch_from_doc_field(doc),
-			lambda: resolve_branch_from_closing_shift(result.get("pos_closing_shift"), company=result.get("company"))
+			lambda: resolve_branch_from_closing_shift(
+				result.get("pos_closing_shift"), company=result.get("company")
+			)
 			if result.get("pos_closing_shift")
 			else None,
-			lambda: resolve_branch_from_opening_shift(result.get("pos_opening_shift"), company=result.get("company"))
+			lambda: resolve_branch_from_opening_shift(
+				result.get("pos_opening_shift"), company=result.get("company")
+			)
 			if result.get("pos_opening_shift")
 			else None,
 			lambda: resolve_branch_from_pos_profile(result.get("pos_profile"), company=result.get("company"))
@@ -456,7 +473,9 @@ def resolve_retailedge_branch_context(
 			lambda: resolve_branch_from_warehouse(result.get("warehouse"), company=result.get("company"))
 			if result.get("warehouse")
 			else None,
-			lambda: get_coreedge_branch_context(user=user or result.get("cashier"), company=result.get("company"))
+			lambda: get_coreedge_branch_context(
+				user=user or result.get("cashier"), company=result.get("company")
+			)
 			if prefer_coreedge
 			else None,
 			lambda: resolve_branch_from_branch_profile(
@@ -466,7 +485,9 @@ def resolve_retailedge_branch_context(
 				pos_profile=result.get("pos_profile"),
 				warehouse=result.get("warehouse"),
 			),
-			lambda: resolve_branch_from_user(user=user or result.get("cashier"), company=result.get("company")),
+			lambda: resolve_branch_from_user(
+				user=user or result.get("cashier"), company=result.get("company")
+			),
 			lambda: _resolve_single_company_branch(result.get("company")),
 		):
 			resolution = resolver()
@@ -498,12 +519,16 @@ def apply_branch_context_to_doc(doc, overwrite=False, validate_access=True):
 		branch=current_branch,
 		pos_profile=getattr(doc, "pos_profile", None),
 		cashier=getattr(doc, "cashier", None),
-		pos_opening_shift=getattr(doc, "linked_pos_opening_shift", None) or getattr(doc, "pos_opening_shift", None),
-		pos_closing_shift=getattr(doc, "linked_pos_closing_shift", None) or getattr(doc, "pos_closing_shift", None),
+		pos_opening_shift=getattr(doc, "linked_pos_opening_shift", None)
+		or getattr(doc, "pos_opening_shift", None),
+		pos_closing_shift=getattr(doc, "linked_pos_closing_shift", None)
+		or getattr(doc, "pos_closing_shift", None),
 		warehouse=getattr(doc, "warehouse", None),
 		user=getattr(doc, "cashier", None) or _current_user(),
 	)
-	if context.get("branch") and (not current_branch or (overwrite and _is_stronger_branch_source(context.get("source")))):
+	if context.get("branch") and (
+		not current_branch or (overwrite and _is_stronger_branch_source(context.get("source")))
+	):
 		doc.branch = context["branch"]
 	if validate_access:
 		context["access"] = validate_user_branch_access(
@@ -585,7 +610,9 @@ def resolve_retailedge_operational_defaults(
 
 
 def backfill_retailedge_branch_context(doctype=None, dry_run=True, limit=500):
-	doctypes = [doctype] if doctype else [dt for dt in SUPPORTED_RETAILEDGE_BRANCH_DOCTYPES if has_doctype(dt)]
+	doctypes = (
+		[doctype] if doctype else [dt for dt in SUPPORTED_RETAILEDGE_BRANCH_DOCTYPES if has_doctype(dt)]
+	)
 	items = []
 	checked = resolved = updated = unresolved = 0
 	for target_doctype in doctypes:
@@ -636,7 +663,9 @@ def backfill_retailedge_branch_context(doctype=None, dry_run=True, limit=500):
 			if context.get("branch"):
 				resolved += 1
 				if not dry_run:
-					frappe.db.set_value(target_doctype, row.get("name"), "branch", context["branch"], update_modified=False)
+					frappe.db.set_value(
+						target_doctype, row.get("name"), "branch", context["branch"], update_modified=False
+					)
 					updated += 1
 			else:
 				unresolved += 1
@@ -703,7 +732,9 @@ def _resolve_branch_from_doc_field(doc):
 
 def _seed_context_from_doc(result, doc):
 	result["company"] = getattr(doc, "company", None) or result.get("company")
-	result["branch"] = getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None) or result.get("branch")
+	result["branch"] = (
+		getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None) or result.get("branch")
+	)
 	result["pos_profile"] = getattr(doc, "pos_profile", None) or result.get("pos_profile")
 	result["cashier"] = getattr(doc, "cashier", None) or getattr(doc, "user", None) or result.get("cashier")
 	result["pos_opening_shift"] = (
@@ -721,7 +752,15 @@ def _seed_context_from_doc(result, doc):
 
 
 def _apply_resolution(result, resolution):
-	for key in ("branch", "company", "pos_profile", "cashier", "pos_opening_shift", "pos_closing_shift", "warehouse"):
+	for key in (
+		"branch",
+		"company",
+		"pos_profile",
+		"cashier",
+		"pos_opening_shift",
+		"pos_closing_shift",
+		"warehouse",
+	):
 		if resolution.get(key) and not result.get(key):
 			result[key] = resolution.get(key)
 			if resolution.get("source"):
@@ -744,7 +783,12 @@ def _resolve_single_company_branch(company):
 	if len(branches or []) == 1:
 		return {"branch": branches[0], "company": company, "source": "Single Company Branch", "messages": []}
 	if len(branches or []) > 1:
-		return {"branch": None, "company": company, "source": None, "messages": ["Multiple branches exist for company."]}
+		return {
+			"branch": None,
+			"company": company,
+			"source": None,
+			"messages": ["Multiple branches exist for company."],
+		}
 	return None
 
 

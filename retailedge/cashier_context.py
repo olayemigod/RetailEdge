@@ -623,21 +623,37 @@ def get_shift_cash_sales(
 				row_dict = payment_row.as_dict() if hasattr(payment_row, "as_dict") else dict(payment_row)
 				mode_name = row_dict.get("mode_of_payment")
 				account_name = row_dict.get("account") or row_dict.get("default_account")
-				if not (_is_cash_mode(mode_name) or (cash_account and account_name == cash_account)):
+				# The till is the one cash mode selected by the POS Profile, not
+				# every Mode of Payment whose underlying ledger is typed Cash.
+				if str(mode_name or "").strip() != str(cash_mode or "").strip():
+					continue
+				if cash_account and account_name != cash_account:
 					continue
 				amount = flt(row_dict.get("base_amount") if row_dict.get("base_amount") is not None else row_dict.get("amount"))
-				if amount <= 0:
+				if amount <= 0 and not (amount < 0 and getattr(invoice, "is_return", 0)):
 					continue
 				invoice_cash += amount
 				invoice_payment_matches += 1
 			if invoice_payment_matches:
-				cash_sales += invoice_cash
+				# POSNext removes change returned to the customer from drawer cash.
+				# Without this deduction till custody can be overstated.
+				change = getattr(invoice, "base_change_amount", None)
+				if change is None:
+					change = getattr(invoice, "change_amount", 0)
+					change = flt(change) * flt(getattr(invoice, "conversion_rate", 1) or 1)
+				cash_sales += invoice_cash - flt(change)
 				matched_invoices += 1
 				matched_payments += invoice_payment_matches
 				matched_invoice_names.add(invoice.name)
 
+		# Partial reads cannot authorise money leaving the physical till.
+		if not invoice_query_succeeded or invoice_processing_failed:
+			result["message"] = "Cannot verify all submitted shift invoices. Till spending is temporarily unavailable."
+			return result
+
 		payment_entry_result = _get_shift_cash_payment_entries(
 			window=window,
+			cash_mode=cash_mode,
 			cash_account=cash_account,
 			matched_invoice_names=matched_invoice_names,
 		)
@@ -708,7 +724,7 @@ def get_shift_cash_sales(
 	return result
 
 
-def _get_shift_cash_payment_entries(window, cash_account=None, matched_invoice_names=None):
+def _get_shift_cash_payment_entries(window, cash_mode=None, cash_account=None, matched_invoice_names=None):
 	result = {
 		"cash_sales": 0.0,
 		"matched_payment_count": 0,
@@ -739,7 +755,7 @@ def _get_shift_cash_payment_entries(window, cash_account=None, matched_invoice_n
 	try:
 		payment_rows = frappe.get_all("Payment Entry", filters=query_filters, fields=list(dict.fromkeys(fields)), limit_page_length=0)
 	except Exception:
-		return result
+		frappe.throw("Cannot verify cash receipts for the shift. No new till expense can be recorded.")
 	if not payment_rows:
 		return result
 
@@ -770,6 +786,18 @@ def _get_shift_cash_payment_entries(window, cash_account=None, matched_invoice_n
 		payment_doc = _coerce_doc("Payment Entry", row.get("name"))
 		if not payment_doc:
 			continue
+		# Company/Branch/date alone never prove that money entered this till.
+		# Require a receipt explicitly attributed to the opening shift,
+		# matching the native POSNext reference_no or the RetailEdge shift link.
+		shift_name = str(getattr(window.get("opening_shift"), "name", "") or "")
+		shift_links = {
+			str(getattr(payment_doc, "reference_no", "") or ""),
+			str(getattr(payment_doc, "retailedge_pos_opening_shift", "") or ""),
+		}
+		if not shift_name or shift_name not in shift_links:
+			continue
+		if getattr(payment_doc, "payment_type", None) != "Receive":
+			continue
 		payment_dt = _get_payment_entry_datetime(payment_doc)
 		if shift_start and shift_end and not _within_window(payment_dt, shift_start, shift_end):
 			continue
@@ -790,8 +818,10 @@ def _get_shift_cash_payment_entries(window, cash_account=None, matched_invoice_n
 			continue
 
 		mode_name = getattr(payment_doc, "mode_of_payment", None)
-		account_name = getattr(payment_doc, "paid_to", None) or getattr(payment_doc, "paid_from", None)
-		if not (_is_cash_mode(mode_name) or (cash_account and account_name == cash_account)):
+		account_name = getattr(payment_doc, "paid_to", None)
+		if str(mode_name or "").strip() != str(cash_mode or "").strip():
+			continue
+		if cash_account and account_name != cash_account:
 			continue
 
 		amount = allocated_cash or flt(getattr(payment_doc, "paid_amount", None) or getattr(payment_doc, "received_amount", None))
@@ -965,6 +995,7 @@ def get_shift_cash_snapshot(
 	pos_profile: str | None = None,
 	user: str | None = None,
 	expense_name: str | None = None,
+	for_cash_validation: bool = False,
 ) -> dict[str, object]:
 	settings = _safe_settings()
 	opening_shift_doc = _coerce_doc("POS Opening Shift", opening_shift)
@@ -979,10 +1010,14 @@ def get_shift_cash_snapshot(
 
 	opening_row = None
 	if opening_shift_doc:
+		# Never select an arbitrary Cash-type payment method as opening till cash.
+		cash_mode = _get_pos_profile_cash_mode(
+			pos_profile or getattr(opening_shift_doc, "pos_profile", None)
+		) or "Cash"
 		for table_field in ("balance_details", "payments", "opening_balance_details", "payment_reconciliation"):
 			if not hasattr(opening_shift_doc, table_field):
 				continue
-			opening_row = _find_cash_row(getattr(opening_shift_doc, table_field))
+			opening_row = _find_cash_row_by_mode(getattr(opening_shift_doc, table_field), [cash_mode])
 			if opening_row:
 				result["opening_cash"] = _extract_amount_from_row(opening_row)
 				result["source"] = f"opening_shift.{table_field}"
@@ -998,6 +1033,7 @@ def get_shift_cash_snapshot(
 		user=user,
 	)
 	result["cash_sales"] = flt(sales_result.get("cash_sales", 0.0))
+	result["cash_sales_verified"] = sales_result.get("source") not in ("", None, "unresolved")
 
 	statuses = ["Submitted", "Pending Ledger", "Posted", "Approved"]
 	if getattr(settings, "include_draft_cashier_expenses_in_cash_check", 1):
@@ -1014,14 +1050,33 @@ def get_shift_cash_snapshot(
 		if expense_name:
 			filters["name"] = ["!=", expense_name]
 		try:
-			expenses = frappe.get_all(
-				"RetailEdge Cashier Expense",
-				filters=filters,
-				fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
-				limit_page_length=0,
-			)
+			if for_cash_validation:
+				# Current/locking read after the opening-shift FOR UPDATE lock.
+				# Ordinary get_all may reuse a REPEATABLE READ snapshot from before
+				# the lock wait and undercount another cashier expense.
+				all_rows = frappe.db.sql(
+					"""SELECT name, amount, expense_status, cash_source, cash_movement_status
+					FROM `tabRetailEdge Cashier Expense`
+					WHERE linked_pos_opening_shift = %s AND docstatus != 2
+					FOR UPDATE""",
+					(opening_shift_doc.name,),
+					as_dict=True,
+				)
+				expenses = [
+					frappe._dict(row) for row in all_rows
+					if row.get("expense_status") in statuses
+					and (not expense_name or row.get("name") != expense_name)
+				]
+			else:
+				expenses = frappe.get_all(
+					"RetailEdge Cashier Expense",
+					filters=filters,
+					fields=["amount", "expense_status", "cash_source", "cash_movement_status"],
+					limit_page_length=0,
+				)
 		except Exception:
-			expenses = []
+			# An unknown previous expense balance must never be treated as zero.
+			frappe.throw("Cannot verify previous till expenses. Please retry or contact your administrator.")
 		result["prior_expenses"] = sum(
 			flt(row.amount)
 			for row in expenses
@@ -1046,11 +1101,14 @@ def get_shift_cash_snapshot(
 def get_cashier_expense_entry_context(user: str | None = None, company: str | None = None) -> dict[str, object]:
 	settings = _safe_settings()
 	context = get_current_cashier_context(user=user, company=company)
-	snapshot = get_shift_cash_snapshot(
+	# Late import avoids cashier_context <-> cash_custody module initialization cycle.
+	from retailedge.cash_custody import get_cash_custody_snapshot
+
+	snapshot = get_cash_custody_snapshot(
 		opening_shift=context.get("linked_pos_opening_shift"),
 		company=context.get("company"),
 		pos_profile=context.get("pos_profile"),
-		user=context.get("user"),
+		cashier=context.get("user"),
 	)
 
 	message_parts = [part for part in [context.get("message"), snapshot.get("message")] if part]
@@ -1058,9 +1116,9 @@ def get_cashier_expense_entry_context(user: str | None = None, company: str | No
 		**context,
 		"shift_opening_cash_amount": snapshot.get("opening_cash", 0.0),
 		"shift_cash_sales_amount": snapshot.get("cash_sales", 0.0),
-		"prior_shift_expense_amount": snapshot.get("prior_expenses", 0.0),
-		"available_shift_cash_before_expense": snapshot.get("available_before", 0.0),
-		"available_shift_cash_after_expense": snapshot.get("available_before", 0.0),
+		"prior_shift_expense_amount": snapshot.get("cashier_expenses", 0.0),
+		"available_shift_cash_before_expense": snapshot.get("available_cash", 0.0),
+		"available_shift_cash_after_expense": snapshot.get("available_cash", 0.0),
 		"cash_balance_source": snapshot.get("source"),
 		"cash_control_message": "\n".join(message_parts) if message_parts else None,
 		"settings": {

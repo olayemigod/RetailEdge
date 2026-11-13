@@ -3,10 +3,9 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = APP_ROOT.parent
-EDGESUITE_SHA = "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7"
+EDGESUITE_SHA = "d50920b005da8dcf1bd1e35c1c88be8afedecfbf"
 
 
 class TestSharedPrintingRetailAdoption(unittest.TestCase):
@@ -35,7 +34,7 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'SUPPORTED_THERMAL_RECEIPT_DOCTYPES = {"Sales Invoice", "POS Invoice"}',
 			'_assert_document_permission(doctype, name, "read")',
 			'_assert_document_permission(doctype, name, "print")',
-			'if cint(doc.docstatus) != 1:',
+			"if cint(doc.docstatus) != 1:",
 			'"blocks": blocks_by_paper["80"]',
 			'"blocks_by_paper": blocks_by_paper',
 			'"template_variants": variants',
@@ -48,8 +47,8 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_receipt_payload_uses_horizontal_pedge_table_without_device_commands(self):
 		source = self.read_app("thermal_receipt.py")
 		for contract in (
-			'ITEM_COLUMN_WIDTHS',
-			'META_COLUMN_WIDTHS',
+			"ITEM_COLUMN_WIDTHS",
+			"META_COLUMN_WIDTHS",
 			'_("Invoice No.")',
 			'_("Customer")',
 			'_("Cashier")',
@@ -66,7 +65,15 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn('_("Thank you for your business.")', source)
-		for forbidden in ("navigator.serial", "navigator.usb", "requestPort", "requestDevice", "0x1b", "0x1d", "ESC @"):
+		for forbidden in (
+			"navigator.serial",
+			"navigator.usb",
+			"requestPort",
+			"requestDevice",
+			"0x1b",
+			"0x1d",
+			"ESC @",
+		):
 			self.assertNotIn(forbidden, source)
 
 	def test_receipt_uses_erpnext_net_values_and_keeps_payment_summary(self):
@@ -89,14 +96,14 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_browser_adapter_uses_shared_runtime_for_serial_and_usb(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
-			'adapter.profiles?.resolve',
-			'adapter.devices?.connectBoundSerial',
-			'adapter.devices?.connectBoundUsb',
-			'adapter.devices?.bindingMatchesStatus',
-			'adapter.profiles.receiptOptions(profile)',
-			'adapter.profiles.textEncoder(profile)',
-			'transport: connection.transport',
-			'payload?.blocks_by_paper?.[paperWidth]',
+			"adapter.profiles?.resolve",
+			"adapter.devices?.connectBoundSerial",
+			"adapter.devices?.connectBoundUsb",
+			"adapter.devices?.bindingMatchesStatus",
+			"adapter.profiles.receiptOptions(profile)",
+			"adapter.profiles.textEncoder(profile)",
+			"transport: connection.transport",
+			"payload?.blocks_by_paper?.[paperWidth]",
 			'return "/app/edge-printing";',
 			'frappe.set_route("edge-printing")',
 		):
@@ -116,23 +123,27 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 	def test_connected_printer_must_match_resolved_profile_binding(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		for contract in (
-			'adapter.bindingStore?.get?.(profile.name)',
-			'adapter.devices?.bindingMatchesStatus?.(profile.name, current || {})',
-			'portInfoMatchesBinding(current.portInfo || {}, binding.portInfo || {})',
-			'if (currentMatchesBinding) return { transport, status: current };',
-			'await adapter.disconnect(transport)',
-			'adapter.devices?.connectBoundUsb',
-			'adapter.devices?.connectBoundSerial',
-			'adapter.simulation?.isEnabled?.()',
+			"adapter.devices?.bindingMatchesStatus?.(profile.name, current || {})",
+			"adapter.devices?.bindingMatchesStatus?.(",
+			"restored?.status || {}",
+			"if (!restored?.status?.connected || !restoredMatchesBinding)",
+			"if (currentMatchesBinding) return { transport, status: current };",
+			"await adapter.disconnect(transport)",
+			"adapter.devices?.connectBoundUsb",
+			"adapter.devices?.connectBoundSerial",
+			"adapter.simulation?.isEnabled?.()",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("if (current?.connected) return current;", source)
+		self.assertNotIn("portInfoMatchesBinding", source)
 
 	def test_usb_profile_has_safe_normal_system_print_fallback_message(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
 		self.assertIn('["serial", "usb"].includes(transport)', source)
 		self.assertIn("Serial / Bluetooth or USB receipt printer profile", source)
-		self.assertIn("If direct USB access is unavailable, use Print Document for normal system printing.", source)
+		self.assertIn(
+			"If direct USB access is unavailable, use Print Document for normal system printing.", source
+		)
 
 	def test_generic_reprint_never_opens_cash_drawer_by_default(self):
 		source = self.read_app("public/js/thermalReceiptPrinting.js")
@@ -166,8 +177,11 @@ class TestSharedPrintingRetailAdoption(unittest.TestCase):
 			'"retailedge.master_experience.get_retailedge_business_hub_context": "retailedge.navigation_consolidation.get_retailedge_business_hub_context"',
 			hooks,
 		)
-		self.assertIn("from retailedge.printing_navigation import normalize_printing_navigation", final_navigation)
-		self.assertIn("return normalize_printing_navigation(context)", final_navigation)
+		self.assertIn(
+			"from retailedge.printing_navigation import normalize_printing_navigation", final_navigation
+		)
+		self.assertIn("context = normalize_printing_navigation(context)", final_navigation)
+		self.assertIn("return filter_context_for_runtime_capabilities(context)", final_navigation)
 
 	def test_branch_print_policy_is_opt_in_and_presentation_only(self):
 		settings = self.read_app("print_output_settings.py")

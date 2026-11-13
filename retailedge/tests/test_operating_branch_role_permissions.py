@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -12,9 +11,6 @@ def test_global_branch_authority_roles_receive_minimum_branch_master_access():
 	assert 'update_permission_property("Branch", role_name, 0, "select", 1)' in source
 	assert 'frappe.clear_cache(doctype="Branch")' in source
 
-	branch_scope = source[
-		source.index("def _ensure_operational_branch_read()") :
-		source.index("def _add_canonical_roles_for_alias_assignments")
-	]
+	branch_scope = source[source.index("def _ensure_operational_branch_read()") : len(source)]
 	for denied in ('"write", 1', '"create", 1', '"delete", 1', '"import", 1'):
 		assert denied not in branch_scope

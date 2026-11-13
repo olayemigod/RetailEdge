@@ -334,8 +334,83 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			doc.validate_cash_availability()
 
+	def test_pos_till_requires_a_shift_even_if_other_expenses_may_be_unlinked(self):
+		doc = self._make_doc(amount=10, available_shift_cash_before_expense=1000)
+		with self.assertRaises(frappe.ValidationError):
+			doc.validate_cash_availability()
+
+	def test_review_does_not_revalidate_submitted_historical_cash(self):
+		doc = self._make_doc(
+			name="EXP-1", _is_new=False, docstatus=1, amount=100
+		)
+		doc.cash_movement_status = "Disbursed"
+		doc.get_doc_before_save = lambda: SimpleNamespace(
+			docstatus=1,
+			get=lambda field: {"amount": 100, "cash_movement_status": "Disbursed"}.get(field),
+		)
+		self.assertFalse(RetailEdgeCashierExpense.requires_new_cash_check(doc))
+
+	@patch("retailedge.cashier_context.get_shift_cash_sales", return_value={"cash_sales": 500, "source": "sales_invoice.payments", "message": None})
+	@patch("retailedge.cashier_context._safe_settings", return_value=_Settings())
+	@patch("retailedge.cashier_context.frappe.db.sql")
+	@patch("retailedge.cashier_context.frappe.get_all")
+	def test_spend_time_uses_current_locked_expense_rows(self, mock_get_all, mock_sql, _settings, _sales):
+		mock_sql.return_value = [
+			{"name": "EXP-1", "amount": 200, "expense_status": "Submitted", "cash_source": "POS Till", "cash_movement_status": "Disbursed"},
+			{"name": "EXP-2", "amount": 100, "expense_status": "Draft", "cash_source": "POS Till", "cash_movement_status": "Not Disbursed"},
+			{"name": "EXP-SELF", "amount": 100, "expense_status": "Draft", "cash_source": "POS Till", "cash_movement_status": "Not Disbursed"},
+		]
+		opening_shift = SimpleNamespace(
+			doctype="POS Opening Shift", name="OPEN-1",
+			payments=[_Row(mode_of_payment="Cash", amount=1000)],
+		)
+		position = get_shift_cash_snapshot(
+			opening_shift=opening_shift, expense_name="EXP-SELF", for_cash_validation=True,
+		)
+		self.assertEqual(position["prior_expenses"], 300)
+		self.assertEqual(position["available_before"], 1200)
+		self.assertTrue(position["cash_sales_verified"])
+		self.assertIn("FOR UPDATE", mock_sql.call_args.args[0])
+		mock_get_all.assert_not_called()
+
+	def test_unverified_sales_cannot_be_used_to_authorise_till_spending(self):
+		doc = self._make_doc(
+			linked_pos_opening_shift="OPEN-1", amount=10, available_shift_cash_before_expense=1000
+		)
+		doc._cash_sales_verified = False
+		with self.assertRaises(frappe.ValidationError):
+			doc.validate_cash_availability()
+
+	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.frappe.db.sql")
+	def test_concurrent_cash_expenses_lock_same_shift_before_snapshot(self, mock_sql):
+		mock_sql.return_value = [{
+			"name": "OPEN-1", "status": "Open", "company": "Demo Company",
+			"pos_profile": "PROFILE-1", "user": "cashier@example.com"
+		}]
+		doc = self._make_doc(
+			linked_pos_opening_shift="OPEN-1", company="Demo Company",
+			pos_profile="PROFILE-1", cashier="cashier@example.com"
+		)
+		RetailEdgeCashierExpense.lock_shift_cash_for_validation(doc)
+		self.assertIn("FOR UPDATE", mock_sql.call_args.args[0])
+		self.assertEqual(mock_sql.call_args.args[1], ("OPEN-1",))
+		doc.cashier = "another@example.com"
+		with self.assertRaises(frappe.ValidationError):
+			RetailEdgeCashierExpense.lock_shift_cash_for_validation(doc)
+
+	@patch("retailedge.cashier_context.get_shift_cash_sales", return_value={"cash_sales": 0, "source": "sales_invoice.payments", "message": None})
+	@patch("retailedge.cashier_context._safe_settings", return_value=_Settings())
+	@patch("retailedge.cashier_context.frappe.get_all", side_effect=RuntimeError("expense-query-down"))
+	def test_expense_query_failure_never_resets_previous_spending_to_zero(self, _mock_rows, _mock_settings, _mock_sales):
+		opening_shift = SimpleNamespace(
+			doctype="POS Opening Shift", name="OPEN-1",
+			payments=[_Row(mode_of_payment="Cash", amount=1000)],
+		)
+		with self.assertRaises(frappe.ValidationError):
+			get_shift_cash_snapshot(opening_shift=opening_shift)
+
 	@patch(
-		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_shift_cash_snapshot"
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_cash_custody_snapshot"
 	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
@@ -345,8 +420,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		mock_snapshot.return_value = {
 			"opening_cash": 1000,
 			"cash_sales": 0,
-			"prior_expenses": 200,
-			"available_before": 800,
+			"cashier_expenses": 200,
+			"submitted_deposits": 0,
+			"available_cash": 800,
 			"source": "opening_shift.payments",
 			"message": None,
 		}
@@ -561,9 +637,12 @@ class CashierContextTests(unittest.TestCase):
 			name="SINV-1",
 			posting_date=datetime(2026, 5, 11, 9, 30, 0),
 			posting_time=None,
+			base_change_amount=50,
 			payments=[
 				_Row(mode_of_payment="Cash", account="Cash - DEMO", amount=500, base_amount=500),
 				_Row(mode_of_payment="Card", account="Bank - DEMO", amount=200, base_amount=200),
+				# Same cash ledger, different tender: must never inflate the till.
+				_Row(mode_of_payment="Moniepoint", account="Cash - DEMO", amount=6000, base_amount=6000),
 			],
 		)
 		mock_shift_window.return_value = {
@@ -606,7 +685,7 @@ class CashierContextTests(unittest.TestCase):
 			"message": None,
 		}
 		result = get_shift_cash_sales(opening_shift="OPEN-1", company="Demo Company", pos_profile="PROFILE-1")
-		self.assertEqual(result["cash_sales"], 500)
+		self.assertEqual(result["cash_sales"], 450)
 		self.assertEqual(result["matched_invoice_count"], 1)
 		self.assertEqual(result["matched_payment_count"], 1)
 		self.assertEqual(result["source"], "sales_invoice.payments")
@@ -735,6 +814,8 @@ class CashierContextTests(unittest.TestCase):
 			posting_time=None,
 			creation=datetime(2026, 5, 18, 10, 0, 0),
 			mode_of_payment="Cash",
+			payment_type="Receive",
+			reference_no="OPEN-1",
 			paid_to="Cash - DEMO",
 			paid_from=None,
 			paid_amount=300,
@@ -809,6 +890,15 @@ class CashierContextTests(unittest.TestCase):
 		self.assertEqual(result["source"], "payment_entry.references")
 		self.assertIn("Payment Entry receipts", result["message"])
 
+		# A matching company, branch, account and date do not prove till receipt.
+		payment_entry.reference_no = "ANOTHER-SHIFT"
+		result = get_shift_cash_sales(opening_shift="OPEN-1", company="Demo Company", pos_profile="PROFILE-1")
+		self.assertEqual(result["cash_sales"], 0)
+		payment_entry.reference_no = "OPEN-1"
+		payment_entry.mode_of_payment = "Moniepoint"
+		result = get_shift_cash_sales(opening_shift="OPEN-1", company="Demo Company", pos_profile="PROFILE-1")
+		self.assertEqual(result["cash_sales"], 0)
+
 
 class PosClosingShiftHookTests(unittest.TestCase):
 	@patch("retailedge.events.pos_closing_shift.frappe.db.set_value")
@@ -823,15 +913,15 @@ class PosClosingShiftHookTests(unittest.TestCase):
 class CashierExpenseServiceTests(unittest.TestCase):
 	def test_reviewer_roles_include_spaced_and_compact_names(self):
 		roles = get_reviewer_roles()
-		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("RetailEdgeAuditor", roles)
 		self.assertIn("RetailEdgeAuditor", roles)
 
 	def test_cashier_roles_include_spaced_and_compact_names(self):
 		roles = get_cashier_roles()
-		self.assertIn("RetailEdge Cashier", roles)
+		self.assertIn("RetailEdgeCashier", roles)
 		self.assertIn("RetailEdgeCashier", roles)
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	def test_user_is_reviewer(self, _mock_roles):
 		self.assertTrue(user_is_reviewer("auditor@example.com"))
 
@@ -860,7 +950,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["expense_status"], "Submitted")
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_approve_moves_submitted_to_pending_ledger(self, mock_get_doc, _mock_roles, mock_log):
@@ -881,7 +971,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.db.set_value")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_approve_normalises_stale_submitted_docstatus(
@@ -910,7 +1000,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reject_moves_submitted_to_rejected(self, mock_get_doc, _mock_roles, mock_log):
@@ -930,7 +1020,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reopen_moves_rejected_back_to_submitted(self, mock_get_doc, _mock_roles, mock_log):
@@ -959,7 +1049,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			approve_cashier_expense("RE-CE-0100")
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_cancelled_expense_cannot_be_approved_rejected_or_reopened(self, mock_get_doc, _mock_roles):
@@ -974,7 +1064,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			reopen_cashier_expense("RE-CE-0101")
 
-	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeAuditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_reopen_moves_pending_ledger_back_to_submitted(self, mock_get_doc, _mock_roles):

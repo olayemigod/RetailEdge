@@ -783,7 +783,7 @@
    "options": "Ready\nBlocked\nAlready Handled\nNeeds Review"
   },
   {
-   "default": "System Manager\nAccounts Manager\nRetailEdge Manager\nRetailEdgeManager",
+   "default": "System Manager\nAccounts Manager\nRetailEdgeManager",
    "description": "Roles allowed to pass the reconciliation execution gate. This does not by itself grant permission to reconcile transactions.",
    "fieldname": "allowed_reconciliation_execution_roles",
    "fieldtype": "Small Text",

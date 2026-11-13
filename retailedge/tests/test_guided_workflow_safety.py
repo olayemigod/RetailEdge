@@ -25,8 +25,15 @@ class TestGuidedWorkflowSafety(unittest.TestCase):
 				self.assertNotIn(".submit()", source)
 				self.assertNotIn("frappe.model.workflow.apply_workflow", source)
 				self.assertNotIn("apply_workflow(", source)
-				self.assertNotIn("docstatus = 1", source)
-				self.assertNotIn("docstatus=1", source)
+				# A read-only SQL WHERE docstatus = 1 is not a workflow
+				# mutation. Check assignment AST rather than banning SQL filters.
+				import ast
+
+				for node in ast.walk(ast.parse(source)):
+					if isinstance(node, (ast.Assign, ast.AnnAssign)):
+						targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+						if any(isinstance(target, ast.Attribute) and target.attr == "docstatus" for target in targets):
+							self.assertFalse(isinstance(node.value, ast.Constant) and node.value.value == 1)
 
 	def test_business_hub_describes_guided_results_as_drafts_and_checks_workflow(self):
 		component = (

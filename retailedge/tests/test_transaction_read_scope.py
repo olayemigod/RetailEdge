@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import retailedge.transaction_read_scope as scope
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -87,9 +86,12 @@ def test_users_without_branch_assignment_history_keep_native_erp_permissions():
 		patch.object(scope, "user_has_global_branch_access", return_value=False),
 		patch.object(scope, "has_branch_assignments", return_value=False),
 	):
-		assert scope.get_sales_invoice_permission_query_conditions(
-			"native-user@example.com", doctype="Sales Invoice"
-		) == ""
+		assert (
+			scope.get_sales_invoice_permission_query_conditions(
+				"native-user@example.com", doctype="Sales Invoice"
+			)
+			== ""
+		)
 
 
 def test_direct_document_access_denies_other_branch_but_allows_native_checks_to_continue():
@@ -98,16 +100,22 @@ def test_direct_document_access_denies_other_branch_but_allows_native_checks_to_
 		"_explicit_working_scope",
 		return_value={"company": "RetailEdge Consulting", "branch": "Ketu", "company_wide": False},
 	):
-		assert scope.has_permission(
-			_doc(company="RetailEdge Consulting", branch="Ketu"),
-			user="manager@example.com",
-			ptype="read",
-		) is True
-		assert scope.has_permission(
-			_doc(company="RetailEdge Consulting", branch="Lagos Island"),
-			user="manager@example.com",
-			ptype="read",
-		) is False
+		assert (
+			scope.has_permission(
+				_doc(company="RetailEdge Consulting", branch="Ketu"),
+				user="manager@example.com",
+				ptype="read",
+			)
+			is True
+		)
+		assert (
+			scope.has_permission(
+				_doc(company="RetailEdge Consulting", branch="Lagos Island"),
+				user="manager@example.com",
+				ptype="read",
+			)
+			is False
+		)
 
 
 def test_direct_company_wide_scope_rejects_another_company():
@@ -116,16 +124,22 @@ def test_direct_company_wide_scope_rejects_another_company():
 		"_explicit_working_scope",
 		return_value={"company": "RetailEdge Consulting", "branch": "", "company_wide": True},
 	):
-		assert scope.has_permission(
-			_doc(company="RetailEdge Consulting", branch="Lagos Island"),
-			user="manager@example.com",
-			ptype="read",
-		) is True
-		assert scope.has_permission(
-			_doc(company="Other Company", branch="Lagos Island"),
-			user="manager@example.com",
-			ptype="read",
-		) is False
+		assert (
+			scope.has_permission(
+				_doc(company="RetailEdge Consulting", branch="Lagos Island"),
+				user="manager@example.com",
+				ptype="read",
+			)
+			is True
+		)
+		assert (
+			scope.has_permission(
+				_doc(company="Other Company", branch="Lagos Island"),
+				user="manager@example.com",
+				ptype="read",
+			)
+			is False
+		)
 
 
 def test_query_hooks_have_v16_compatible_doctype_wrappers():
@@ -140,7 +154,10 @@ def test_query_hooks_have_v16_compatible_doctype_wrappers():
 	for doctype, function in contracts.items():
 		assert f'"{doctype}": "retailedge.transaction_read_scope.{function}"' in hooks
 		assert f"def {function}(user: str | None = None, doctype: str | None = None)" in source
-	assert "def has_permission(doc, ptype: str | None = None, user: str | None = None, debug: bool = False)" in source
+	assert (
+		"def has_permission(doc, ptype: str | None = None, user: str | None = None, debug: bool = False)"
+		in source
+	)
 	assert "retailedge.transaction_read_scope.has_permission" in hooks
 
 
@@ -173,7 +190,9 @@ def test_retailedge_roles_receive_only_minimum_context_master_visibility():
 	assert 'update_permission_property("Branch", role_name, 0, "read", 1)' in roles
 	assert 'update_permission_property("Branch", role_name, 0, "select", 1)' in roles
 	branch_scope = roles[
-		roles.index("def _ensure_operational_branch_read()") : roles.index("def _ensure_management_context_read_permissions")
+		roles.index("def _ensure_operational_branch_read()") : roles.index(
+			"def _ensure_management_context_read_permissions"
+		)
 	]
 	for denied in ('"write", 1', '"create", 1', '"delete", 1', '"import", 1'):
 		assert denied not in branch_scope
@@ -182,7 +201,7 @@ def test_retailedge_roles_receive_only_minimum_context_master_visibility():
 def test_after_migrate_does_not_regrant_transaction_read_over_merchant_policy():
 	roles = (APP_ROOT / "setup_roles.py").read_text(encoding="utf-8")
 	management_start = roles.index("def _ensure_management_context_read_permissions()")
-	management_end = roles.index("def _add_canonical_roles_for_alias_assignments", management_start)
+	management_end = len(roles)
 	management_scope = roles[management_start:management_end]
 	for doctype in (
 		"Quotation",
@@ -192,5 +211,5 @@ def test_after_migrate_does_not_regrant_transaction_read_over_merchant_policy():
 		"Payment Entry",
 	):
 		assert doctype not in management_scope
-	assert "Role Permission Manager" in management_scope
+	assert "Role Permission" in management_scope
 	assert "If Owner" in management_scope

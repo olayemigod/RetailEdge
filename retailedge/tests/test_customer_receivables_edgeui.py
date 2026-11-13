@@ -18,7 +18,7 @@ class RetailEdgeCustomerReceivablesEdgeUITests(unittest.TestCase):
 		roles = {row["role"] for row in data["roles"]}
 		self.assertIn("Sales Manager", roles)
 		self.assertIn("Accounts Manager", roles)
-		self.assertIn("RetailEdge Manager", roles)
+		self.assertIn("RetailEdgeManager", roles)
 
 	def test_component_uses_shared_report_shell(self):
 		source = COMPONENT.read_text()
@@ -32,7 +32,7 @@ class RetailEdgeCustomerReceivablesEdgeUITests(unittest.TestCase):
 	def test_provider_is_bounded_and_governed(self):
 		source = BUNDLE.read_text()
 		self.assertIn("createBoundedPaginatedReportProvider", source)
-		self.assertIn('key: REPORT_KEY', source)
+		self.assertIn("key: REPORT_KEY", source)
 		self.assertIn('const REPORT_KEY = "customer-receivables"', source)
 		self.assertIn("maxDatasetRows: 2000", source)
 		self.assertIn("retailedge.reporting_actions.get_report_export_data", source)

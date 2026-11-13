@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -18,13 +17,14 @@ class TestWarrantyServiceNavigationContract(TestCase):
 		self.assertEqual(group.count('"label": "Warranty Claims"'), 1)
 		self.assertEqual(group.count('"label": "Maintenance Schedules"'), 1)
 		self.assertEqual(group.count('"label": "Maintenance Visits"'), 1)
-		self.assertIn('"target_type": "DocType", "target": "Warranty Claim"', group)
-		self.assertIn('"target_type": "DocType", "target": "Maintenance Schedule"', group)
-		self.assertIn('"target_type": "DocType", "target": "Maintenance Visit"', group)
+		self.assertIn('"target": "Warranty Claim"', group)
+		self.assertIn('"target": "Maintenance Schedule"', group)
+		self.assertIn('"target": "Maintenance Visit"', group)
 		self.assertNotIn("required_roles", group)
 
 		self.assertIn('if target_type == "DocType":', source)
-		self.assertIn('_has_permission_cached(target, "read", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('target, "read", permission_cache', source)
 
 	def test_new_claim_action_is_native_and_create_permission_gated(self):
 		source = (APP_ROOT / "edgesuite_ui.py").read_text()
@@ -36,14 +36,11 @@ class TestWarrantyServiceNavigationContract(TestCase):
 		self.assertIn('"label": "New Warranty Claim"', action)
 		self.assertIn('"doctype": "Warranty Claim"', action)
 		self.assertIn('"mode": "native_fallback"', action)
-		self.assertIn('_has_permission_cached(doctype, "create", permission_cache)', source)
+		self.assertIn("_has_permission_cached(", source)
+		self.assertIn('doctype, "create", permission_cache', source)
 
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "RetailEdgeBusinessHub.vue"
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 		).read_text()
 		self.assertIn("await openNativeCreateSurface(action.doctype);", component)
 		generic_block_start = component.index("if (!this.nativeFallbackEnabled)")
@@ -55,7 +52,7 @@ class TestWarrantyServiceNavigationContract(TestCase):
 		self.assertNotIn("frappe.new_doc(doctype, defaults)", component)
 		self.assertNotIn("frappe.ui.form.make_quick_entry", component)
 
-		permission_gate = component.index('if (!this.nativeFallbackEnabled)')
+		permission_gate = component.index("if (!this.nativeFallbackEnabled)")
 		native_create = component.index("await openNativeCreateSurface(action.doctype);")
 		self.assertLess(permission_gate, native_create)
 

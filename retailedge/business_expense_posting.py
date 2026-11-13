@@ -26,9 +26,7 @@ BUSINESS_EXPENSE_POSTING_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
 }
 
@@ -61,8 +59,7 @@ def search_business_expense_posting_workflow_states(
 	states = [
 		str(row.state or "").strip()
 		for row in rows
-		if str(row.state or "").strip()
-		and (not needle or needle in str(row.state).lower())
+		if str(row.state or "").strip() and (not needle or needle in str(row.state).lower())
 	]
 	start = max(0, cint(start))
 	page_len = max(1, min(cint(page_len) or 20, 100))
@@ -217,11 +214,7 @@ def _workflow_posting_reasons(doc, settings: dict[str, Any]) -> list[str]:
 		return reasons
 
 	state_field = str(workflow.get("workflow_state_field") or "workflow_state").strip()
-	current_state = str(
-		getattr(doc, state_field, None)
-		or getattr(doc, "workflow_state", None)
-		or ""
-	).strip()
+	current_state = str(getattr(doc, state_field, None) or getattr(doc, "workflow_state", None) or "").strip()
 	allowed_state = str(settings.get("posting_workflow_state") or "").strip()
 	if not allowed_state:
 		return [
@@ -245,9 +238,9 @@ def _workflow_posting_reasons(doc, settings: dict[str, Any]) -> list[str]:
 		]
 	if current_state != allowed_state:
 		return [
-			_(
-				"Business Expense must be in Workflow State {0} before accounting posting."
-			).format(allowed_state)
+			_("Business Expense must be in Workflow State {0} before accounting posting.").format(
+				allowed_state
+			)
 		]
 	return []
 
@@ -341,9 +334,7 @@ def _validate_source_accounts(doc) -> None:
 
 def _validate_company_currency_accounts(doc) -> None:
 	company = str(getattr(doc, "company", None) or "").strip()
-	company_currency = str(
-		frappe.db.get_value("Company", company, "default_currency") or ""
-	).strip()
+	company_currency = str(frappe.db.get_value("Company", company, "default_currency") or "").strip()
 	if not company_currency:
 		frappe.throw(_("Company default currency is required before posting."))
 	for fieldname, label in (
@@ -352,8 +343,7 @@ def _validate_company_currency_accounts(doc) -> None:
 	):
 		account = str(getattr(doc, fieldname, None) or "").strip()
 		account_currency = str(
-			frappe.db.get_value("Account", account, "account_currency")
-			or company_currency
+			frappe.db.get_value("Account", account, "account_currency") or company_currency
 		).strip()
 		if account_currency != company_currency:
 			frappe.throw(
@@ -364,9 +354,7 @@ def _validate_company_currency_accounts(doc) -> None:
 
 
 def _posting_reference_state(doc) -> dict[str, Any]:
-	reference_type = str(
-		getattr(doc, "posting_reference_type", None) or ""
-	).strip()
+	reference_type = str(getattr(doc, "posting_reference_type", None) or "").strip()
 	reference = str(getattr(doc, "posting_reference", None) or "").strip()
 	if not reference:
 		return {

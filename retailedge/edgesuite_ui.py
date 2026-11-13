@@ -17,11 +17,8 @@ from retailedge.pos_runtime import (
 FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
 CASH_FLOW_OUTLOOK_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 	"Accounts Manager",
 	"Accounts User",
@@ -36,11 +33,8 @@ SUPPLIER_DOCUMENT_REVIEW_ROLES = {
 }
 ACTION_CENTER_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 	"Accounts Manager",
 	"Accounts User",
@@ -92,37 +86,115 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "home",
 		"label": "Home",
 		"icon": "home",
-		"items": ({"label": "Business Hub", "target_type": "Page", "target": "retailedge-business-hub", "icon": "home"},),
+		"items": (
+			{
+				"label": "Business Hub",
+				"target_type": "Page",
+				"target": "retailedge-business-hub",
+				"icon": "home",
+			},
+		),
 	},
 	{
 		"key": "sell",
 		"label": "Sell",
 		"icon": "shopping-cart",
 		"items": (
-			{"label": START_POS_LABEL, "target_type": "URL", "target": POSNEXT_POS_URL, "runtime_target": "pos", "icon": "grid"},
-			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice", "icon": "clipboard"},
+			{
+				"label": START_POS_LABEL,
+				"target_type": "URL",
+				"target": POSNEXT_POS_URL,
+				"runtime_target": "pos",
+				"icon": "grid",
+			},
+			{
+				"label": "Sales Invoices",
+				"target_type": "DocType",
+				"target": "Sales Invoice",
+				"icon": "clipboard",
+			},
 			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order", "icon": "clipboard"},
 			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "truck"},
-			{"label": "Sales Team & Targets", "target_type": "Page", "target": "sales-team-control", "icon": "users"},
+			{
+				"label": "Sales Team & Targets",
+				"target_type": "Page",
+				"target": "sales-team-control",
+				"icon": "users",
+			},
 			{"label": "Sales People", "target_type": "DocType", "target": "Sales Person", "icon": "user"},
 			{"label": "Sales Partners", "target_type": "DocType", "target": "Sales Partner", "icon": "users"},
-			{"label": "Sales Person Commissions", "target_type": "Report", "target": "Sales Person Commission Summary", "icon": "report"},
-			{"label": "Sales Partner Commissions", "target_type": "Report", "target": "Sales Partner Commission Summary", "icon": "report"},
-			{"label": "Sales Person Targets", "target_type": "Report", "target": "Sales Person Target Variance Based On Item Group", "icon": "chart"},
-			{"label": "Sales Partner Targets", "target_type": "Report", "target": "Sales Partner Target Variance based on Item Group", "icon": "chart"},
-			{"label": "POS Opening", "target_type": "DocType", "target": ERPNEXT_POS_OPENING_ENTRY, "runtime_target": "pos_opening", "icon": "calendar"},
-			{"label": "POS Closing", "target_type": "DocType", "target": ERPNEXT_POS_CLOSING_ENTRY, "runtime_target": "pos_closing", "icon": "calendar"},
+			{
+				"label": "Sales Person Commissions",
+				"target_type": "Report",
+				"target": "Sales Person Commission Summary",
+				"icon": "report",
+			},
+			{
+				"label": "Sales Partner Commissions",
+				"target_type": "Report",
+				"target": "Sales Partner Commission Summary",
+				"icon": "report",
+			},
+			{
+				"label": "Sales Person Targets",
+				"target_type": "Report",
+				"target": "Sales Person Target Variance Based On Item Group",
+				"icon": "chart",
+			},
+			{
+				"label": "Sales Partner Targets",
+				"target_type": "Report",
+				"target": "Sales Partner Target Variance based on Item Group",
+				"icon": "chart",
+			},
+			{
+				"label": "POS Opening",
+				"target_type": "DocType",
+				"target": ERPNEXT_POS_OPENING_ENTRY,
+				"runtime_target": "pos_opening",
+				"icon": "calendar",
+			},
+			{
+				"label": "POS Closing",
+				"target_type": "DocType",
+				"target": ERPNEXT_POS_CLOSING_ENTRY,
+				"runtime_target": "pos_closing",
+				"icon": "calendar",
+			},
 		),
 	},
 	{
-		"key": "pricing-promotions", "label": "Pricing & Promotions", "icon": "tag", "items": (
-			{"label": "Pricing & Promotions", "target_type": "Page", "target": "pricing-promotions-control", "icon": "tag"},
+		"key": "pricing-promotions",
+		"label": "Pricing & Promotions",
+		"icon": "tag",
+		"items": (
+			{
+				"label": "Pricing & Promotions",
+				"target_type": "Page",
+				"target": "pricing-promotions-control",
+				"icon": "tag",
+			},
 			{"label": "Price Lists", "target_type": "DocType", "target": "Price List", "icon": "tag"},
 			{"label": "Item Prices", "target_type": "DocType", "target": "Item Price", "icon": "tag"},
-			{"label": "Pricing Rules", "target_type": "DocType", "target": "Pricing Rule", "icon": "settings"},
-			{"label": "Promotional Schemes", "target_type": "DocType", "target": "Promotional Scheme", "icon": "gift"},
+			{
+				"label": "Pricing Rules",
+				"target_type": "DocType",
+				"target": "Pricing Rule",
+				"icon": "settings",
+			},
+			{
+				"label": "Promotional Schemes",
+				"target_type": "DocType",
+				"target": "Promotional Scheme",
+				"icon": "gift",
+			},
 			{"label": "Coupon Codes", "target_type": "DocType", "target": "Coupon Code", "icon": "tag"},
-			{"label": "Loyalty Programs", "target_type": "DocType", "target": "Loyalty Program", "icon": "gift"},
+			{
+				"label": "Loyalty Programs",
+				"target_type": "DocType",
+				"target": "Loyalty Program",
+				"icon": "gift",
+			},
 		),
 	},
 	{
@@ -130,177 +202,647 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Buy",
 		"icon": "shopping-bag",
 		"items": (
-			{"label": "Purchase Operations", "target_type": "Page", "target": "professional-purchasing", "icon": "shopping-bag"},
-			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice", "icon": "clipboard"},
-			{"label": "Purchase Register", "target_type": "Page", "target": "purchase-register", "icon": "report"},
-			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
-			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "truck"},
+			{
+				"label": "Purchase Operations",
+				"target_type": "Page",
+				"target": "professional-purchasing",
+				"icon": "shopping-bag",
+			},
+			{
+				"label": "Purchase Invoices",
+				"target_type": "DocType",
+				"target": "Purchase Invoice",
+				"icon": "clipboard",
+			},
+			{
+				"label": "Purchase Register",
+				"target_type": "Page",
+				"target": "purchase-register",
+				"icon": "report",
+			},
+			{
+				"label": "Purchase Orders",
+				"target_type": "DocType",
+				"target": "Purchase Order",
+				"icon": "clipboard",
+			},
+			{
+				"label": "Purchase Receipts",
+				"target_type": "DocType",
+				"target": "Purchase Receipt",
+				"icon": "truck",
+			},
 		),
 	},
 	{
-		"key": "stock", "label": "Stock", "icon": "layers", "items": (
+		"key": "stock",
+		"label": "Stock",
+		"icon": "layers",
+		"items": (
 			{"label": "Products", "target_type": "DocType", "target": "Item", "icon": "layers"},
 			{"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
-			{"label": "Stock Traceability", "target_type": "Page", "target": "stock-traceability-control", "icon": "search"},
+			{
+				"label": "Stock Traceability",
+				"target_type": "Page",
+				"target": "stock-traceability-control",
+				"icon": "search",
+			},
 			{"label": "Batches", "target_type": "DocType", "target": "Batch", "icon": "layers"},
 			{"label": "Serial Numbers", "target_type": "DocType", "target": "Serial No", "icon": "clipboard"},
-			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
+			{
+				"label": "Stock Movement History",
+				"target_type": "Report",
+				"target": "RetailEdge Stock Movement History",
+				"icon": "report",
+			},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
-			{"label": "Inventory Intelligence", "target_type": "Page", "target": "inventory-intelligence", "icon": "chart"},
-			{"label": "Transfer Opportunities", "target_type": "Page", "target": "inventory-transfer-opportunities", "icon": "repeat"},
-			{"label": "Inventory Ageing", "target_type": "Page", "target": "inventory-ageing", "icon": "report"},
-			{"label": "Stock & Accounting Integrity", "target_type": "Page", "target": "stock-accounting-integrity", "icon": "shield", "required_roles": tuple(sorted(STOCK_ACCOUNTING_INTEGRITY_ROLES))},
+			{
+				"label": "Inventory Intelligence",
+				"target_type": "Page",
+				"target": "inventory-intelligence",
+				"icon": "chart",
+			},
+			{
+				"label": "Transfer Opportunities",
+				"target_type": "Page",
+				"target": "inventory-transfer-opportunities",
+				"icon": "repeat",
+			},
+			{
+				"label": "Inventory Ageing",
+				"target_type": "Page",
+				"target": "inventory-ageing",
+				"icon": "report",
+			},
+			{
+				"label": "Stock & Accounting Integrity",
+				"target_type": "Page",
+				"target": "stock-accounting-integrity",
+				"icon": "shield",
+				"required_roles": tuple(sorted(STOCK_ACCOUNTING_INTEGRITY_ROLES)),
+			},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
-			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
-			{"label": "Reorder Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
+			{
+				"label": "Stock Count",
+				"target_type": "DocType",
+				"target": "Stock Reconciliation",
+				"icon": "clipboard",
+			},
+			{
+				"label": "Reorder Requests",
+				"target_type": "DocType",
+				"target": "Material Request",
+				"icon": "clipboard",
+			},
 			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
-			{"label": "Projected Stock", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
-			{"label": "Stock Ageing (Detailed)", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
+			{
+				"label": "Projected Stock",
+				"target_type": "Report",
+				"target": "Stock Projected Qty",
+				"icon": "report",
+			},
+			{
+				"label": "Stock Ageing (Detailed)",
+				"target_type": "Report",
+				"target": "Stock Ageing",
+				"icon": "report",
+			},
 		),
 	},
 	{
-		"key": "assets", "label": "Assets", "icon": "briefcase", "items": (
-			{"label": "Assets Overview", "target_type": "Page", "target": "assets-control", "icon": "briefcase"},
+		"key": "assets",
+		"label": "Assets",
+		"icon": "briefcase",
+		"items": (
+			{
+				"label": "Assets Overview",
+				"target_type": "Page",
+				"target": "assets-control",
+				"icon": "briefcase",
+			},
 			{"label": "Fixed Assets", "target_type": "DocType", "target": "Asset", "icon": "briefcase"},
-			{"label": "Asset Categories", "target_type": "DocType", "target": "Asset Category", "icon": "layers"},
+			{
+				"label": "Asset Categories",
+				"target_type": "DocType",
+				"target": "Asset Category",
+				"icon": "layers",
+			},
 		),
 	},
 	{
-		"key": "money", "label": "Money", "icon": "wallet", "items": (
+		"key": "money",
+		"label": "Money",
+		"icon": "wallet",
+		"items": (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
-			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
+			{
+				"label": "Cash Flow Outlook",
+				"target_type": "Page",
+				"target": "cash-flow-outlook",
+				"icon": "chart",
+				"required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES)),
+			},
 			{"label": "Payments", "target_type": "Page", "target": "payment-management", "icon": "wallet"},
-			{"label": "Payment History", "target_type": "Page", "target": "payment-history", "icon": "report"},
-			{"label": "Payment Reconciliation", "target_type": "DocType", "target": "Payment Reconciliation", "icon": "repeat", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
-			{"label": "Subscriptions", "target_type": "DocType", "target": "Subscription", "icon": "repeat", "mode": "native_fallback"},
-			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard", "mode": "native_fallback"},
-			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
-			{"label": "Import Bank Statement", "target_type": "Page", "target": "bank-statement-imports", "icon": "upload"},
+			{
+				"label": "Payment History",
+				"target_type": "Page",
+				"target": "payment-history",
+				"icon": "report",
+			},
+			{
+				"label": "Payment Reconciliation",
+				"target_type": "DocType",
+				"target": "Payment Reconciliation",
+				"icon": "repeat",
+				"mode": "native_fallback",
+				"required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
+			},
+			{
+				"label": "Subscriptions",
+				"target_type": "DocType",
+				"target": "Subscription",
+				"icon": "repeat",
+				"mode": "native_fallback",
+			},
+			{
+				"label": "Subscription Plans",
+				"target_type": "DocType",
+				"target": "Subscription Plan",
+				"icon": "clipboard",
+				"mode": "native_fallback",
+			},
+			{
+				"label": "Bank Transactions",
+				"target_type": "DocType",
+				"target": "Bank Transaction",
+				"icon": "wallet",
+				"mode": "native_fallback",
+				"required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
+			},
+			{
+				"label": "Import Bank Statement",
+				"target_type": "Page",
+				"target": "bank-statement-imports",
+				"icon": "upload",
+			},
 		),
 	},
 	{
-		"key": "expenses", "label": "Expenses", "icon": "file-text", "items": (
-			{"label": "Business Expenses", "target_type": "Page", "target": "business-expenses", "icon": "file-text"},
-			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
-			{"label": "Cashier Expenses", "target_type": "Page", "target": "cashier-expenses", "icon": "file-text"},
-			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
+		"key": "expenses",
+		"label": "Expenses",
+		"icon": "file-text",
+		"items": (
+			{
+				"label": "Business Expenses",
+				"target_type": "Page",
+				"target": "business-expenses",
+				"icon": "file-text",
+			},
+			{
+				"label": "Expense Register",
+				"target_type": "Page",
+				"target": "expense-register",
+				"icon": "report",
+			},
+			{
+				"label": "Cashier Expenses",
+				"target_type": "Page",
+				"target": "cashier-expenses",
+				"icon": "file-text",
+			},
+			{
+				"label": "Expense Categories",
+				"target_type": "DocType",
+				"target": "RetailEdge Expense Category",
+				"icon": "layers",
+			},
 		),
 	},
 	{
-		"key": "customers", "label": "Customers", "icon": "users", "items": (
+		"key": "customers",
+		"label": "Customers",
+		"icon": "users",
+		"items": (
 			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
-			{"label": "Customer Receivables", "target_type": "Page", "target": "customer-receivables", "icon": "report"},
-			{"label": "Customer & Sales Intelligence", "target_type": "Page", "target": "customer-sales-intelligence", "icon": "chart"},
+			{
+				"label": "Customer Receivables",
+				"target_type": "Page",
+				"target": "customer-receivables",
+				"icon": "report",
+			},
+			{
+				"label": "Customer & Sales Intelligence",
+				"target_type": "Page",
+				"target": "customer-sales-intelligence",
+				"icon": "chart",
+			},
 			{"label": "Customer 360", "target_type": "Page", "target": "customer-360", "icon": "user"},
-			{"label": "Retention & Opportunities", "target_type": "Page", "target": "customer-opportunity-intelligence", "icon": "trending-up"},
-			{"label": "Accounts Receivable (Detailed)", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
+			{
+				"label": "Retention & Opportunities",
+				"target_type": "Page",
+				"target": "customer-opportunity-intelligence",
+				"icon": "trending-up",
+			},
+			{
+				"label": "Accounts Receivable (Detailed)",
+				"target_type": "Report",
+				"target": "Accounts Receivable",
+				"icon": "report",
+			},
 		),
 	},
 	{
-		"key": "service-warranty", "label": "Service & Warranty", "icon": "tool", "items": (
-			{"label": "Service & Warranty Overview", "target_type": "Page", "target": "service-warranty-control", "icon": "tool"},
-			{"label": "Warranty Claims", "target_type": "DocType", "target": "Warranty Claim", "icon": "shield"},
-			{"label": "Maintenance Schedules", "target_type": "DocType", "target": "Maintenance Schedule", "icon": "calendar"},
-			{"label": "Maintenance Visits", "target_type": "DocType", "target": "Maintenance Visit", "icon": "tool"},
+		"key": "service-warranty",
+		"label": "Service & Warranty",
+		"icon": "tool",
+		"items": (
+			{
+				"label": "Service & Warranty Overview",
+				"target_type": "Page",
+				"target": "service-warranty-control",
+				"icon": "tool",
+			},
+			{
+				"label": "Warranty Claims",
+				"target_type": "DocType",
+				"target": "Warranty Claim",
+				"icon": "shield",
+			},
+			{
+				"label": "Maintenance Schedules",
+				"target_type": "DocType",
+				"target": "Maintenance Schedule",
+				"icon": "calendar",
+			},
+			{
+				"label": "Maintenance Visits",
+				"target_type": "DocType",
+				"target": "Maintenance Visit",
+				"icon": "tool",
+			},
 		),
 	},
 	{
-		"key": "suppliers-payables", "label": "Suppliers & Payables", "icon": "users", "items": (
+		"key": "suppliers-payables",
+		"label": "Suppliers & Payables",
+		"icon": "users",
+		"items": (
 			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
-			{"label": "Supplier Payables", "target_type": "Page", "target": "supplier-payables", "icon": "report"},
-			{"label": "Payment Orders", "target_type": "DocType", "target": "Payment Order", "icon": "wallet", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
-			{"label": "Accounts Payable (Detailed)", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
+			{
+				"label": "Supplier Payables",
+				"target_type": "Page",
+				"target": "supplier-payables",
+				"icon": "report",
+			},
+			{
+				"label": "Payment Orders",
+				"target_type": "DocType",
+				"target": "Payment Order",
+				"icon": "wallet",
+				"mode": "native_fallback",
+				"required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
+			},
+			{
+				"label": "Accounts Payable (Detailed)",
+				"target_type": "Report",
+				"target": "Accounts Payable",
+				"icon": "report",
+			},
 		),
 	},
 	{
-		"key": "insights", "label": "Insights", "icon": "chart", "items": (
-			{"label": "Financial Dashboard", "target_type": "Page", "target": "owner-dashboard", "icon": "chart"},
+		"key": "insights",
+		"label": "Insights",
+		"icon": "chart",
+		"items": (
+			{
+				"label": "Financial Dashboard",
+				"target_type": "Page",
+				"target": "owner-dashboard",
+				"icon": "chart",
+			},
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
-			{"label": "Sales Forecast", "target_type": "Page", "target": "sales-forecast", "icon": "trending-up"},
-			{"label": "Forecasting & Planning", "target_type": "Page", "target": "forecasting-planning", "icon": "calendar"},
-			{"label": "Planning Scenarios", "target_type": "DocType", "target": "RetailEdge Planning Scenario", "icon": "clipboard"},
-			{"label": "Basket & Product Affinity", "target_type": "Page", "target": "basket-affinity", "icon": "grid"},
-			{"label": "Discount & Sales Quality", "target_type": "Page", "target": "sales-quality-intelligence", "icon": "trending-down"},
-			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
-			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
-			{"label": "Branch Performance", "target_type": "Page", "target": "branch-performance-dashboard", "icon": "chart"},
-			{"label": "Inventory + Profitability", "target_type": "Page", "target": "inventory-profitability", "icon": "chart"},
+			{
+				"label": "Sales Forecast",
+				"target_type": "Page",
+				"target": "sales-forecast",
+				"icon": "trending-up",
+			},
+			{
+				"label": "Forecasting & Planning",
+				"target_type": "Page",
+				"target": "forecasting-planning",
+				"icon": "calendar",
+			},
+			{
+				"label": "Planning Scenarios",
+				"target_type": "DocType",
+				"target": "RetailEdge Planning Scenario",
+				"icon": "clipboard",
+			},
+			{
+				"label": "Basket & Product Affinity",
+				"target_type": "Page",
+				"target": "basket-affinity",
+				"icon": "grid",
+			},
+			{
+				"label": "Discount & Sales Quality",
+				"target_type": "Page",
+				"target": "sales-quality-intelligence",
+				"icon": "trending-down",
+			},
+			{
+				"label": "Sales Invoice Register",
+				"target_type": "Page",
+				"target": "sales-invoice-register",
+				"icon": "report",
+			},
+			{
+				"label": "Salesperson Performance",
+				"target_type": "Page",
+				"target": "salesperson-performance-dashboard",
+				"icon": "user",
+			},
+			{
+				"label": "Branch Performance",
+				"target_type": "Page",
+				"target": "branch-performance-dashboard",
+				"icon": "chart",
+			},
+			{
+				"label": "Inventory + Profitability",
+				"target_type": "Page",
+				"target": "inventory-profitability",
+				"icon": "chart",
+			},
 		),
 	},
 	{
-		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
-			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
-			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
-			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
-			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},
-			{"label": "Daily Sales Audit", "target_type": "Page", "target": "daily-sales-audit", "icon": "shield"},
-			{"label": "Cashier Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
-			{"label": "Cash Shift Verification", "target_type": "Page", "target": "cash-shift-verification", "icon": "report"},
-			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit", "icon": "report"},
-			{"label": "POS Closing Variance & Expenses", "target_type": "Page", "target": "pos-closing-variance", "icon": "report"},
-			{"label": "Unmatched Bank Transactions", "target_type": "Page", "target": "unmatched-bank-transactions", "icon": "report"},
-			{"label": "Unmatched Bank Payments", "target_type": "Page", "target": "unmatched-bank-payments", "icon": "report"},
-			{"label": "Banking Readiness", "target_type": "Page", "target": "banking-readiness", "icon": "shield"},
-			{"label": "Reconciliation Handoff", "target_type": "Page", "target": "reconciliation-handoff", "icon": "report"},
-			{"label": "Daily Sales Audit Register", "target_type": "Page", "target": "daily-sales-audit-register", "icon": "report"},
+		"key": "review-approvals",
+		"label": "Review & Approvals",
+		"icon": "shield",
+		"items": (
+			{
+				"label": "Business Control Centre",
+				"target_type": "Page",
+				"target": "business-control-center",
+				"icon": "shield",
+				"required_roles": tuple(sorted(ACTION_CENTER_ROLES)),
+			},
+			{
+				"label": "Action Centre",
+				"target_type": "Page",
+				"target": "action-center",
+				"icon": "bell",
+				"required_roles": tuple(sorted(ACTION_CENTER_ROLES)),
+			},
+			{
+				"label": "Supplier Document Review",
+				"target_type": "Page",
+				"target": "supplier-document-review",
+				"icon": "clipboard",
+				"required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES)),
+			},
+			{
+				"label": "Bank Match Reviews",
+				"target_type": "Page",
+				"target": "bank-matching-reconciliation",
+				"icon": "shield",
+			},
+			{
+				"label": "Daily Sales Audit",
+				"target_type": "Page",
+				"target": "daily-sales-audit",
+				"icon": "shield",
+			},
+			{
+				"label": "Cashier Expense Review",
+				"target_type": "Page",
+				"target": "expense-review",
+				"icon": "report",
+			},
+			{
+				"label": "Cash Shift Verification",
+				"target_type": "Page",
+				"target": "cash-shift-verification",
+				"icon": "report",
+			},
+			{
+				"label": "Invoice Payment Audit",
+				"target_type": "Report",
+				"target": "RetailEdge Invoice Payment Audit",
+				"icon": "report",
+			},
+			{
+				"label": "POS Closing Variance & Expenses",
+				"target_type": "Page",
+				"target": "pos-closing-variance",
+				"icon": "report",
+			},
+			{
+				"label": "Unmatched Bank Transactions",
+				"target_type": "Page",
+				"target": "unmatched-bank-transactions",
+				"icon": "report",
+			},
+			{
+				"label": "Unmatched Bank Payments",
+				"target_type": "Page",
+				"target": "unmatched-bank-payments",
+				"icon": "report",
+			},
+			{
+				"label": "Banking Readiness",
+				"target_type": "Page",
+				"target": "banking-readiness",
+				"icon": "shield",
+			},
+			{
+				"label": "Reconciliation Handoff",
+				"target_type": "Page",
+				"target": "reconciliation-handoff",
+				"icon": "report",
+			},
+			{
+				"label": "Daily Sales Audit Register",
+				"target_type": "Page",
+				"target": "daily-sales-audit-register",
+				"icon": "report",
+			},
 		),
 	},
 	{
-		"key": "accounting", "label": "Accounting", "icon": "book-open", "required_roles": ("Accounts User", "Accounts Manager", "System Manager"), "items": (
-			{"label": "General Ledger", "target_type": "Report", "target": "General Ledger", "icon": "report"},
+		"key": "accounting",
+		"label": "Accounting",
+		"icon": "book-open",
+		"required_roles": ("Accounts User", "Accounts Manager", "System Manager"),
+		"items": (
+			{
+				"label": "General Ledger",
+				"target_type": "Report",
+				"target": "General Ledger",
+				"icon": "report",
+			},
 			{"label": "Trial Balance", "target_type": "Report", "target": "Trial Balance", "icon": "report"},
-			{"label": "Profit & Loss", "target_type": "Report", "target": "Profit and Loss Statement", "icon": "report"},
+			{
+				"label": "Profit & Loss",
+				"target_type": "Report",
+				"target": "Profit and Loss Statement",
+				"icon": "report",
+			},
 			{"label": "Balance Sheet", "target_type": "Report", "target": "Balance Sheet", "icon": "report"},
-			{"label": "Cash Flow Statement", "target_type": "Report", "target": "Cash Flow", "icon": "report"},
-			{"label": "Budgeting & Cost Control", "target_type": "Page", "target": "budget-control", "icon": "chart"},
+			{
+				"label": "Cash Flow Statement",
+				"target_type": "Report",
+				"target": "Cash Flow",
+				"icon": "report",
+			},
+			{
+				"label": "Budgeting & Cost Control",
+				"target_type": "Page",
+				"target": "budget-control",
+				"icon": "chart",
+			},
 			{"label": "Budgets", "target_type": "DocType", "target": "Budget", "icon": "chart"},
-			{"label": "Budget Variance", "target_type": "Report", "target": "Budget Variance Report", "icon": "report"},
+			{
+				"label": "Budget Variance",
+				"target_type": "Report",
+				"target": "Budget Variance Report",
+				"icon": "report",
+			},
 			{"label": "Cost Centers", "target_type": "DocType", "target": "Cost Center", "icon": "layers"},
-			{"label": "Journal Entries", "target_type": "DocType", "target": "Journal Entry", "icon": "clipboard"},
+			{
+				"label": "Journal Entries",
+				"target_type": "DocType",
+				"target": "Journal Entry",
+				"icon": "clipboard",
+			},
 		),
 	},
 	{
-		"key": "setup", "label": "Setup", "icon": "settings", "required_roles": ("System Manager",), "items": (
+		"key": "setup",
+		"label": "Setup",
+		"icon": "settings",
+		"required_roles": ("System Manager",),
+		"items": (
 			{"label": "Settings", "target_type": "Page", "target": "retail-settings", "icon": "settings"},
-			{"label": "Branch Setup", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
+			{
+				"label": "Branch Setup",
+				"target_type": "DocType",
+				"target": "RetailEdge Branch Profile",
+				"icon": "building",
+			},
 			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
-			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},
-			{"label": "Bank Statement Mapping", "target_type": "DocType", "target": "RetailEdge Statement Mapping Template", "icon": "settings"},
+			{
+				"label": "Modes of Payment",
+				"target_type": "DocType",
+				"target": "Mode of Payment",
+				"icon": "wallet",
+			},
+			{
+				"label": "Bank Statement Mapping",
+				"target_type": "DocType",
+				"target": "RetailEdge Statement Mapping Template",
+				"icon": "settings",
+			},
 		),
 	},
 )
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "new-sales-invoice", "label": "Quick Sale", "description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
+		"key": "new-sales-invoice",
+		"label": "Quick Sale",
+		"description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.",
+		"doctype": "Sales Invoice",
+		"icon": "file-text",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record one customer invoice/order receipt or an unallocated advance. Use Payment Management for advance and single-invoice settlement.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
+		"key": "receive-customer-payment",
+		"label": "Receive Customer Payment",
+		"description": "Record one customer invoice/order receipt or an unallocated advance. Use Payment Management for advance and single-invoice settlement.",
+		"doctype": "Payment Entry",
+		"icon": "download",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Pay one Purchase Invoice quickly. Use Supplier Payables for multi-invoice settlement.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+		"key": "pay-supplier",
+		"label": "Pay Supplier",
+		"description": "Pay one Purchase Invoice quickly. Use Supplier Payables for multi-invoice settlement.",
+		"doctype": "Payment Entry",
+		"icon": "upload",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
+		"key": "deposit-cash",
+		"label": "Deposit Cash",
+		"description": "Deposit available cashier shift cash to an approved company bank account.",
+		"doctype": "Payment Entry",
+		"icon": "upload",
+		"experience": "act",
+		"mode": "available",
+		"cashier_deposit": True,
 	},
 	{
-		"key": "cash-transfer", "label": "Cash / Bank Transfer", "description": "Move money between permitted Cash and Bank accounts using an ERPNext internal-transfer draft.", "doctype": "Payment Entry", "icon": "repeat", "experience": "act", "mode": "available", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
+		"key": "cash-transfer",
+		"label": "Cash / Bank Transfer",
+		"description": "Move money between permitted Cash and Bank accounts using an ERPNext internal-transfer draft.",
+		"doctype": "Payment Entry",
+		"icon": "repeat",
+		"experience": "act",
+		"mode": "available",
+		"required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
 	},
 	{
-		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
+		"key": "record-expense",
+		"label": "Record Cashier Expense",
+		"description": "Record a controlled expense arising during an open cashier shift.",
+		"doctype": "RetailEdge Cashier Expense",
+		"icon": "credit-card",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "record-purchase", "label": "Direct Purchase", "description": "Create a short direct Purchase Invoice. Use Purchase Operations for the standard Purchase Order → Receipt → Invoice workflow.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+		"key": "record-purchase",
+		"label": "Direct Purchase",
+		"description": "Create a short direct Purchase Invoice. Use Purchase Operations for the standard Purchase Order → Receipt → Invoice workflow.",
+		"doctype": "Purchase Invoice",
+		"icon": "shopping-bag",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
+		"key": "new-warranty-claim",
+		"label": "New Warranty Claim",
+		"description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.",
+		"doctype": "Warranty Claim",
+		"icon": "tool",
+		"experience": "act",
+		"mode": "native_fallback",
 	},
 	{
-		"key": "transfer-stock", "label": "Quick Transfer", "description": "Move a small number of stock lines quickly. Use Transfer Stock for larger movements.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
+		"key": "transfer-stock",
+		"label": "Quick Transfer",
+		"description": "Move a small number of stock lines quickly. Use Transfer Stock for larger movements.",
+		"doctype": "Stock Entry",
+		"icon": "repeat",
+		"experience": "act",
+		"mode": "available",
 	},
 	{
-		"key": "adjust-stock", "label": "Quick Adjustment", "description": "Record a short physical count quickly. Use Stock Adjustment for larger counts.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
+		"key": "adjust-stock",
+		"label": "Quick Adjustment",
+		"description": "Record a short physical count quickly. Use Stock Adjustment for larger counts.",
+		"doctype": "Stock Reconciliation",
+		"icon": "clipboard",
+		"experience": "act",
+		"mode": "available",
 	},
 )
 
@@ -364,14 +906,19 @@ def _get_edgesuite_access_context() -> dict[str, Any]:
 
 
 def _get_permitted_navigation_groups(
-	roles: set[str], *, target_cache: dict[tuple[str, str], bool] | None = None,
-	permission_cache: dict[tuple[str, str], bool] | None = None, pos_capabilities=None,
+	roles: set[str],
+	*,
+	target_cache: dict[tuple[str, str], bool] | None = None,
+	permission_cache: dict[tuple[str, str], bool] | None = None,
+	pos_capabilities=None,
 	native_desk_enabled: bool = True,
 ) -> list[dict[str, Any]]:
 	target_cache = target_cache if target_cache is not None else {}
 	permission_cache = permission_cache if permission_cache is not None else {}
 	if pos_capabilities is None:
-		pos_capabilities = get_pos_runtime_capabilities(lambda target_type, target: _target_exists_cached(target_type, target, target_cache))
+		pos_capabilities = get_pos_runtime_capabilities(
+			lambda target_type, target: _target_exists_cached(target_type, target, target_cache)
+		)
 	groups: list[dict[str, Any]] = []
 	for group in NAVIGATION_GROUPS:
 		required_roles = set(group.get("required_roles") or ())
@@ -394,7 +941,14 @@ def _get_permitted_navigation_groups(
 				resolved.pop("required_roles", None)
 				items.append(resolved)
 		if items:
-			groups.append({"key": group["key"], "label": _(group["label"]), "icon": group.get("icon") or "", "items": items})
+			groups.append(
+				{
+					"key": group["key"],
+					"label": _(group["label"]),
+					"icon": group.get("icon") or "",
+					"items": items,
+				}
+			)
 	return groups
 
 
@@ -429,7 +983,11 @@ def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> 
 
 
 def _get_permitted_quick_actions(
-	*, roles=None, target_cache=None, permission_cache=None, native_desk_enabled: bool = True,
+	*,
+	roles=None,
+	target_cache=None,
+	permission_cache=None,
+	native_desk_enabled: bool = True,
 ) -> list[dict[str, Any]]:
 	roles = set(roles if roles is not None else frappe.get_roles(frappe.session.user))
 	target_cache = target_cache if target_cache is not None else {}
@@ -439,7 +997,9 @@ def _get_permitted_quick_actions(
 		doctype = action["doctype"]
 		if action.get("mode") == "native_fallback" and not native_desk_enabled:
 			continue
-		if not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(doctype, "create", permission_cache):
+		if not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(
+			doctype, "create", permission_cache
+		):
 			continue
 		required_roles = set(action.get("required_roles") or ())
 		if required_roles and not roles.intersection(required_roles):
@@ -479,9 +1039,13 @@ def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cach
 	if target_type == "URL":
 		return True
 	if target_type == "DocType":
-		return _doctype_exists_cached(target, target_cache) and _has_permission_cached(target, "read", permission_cache)
+		return _doctype_exists_cached(target, target_cache) and _has_permission_cached(
+			target, "read", permission_cache
+		)
 	if target_type == "Report":
-		return _target_exists_cached(target_type, target, target_cache) and _can_open_report_cached(target, permission_cache)
+		return _target_exists_cached(target_type, target, target_cache) and _can_open_report_cached(
+			target, permission_cache
+		)
 	if target_type == "Page":
 		return _target_exists_cached(target_type, target, target_cache) and _can_open_page_cached(
 			target, permission_cache
@@ -544,6 +1108,8 @@ def _target_exists(target_type: str, target: str) -> bool:
 
 def _doctype_exists(doctype: str) -> bool:
 	return _target_exists("DocType", doctype)
+
+
 def _has_permission(doctype: str, permission_type: str) -> bool:
 	try:
 		return bool(frappe.has_permission(doctype, permission_type))

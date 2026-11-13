@@ -87,7 +87,7 @@ class TestCreateVisibilityPermissions(unittest.TestCase):
 			patch("retailedge.edgesuite_ui._cashier_deposit_available", return_value=True),
 		):
 			actions = _get_permitted_quick_actions(
-				roles={"RetailEdge Cashier"},
+				roles={"RetailEdgeCashier"},
 				target_cache={},
 				permission_cache={},
 			)

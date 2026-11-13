@@ -39,20 +39,15 @@ BUSINESS_EXPENSE_READ_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
 
 BUSINESS_EXPENSE_REVIEWER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
 }
 
@@ -88,41 +83,31 @@ def get_business_expense_settings() -> dict[str, Any]:
 			"default_payment_account": "",
 		}
 
-	process = str(
-		getattr(settings, "business_expense_process", None)
-		or "Approval Required"
-	).strip()
+	process = str(getattr(settings, "business_expense_process", None) or "Approval Required").strip()
 	if process not in BUSINESS_EXPENSE_ALLOWED_PROCESSES:
 		process = "Approval Required"
 	return {
 		"enabled": bool(cint(getattr(settings, "enable_business_expenses", 0))),
 		"process": process,
-		"require_attachment": bool(
-			cint(getattr(settings, "require_business_expense_attachment", 0))
-		),
+		"require_attachment": bool(cint(getattr(settings, "require_business_expense_attachment", 0))),
 		"accounting_posting_enabled": bool(
 			cint(getattr(settings, "enable_business_expense_accounting_posting", 0))
 		),
 		"posting_document_type": str(
-			getattr(settings, "business_expense_posting_document_type", None)
-			or "Journal Entry"
+			getattr(settings, "business_expense_posting_document_type", None) or "Journal Entry"
 		),
 		"posting_workflow_state": str(
-			getattr(settings, "business_expense_posting_workflow_state", None)
-			or ""
+			getattr(settings, "business_expense_posting_workflow_state", None) or ""
 		).strip(),
 		"default_payment_account": str(
-			getattr(settings, "default_business_expense_payment_account", None)
-			or ""
+			getattr(settings, "default_business_expense_payment_account", None) or ""
 		).strip(),
 	}
 
 
 def user_is_business_expense_reviewer(user: str | None = None) -> bool:
 	user = user or frappe.session.user
-	return bool(
-		set(frappe.get_roles(user)).intersection(BUSINESS_EXPENSE_REVIEWER_ROLES)
-	)
+	return bool(set(frappe.get_roles(user)).intersection(BUSINESS_EXPENSE_REVIEWER_ROLES))
 
 
 @frappe.whitelist()
@@ -142,9 +127,7 @@ def get_business_expense_context() -> dict[str, Any]:
 		)
 	return {
 		"title": _("Business Expenses"),
-		"subtitle": _(
-			"Record non-POS business spending with evidence, approval and accounting controls."
-		),
+		"subtitle": _("Record non-POS business spending with evidence, approval and accounting controls."),
 		"default_values": {
 			"company": company,
 			"branch": branch,
@@ -182,7 +165,11 @@ def get_business_expense_context() -> dict[str, Any]:
 		},
 		"feature": {
 			"enabled": bool(settings["enabled"]),
-			"message": "" if settings["enabled"] else _("Business Expenses are currently turned off. Enable them in Settings to start recording direct business spend."),
+			"message": ""
+			if settings["enabled"]
+			else _(
+				"Business Expenses are currently turned off. Enable them in Settings to start recording direct business spend."
+			),
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS},
 	}
@@ -199,9 +186,7 @@ def search_business_expense_options(
 	_assert_feature_enabled()
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
-	company = str(
-		company or frappe.defaults.get_user_default("Company") or ""
-	).strip()
+	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 
 	if kind == "company":
@@ -486,9 +471,7 @@ def _apply_business_expense_values(doc, values: dict[str, Any]) -> None:
 def _build_business_expense_list_filters(
 	filters: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-	company = str(
-		filters.get("company") or frappe.defaults.get_user_default("Company") or ""
-	).strip()
+	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
 	_assert_company_access(company)
@@ -516,9 +499,7 @@ def _build_business_expense_list_filters(
 			frappe.throw(_("From Date cannot be after To Date."))
 		if (to_date - from_date).days + 1 > MAX_DATE_RANGE_DAYS:
 			frappe.throw(
-				_("Business Expenses supports up to {0} days per request.").format(
-					MAX_DATE_RANGE_DAYS
-				)
+				_("Business Expenses supports up to {0} days per request.").format(MAX_DATE_RANGE_DAYS)
 			)
 		query_filters["expense_date"] = ["between", [from_date, to_date]]
 	elif from_date:
@@ -548,12 +529,16 @@ def _build_business_expense_list_filters(
 			"description": ["like", like],
 		}
 
-	return query_filters, or_filters, {
-		"company": company,
-		"branch": requested_branch,
-		"restricted": int(bool(scope.get("restricted"))),
-		"allowed_branches": allowed,
-	}
+	return (
+		query_filters,
+		or_filters,
+		{
+			"company": company,
+			"branch": requested_branch,
+			"restricted": int(bool(scope.get("restricted"))),
+			"allowed_branches": allowed,
+		},
+	)
 
 
 def _assert_modified(doc, expected_modified: str | None) -> None:
@@ -616,9 +601,7 @@ def validate_business_expense_document(doc) -> None:
 	if flt(getattr(doc, "amount", 0)) <= 0:
 		frappe.throw(_("Amount must be greater than zero."))
 	if not getattr(doc, "expense_account", None):
-		frappe.throw(
-			_("Expense Account could not be resolved from the selected Expense Category.")
-		)
+		frappe.throw(_("Expense Account could not be resolved from the selected Expense Category."))
 	_validate_expense_account(doc.expense_account, doc.company)
 	if not getattr(doc, "payment_account", None):
 		frappe.throw(_("Paid From account is required."))
@@ -634,8 +617,7 @@ def validate_business_expense_document(doc) -> None:
 			frappe.throw(
 				_("You do not have permission to use this Supplier."),
 				frappe.PermissionError,
-		)
-
+			)
 
 
 def _assert_posted_business_expense_workflow_terminal(doc) -> None:
@@ -649,9 +631,7 @@ def _assert_posted_business_expense_workflow_terminal(doc) -> None:
 	)
 	if not previous or not previous.posting_reference:
 		return
-	if str(getattr(doc, "workflow_state", None) or "") != str(
-		previous.workflow_state or ""
-	):
+	if str(getattr(doc, "workflow_state", None) or "") != str(previous.workflow_state or ""):
 		frappe.throw(
 			_(
 				"Posted Business Expenses cannot move to another Workflow State. Use the approved accounting reversal process for corrections."
@@ -664,9 +644,7 @@ def prepare_business_expense_for_submit(doc) -> None:
 
 	settings = get_business_expense_settings()
 	if settings["require_attachment"] and not getattr(doc, "attachment", None):
-		frappe.throw(
-			_("Receipt or supporting evidence is required before submitting this Business Expense.")
-		)
+		frappe.throw(_("Receipt or supporting evidence is required before submitting this Business Expense."))
 	if _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE):
 		return
 	if settings["process"] == "Direct Posting":
@@ -678,10 +656,7 @@ def prepare_business_expense_for_submit(doc) -> None:
 
 
 def prepare_business_expense_for_cancel(doc) -> None:
-	if (
-		str(getattr(doc, "ledger_status", None) or "") == "Posted"
-		or getattr(doc, "posting_reference", None)
-	):
+	if str(getattr(doc, "ledger_status", None) or "") == "Posted" or getattr(doc, "posting_reference", None):
 		frappe.throw(
 			_(
 				"Posted Business Expenses cannot be cancelled directly. "
@@ -711,9 +686,7 @@ def approve_business_expense(
 	doc = _get_business_expense_for_review(name)
 	settings = get_business_expense_settings()
 	if settings["process"] != "Approval Required":
-		frappe.throw(
-			_("This Business Expense does not use the configured approval fallback.")
-		)
+		frappe.throw(_("This Business Expense does not use the configured approval fallback."))
 	if doc.docstatus != 1 or doc.expense_status != "Submitted":
 		frappe.throw(_("Only submitted Business Expenses can be approved."))
 	_assert_not_self_approval(doc)
@@ -801,18 +774,14 @@ def resolve_business_expense_branch(
 		if branch:
 			if branch not in allowed:
 				frappe.throw(
-					_("You do not have active RetailEdge Branch access to {0}.").format(
-						branch
-					),
+					_("You do not have active RetailEdge Branch access to {0}.").format(branch),
 					frappe.PermissionError,
 				)
 		else:
 			if len(allowed) == 1:
 				branch = allowed[0]
 			elif require_when_restricted and len(allowed) > 1:
-				frappe.throw(
-					_("Choose a Branch before recording this Business Expense.")
-				)
+				frappe.throw(_("Choose a Branch before recording this Business Expense."))
 			elif require_when_restricted and not allowed:
 				frappe.throw(
 					_("You do not have an active RetailEdge Branch for this Company."),
@@ -828,9 +797,7 @@ def _apply_category_defaults(doc) -> None:
 	if not category_name:
 		return
 	if not frappe.db.exists(CATEGORY_DOCTYPE, category_name):
-		frappe.throw(
-			_("Expense Category {0} does not exist.").format(category_name)
-		)
+		frappe.throw(_("Expense Category {0} does not exist.").format(category_name))
 	if not frappe.has_permission(CATEGORY_DOCTYPE, "read", doc=category_name):
 		frappe.throw(
 			_("You do not have permission to use this Expense Category."),
@@ -845,11 +812,7 @@ def _apply_category_defaults(doc) -> None:
 	if not category or not cint(category.is_active):
 		frappe.throw(_("Expense Category {0} is inactive.").format(category_name))
 	if category.company and doc.company and category.company != doc.company:
-		frappe.throw(
-			_("Expense Category {0} belongs to another Company.").format(
-				category_name
-			)
-		)
+		frappe.throw(_("Expense Category {0} belongs to another Company.").format(category_name))
 	if category.expense_account:
 		doc.expense_account = category.expense_account
 	if category.default_cost_center and not getattr(doc, "cost_center", None):
@@ -942,10 +905,7 @@ def _search_companies(*, txt: str, limit: int) -> list[dict[str, Any]]:
 		order_by="company_name asc, name asc",
 		limit_page_length=limit,
 	)
-	return [
-		{"value": row.name, "label": row.company_name or row.name}
-		for row in rows
-	]
+	return [{"value": row.name, "label": row.company_name or row.name} for row in rows]
 
 
 def _search_branches(
@@ -956,11 +916,7 @@ def _search_branches(
 ) -> list[dict[str, Any]]:
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if scope.get("restricted"):
-		branches = [
-			str(value)
-			for value in scope.get("allowed_branches") or []
-			if str(value or "").strip()
-		]
+		branches = [str(value) for value in scope.get("allowed_branches") or [] if str(value or "").strip()]
 	else:
 		profiles = get_enabled_branch_profiles(company=company)
 		branches = [str(row.get("branch") or "") for row in profiles]
@@ -1057,10 +1013,7 @@ def _search_cost_centers(
 		order_by="cost_center_name asc, name asc",
 		limit_page_length=limit,
 	)
-	return [
-		{"value": row.name, "label": row.cost_center_name or row.name}
-		for row in rows
-	]
+	return [{"value": row.name, "label": row.cost_center_name or row.name} for row in rows]
 
 
 def _search_projects(
@@ -1104,10 +1057,7 @@ def _search_suppliers(*, txt: str, limit: int) -> list[dict[str, Any]]:
 		order_by="supplier_name asc, name asc",
 		limit_page_length=limit,
 	)
-	return [
-		{"value": row.name, "label": row.supplier_name or row.name}
-		for row in rows
-	]
+	return [{"value": row.name, "label": row.supplier_name or row.name} for row in rows]
 
 
 def _get_business_expense_for_action(name: str):
@@ -1131,9 +1081,8 @@ def _get_business_expense_for_review(name: str):
 
 
 def _assert_not_self_approval(doc) -> None:
-	if (
-		frappe.session.user == getattr(doc, "requested_by", None)
-		and "System Manager" not in set(frappe.get_roles(frappe.session.user))
+	if frappe.session.user == getattr(doc, "requested_by", None) and "System Manager" not in set(
+		frappe.get_roles(frappe.session.user)
 	):
 		frappe.throw(_("You cannot approve your own Business Expense."))
 
@@ -1197,10 +1146,7 @@ def _business_expense_payload(
 		"reversal_reason": getattr(doc, "reversal_reason", None) or "",
 		"reversed_by": getattr(doc, "reversed_by", None) or "",
 		"reversed_on": getattr(doc, "reversed_on", None),
-		"can_edit": bool(
-			int(getattr(doc, "docstatus", 0) or 0) == 0
-			and doc.has_permission("write")
-		),
+		"can_edit": bool(int(getattr(doc, "docstatus", 0) or 0) == 0 and doc.has_permission("write")),
 		"settings": get_business_expense_settings(),
 	}
 	if include_workflow:
@@ -1224,10 +1170,7 @@ def get_permission_query_conditions(user: str | None = None) -> str:
 	clauses: list[str] = []
 	for company in _readable_companies(user):
 		scope = get_operational_branch_scope(company, user=user)
-		company_sql = (
-			f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`company` = "
-			f"{frappe.db.escape(company)}"
-		)
+		company_sql = f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`company` = {frappe.db.escape(company)}"
 		if not scope.get("restricted"):
 			clauses.append(f"({company_sql})")
 			continue
@@ -1237,10 +1180,7 @@ def get_permission_query_conditions(user: str | None = None) -> str:
 			if str(value or "").strip()
 		]
 		for branch in allowed:
-			branch_sql = (
-				f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`branch` = "
-				f"{frappe.db.escape(branch)}"
-			)
+			branch_sql = f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`branch` = {frappe.db.escape(branch)}"
 			clauses.append(f"({company_sql} AND {branch_sql})")
 	return f"({' OR '.join(clauses)})" if clauses else "1=0"
 
@@ -1267,9 +1207,7 @@ def has_permission(
 	if not scope.get("restricted"):
 		return True
 	allowed = {
-		str(value).strip()
-		for value in scope.get("allowed_branches") or []
-		if str(value or "").strip()
+		str(value).strip() for value in scope.get("allowed_branches") or [] if str(value or "").strip()
 	}
 	return bool(branch and branch in allowed)
 
@@ -1277,9 +1215,7 @@ def has_permission(
 def _readable_companies(user: str) -> list[str]:
 	companies = frappe.get_all("Company", pluck="name", limit_page_length=0)
 	return [
-		company
-		for company in companies
-		if frappe.has_permission("Company", "read", doc=company, user=user)
+		company for company in companies if frappe.has_permission("Company", "read", doc=company, user=user)
 	]
 
 

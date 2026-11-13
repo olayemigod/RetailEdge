@@ -15,15 +15,12 @@ from retailedge.transaction_branch_attribution import (
 )
 from retailedge.utils.settings import get_retailedge_settings
 
-
 SALES_DOCTYPES = {"Sales Order", "Delivery Note", "Sales Invoice", "POS Invoice"}
 PURCHASE_DOCTYPES = {"Purchase Order", "Purchase Receipt", "Purchase Invoice"}
 DEFAULT_APPLICATION_MANAGER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
 WAREHOUSE_CONTEXT_FIELDS = (
@@ -304,21 +301,21 @@ def _get_valid_pos_profile_default(doc, defaults, summary):
 		return None
 
 	company = getattr(doc, "company", None) or defaults.get("company")
-	branch = (
-		getattr(doc, "branch", None)
-		or getattr(doc, "retailedge_branch", None)
-		or defaults.get("branch")
-	)
+	branch = getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None) or defaults.get("branch")
 	resolved = resolve_branch_from_pos_profile(pos_profile, company=company)
 	profile_company = resolved.get("company")
 	profile_branch = resolved.get("branch")
 	if company and profile_company and profile_company != company:
 		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_company_mismatch"})
-		summary["messages"].append("The Branch Setup POS Profile belongs to a different Company and was not applied.")
+		summary["messages"].append(
+			"The Branch Setup POS Profile belongs to a different Company and was not applied."
+		)
 		return None
 	if branch and profile_branch and profile_branch != branch:
 		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_branch_mismatch"})
-		summary["messages"].append("The Branch Setup POS Profile belongs to a different Branch and was not applied.")
+		summary["messages"].append(
+			"The Branch Setup POS Profile belongs to a different Branch and was not applied."
+		)
 		return None
 	return pos_profile
 
@@ -328,15 +325,21 @@ def _apply_cashier_expense_defaults(doc, defaults, settings, summary, overwrite=
 		account_default = defaults.get("default_cash_account")
 		_apply_doc_field(doc, "payment_account", account_default, summary, overwrite=overwrite)
 	if settings["apply_cost_center"]:
-		cost_center_default = defaults.get("default_expense_cost_center") or defaults.get("default_cost_center")
+		cost_center_default = defaults.get("default_expense_cost_center") or defaults.get(
+			"default_cost_center"
+		)
 		_apply_doc_field(doc, "cost_center", cost_center_default, summary, overwrite=overwrite)
 	if settings["apply_pos_profile"] and not getattr(doc, "linked_pos_opening_shift", None):
-		_apply_doc_field(doc, "pos_profile", defaults.get("default_pos_profile"), summary, overwrite=overwrite)
+		_apply_doc_field(
+			doc, "pos_profile", defaults.get("default_pos_profile"), summary, overwrite=overwrite
+		)
 
 
 def _apply_daily_sales_audit_defaults(doc, defaults, settings, summary, overwrite=False):
 	if settings["apply_pos_profile"] and getattr(doc, "branch", None):
-		_apply_doc_field(doc, "pos_profile", defaults.get("default_pos_profile"), summary, overwrite=overwrite)
+		_apply_doc_field(
+			doc, "pos_profile", defaults.get("default_pos_profile"), summary, overwrite=overwrite
+		)
 
 
 def _apply_doc_field(doc, fieldname, value, summary, overwrite=False):

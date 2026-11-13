@@ -16,9 +16,17 @@ permissions:
 
 jobs:
   compatibility:
-    name: RetailEdge + EdgeSuite printing candidate
+    name: RetailEdge + EdgeSuite ${{ matrix.edge_candidate.name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        edge_candidate:
+          - name: governed-baseline
+            sha: d50920b005da8dcf1bd1e35c1c88be8afedecfbf
+          - name: tab-handoff-pr53
+            sha: 3b4533bff7aef73728c6667032bcaa9217224c6a
 
     services:
       redis:
@@ -56,16 +64,7 @@ jobs:
           check-latest: true
 
       - name: Install bench prerequisites
-        run: |
-          for source in /etc/apt/sources.list.d/*; do
-            if sudo grep -q 'dl.google.com/linux/chrome-stable' "$source" 2>/dev/null; then
-              sudo rm -f "$source"
-            fi
-          done
-          sudo apt-get update
-          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
-          python -m pip install --upgrade frappe-bench
-          redis-cli -h 127.0.0.1 -p 6379 ping
+        run: bash scripts/ci/bootstrap_bench_prerequisites.sh
 
       - name: Create clean Frappe v16 bench
         run: |
@@ -81,11 +80,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out combined EdgeSuite printing + fuzzy-date candidate
+      - name: Check out pinned EdgeSuite QA candidate
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: 4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7
+          ref: ${{ matrix.edge_candidate.sha }}
           path: edgesuite-ui-source
 
       - name: Fetch ERPNext, Payments, EdgeSuite UI, and RetailEdge
@@ -104,7 +103,31 @@ jobs:
         run: |
           uv pip install --python env/bin/python -e 'apps/frappe[test]' -e apps/erpnext -e apps/payments -e apps/edgesuite_ui -e apps/retailedge
           uv pip check --python env/bin/python
-          python "$GITHUB_WORKSPACE/scripts/verify-platform-baseline.py" --bench . --include-payments
+          if [ "${{ matrix.edge_candidate.name }}" = "governed-baseline" ]; then
+            python "$GITHUB_WORKSPACE/scripts/verify-platform-baseline.py" --bench . --include-payments
+          else
+            # QA-only compatibility check. Do not modify platform-baseline.json
+            # or silently move the approved EdgeSuite release dependency.
+            python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          baseline = json.loads(Path("../platform-baseline.json").read_text())
+          for app in ("frappe", "erpnext", "payments"):
+              expected = baseline["apps"][app]["sha"]
+              actual = subprocess.check_output(
+                  ["git", "-C", f"apps/{app}", "rev-parse", "HEAD"], text=True
+              ).strip()
+              if actual != expected:
+                  raise SystemExit(f"{app}: expected {expected}, got {actual}")
+          edge = subprocess.check_output(
+              ["git", "-C", "apps/edgesuite_ui", "rev-parse", "HEAD"], text=True
+          ).strip()
+          if edge != "3b4533bff7aef73728c6667032bcaa9217224c6a":
+              raise SystemExit(f"EdgeSuite QA candidate drift: {edge}")
+          print("QA-only EdgeSuite tab handoff compatibility: exact candidate verified")
+          PY
+          fi
 
       - name: Create standalone RetailEdge site
         working-directory: frappe-bench
@@ -123,7 +146,11 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "4f6a0ee9ba8b6803ca81d179dcd45f343c6ad8a7"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "${{ matrix.edge_candidate.sha }}"
+          if [ "${{ matrix.edge_candidate.name }}" = "tab-handoff-pr53" ]; then
+            test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_tab_lease.js
+            grep -Fq 'createSerialTabLease' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/printing_serial_transport.js
+          fi
 
           python - <<'PY'
           import json

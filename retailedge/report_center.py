@@ -7,7 +7,6 @@ from frappe import _
 
 from retailedge.master_experience import get_retailedge_business_hub_context
 
-
 REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "sales",
@@ -508,8 +507,14 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 @frappe.whitelist()
 def get_reports_centre_context() -> dict[str, Any]:
 	"""Return the permission-filtered report catalogue without querying report datasets."""
-	if not frappe.session.user or frappe.session.user == "Guest":
+	user = frappe.session.user
+	if not user or user == "Guest":
 		frappe.throw(_("Sign in to open Reports Centre."), frappe.PermissionError)
+	if (
+		not frappe.db.exists("Page", "reports-centre")
+		or not frappe.get_doc("Page", "reports-centre").is_permitted()
+	):
+		frappe.throw(_("You do not have access to Reports Centre."), frappe.PermissionError)
 
 	master = get_retailedge_business_hub_context() or {}
 	access = dict(master.get("access") or {})

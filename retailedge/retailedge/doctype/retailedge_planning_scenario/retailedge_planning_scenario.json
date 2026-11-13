@@ -63,12 +63,9 @@
  "owner": "Administrator",
  "permissions": [
   {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
-  {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdge Manager","share":1,"write":1},
   {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdgeManager","share":1,"write":1},
-  {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdge Branch Manager","share":1,"write":1},
   {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdgeBranchManager","share":1,"write":1},
   {"create":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Accounts Manager","share":1,"write":1},
-  {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdge Auditor","share":1},
   {"email":1,"export":1,"print":1,"read":1,"report":1,"role":"RetailEdgeAuditor","share":1}
  ],
  "sort_field": "modified",

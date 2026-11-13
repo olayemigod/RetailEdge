@@ -12,11 +12,8 @@
  "page_name": "operating-context",
  "roles": [
   {"role": "System Manager"},
-  {"role": "RetailEdge Manager"},
   {"role": "RetailEdgeManager"},
-  {"role": "RetailEdge Branch Manager"},
   {"role": "RetailEdgeBranchManager"},
-  {"role": "RetailEdge Cashier"},
   {"role": "RetailEdgeCashier"},
   {"role": "Accounts Manager"},
   {"role": "Accounts User"},

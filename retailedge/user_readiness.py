@@ -337,14 +337,7 @@ def _validate_pos_readiness(
 			"configure_pos_profile",
 		)
 		return False
-	if default_pos_profile not in assigned_profiles:
-		_block(
-			result,
-			"pos_profile_not_assigned",
-			_("Assign this User to the POS Profile configured for Branch {0}.").format(branch),
-			"configure_pos_profile",
-		)
-		return False
+
 	profile = frappe.db.get_value("POS Profile", default_pos_profile, ["company", "disabled"], as_dict=True)
 	if not profile or cint(profile.get("disabled")):
 		_block(
@@ -368,6 +361,27 @@ def _validate_pos_readiness(
 			"pos_profile_permission_missing",
 			_("This User does not have permission to use the POS Profile configured for Branch {0}.").format(branch),
 			"review_permissions",
+		)
+		return False
+
+	# ERPNext treats a POS Profile with no Applicable for Users rows as shared.
+	# A User may have an explicit assignment to another Profile and still be allowed
+	# to use this Branch's shared default Profile. Do not falsely require an
+	# explicit row merely because another Profile is restricted for that User.
+	default_profile_is_restricted = bool(
+		frappe.db.exists(
+			"POS Profile User",
+			{"parent": default_pos_profile, "parenttype": "POS Profile"},
+		)
+	)
+	if not default_profile_is_restricted:
+		return True
+	if default_pos_profile not in assigned_profiles:
+		_block(
+			result,
+			"pos_profile_not_assigned",
+			_("Assign this User to the POS Profile configured for Branch {0}.").format(branch),
+			"configure_pos_profile",
 		)
 		return False
 	return True

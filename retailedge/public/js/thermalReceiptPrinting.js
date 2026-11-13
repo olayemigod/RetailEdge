@@ -2,8 +2,11 @@ const RECEIPT_METHOD = "retailedge.thermal_receipt.get_thermal_receipt_payload";
 const RETAILEDGE_PRODUCT_KEY = "retailedge";
 
 function sharedPrintAdapter() {
-	const runtime = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
-	return runtime?.print || runtime?.getAdapter?.("print") || null;
+	const browser = typeof window !== "undefined" ? window : null;
+	const runtime = browser?.EdgeSuiteUI;
+	// POSNext exposes the same EdgeSuite printing adapter through its
+	// lightweight print bundle; Desk normally exposes it through EdgeSuiteUI.
+	return browser?.EdgeSuitePrint || runtime?.print || runtime?.getAdapter?.("print") || null;
 }
 
 function callReceiptPayload(document, name) {
@@ -36,13 +39,6 @@ function normalizedContext(context = {}) {
 		company: String(context.company || "").trim(),
 		branch: String(context.branch || "").trim(),
 	};
-}
-
-function portInfoMatchesBinding(portInfo = {}, bindingPortInfo = {}) {
-	const entries = Object.entries(bindingPortInfo || {}).filter(
-		([, value]) => value !== undefined && value !== null && value !== "",
-	);
-	return entries.length > 0 && entries.every(([key, value]) => portInfo?.[key] === value);
 }
 
 function resolvedReceiptTemplate(payload = {}, profileOptions = {}) {
@@ -115,15 +111,11 @@ async function ensureConnected(adapter, profile) {
 	}
 
 	try {
-		const binding = adapter.bindingStore?.get?.(profile.name);
+		// The Bluetooth SPP service UUID is shared across many printers; it
+		// cannot identify a particular branch's receipt printer by itself.
+		// Trust only the shared EdgeSuite device/profile binding contract.
 		const sharedMatch = adapter.devices?.bindingMatchesStatus?.(profile.name, current || {});
-		const legacySerialMatch = Boolean(
-			transport === "serial"
-			&& current?.connected
-			&& binding?.transport === "serial"
-			&& portInfoMatchesBinding(current.portInfo || {}, binding.portInfo || {}),
-		);
-		const currentMatchesBinding = Boolean(current?.connected && (sharedMatch || legacySerialMatch));
+		const currentMatchesBinding = Boolean(current?.connected && sharedMatch);
 
 		if (currentMatchesBinding) return { transport, status: current };
 
@@ -145,9 +137,25 @@ async function ensureConnected(adapter, profile) {
 			profile.name,
 			adapter.profiles.connectionOptions(profile),
 		);
-		if (!restored?.status?.connected) throw new Error("Printer did not reconnect.");
+		const restoredMatchesBinding = adapter.devices?.bindingMatchesStatus?.(
+			profile.name,
+			restored?.status || {},
+		);
+		if (!restored?.status?.connected || !restoredMatchesBinding) {
+			// Do not send a customer's receipt to an unrelated device after
+			// an interrupted tab handoff or a stale profile binding.
+			if (restored?.status?.connected) await adapter.disconnect(transport);
+			throw new Error("The connected printer does not match the selected receipt profile.");
+		}
 		return { transport, status: restored.status };
 	} catch (error) {
+		if (["SERIAL_TAB_IN_USE", "SERIAL_TAB_COORDINATION_UNAVAILABLE"].includes(error?.code)) {
+			throw printerError(
+				"RETAIL_PRINTER_TAB_BUSY",
+				error.message || "The receipt printer is busy in another browser tab. Close the other connection and try again.",
+				error,
+			);
+		}
 		const suffix = transport === "usb"
 			? " If direct USB access is unavailable, use Print Document for normal system printing."
 			: "";

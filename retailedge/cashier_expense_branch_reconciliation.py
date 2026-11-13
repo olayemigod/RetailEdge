@@ -8,7 +8,6 @@ from frappe.utils import cint
 
 from retailedge.cashier_expense import append_cashier_expense_action_log
 
-
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 BRANCH_PROFILE_DOCTYPE = "RetailEdge Branch Profile"
 OPENING_SHIFT_DOCTYPE = "POS Opening Shift"
@@ -144,7 +143,9 @@ def _classify_row(row) -> dict[str, str | None]:
 		)
 	target_branch = target_branches[0]
 	if target_branch == current_branch:
-		return _classification("already_correct", "Branch already matches the exact POS Profile mapping.", target_branch)
+		return _classification(
+			"already_correct", "Branch already matches the exact POS Profile mapping.", target_branch
+		)
 
 	current_profiles = frappe.get_all(
 		BRANCH_PROFILE_DOCTYPE,
@@ -205,7 +206,9 @@ def _repair_row(row, classification: dict[str, str | None]) -> None:
 		action="Branch Attribution Reconciled",
 		previous_status=status,
 		new_status=status,
-		remarks=_("Corrected historical Branch attribution caused by the blank POS Profile wildcard resolver defect."),
+		remarks=_(
+			"Corrected historical Branch attribution caused by the blank POS Profile wildcard resolver defect."
+		),
 		context={
 			"old_branch": old_branch,
 			"new_branch": new_branch,
@@ -227,6 +230,9 @@ def _assert_reconciliation_access() -> None:
 	if user == "Administrator":
 		return
 	roles = set(frappe.get_roles(user))
-	if roles.intersection({"System Manager", "RetailEdge Manager", "RetailEdgeManager"}):
+	if roles.intersection({"System Manager", "RetailEdgeManager"}):
 		return
-	frappe.throw(_("You do not have permission to audit or reconcile Cashier Expense Branch history."), frappe.PermissionError)
+	frappe.throw(
+		_("You do not have permission to audit or reconcile Cashier Expense Branch history."),
+		frappe.PermissionError,
+	)

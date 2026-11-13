@@ -9,6 +9,7 @@ from retailedge.tests.upgrade_validation_fixture import (
 	COMPANY,
 	CUSTOMER,
 	ITEM,
+	ITEM_GROUP,
 	PRICE_LIST,
 	_ensure_customer,
 	_ensure_item,
@@ -23,6 +24,11 @@ BRANCHES = (
 )
 BRANCH_WITHOUT_DEFAULTS = "RetailEdge RC3 Ikeja"
 EXPENSE_CATEGORY = "Browser Working Branch Expense"
+CASHIER_USER = "browser-cashier@example.com"
+CASHIER_UNFINISHED_MARKER = "RetailEdge browser cashier unfinished sale fixture"
+CASHIER_RECEIPT_MARKER = "RetailEdge browser cashier unpaid receipt fixture"
+CASHIER_TEST_MODE = "RetailEdge Browser Cash Receipt"
+SECOND_ITEM = "RE-UPGRADE-SERVICE-SECOND"
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
@@ -39,6 +45,8 @@ EXTRA_PERSONAS = {
 	),
 	"browser-zero-branch@example.com": ("Browser Zero Branch", ("RetailEdgeBranchManager", "Stock User")),
 	"browser-native@example.com": ("Browser Native Advanced", ("System Manager",)),
+	"browser-auditor@example.com": ("Browser Auditor", ("RetailEdgeAuditor",)),
+	"browser-no-access@example.com": ("Browser No Access", ()),
 	"browser-global-branch@example.com": (
 		"Browser Global Branch",
 		("System Manager", "Sales Manager", "Accounts Manager", "Stock Manager", "Purchase Manager"),
@@ -49,12 +57,13 @@ ACTIVE_ASSIGNMENTS = {
 	"Administrator": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-branch-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
-	"browser-cashier@example.com": (("RetailEdge RC3 Lagos", "Cashier", 1),),
+	CASHIER_USER: (("RetailEdge RC3 Lagos", "Cashier", 1),),
 	"browser-accounts@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),
 	"browser-stock@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-stock-manager@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-purchasing@example.com": (("RetailEdge RC3 Lagos", "Purchasing", 1),),
 	"browser-sales@example.com": (("RetailEdge RC3 Lagos", "Sales", 1),),
+	"browser-auditor@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),
 	"browser-one-branch@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-multi-branch@example.com": (
 		("RetailEdge RC3 Lagos", "Stock", 1),
@@ -112,6 +121,7 @@ def _ensure_branch_profile(
 	*,
 	default_warehouse: str = "",
 	is_default: bool = False,
+	default_selling_price_list: str = "",
 ) -> None:
 	profile_name = f"RC3 {branch_name}"
 	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
@@ -119,6 +129,9 @@ def _ensure_branch_profile(
 		changed = False
 		if (profile.default_warehouse or "") != default_warehouse:
 			profile.default_warehouse = default_warehouse or None
+			changed = True
+		if (profile.default_selling_price_list or "") != default_selling_price_list:
+			profile.default_selling_price_list = default_selling_price_list or None
 			changed = True
 		if int(profile.enabled or 0) != 1:
 			profile.enabled = 1
@@ -138,6 +151,7 @@ def _ensure_branch_profile(
 			"branch": branch_name,
 			"is_default_for_company": 1 if is_default else 0,
 			"default_warehouse": default_warehouse or None,
+			"default_selling_price_list": default_selling_price_list or None,
 			"notes": "Deterministic RC3 browser/persona fixture.",
 		}
 	).insert(ignore_permissions=True)
@@ -191,10 +205,71 @@ def _ensure_branch_quotation(branch_name: str) -> str:
 			"company": COMPANY,
 			"branch": branch_name,
 			"customer": CUSTOMER,
+			"price_list": PRICE_LIST,
 			"items": [{"item_code": ITEM, "qty": 1, "rate": 1000}],
 		}
 	)
 	return str(result["name"])
+
+
+def _sales_invoice_values(branch_name: str, marker: str) -> dict:
+	company = frappe.get_doc("Company", COMPANY)
+	currency = str(company.default_currency or "NGN")
+	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
+	income = _first_leaf_account(COMPANY, root_type="Income")
+	cost_center = _first_cost_center(COMPANY)
+	# Seed an actual Company/Branch-authorised warehouse for every CI invoice.
+	# An omitted warehouse is filled from ERPNext's Company default (Stores),
+	# which may not be a valid Stock Location in the cashier's operating Branch.
+	warehouse = frappe.db.get_value(
+		"Warehouse",
+		{"warehouse_name": f"{branch_name} Stock", "company": COMPANY, "is_group": 0},
+		"name",
+	)
+	if not warehouse:
+		frappe.throw(f"Browser Sales Invoice fixture has no Stock Location for Branch {branch_name}.")
+	return {
+		"doctype": "Sales Invoice",
+		"company": COMPANY,
+		"customer": CUSTOMER,
+		"posting_date": nowdate(),
+		"due_date": add_days(nowdate(), 30),
+		"currency": currency,
+		"conversion_rate": 1,
+		"selling_price_list": PRICE_LIST,
+		"price_list_currency": currency,
+		"plc_conversion_rate": 1,
+		"debit_to": receivable,
+		"set_warehouse": warehouse,
+		"remarks": marker,
+		"retailedge_branch": branch_name,
+		"items": [
+			{
+				"item_code": ITEM,
+				"qty": 2,
+				"rate": 1250,
+				"warehouse": warehouse,
+				"income_account": income,
+				"cost_center": cost_center,
+			}
+		],
+	}
+
+
+def _ensure_second_item() -> None:
+	"""Use a distinct Item master so saved-draft row removal is meaningful."""
+	if frappe.db.exists("Item", SECOND_ITEM):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Item",
+			"item_code": SECOND_ITEM,
+			"item_name": "RetailEdge Upgrade Second Service",
+			"item_group": ITEM_GROUP,
+			"stock_uom": "Nos",
+			"is_stock_item": 0,
+		}
+	).insert(ignore_permissions=True)
 
 
 def _ensure_branch_sales_invoice(branch_name: str) -> str:
@@ -213,41 +288,109 @@ def _ensure_branch_sales_invoice(branch_name: str) -> str:
 	if existing:
 		return str(existing)
 
-	company = frappe.get_doc("Company", COMPANY)
-	currency = str(company.default_currency or "NGN")
-	receivable = _first_leaf_account(COMPANY, root_type="Asset", account_type="Receivable")
-	income = _first_leaf_account(COMPANY, root_type="Income")
-	cost_center = _first_cost_center(COMPANY)
-	invoice = frappe.get_doc(
-		{
-			"doctype": "Sales Invoice",
-			"company": COMPANY,
-			"customer": CUSTOMER,
-			"posting_date": nowdate(),
-			"due_date": add_days(nowdate(), 30),
-			"currency": currency,
-			"conversion_rate": 1,
-			"selling_price_list": PRICE_LIST,
-			"price_list_currency": currency,
-			"plc_conversion_rate": 1,
-			"debit_to": receivable,
-			"remarks": marker,
-			"retailedge_branch": branch_name,
-			"items": [
-				{
-					"item_code": ITEM,
-					"qty": 1,
-					"rate": 1000,
-					"income_account": income,
-					"cost_center": cost_center,
-				}
-			],
-		}
-	)
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, marker))
 	if invoice.meta.has_field("branch"):
 		invoice.branch = branch_name
 	invoice.insert(ignore_permissions=True)
 	return str(invoice.name)
+
+
+def _ensure_cashier_unfinished_sale(branch_name: str) -> str:
+	"""Seed one cashier-owned Sales Invoice draft for restart/resume acceptance."""
+	existing = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"company": COMPANY,
+			"retailedge_branch": branch_name,
+			"remarks": CASHIER_UNFINISHED_MARKER,
+			"docstatus": 0,
+		},
+		"name",
+		order_by="creation asc",
+	)
+	if existing:
+		frappe.db.set_value("Sales Invoice", existing, "owner", CASHIER_USER, update_modified=False)
+		return str(existing)
+
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, CASHIER_UNFINISHED_MARKER))
+	if invoice.meta.has_field("branch"):
+		invoice.branch = branch_name
+	invoice.insert(ignore_permissions=True)
+	frappe.db.set_value("Sales Invoice", invoice.name, "owner", CASHIER_USER, update_modified=False)
+	return str(invoice.name)
+
+
+def _ensure_cashier_receivable_invoice(branch_name: str) -> str:
+	"""Seed one submitted unpaid cashier-visible invoice for constrained receipt acceptance."""
+	existing = frappe.db.get_value(
+		"Sales Invoice",
+		{
+			"company": COMPANY,
+			"retailedge_branch": branch_name,
+			"remarks": CASHIER_RECEIPT_MARKER,
+			"docstatus": 1,
+		},
+		"name",
+		order_by="creation asc",
+	)
+	if existing:
+		frappe.db.set_value("Sales Invoice", existing, "owner", CASHIER_USER, update_modified=False)
+		return str(existing)
+
+	invoice = frappe.get_doc(_sales_invoice_values(branch_name, CASHIER_RECEIPT_MARKER))
+	if invoice.meta.has_field("branch"):
+		invoice.branch = branch_name
+	invoice.flags.ignore_permissions = True
+	invoice.insert(ignore_permissions=True)
+	invoice.submit()
+	frappe.db.set_value("Sales Invoice", invoice.name, "owner", CASHIER_USER, update_modified=False)
+	return str(invoice.name)
+
+
+def _ensure_cashier_test_mode() -> str:
+	"""CI-only cash mode bound to a real native Company cash ledger account.
+
+	This helper runs exclusively inside the browser-persona fixture on an
+	ephemeral CI site. It must never be invoked by application startup or migrate.
+	"""
+	cash_account = frappe.db.get_value(
+		"Account",
+		{"company": COMPANY, "account_type": "Cash", "is_group": 0, "disabled": 0},
+		"name",
+	)
+	if not cash_account:
+		frappe.throw(f"Browser receipt fixture: no enabled Cash ledger account in {COMPANY}.")
+	if frappe.db.exists("Mode of Payment", CASHIER_TEST_MODE):
+		mode = frappe.get_doc("Mode of Payment", CASHIER_TEST_MODE)
+	else:
+		mode = frappe.get_doc(
+		{
+			"doctype": "Mode of Payment",
+			"mode_of_payment": CASHIER_TEST_MODE,
+			"type": "Cash",
+			"enabled": 1,
+		}
+		)
+	changed = bool(not mode.name or not frappe.db.exists("Mode of Payment", CASHIER_TEST_MODE))
+	if int(mode.enabled or 0) != 1:
+		mode.enabled = 1
+		changed = True
+	if str(mode.type or "") != "Cash":
+		mode.type = "Cash"
+		changed = True
+	row = next((row for row in mode.accounts or [] if row.company == COMPANY), None)
+	if not row:
+		mode.append("accounts", {"company": COMPANY, "default_account": cash_account})
+		changed = True
+	elif str(row.default_account or "") != str(cash_account):
+		row.default_account = cash_account
+		changed = True
+	if changed:
+		if mode.is_new():
+			mode.insert(ignore_permissions=True)
+		else:
+			mode.save(ignore_permissions=True)
+	return CASHIER_TEST_MODE
 
 
 def _ensure_expense_category() -> str:
@@ -318,6 +461,7 @@ def seed_rc3_personas() -> dict:
 			branch_name,
 			default_warehouse=warehouses[branch_name],
 			is_default=index == 0,
+			default_selling_price_list=PRICE_LIST if index == 0 else "",
 		)
 
 	# Printing acceptance uses Administrator so seed the same deterministic
@@ -350,17 +494,18 @@ def seed_rc3_personas() -> dict:
 	# browser acceptance isolates read/list governance rather than creation UX.
 	_ensure_customer()
 	_ensure_item()
+	_ensure_second_item()
 	branch_quotations = {
-		branch_name: _ensure_branch_quotation(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_quotation(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 	branch_sales_invoices = {
-		branch_name: _ensure_branch_sales_invoice(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_sales_invoice(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
+	cashier_unfinished_sale = _ensure_cashier_unfinished_sale(BRANCHES[0])
+	cashier_receivable_invoice = _ensure_cashier_receivable_invoice(BRANCHES[0])
+	cashier_receipt_mode = _ensure_cashier_test_mode()
 	branch_cashier_expenses = {
-		branch_name: _ensure_branch_cashier_expense(branch_name)
-		for branch_name in (BRANCHES[0], BRANCHES[1])
+		branch_name: _ensure_branch_cashier_expense(branch_name) for branch_name in (BRANCHES[0], BRANCHES[1])
 	}
 
 	frappe.db.commit()
@@ -371,6 +516,9 @@ def seed_rc3_personas() -> dict:
 		"branch_without_defaults": BRANCH_WITHOUT_DEFAULTS,
 		"branch_quotations": branch_quotations,
 		"branch_sales_invoices": branch_sales_invoices,
+		"cashier_unfinished_sale": cashier_unfinished_sale,
+		"cashier_receivable_invoice": cashier_receivable_invoice,
+		"cashier_receipt_mode": cashier_receipt_mode,
 		"branch_cashier_expenses": branch_cashier_expenses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {

@@ -49,8 +49,8 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 			roles = {entry["role"] for entry in payload["roles"]}
 			self.assertIn("Sales User", roles)
 			self.assertIn("Sales Manager", roles)
-			self.assertIn("RetailEdge Branch Manager", roles)
-			self.assertIn("RetailEdge Auditor", roles)
+			self.assertIn("RetailEdgeBranchManager", roles)
+			self.assertIn("RetailEdgeAuditor", roles)
 
 	def test_backend_is_submitted_invoice_based_permission_aware_and_bounded(self):
 		source = self.read(BACKEND)

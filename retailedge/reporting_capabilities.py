@@ -14,19 +14,17 @@ EXPORT_SETTING = "enable_reporting_export"
 
 _MANAGER_ROLES = {
 	"System Manager",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
-_BRANCH_MANAGER_ROLES = {"RetailEdge Branch Manager", "RetailEdgeBranchManager"}
+_BRANCH_MANAGER_ROLES = {"RetailEdgeBranchManager"}
 _SALES_MANAGER_ROLES = {"Sales Manager"}
 _STOCK_MANAGER_ROLES = {"Stock Manager"}
 _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
 _PURCHASE_MANAGER_ROLES = {"Purchase Manager"}
 _PURCHASE_USER_ROLES = {"Purchase User"}
-_CASHIER_ROLES = {"RetailEdge Cashier", "RetailEdgeCashier"}
+_CASHIER_ROLES = {"RetailEdgeCashier"}
 
 
 @dataclass(frozen=True)
@@ -49,117 +47,240 @@ def _roles(*groups: set[str]) -> frozenset[str]:
 
 _REPORT_SPECS = {
 	"sales-by-item": ReportCapabilitySpec(
-		key="sales-by-item", label="Sales by Item",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="sales-by-item",
+		label="Sales by Item",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_SALES_MANAGER_ROLES,
+			{"Sales User"},
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
 	),
 	"sales-analysis": ReportCapabilitySpec(
-		key="sales-analysis", label="Sales Analysis",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="sales-analysis",
+		label="Sales Analysis",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_SALES_MANAGER_ROLES,
+			{"Sales User"},
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
 	),
 	"sales-invoice-register": ReportCapabilitySpec(
-		key="sales-invoice-register", label="Sales Invoice Register",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="sales-invoice-register",
+		label="Sales Invoice Register",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_SALES_MANAGER_ROLES,
+			{"Sales User"},
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
 	),
 	"customer-receivables": ReportCapabilitySpec(
-		key="customer-receivables", label="Customer Receivables",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Sales Invoice",
+		key="customer-receivables",
+		label="Customer Receivables",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_SALES_MANAGER_ROLES,
+			{"Sales User"},
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
+		print_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES
+		),
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
 		allow_controlled_view_without_ref_permission=True,
 	),
 	"purchase-analysis": ReportCapabilitySpec(
-		key="purchase-analysis", label="Purchase Analysis",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
+		key="purchase-analysis",
+		label="Purchase Analysis",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_PURCHASE_MANAGER_ROLES,
+			_PURCHASE_USER_ROLES,
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
+		print_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES
+		),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
 	),
 	"supplier-performance": ReportCapabilitySpec(
-		key="supplier-performance", label="Supplier Performance",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
+		key="supplier-performance",
+		label="Supplier Performance",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_PURCHASE_MANAGER_ROLES,
+			_PURCHASE_USER_ROLES,
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
+		print_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES
+		),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
 	),
 	"purchase-register": ReportCapabilitySpec(
-		key="purchase-register", label="Purchase Register",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
+		key="purchase-register",
+		label="Purchase Register",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_PURCHASE_MANAGER_ROLES,
+			_PURCHASE_USER_ROLES,
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
+		print_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES
+		),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
 	),
 	"supplier-payables": ReportCapabilitySpec(
-		key="supplier-payables", label="Supplier Payables",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
+		key="supplier-payables",
+		label="Supplier Payables",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_PURCHASE_MANAGER_ROLES,
+			_PURCHASE_USER_ROLES,
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+		),
+		print_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES
+		),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
 	),
 	"stock-position": ReportCapabilitySpec(
-		key="stock-position", label="Stock Position",
+		key="stock-position",
+		label="Stock Position",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _STOCK_MANAGER_ROLES, {"Stock User"}),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _STOCK_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _STOCK_MANAGER_ROLES), ref_doctype="Item",
+		export_roles=_roles(_MANAGER_ROLES, _STOCK_MANAGER_ROLES),
+		ref_doctype="Item",
 	),
 	"stock-movement-history": ReportCapabilitySpec(
-		key="stock-movement-history", label="Stock Movement History",
+		key="stock-movement-history",
+		label="Stock Movement History",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _STOCK_MANAGER_ROLES, {"Stock User"}),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _STOCK_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _STOCK_MANAGER_ROLES), ref_doctype="Stock Ledger Entry",
+		export_roles=_roles(_MANAGER_ROLES, _STOCK_MANAGER_ROLES),
+		ref_doctype="Stock Ledger Entry",
 	),
 	"stock-accounting-integrity": ReportCapabilitySpec(
-		key="stock-accounting-integrity", label="Stock & Accounting Integrity",
+		key="stock-accounting-integrity",
+		label="Stock & Accounting Integrity",
 		view_roles=_roles({"System Manager", "Stock User"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		print_roles=_roles({"System Manager"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles({"System Manager"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Stock Ledger Entry",
+		export_roles=_roles({"System Manager"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Stock Ledger Entry",
 	),
 	"expense-analysis": ReportCapabilitySpec(
-		key="expense-analysis", label="Expense Analysis",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="expense-analysis",
+		label="Expense Analysis",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Cashier Expense",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Cashier Expense",
 	),
 	"expense-register": ReportCapabilitySpec(
-		key="expense-register", label="Expense Register",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES, _CASHIER_ROLES),
+		key="expense-register",
+		label="Expense Register",
+		view_roles=_roles(
+			_MANAGER_ROLES,
+			_BRANCH_MANAGER_ROLES,
+			_ACCOUNTS_MANAGER_ROLES,
+			_ACCOUNTS_USER_ROLES,
+			_CASHIER_ROLES,
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Cashier Expense",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Cashier Expense",
 	),
 	"expense-review": ReportCapabilitySpec(
-		key="expense-review", label="Expense Review",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="expense-review",
+		label="Expense Review",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Cashier Expense",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Cashier Expense",
 	),
 	"cash-shift-verification": ReportCapabilitySpec(
-		key="cash-shift-verification", label="Cash Shift Verification",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="cash-shift-verification",
+		label="Cash Shift Verification",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Daily Sales Audit",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Daily Sales Audit",
 	),
 	"daily-sales-audit": ReportCapabilitySpec(
-		key="daily-sales-audit", label="Daily Sales Audit",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="daily-sales-audit",
+		label="Daily Sales Audit",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Daily Sales Audit",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Daily Sales Audit",
 	),
 	"payment-settlement-analysis": ReportCapabilitySpec(
-		key="payment-settlement-analysis", label="Payment & Settlement Analysis",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="payment-settlement-analysis",
+		label="Payment & Settlement Analysis",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Payment Entry",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Payment Entry",
 	),
 	"cash-movement": ReportCapabilitySpec(
-		key="cash-movement", label="Cash Movement",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="cash-movement",
+		label="Cash Movement",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Payment Entry",
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Payment Entry",
 	),
 	"cash-flow-outlook": ReportCapabilitySpec(
-		key="cash-flow-outlook", label="Cash Flow Outlook",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		key="cash-flow-outlook",
+		label="Cash Flow Outlook",
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 	),
@@ -238,7 +359,9 @@ def require_report_view_access(report_key: str, user: str | None = None) -> dict
 	)
 
 
-def get_report_capabilities(report_key: str, company: str = "", branch: str = "", user: str | None = None) -> dict[str, object]:
+def get_report_capabilities(
+	report_key: str, company: str = "", branch: str = "", user: str | None = None
+) -> dict[str, object]:
 	user = user or frappe.session.user
 	spec = get_report_capability_spec(report_key)
 	_validate_scope(company=company, branch=branch, user=user)
@@ -249,21 +372,36 @@ def get_report_capabilities(report_key: str, company: str = "", branch: str = ""
 	can_print = can_view and print_setting and bool(roles.intersection(spec.print_roles))
 	can_export = can_view and export_setting and bool(roles.intersection(spec.export_roles))
 	return {
-		"scope_name": spec.label, "scope_key": spec.key, "scope_type": "report",
-		"can_view": can_view, "can_print": can_print, "can_export": can_export,
+		"scope_name": spec.label,
+		"scope_key": spec.key,
+		"scope_type": "report",
+		"can_view": can_view,
+		"can_print": can_print,
+		"can_export": can_export,
 		"authorization_model": "settings_scope_role_document_and_operating_branch_permission",
 	}
 
 
-def require_report_action(report_key: str, action: str = "view", company: str = "", branch: str = "", user: str | None = None) -> dict[str, object]:
+def require_report_action(
+	report_key: str, action: str = "view", company: str = "", branch: str = "", user: str | None = None
+) -> dict[str, object]:
 	capabilities = get_report_capabilities(report_key, company=company, branch=branch, user=user)
 	action = cstr(action or "view").strip().lower()
-	allowed = {"view": capabilities["can_view"], "print": capabilities["can_print"], "export": capabilities["can_export"]}.get(action)
+	allowed = {
+		"view": capabilities["can_view"],
+		"print": capabilities["can_print"],
+		"export": capabilities["can_export"],
+	}.get(action)
 	if allowed:
 		return capabilities
 	if action not in {"view", "print", "export"}:
 		frappe.throw(_("Unsupported RetailEdge reporting action."))
-	frappe.throw(_("You are not permitted to {0} this report, or the capability is disabled in RetailEdge Settings.").format(action), frappe.PermissionError)
+	frappe.throw(
+		_(
+			"You are not permitted to {0} this report, or the capability is disabled in RetailEdge Settings."
+		).format(action),
+		frappe.PermissionError,
+	)
 
 
 @frappe.whitelist()

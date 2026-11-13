@@ -32,11 +32,8 @@ _CONSOLIDATED_ROLES = {
 	"System Manager",
 	"Accounts Manager",
 	"Accounts User",
-	"RetailEdge Manager",
 	"RetailEdgeManager",
-	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
-	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
 
@@ -125,9 +122,7 @@ def get_consolidated_expense_register(
 			"view_mode": "consolidated",
 			"branch_scope": query["branch_scope_label"],
 			"includes_unattributed": int(query["includes_unattributed"]),
-			"include_unposted_cashier_expenses": int(
-				query["include_unposted_cashier_expenses"]
-			),
+			"include_unposted_cashier_expenses": int(query["include_unposted_cashier_expenses"]),
 		},
 		"metadata": {
 			"view_mode": "consolidated",
@@ -164,9 +159,7 @@ def get_consolidated_expense_export(
 			"branch": query["requested_branch"],
 			"view_mode": "consolidated",
 			"branch_scope": query["branch_scope_label"],
-			"include_unposted_cashier_expenses": int(
-				query["include_unposted_cashier_expenses"]
-			),
+			"include_unposted_cashier_expenses": int(query["include_unposted_cashier_expenses"]),
 		},
 		"metadata": {
 			"view_mode": "consolidated",
@@ -177,11 +170,7 @@ def get_consolidated_expense_export(
 
 def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	_assert_access()
-	company = str(
-		filters.get("company")
-		or frappe.defaults.get_user_default("Company")
-		or ""
-	).strip()
+	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."), frappe.ValidationError)
 	_assert_company_read_access(company)
@@ -193,10 +182,9 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 			frappe.throw(_("From Date cannot be after To Date."))
 		if (to_date - from_date).days + 1 > MAX_DATE_RANGE_DAYS:
 			frappe.throw(
-				_(
-					"Expense Register supports up to {0} days per request. "
-					"Narrow the date range."
-				).format(MAX_DATE_RANGE_DAYS)
+				_("Expense Register supports up to {0} days per request. Narrow the date range.").format(
+					MAX_DATE_RANGE_DAYS
+				)
 			)
 
 	status = str(filters.get("expense_status") or "").strip()
@@ -207,17 +195,19 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	if source_type and source_type not in CONSOLIDATED_SOURCE_TYPES:
 		frappe.throw(_("Unsupported Expense Source."))
 
-	include_unposted_cashier_expenses = bool(
-		cint(filters.get("include_unposted_cashier_expenses") or 0)
-	)
+	include_unposted_cashier_expenses = bool(cint(filters.get("include_unposted_cashier_expenses") or 0))
 
 	category = str(filters.get("expense_category") or "").strip()
-	category_filter = _resolve_category_filter(category=category, company=company) if category else {
-		"kind": "",
-		"operational_category": "",
-		"ledger_account": "",
-		"ledger_filter_active": False,
-	}
+	category_filter = (
+		_resolve_category_filter(category=category, company=company)
+		if category
+		else {
+			"kind": "",
+			"operational_category": "",
+			"ledger_account": "",
+			"ledger_filter_active": False,
+		}
+	)
 	operational_category = str(category_filter.get("operational_category") or "")
 	include_operational_sources = category_filter.get("kind") != "account"
 
@@ -821,20 +811,10 @@ def _build_sql_context() -> dict[str, str]:
 			"AND be_reverse.docstatus <> 2"
 		)
 
-	branch_expression = (
-		f"COALESCE({', '.join(branch_parts)}, '')"
-		if branch_parts
-		else "''"
-	)
-	remarks_expression = (
-		"COALESCE(gle.remarks, '')"
-		if _doctype_has_field("GL Entry", "remarks")
-		else "''"
-	)
+	branch_expression = f"COALESCE({', '.join(branch_parts)}, '')" if branch_parts else "''"
+	remarks_expression = "COALESCE(gle.remarks, '')" if _doctype_has_field("GL Entry", "remarks") else "''"
 	cost_center_expression = (
-		"COALESCE(gle.cost_center, '')"
-		if _doctype_has_field("GL Entry", "cost_center")
-		else "''"
+		"COALESCE(gle.cost_center, '')" if _doctype_has_field("GL Entry", "cost_center") else "''"
 	)
 	return {
 		"joins": "\n".join(joins),
@@ -867,9 +847,7 @@ def _resolve_branch_scope(
 	if requested_branch:
 		if restricted and requested_branch not in allowed:
 			frappe.throw(
-				_(
-					"You do not have active RetailEdge Branch access to Branch {0}."
-				).format(requested_branch),
+				_("You do not have active RetailEdge Branch access to Branch {0}.").format(requested_branch),
 				frappe.PermissionError,
 			)
 		effective = [requested_branch]
@@ -978,25 +956,21 @@ def _resolve_category_filter(*, category: str, company: str) -> dict[str, Any]:
 	if len(exact_name) == 1:
 		resolved = exact_name[0]
 	else:
-		label_matches = [
-			row for row in account_rows
-			if str(row.account_name or "").strip() == category
-		]
+		label_matches = [row for row in account_rows if str(row.account_name or "").strip() == category]
 		if len(label_matches) == 1:
 			resolved = label_matches[0]
 		elif len(label_matches) > 1:
 			frappe.throw(
 				_(
-					"Expense account label {0} is ambiguous in Company {1}. "
-					"Use the exact Account name."
+					"Expense account label {0} is ambiguous in Company {1}. Use the exact Account name."
 				).format(category, company),
 				frappe.ValidationError,
 			)
 		else:
 			frappe.throw(
-				_(
-					"Expense Category or Expense Account {0} does not exist in Company {1}."
-				).format(category, company),
+				_("Expense Category or Expense Account {0} does not exist in Company {1}.").format(
+					category, company
+				),
 				frappe.ValidationError,
 			)
 		return {}
@@ -1151,8 +1125,7 @@ def _doctype_has_field(doctype: str, fieldname: str) -> bool:
 	if key not in cache:
 		try:
 			cache[key] = bool(
-				frappe.db.exists("DocType", doctype)
-				and frappe.get_meta(doctype).has_field(fieldname)
+				frappe.db.exists("DocType", doctype) and frappe.get_meta(doctype).has_field(fieldname)
 			)
 		except Exception:
 			cache[key] = False
