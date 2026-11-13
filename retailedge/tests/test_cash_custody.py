@@ -106,7 +106,10 @@ class TestCashCustody(unittest.TestCase):
 	@patch("retailedge.cash_custody._validate_cash_custody_branch", return_value="Main")
 	@patch("retailedge.cash_custody.has_doctype", return_value=True)
 	@patch("retailedge.cash_custody.frappe.db.exists", return_value=True)
-	@patch("retailedge.cash_custody.frappe.db.sql", return_value=[])
+	@patch("retailedge.cash_custody.frappe.db.sql", return_value=[frappe._dict(
+		company="Demo Company", user="cashier@example.com", pos_profile="POS-1",
+		status="Open", docstatus=1,
+	)])
 	@patch("retailedge.cash_custody.get_cash_custody_snapshot")
 	def test_cash_deposit_fails_closed_when_cash_receipts_unverified(
 		self, snapshot, shift_lock, _exists, _has_doctype, _branch, _account, _destination
@@ -120,11 +123,56 @@ class TestCashCustody(unittest.TestCase):
 			paid_to="Bank - DEMO", paid_amount=100, received_amount=100,
 		)
 		snapshot.return_value = {"available_cash": 1000, "cash_sales_verified": False}
-		with self.assertRaises(frappe.ValidationError):
-			validate_cash_deposit_before_submit(doc)
-		self.assertIn("FOR UPDATE", shift_lock.call_args.args[0])
-		snapshot.return_value = {"available_cash": 1000, "cash_sales_verified": True}
-		self.assertIsNone(validate_cash_deposit_before_submit(doc))
+		with patch("retailedge.cash_custody.resolve_cash_payment_account", return_value={"payment_account": "Cash - DEMO"}) as cash:
+			with self.assertRaises(frappe.ValidationError):
+				validate_cash_deposit_before_submit(doc)
+			self.assertIn("FOR UPDATE", shift_lock.call_args.args[0])
+			snapshot.return_value = {"available_cash": 1000, "cash_sales_verified": True}
+			self.assertIsNone(validate_cash_deposit_before_submit(doc))
+			cash.assert_called_with(
+				company="Demo Company", pos_profile="POS-1", opening_shift="OPEN-1",
+			)
+
+	def test_cash_deposit_submit_rejects_closed_or_wrongly_linked_shift_and_source(self):
+		"""Payment Entry edit/submit must not reattribute posted shift custody."""
+		base = {
+			"company": "Demo Company", "user": "cashier@example.com",
+			"pos_profile": "POS-1", "status": "Open", "docstatus": 1,
+		}
+		doc = SimpleNamespace(
+			doctype="Payment Entry", name="PE-1", company="Demo Company",
+			retailedge_branch="Main", retailedge_cashier="cashier@example.com",
+			retailedge_pos_opening_shift="OPEN-1",
+			retailedge_cash_custody_type=CASH_DEPOSIT_TYPE,
+			payment_type="Internal Transfer", paid_from="Cash - DEMO",
+			paid_to="Bank - DEMO", paid_amount=100, received_amount=100,
+		)
+		for label, changed_shift, changed_from, resolved in (
+			("closed", {"status": "Closed"}, "Cash - DEMO", "Cash - DEMO"),
+			("draft opening", {"docstatus": 0}, "Cash - DEMO", "Cash - DEMO"),
+			("wrong company", {"company": "Different Co"}, "Cash - DEMO", "Cash - DEMO"),
+			("wrong owner", {"user": "other@example.com"}, "Cash - DEMO", "Cash - DEMO"),
+			("wrong source account", {}, "Other Cash - DEMO", "Cash - DEMO"),
+			("cash account unresolved", {}, "Cash - DEMO", ""),
+		):
+			with self.subTest(case=label):
+				shift = frappe._dict({**base, **changed_shift})
+				doc.paid_from = changed_from
+				with (
+					patch("retailedge.cash_custody.frappe.db.sql", return_value=[shift]) as shift_lock,
+					patch("retailedge.cash_custody.frappe.db.exists", return_value=True),
+					patch("retailedge.cash_custody.has_doctype", return_value=True),
+					patch("retailedge.cash_custody._validate_cash_custody_branch", return_value="Main"),
+					patch("retailedge.cash_custody._get_account", return_value={}),
+					patch("retailedge.cash_custody.validate_cash_deposit_bank_destination"),
+					patch("retailedge.cash_custody.get_cash_custody_snapshot",
+						return_value={"available_cash": 1000, "cash_sales_verified": True}),
+					patch("retailedge.cash_custody.resolve_cash_payment_account",
+						return_value={"payment_account": resolved}),
+				):
+					with self.assertRaises((frappe.ValidationError, frappe.PermissionError)):
+						validate_cash_deposit_before_submit(doc)
+					self.assertIn("FOR UPDATE", shift_lock.call_args.args[0])
 
 	def test_custody_contract_preserves_erpnext_accounting_truth(self):
 		source = (APP_ROOT / "cash_custody.py").read_text(encoding="utf-8")
