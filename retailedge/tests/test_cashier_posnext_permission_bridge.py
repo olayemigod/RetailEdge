@@ -21,12 +21,15 @@ class TestCashierPOSNextPermissionBridge(unittest.TestCase):
 		):
 			permission_patch.execute()
 
+		# Account Select-only is granted by the operational permissions patch,
+		# immediately before this POSNext shift-specific patch. It must not
+		# reintroduce Account Read even transiently during bench migrate.
 		expected_calls = [
-			call("Account", "RetailEdgeCashier", ("read", "select")),
 			call("POS Opening Shift", "RetailEdgeCashier", ("read", "create", "write", "submit")),
 			call("POS Closing Shift", "RetailEdgeCashier", ("read", "create", "write", "submit")),
 		]
 		self.assertEqual(grant.call_args_list, expected_calls)
+		self.assertFalse(any(args.args[0] == "Account" for args in grant.call_args_list))
 
 	def test_bridge_does_not_expand_cashier_authority(self):
 		source = Path(permission_patch.__file__).read_text(encoding="utf-8")
