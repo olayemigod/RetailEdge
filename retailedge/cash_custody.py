@@ -14,7 +14,11 @@ from retailedge.bank_account_policy import (
 	validate_cash_deposit_bank_destination,
 )
 from retailedge.branch_context import has_doctype, has_field
-from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cashier_context import (
+	get_current_cashier_context,
+	get_shift_cash_snapshot,
+	resolve_cash_payment_account,
+)
 from retailedge.operating_context import (
 	get_operational_branch_scope,
 	resolve_operational_branch,
@@ -384,9 +388,33 @@ def validate_cash_deposit_before_submit(doc, method=None):
 	if not has_doctype("POS Opening Shift") or not frappe.db.exists("POS Opening Shift", opening_shift):
 		frappe.throw(_("The linked POS opening shift no longer exists."))
 
-	# Serialize submissions for the same shift. The custody check below therefore
-	# sees any earlier deposit committed or still holding this row lock.
-	frappe.db.sql("SELECT name FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE", (opening_shift,))
+	# Lock and CURRENT-read the full opening-shift identity. A plain get_value
+	# after a row lock may still return a stale REPEATABLE READ snapshot after a
+	# concurrent POS close, so the status/ownership checks belong to this read.
+	shift_rows = frappe.db.sql(
+		"SELECT company, user, pos_profile, status, docstatus "
+		"FROM `tabPOS Opening Shift` WHERE name = %s FOR UPDATE",
+		(opening_shift,),
+		as_dict=True,
+	)
+	if len(shift_rows) != 1:
+		frappe.throw(_("The linked POS opening shift is not available."))
+	shift = shift_rows[0]
+	if cint(shift.get("docstatus")) != 1 or str(shift.get("status") or "").strip() != "Open":
+		frappe.throw(_("Cash deposits can be submitted only while the linked POS shift is Open."))
+	if str(shift.get("company") or "").strip() != company or str(shift.get("user") or "").strip() != cashier:
+		frappe.throw(
+			_("The Cash Deposit company or cashier does not match its linked POS opening shift."),
+			frappe.PermissionError,
+		)
+	# A draft Payment Entry remains editable. Re-check the cash account from
+	# the exact locked shift, not just its Cash-type status, so a native edit
+	# cannot debit an unrelated Company cash account against this shift.
+	cash_account = resolve_cash_payment_account(
+		company=company, pos_profile=shift.get("pos_profile"), opening_shift=opening_shift,
+	).get("payment_account")
+	if not cash_account or str(getattr(doc, "paid_from", "") or "").strip() != str(cash_account).strip():
+		frappe.throw(_("The Cash Deposit source account no longer matches the linked POS shift."))
 	if getattr(doc, "payment_type", None) != "Internal Transfer":
 		frappe.throw(_("A RetailEdge cash deposit must remain an Internal Transfer."))
 	_get_account(company, getattr(doc, "paid_from", None), expected_type="Cash")
