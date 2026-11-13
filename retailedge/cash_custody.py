@@ -419,7 +419,14 @@ def _get_account(company: str, account: str | None, *, expected_type: str) -> di
 	account = str(account or "").strip()
 	if not account or not frappe.db.exists("Account", account):
 		frappe.throw(_("Account {0} does not exist.").format(account or "(blank)"))
-	if not frappe.has_permission("Account", "read", doc=account):
+	# ERPNext v16 Account Link resolution works with Select permission. RetailEdge
+	# cashiers receive Account Select-only, not ledger-wide Account Read. The
+	# document is still validated below for exact Company, type and currency;
+	# a Read-only native accountant also remains eligible for this operation.
+	if not (
+		frappe.has_permission("Account", "select", doc=account)
+		or frappe.has_permission("Account", "read", doc=account)
+	):
 		frappe.throw(_("You do not have permission to use Account {0}.").format(account), frappe.PermissionError)
 	fields = ["company", "is_group", "account_type", "account_currency"]
 	if has_field("Account", "disabled"):
