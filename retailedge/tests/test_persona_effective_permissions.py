@@ -8,6 +8,9 @@ from retailedge.patches.ensure_retailedge_cashier_company_read import execute as
 from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
 	execute as ensure_cashier_operational_permissions,
 )
+from retailedge.patches.ensure_retailedge_cashier_posnext_permissions import (
+	execute as ensure_cashier_posnext_permissions,
+)
 from retailedge.patches.ensure_retailedge_manager_payment_entry_read import (
 	execute as ensure_manager_payment_entry_read,
 )
@@ -90,6 +93,8 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 		# their effective Frappe result instead of only their source text.
 		ensure_cashier_company_read()
 		ensure_cashier_operational_permissions()
+		# POSNext's migration bridge must never elevate cashier Account Read.
+		ensure_cashier_posnext_permissions()
 		ensure_manager_payment_entry_read()
 
 		for email, (first_name, roles) in PERSONAS.items():
