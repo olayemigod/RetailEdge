@@ -4,6 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from erpnext.accounts.party import get_party_account
 
+from retailedge.cash_custody import _get_account
 from retailedge.patches.ensure_retailedge_cashier_company_read import execute as ensure_cashier_company_read
 from retailedge.patches.ensure_retailedge_cashier_operational_permissions import (
 	execute as ensure_cashier_operational_permissions,
@@ -168,6 +169,9 @@ class PersonaEffectivePermissionTests(IntegrationTestCase):
 			frappe.set_user(user)
 			self.assertTrue(frappe.only_has_select_perm("Account"))
 			self.assertEqual(get_party_account("Customer", None, COMPANY), account)
+			# Cash Deposit must use the same Account Select authority; the
+			# cashier must not need generic Account Read/ledger visibility.
+			self.assertEqual(_get_account(COMPANY, account, expected_type="Receivable")["account_type"], "Receivable")
 		finally:
 			frappe.set_user(prior_user)
 
