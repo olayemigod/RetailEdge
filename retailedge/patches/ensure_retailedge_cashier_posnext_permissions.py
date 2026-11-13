@@ -5,10 +5,9 @@ from frappe.permissions import add_permission, update_permission_property
 
 PERMLEVEL = 0
 CASHIER_ROLES = ("RetailEdgeCashier",)
-ACCOUNT_PERMISSIONS = (
-	"read",
-	"select",
-)
+# Account Select-only is already granted by the preceding canonical cashier
+# operational-permission reconciliation. Do not grant Account Read here: it
+# would elevate the cashier's ledger visibility between migration patches.
 POS_SHIFT_PERMISSIONS = (
 	"read",
 	"create",
@@ -53,7 +52,8 @@ def execute():
 		if not frappe.db.exists("Role", role):
 			continue
 
-		_grant("Account", role, ACCOUNT_PERMISSIONS)
+		# The POSNext bridge is limited to native shift lifecycle permissions.
+		# Account is intentionally governed by the Select-only operational patch.
 		for doctype in POS_SHIFT_DOCTYPES:
 			_grant(doctype, role, POS_SHIFT_PERMISSIONS)
 
