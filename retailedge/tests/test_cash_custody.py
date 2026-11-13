@@ -10,6 +10,7 @@ import frappe
 from retailedge.cash_custody import (
 	CASH_DEPOSIT_TYPE,
 	get_cash_custody_snapshot,
+	_get_account,
 	validate_cash_deposit_before_submit,
 )
 
@@ -139,6 +140,52 @@ class TestCashCustody(unittest.TestCase):
 		self.assertIn("FOR UPDATE", source)
 		self.assertIn('"before_submit": "retailedge.cash_custody.validate_cash_deposit_before_submit"', hooks)
 		self.assertIn('"retailedge.cash_custody.ensure_cash_custody_custom_fields"', hooks)
+
+	def test_cash_deposit_account_lookup_accepts_select_only_not_generic_account_read(self):
+		"""The canonical cashier gets Account Select without Account Read."""
+		account = frappe._dict({
+			"company": "Demo Company",
+			"is_group": 0,
+			"account_type": "Cash",
+			"account_currency": "NGN",
+		})
+		with (
+			patch("retailedge.cash_custody.frappe.db.exists", return_value=True),
+			patch("retailedge.cash_custody.has_field", return_value=False),
+			patch("retailedge.cash_custody.frappe.db.get_value", return_value=account),
+			patch(
+				"retailedge.cash_custody.frappe.has_permission",
+				side_effect=lambda _dt, ptype, **_kw: ptype == "select",
+			) as permission,
+		):
+			result = _get_account("Demo Company", "Cash - DEMO", expected_type="Cash")
+		self.assertEqual(result, {"account_type": "Cash", "account_currency": "NGN"})
+		self.assertTrue(any(call.args[1] == "select" for call in permission.call_args_list))
+		self.assertNotIn("read", [call.args[1] for call in permission.call_args_list])
+
+	def test_cash_deposit_account_lookup_denies_no_access_and_wrong_account_type(self):
+		account = frappe._dict({
+			"company": "Demo Company",
+			"is_group": 0,
+			"account_type": "Bank",
+			"account_currency": "NGN",
+		})
+		with (
+			patch("retailedge.cash_custody.frappe.db.exists", return_value=True),
+			patch("retailedge.cash_custody.has_field", return_value=False),
+			patch("retailedge.cash_custody.frappe.db.get_value", return_value=account),
+			patch("retailedge.cash_custody.frappe.has_permission", return_value=False),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				_get_account("Demo Company", "Bank - DEMO", expected_type="Bank")
+		with (
+			patch("retailedge.cash_custody.frappe.db.exists", return_value=True),
+			patch("retailedge.cash_custody.has_field", return_value=False),
+			patch("retailedge.cash_custody.frappe.db.get_value", return_value=account),
+			patch("retailedge.cash_custody.frappe.has_permission", return_value=True),
+		):
+			with self.assertRaises(frappe.ValidationError):
+				_get_account("Demo Company", "Bank - DEMO", expected_type="Cash")
 
 	def test_custom_fields_are_durable_and_hidden_from_normal_payment_entry_ui(self):
 		source = (APP_ROOT / "cash_custody.py").read_text(encoding="utf-8")
