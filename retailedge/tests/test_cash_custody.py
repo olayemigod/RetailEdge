@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,9 @@ import frappe
 from retailedge.cash_custody import (
 	CASH_DEPOSIT_TYPE,
 	get_cash_custody_snapshot,
+	get_cash_deposit_context,
+	create_cash_deposit_draft,
+	require_cash_custody_fields_installed,
 	_get_account,
 	validate_cash_deposit_before_submit,
 )
@@ -234,6 +238,29 @@ class TestCashCustody(unittest.TestCase):
 		):
 			with self.assertRaises(frappe.ValidationError):
 				_get_account("Demo Company", "Bank - DEMO", expected_type="Cash")
+
+	def test_cash_deposit_uses_migration_only_metadata_never_get_or_post_schema_writes(self):
+		"""Whitelisted cashier requests must not write Custom Field metadata."""
+		for method in (get_cash_deposit_context, create_cash_deposit_draft):
+			with self.subTest(method=method.__name__):
+				code = inspect.getsource(method)
+				self.assertNotIn("ensure_cash_custody_custom_fields(", code)
+				self.assertIn("require_cash_custody_fields_installed()", code)
+		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+		self.assertIn('"retailedge.cash_custody.ensure_cash_custody_custom_fields"', hooks)
+
+	@patch("retailedge.cash_custody.has_doctype", return_value=True)
+	@patch("retailedge.cash_custody.has_field", side_effect=lambda doctype, field: field != "retailedge_cashier")
+	def test_cash_deposit_denies_unmigrated_schema(self, fields, _doctype):
+		with self.assertRaises(frappe.ValidationError):
+			require_cash_custody_fields_installed()
+		self.assertTrue(any(args.args[1] == "retailedge_cashier" for args in fields.call_args_list))
+
+	@patch("retailedge.cash_custody.has_doctype", return_value=True)
+	@patch("retailedge.cash_custody.has_field", return_value=True)
+	def test_cash_deposit_accepts_migrated_schema(self, fields, _doctype):
+		self.assertIsNone(require_cash_custody_fields_installed())
+		self.assertEqual(fields.call_count, 3)
 
 	def test_custom_fields_are_durable_and_hidden_from_normal_payment_entry_ui(self):
 		source = (APP_ROOT / "cash_custody.py").read_text(encoding="utf-8")
