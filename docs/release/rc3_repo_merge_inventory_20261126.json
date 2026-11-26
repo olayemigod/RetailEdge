@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "purpose": "Evidence inventory for the validated RC3 repository merge; not a Frappe Cloud deployment manifest",
+  "verification_date": "2026-11-26",
+  "status": "merged_repositories_ci_green_production_deployment_not_authorized",
+  "live_site_deployed_versions_verified": false,
+  "platform": {
+    "python": "3.14",
+    "node": "24",
+    "frappe": {
+      "version": "16.52.0",
+      "sha": "4515014c87ece6cb20ee91d2cfb121c5cbd1ff4a"
+    },
+    "erpnext": {
+      "version": "16.51.1",
+      "sha": "5af6561f5aa48104559692fb4fd82f2580e8d338"
+    }
+  },
+  "components": {
+    "edgesuite_ui": {
+      "version": "1.1.0",
+      "qa_sha": "d50920b005da8dcf1bd1e35c1c88be8afedecfbf"
+    },
+    "pos_next": {
+      "version": "1.17.0",
+      "seven_app_qa_sha": "44119bc9efa994bc096b037c3e9597068c9f4e8b"
+    },
+    "retailedge": {
+      "version": "1.0.0",
+      "merged_branch": "version-16",
+      "merge_sha": "b636632fd12bc01a9f1abee08bbf65922e8c245f",
+      "tested_source_sha": "8e7f3a7c41ce565212fa7b14b4294341ee24db2d"
+    },
+    "processedge_posnext_override": {
+      "version": "0.0.15",
+      "merged_branch": "main",
+      "merge_sha": "374f517064755cfa56f20e8740a00721210d1f96",
+      "tested_source_sha": "20fec40e45b76f7a086ad98954be4ee6e2870eea"
+    },
+    "payments": {
+      "scope": "ci_only_not_merchant_install_requirement",
+      "qa_sha": "cca07d9f9392e2ea0e521c5975151db9e4b6c321"
+    }
+  },
+  "evidence": {
+    "retailedge_postmerge_ci": "https://github.com/olayemigod/RetailEdge/actions/runs/43383530224",
+    "posnext_extension_postmerge_ci": "https://github.com/olayemigod/Processedge-POSNext-Extension/actions/runs/43383583269",
+    "retailedge_exact_head_gates": {
+      "ci": "https://github.com/olayemigod/RetailEdge/actions/runs/43378815950",
+      "lint": "https://github.com/olayemigod/RetailEdge/actions/runs/43378815977",
+      "edgesuite": "https://github.com/olayemigod/RetailEdge/actions/runs/43378815972",
+      "upgrade": "https://github.com/olayemigod/RetailEdge/actions/runs/43378815946",
+      "browser": "https://github.com/olayemigod/RetailEdge/actions/runs/43378815995"
+    },
+    "posnext_extension_exact_head_gates": {
+      "standalone": "https://github.com/olayemigod/Processedge-POSNext-Extension/actions/runs/43378861519",
+      "seven_app": "https://github.com/olayemigod/Processedge-POSNext-Extension/actions/runs/43378861603"
+    }
+  },
+  "legacy_manifest_notice": "platform-baseline.json includes distinct historical local six-app POSNext/Extension pins and is used by the CI verifier. Do not silently replace its values with seven-app QA commits; reconcile the contract with dedicated compatibility validation.",
+  "deployment": {
+    "production_authorized": false,
+    "staging_site_verified": false,
+    "backups_restored_to_staging": false,
+    "site_auto_update_settings_verified": false
+  }
+}
