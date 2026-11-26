@@ -101,7 +101,7 @@ class TestGuidedPayment(unittest.TestCase):
 	):
 		doc = _DraftPaymentEntry()
 		mock_new_doc.return_value = doc
-		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
+		mock_db_value.side_effect = lambda doctype, name=None, fieldname=None, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
 		mock_party_details.return_value = frappe._dict(party_account="Debtors - DC", party_account_currency="NGN")
@@ -175,7 +175,7 @@ class TestGuidedPayment(unittest.TestCase):
 	):
 		doc = _DraftPaymentEntry()
 		mock_new_doc.return_value = doc
-		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
+		mock_db_value.side_effect = lambda doctype, name=None, fieldname=None, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
 		mock_party_details.return_value = frappe._dict(party_account="Creditors - DC", party_account_currency="NGN")
