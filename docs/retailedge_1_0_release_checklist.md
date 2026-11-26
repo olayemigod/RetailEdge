@@ -1,6 +1,14 @@
 # RetailEdge 1.0.0 — QA and Release Readiness Checklist
 
-## Current authority
+## Post-merge correction — 26 November 2026
+
+**This checklist preserves the historical PR #58 / RC5 snapshot. It is not the current release authority.** Repository merges completed under RetailEdge [PR #250](https://github.com/olayemigod/RetailEdge/pull/250) at `b636632fd12bc01a9f1abee08bbf65922e8c245f` and POSNext Extension [PR #26](https://github.com/olayemigod/Processedge-POSNext-Extension/pull/26) at `374f517064755cfa56f20e8740a00721210d1f96`. Both merged heads passed their post-merge CI. The five RetailEdge exact-head gates and two cross-app Extension gates also passed on tree-identical pre-merge heads.
+
+**Not released to any site by this GitHub action.** Actual Production deployment, formal tagging/GitHub Release, backup restoration, hosted auto-update settings and staging acceptance are separate gates requiring verification/authorization. Historical PR #58 SHA and older run IDs below remain evidence of that earlier freeze, **not** instructions to deploy or merge those commits.
+
+For the current immutable commits, dependency distinctions, automated evidence and staging/rollback checklist, use [RC3 Post-Merge Deployment Readiness](release/rc3_postmerge_deployment_readiness_20261126.md) and its [release evidence inventory](release/rc3_repo_merge_inventory_20261126.json). Follow [Issue #251](https://github.com/olayemigod/RetailEdge/issues/251) for the unapproved hosted-site gates.
+
+## Historical authority — superseded RC5 snapshot
 
 - Product: RetailEdge
 - Target release: **1.0.0**
