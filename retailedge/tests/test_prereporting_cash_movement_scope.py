@@ -122,6 +122,7 @@ class TestPrereportingCashMovementScope(unittest.TestCase):
 					"source": "branch_assignment",
 				},
 			),
+			patch.object(cash_movement, "today", return_value="2026-09-05"),
 			patch.object(cash_movement.frappe.db, "get_value", return_value="Reader"),
 		):
 			get_default.side_effect = lambda key: {
