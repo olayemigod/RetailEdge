@@ -77,7 +77,12 @@
 					<article class="cashier-work-card">
 						<span>Payments recorded</span>
 						<strong>{{ money(summary.payments_total) }}</strong>
-						<small>Across your sales for this day</small>
+						<small>Net payments against these sales</small>
+					</article>
+					<article class="cashier-work-card">
+						<span>Outstanding</span>
+						<strong>{{ money(summary.outstanding_total) }}</strong>
+						<small>{{ summary.outstanding_count || 0 }} invoice{{ Number(summary.outstanding_count || 0) === 1 ? "" : "s" }} with a balance due</small>
 					</article>
 					<article class="cashier-work-card">
 						<span>Returns</span>
@@ -102,10 +107,11 @@
 						</div>
 						<div v-if="shift.open" class="cashier-work-metrics">
 							<div><span>Opening cash</span><strong>{{ money(shift.opening_cash) }}</strong></div>
-							<div><span>Cash sales</span><strong>{{ money(shift.cash_sales) }}</strong></div>
+							<div><span>Cash receipts</span><strong>{{ money(shift.cash_sales) }}</strong></div>
 							<div><span>Expenses</span><strong>{{ money(shift.prior_expenses) }}</strong></div>
 							<div><span>Cash deposits</span><strong>{{ money(shift.cash_deposits) }}</strong></div>
 							<div><span>Available cash</span><strong>{{ money(shift.available_cash) }}</strong></div>
+							<div><span>Outstanding on shift sales</span><strong>{{ shift.outstanding_total == null ? "Unavailable" : money(shift.outstanding_total) }}</strong></div>
 						</div>
 						<div v-else class="cashier-work-empty compact">
 							<p>Open your POS shift to start selling and see live shift totals here.</p>
@@ -118,7 +124,7 @@
 						<div class="cashier-work-panel-heading">
 							<div>
 								<div class="cashier-work-eyebrow">Payments</div>
-								<h3>Payment mix</h3>
+								<h3>Payments against these sales</h3>
 							</div>
 						</div>
 						<div v-if="paymentBreakdown.length" class="cashier-work-payment-list">
@@ -136,14 +142,14 @@
 						<div>
 							<div class="cashier-work-eyebrow">Work activity</div>
 							<h3>My sales and returns</h3>
-							<p>Only transactions recorded by your account are shown.</p>
+							<p>Only sales and returns recorded by your account are shown. Paid and outstanding amounts reflect current allocations, not just payments on the selected date.</p>
 						</div>
 						<span v-if="activityTruncated" class="cashier-work-muted">Showing latest {{ activityLimit }} of {{ activityTotal }}</span>
 					</div>
 					<div v-if="recentActivity.length" class="cashier-work-table-wrap">
 						<table class="cashier-work-table">
 							<thead>
-								<tr><th>Time</th><th>Reference</th><th>Type</th><th>Customer</th><th>Total</th><th>Paid</th><th>Status</th></tr>
+								<tr><th>Time</th><th>Reference</th><th>Type</th><th>Customer</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr>
 							</thead>
 							<tbody>
 								<tr v-for="row in recentActivity" :key="row.reference">
@@ -153,6 +159,7 @@
 									<td>{{ row.customer || "—" }}</td>
 									<td>{{ money(row.total) }}</td>
 									<td>{{ money(row.paid_amount) }}</td>
+									<td>{{ money(row.outstanding_amount) }}</td>
 									<td>{{ row.status || "Submitted" }}</td>
 								</tr>
 							</tbody>
@@ -364,7 +371,7 @@ export default {
 .cashier-work-date-bar { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; }
 .cashier-work-date-bar :deep(.edge-input) { width: min(18rem, 100%); }
 .cashier-work-date-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; color: var(--text-muted); font-size: .82rem; }
-.cashier-work-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .85rem; }
+.cashier-work-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .85rem; }
 .cashier-work-card { display: grid; gap: .25rem; padding: 1rem; min-width: 0; }
 .cashier-work-card > span, .cashier-work-metrics span, .cashier-work-payment-list span { color: var(--text-muted); font-size: .82rem; }
 .cashier-work-card strong { font-size: 1.35rem; overflow: hidden; text-overflow: ellipsis; }
