@@ -224,6 +224,20 @@ class TestPrereportingCashierExpenseReadScope(unittest.TestCase):
 			self.assertIn("apply_cashier_expense_read_scope", source)
 			self.assertNotIn("get_branch_query_filters", source)
 
+	def test_expense_report_rows_use_native_permission_aware_reads(self):
+		# A DocType Read check plus Branch filters does not enforce owner-only
+		# native permissions. Every user-facing report must query via get_list.
+		for reader in (
+			cashier_expense.get_cashier_expense_summary,
+			cashier_expense.get_cashier_expenses_for_variance,
+			cashier_expense_audit.get_cashier_expenses_for_daily_audit,
+		):
+			with self.subTest(reader=reader.__name__):
+				source = inspect.getsource(reader)
+				self.assertIn("frappe.get_list(", source)
+				self.assertNotIn("frappe.get_all(", source)
+				self.assertNotIn("ignore_permissions", source)
+
 	def test_daily_audit_builder_uses_same_authoritative_read_scope(self):
 		source = inspect.getsource(cashier_expense_audit._build_daily_audit_filters)
 		self.assertIn("apply_cashier_expense_read_scope", source)
