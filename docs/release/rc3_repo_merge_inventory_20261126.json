@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "purpose": "Evidence inventory for the validated RC3 repository merge; not a Frappe Cloud deployment manifest",
-  "verification_date": "2026-11-26",
-  "status": "merged_repositories_ci_green_production_deployment_not_authorized",
+  "verification_date": "2026-11-27",
+  "status": "merged_repositories_and_ci_fixture_repair_green_production_deployment_not_authorized",
   "live_site_deployed_versions_verified": false,
   "platform": {
     "python": "3.14",
@@ -29,7 +29,13 @@
       "version": "1.0.0",
       "merged_branch": "version-16",
       "merge_sha": "b636632fd12bc01a9f1abee08bbf65922e8c245f",
-      "tested_source_sha": "8e7f3a7c41ce565212fa7b14b4294341ee24db2d"
+      "tested_source_sha": "8e7f3a7c41ce565212fa7b14b4294341ee24db2d",
+      "original_rc3_merge_sha": "b636632fd12bc01a9f1abee08bbf65922e8c245f",
+      "current_verified_branch_head": "f46040f7d3822d306576a31a68bfe267b7a101f1",
+      "ci_repair_pr": 254,
+      "ci_repair_tested_sha": "3b6751329d59c85cf39710eb1912f39fc101a7d1",
+      "ci_repair_merge_sha": "f46040f7d3822d306576a31a68bfe267b7a101f1",
+      "ci_repair_scope": "five_test_fixture_files_only_no_runtime_code_or_workflow_change"
     },
     "processedge_posnext_override": {
       "version": "0.0.15",
@@ -55,6 +61,19 @@
     "posnext_extension_exact_head_gates": {
       "standalone": "https://github.com/olayemigod/Processedge-POSNext-Extension/actions/runs/43378861519",
       "seven_app": "https://github.com/olayemigod/Processedge-POSNext-Extension/actions/runs/43378861603"
+    },
+    "retailedge_ci_repair": {
+      "issue": "https://github.com/olayemigod/RetailEdge/issues/253",
+      "pr": "https://github.com/olayemigod/RetailEdge/pull/254",
+      "exact_head": "3b6751329d59c85cf39710eb1912f39fc101a7d1",
+      "merged_head": "f46040f7d3822d306576a31a68bfe267b7a101f1",
+      "checks_completed_successfully": 7,
+      "standalone": "https://github.com/olayemigod/RetailEdge/actions/runs/45899360203",
+      "edgesuite_both_variants": "https://github.com/olayemigod/RetailEdge/actions/runs/45899360071",
+      "frozen_candidate_upgrade": "https://github.com/olayemigod/RetailEdge/actions/runs/45899360056",
+      "browser_personas": "https://github.com/olayemigod/RetailEdge/actions/runs/45899360150",
+      "lint_and_security": "https://github.com/olayemigod/RetailEdge/actions/runs/45899360051",
+      "note": "CI test-fixture corrective changes do not establish a deployed-site release or repeat the original seven-app acceptance for a new runtime tree."
     }
   },
   "legacy_manifest_notice": "platform-baseline.json includes distinct historical local six-app POSNext/Extension pins and is used by the CI verifier. Do not silently replace its values with seven-app QA commits; reconcile the contract with dedicated compatibility validation.",
