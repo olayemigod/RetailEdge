@@ -80,6 +80,7 @@ class TestGuidedPayment(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_references(rows)
 
+	@patch("retailedge.guided_payment.frappe.get_list", return_value=[])
 	@patch("retailedge.guided_payment.frappe.db.get_value")
 	@patch("retailedge.guided_payment._get_reference_snapshot")
 	@patch("retailedge.guided_payment.get_simple_payment_mode_details")
@@ -98,10 +99,12 @@ class TestGuidedPayment(unittest.TestCase):
 		mock_mode_details,
 		mock_snapshot,
 		mock_db_value,
+		mock_existing_drafts,
 	):
 		doc = _DraftPaymentEntry()
 		mock_new_doc.return_value = doc
-		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
+		mock_existing_drafts.return_value = []
+		mock_db_value.side_effect = lambda doctype, name=None, fieldname=None, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
 		mock_party_details.return_value = frappe._dict(party_account="Debtors - DC", party_account_currency="NGN")
@@ -154,6 +157,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertEqual(result["docstatus"], 0)
 		self.assertEqual(result["name"], doc.name)
 
+	@patch("retailedge.guided_payment.frappe.get_list", return_value=[])
 	@patch("retailedge.guided_payment.frappe.db.get_value")
 	@patch("retailedge.guided_payment._get_reference_snapshot")
 	@patch("retailedge.guided_payment.get_simple_payment_mode_details")
@@ -172,10 +176,12 @@ class TestGuidedPayment(unittest.TestCase):
 		mock_mode_details,
 		mock_snapshot,
 		mock_db_value,
+		mock_existing_drafts,
 	):
 		doc = _DraftPaymentEntry()
 		mock_new_doc.return_value = doc
-		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
+		mock_existing_drafts.return_value = []
+		mock_db_value.side_effect = lambda doctype, name=None, fieldname=None, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
 		mock_party_details.return_value = frappe._dict(party_account="Creditors - DC", party_account_currency="NGN")
