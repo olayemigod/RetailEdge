@@ -248,3 +248,27 @@ def test_contract_keeps_shift_close_and_reconciliation_out_of_scope():
 	source = _read(CONTRACT)
 	assert "cashier shift closing mechanics" in source
 	assert "Payment Reconciliation" in source
+
+
+def test_deposit_completion_accepts_select_without_generic_transfer_permission_expansion():
+	from unittest.mock import patch
+
+	import frappe
+
+	from retailedge.standard_internal_transfer_completion import _account_details
+
+	with (
+		patch("retailedge.standard_internal_transfer_completion.frappe.db.exists", return_value=True),
+		patch("retailedge.standard_internal_transfer_completion.frappe.has_permission",
+			side_effect=lambda doctype, ptype, **kwargs: ptype == "select"),
+		patch("retailedge.standard_internal_transfer_completion.has_field", return_value=True),
+		patch("retailedge.standard_internal_transfer_completion.frappe.db.get_value",
+			return_value=frappe._dict(company="Co", is_group=0, account_type="Bank", account_currency="NGN", disabled=0)),
+	):
+		assert _account_details(company="Co", account="Bank", allow_account_select=True)["account_type"] == "Bank"
+		try:
+			_account_details(company="Co", account="Bank")
+		except frappe.PermissionError:
+			pass
+		else:
+			raise AssertionError("Generic internal transfer must still require Account Read")

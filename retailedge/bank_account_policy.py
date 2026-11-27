@@ -135,6 +135,7 @@ def resolve_retailedge_bank_account(
 	branch: str = "",
 	bank_account: str,
 	strict_branch_scope: bool = False,
+	allow_account_select: bool = False,
 ) -> dict[str, Any]:
 	"""Resolve one permitted Bank Account to its ERPNext Bank ledger account.
 
@@ -185,7 +186,7 @@ def resolve_retailedge_bank_account(
 				frappe.ValidationError,
 			)
 
-	_account_must_be_company_bank_account(row.account, company)
+	_account_must_be_company_bank_account(row.account, company, allow_account_select=allow_account_select)
 	return {
 		"bank_account": row.name,
 		"account": row.account,
@@ -222,7 +223,7 @@ def validate_cash_deposit_bank_destination(doc, method=None):
 				paid_to
 			)
 		)
-	resolve_retailedge_bank_account(company=company, branch=branch, bank_account=bank_account)
+	resolve_retailedge_bank_account(company=company, branch=branch, bank_account=bank_account, allow_account_select=True)
 
 
 def _bank_account_branch_filters(branch: str, *, strict_branch_scope: bool = False) -> list[dict[str, Any]]:
@@ -280,10 +281,13 @@ def _assert_branch_belongs_to_company(branch: str, company: str) -> None:
 			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
 
 
-def _account_must_be_company_bank_account(account: str, company: str) -> None:
+def _account_must_be_company_bank_account(account: str, company: str, *, allow_account_select: bool = False) -> None:
 	if not frappe.db.exists("Account", account):
 		frappe.throw(_("Linked Bank ledger Account {0} does not exist.").format(account))
-	if not frappe.has_permission("Account", "read", doc=account):
+	if not (
+		(allow_account_select and frappe.has_permission("Account", "select", doc=account))
+		or frappe.has_permission("Account", "read", doc=account)
+	):
 		frappe.throw(_("You do not have permission to use linked Bank ledger Account {0}.").format(account), frappe.PermissionError)
 	fields = ["company", "is_group", "account_type"]
 	if has_field("Account", "disabled"):

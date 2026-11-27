@@ -129,5 +129,51 @@ class TestBankAccountPolicy(unittest.TestCase):
 		self.assertIn('{ company: frm.doc.company }', client)
 
 
+	def test_cash_deposit_bank_ledger_accepts_select_without_widening_other_workflows(self):
+		from retailedge.bank_account_policy import _account_must_be_company_bank_account
+
+		with (
+			patch("retailedge.bank_account_policy.frappe.db.exists", return_value=True),
+			patch("retailedge.bank_account_policy.frappe.db.get_value", return_value=frappe._dict(
+				company="Demo Company", is_group=0, account_type="Bank", disabled=0
+			)),
+			patch("retailedge.bank_account_policy.has_field", return_value=True),
+			patch("retailedge.bank_account_policy.frappe.has_permission",
+				side_effect=lambda doctype, ptype, **kwargs: ptype == "select"),
+		):
+			_account_must_be_company_bank_account("Bank - DC", "Demo Company", allow_account_select=True)
+			with self.assertRaises(frappe.PermissionError):
+				_account_must_be_company_bank_account("Bank - DC", "Demo Company")
+
+	def test_cash_deposit_bank_ledger_select_does_not_bypass_company_or_account_type(self):
+		from retailedge.bank_account_policy import _account_must_be_company_bank_account
+
+		with (
+			patch("retailedge.bank_account_policy.frappe.db.exists", return_value=True),
+			patch("retailedge.bank_account_policy.has_field", return_value=True),
+			patch("retailedge.bank_account_policy.frappe.has_permission", return_value=True),
+			patch("retailedge.bank_account_policy.frappe.db.get_value") as get_value,
+		):
+			for override in (
+				{"company": "Other Company"}, {"is_group": 1},
+				{"account_type": "Cash"}, {"disabled": 1},
+			):
+				row = frappe._dict(company="Demo Company", is_group=0, account_type="Bank", disabled=0)
+				row.update(override)
+				get_value.return_value = row
+				with self.assertRaises(frappe.ValidationError):
+					_account_must_be_company_bank_account("Bank - DC", "Demo Company", allow_account_select=True)
+
+	def test_cash_deposit_bank_ledger_rejects_no_account_permission(self):
+		from retailedge.bank_account_policy import _account_must_be_company_bank_account
+
+		with (
+			patch("retailedge.bank_account_policy.frappe.db.exists", return_value=True),
+			patch("retailedge.bank_account_policy.frappe.has_permission", return_value=False),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				_account_must_be_company_bank_account("Bank - DC", "Demo Company", allow_account_select=True)
+
+
 if __name__ == "__main__":
 	unittest.main()
