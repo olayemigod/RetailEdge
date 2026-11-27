@@ -98,6 +98,7 @@ class TestGuidedCashTransfer(unittest.TestCase):
 			create_simple_cash_transfer_draft(
 				{
 					"company": "Demo Company",
+					"posting_date": "2026-08-18",
 					"from_account": "Cash Main - DC",
 					"to_account": "Bank - DC",
 					"amount": 1000,

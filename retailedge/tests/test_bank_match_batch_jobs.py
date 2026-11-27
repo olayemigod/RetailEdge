@@ -25,6 +25,26 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class BankMatchBatchJobTests(unittest.TestCase):
+	def setUp(self):
+		# Exercise authorized batch operations with a role-bearing test persona.
+		# Keep native permissions and document-level denial checks intact.
+		self._original_user = frappe.session.user
+		frappe.set_user("Administrator")
+		original_get_roles = frappe.get_roles
+
+		def get_roles_with_manager(user=None):
+			roles = list(original_get_roles(user))
+			if (user or frappe.session.user) == "Administrator" and "System Manager" not in roles:
+				roles.append("System Manager")
+			return roles
+
+		self._roles_patcher = patch("frappe.get_roles", side_effect=get_roles_with_manager)
+		self._roles_patcher.start()
+
+	def tearDown(self):
+		self._roles_patcher.stop()
+		frappe.set_user(self._original_user or "Administrator")
+
 	def test_background_threshold_uses_safe_sync_limit(self):
 		rows = [{"bank_transaction": f"BTN-{idx}"} for idx in range(MAX_SYNC_ROWS)]
 		self.assertFalse(should_run_background(rows=json.dumps(rows)))

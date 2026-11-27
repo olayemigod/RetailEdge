@@ -130,10 +130,11 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(reopened["operational_status"], STATUS_NEEDS_REVIEW)
         self.assertEqual(terminal["operational_status"], STATUS_RECONCILED)
 
+    @patch("retailedge.banking_workspace.frappe.has_permission", return_value=True)
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
-    def test_review_queue_receives_direction_and_user_filters(self, review_rows, validate_scope, _assert_access):
+    def test_review_queue_receives_direction_and_user_filters(self, review_rows, validate_scope, _assert_access, _native_read):
         review_rows.return_value = (
             [
                 {
@@ -163,12 +164,13 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(filters.search, "supplier")
         self.assertTrue(validate_scope.call_args.kwargs["require_branch_when_restricted"])
 
+    @patch("retailedge.banking_workspace.frappe.has_permission", return_value=True)
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
     def test_to_match_combines_unmatched_and_review_rows_without_losing_manual_review(
-        self, unmatched_rows, review_rows, _validate_scope, _assert_access
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access, _native_read
     ):
         unmatched_rows.return_value = (
             [
@@ -200,12 +202,13 @@ class BankingWorkspaceTests(unittest.TestCase):
             {STATUS_UNMATCHED, STATUS_NEEDS_REVIEW},
         )
 
+    @patch("retailedge.banking_workspace.frappe.has_permission", return_value=True)
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
     def test_to_match_respects_requested_result_limit_after_combining_sources(
-        self, unmatched_rows, review_rows, _validate_scope, _assert_access
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access, _native_read
     ):
         unmatched_rows.return_value = (
             [
@@ -270,12 +273,13 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(result["decision_status"], "Confirmed")
         self.assertEqual(result["execution_status"], ["in", ["Blocked", "Failed"]])
 
+    @patch("retailedge.banking_workspace.frappe.has_permission", return_value=True)
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": "Lagos"})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
     def test_business_hub_review_focus_excludes_unmatched_transactions(
-        self, unmatched_rows, review_rows, _validate_scope, _assert_access
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access, _native_read
     ):
         review_rows.return_value = (
             [{"bank_transaction": "BT-REVIEW", "transaction_date": "2026-09-01", "operational_status": STATUS_NEEDS_REVIEW}],
