@@ -222,7 +222,7 @@ def reopen_cashier_expense(expense_name, remarks=None):
 def get_cashier_expense_summary(filters=None):
 	filters = frappe.parse_json(filters) if filters else {}
 	query_filters = _build_summary_filters(filters)
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"RetailEdge Cashier Expense",
 		filters=query_filters,
 		fields=["expense_status", "amount"],
@@ -294,7 +294,7 @@ def get_cashier_expenses_for_variance(filters=None, include_rejected=True):
 		include_rejected=include_rejected,
 		include_draft=include_draft,
 	)
-	return frappe.get_all(
+	return frappe.get_list(
 		"RetailEdge Cashier Expense",
 		filters=query_filters,
 		fields=[
