@@ -344,6 +344,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 				"required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES)),
 			},
 			{"label": "Payments", "target_type": "Page", "target": "payment-management", "icon": "wallet"},
+			{"label": "Cash Deposits", "target_type": "Page", "target": "cash-deposits", "icon": "wallet"},
 			{
 				"label": "Payment History",
 				"target_type": "Page",
