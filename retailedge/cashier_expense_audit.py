@@ -59,7 +59,7 @@ def get_cashier_expenses_for_daily_audit(filters=None, limit_page_length=0):
 	filters = frappe.parse_json(filters) if filters else {}
 	settings = get_cashier_expense_daily_audit_settings()
 	query_filters = _build_daily_audit_filters(filters, settings)
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"RetailEdge Cashier Expense",
 		filters=query_filters,
 		fields=[
