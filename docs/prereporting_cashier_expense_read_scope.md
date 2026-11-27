@@ -41,9 +41,9 @@ Global advanced users without a Company continue to retain the pre-existing cros
 
 ## Permission boundary
 
-Some Cashier Expense reads use `frappe.get_all`, which does not itself enforce normal DocType read permissions. B4B4 therefore requires `RetailEdge Cashier Expense` read permission before the shared scope applicator permits those reads to proceed.
+Cashier Expense summary, totals, variance and Daily Audit readers use `frappe.get_list` with the shared branch scope and native row permissions. A DocType-level Read check alone does not enforce owner-only permissions, user permissions or other document-level visibility constraints; `frappe.get_all` must not be used for these user-facing reads.
 
-Branch Assignment scope is additional to the existing DocType role permissions; it does not broaden those permissions.
+Branch Assignment scope is additional to the existing DocType role permissions; it does not broaden those permissions. An owner-restricted cashier sees only the rows native permissions allow within the authorized branch. Authorized reviewers retain access to rows permitted by their own roles and branch scope. Existing status filters, aggregation rules and explicit row limits remain unchanged. Internal posting and cash reconciliation authorities must not be repurposed as unrestricted user-facing queries.
 
 ## Surfaces covered
 
