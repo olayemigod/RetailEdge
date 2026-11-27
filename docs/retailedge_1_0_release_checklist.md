@@ -8,6 +8,12 @@
 
 For the current immutable commits, dependency distinctions, automated evidence and staging/rollback checklist, use [RC3 Post-Merge Deployment Readiness](release/rc3_postmerge_deployment_readiness_20261126.md) and its [release evidence inventory](release/rc3_repo_merge_inventory_20261126.json). Follow [Issue #251](https://github.com/olayemigod/RetailEdge/issues/251) for the unapproved hosted-site gates.
 
+## CI reconciliation — 27 November 2026
+
+After the original RetailEdge RC3 merge at `b636632fd12bc01a9f1abee08bbf65922e8c245f`, an unchanged-baseline CI rerun exposed test-fixture failures. Test-only [PR #254](https://github.com/olayemigod/RetailEdge/pull/254) resolved them and passed **7/7 exact-head checks** on `3b6751329d59c85cf39710eb1912f39fc101a7d1`. PR #254 was merged and the verified RetailEdge `version-16` branch head became `f46040f7d3822d306576a31a68bfe267b7a101f1`. [Issue #253](https://github.com/olayemigod/RetailEdge/issues/253) is closed. This correction touches **five test files only** and does not alter the original release candidate's runtime behavior. Keep original PR #250 and POSNext Extension #26 merge SHAs as historical checkpoints, not as the latest RetailEdge branch head.
+
+**No site deployment, staging restore, Production acceptance, tag or GitHub Release is implied or authorized.** Track those separately under [Issue #251](https://github.com/olayemigod/RetailEdge/issues/251).
+
 ## Historical authority — superseded RC5 snapshot
 
 - Product: RetailEdge
