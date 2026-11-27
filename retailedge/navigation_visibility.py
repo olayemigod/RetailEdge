@@ -122,6 +122,11 @@ def _page_is_functionally_available(
 	if workspace:
 		return _native_workspace_is_available(workspace)
 
+	if page_name == "cash-deposits":
+		from retailedge.cash_deposit_register import can_view_cash_deposits
+
+		return _quiet_probe(can_view_cash_deposits)
+
 	if page_name == BANK_MATCHING_PAGE:
 		return _quiet_probe(
 			lambda: bool(assert_can_access_bank_transaction_matching(user=frappe.session.user))
