@@ -125,7 +125,7 @@ class TestCashierMyWork(unittest.TestCase):
 		total, mix, by_invoice = _payment_breakdown(invoices)
 		summary, activity = _normalize_activity(invoices, by_invoice)
 		self.assertEqual(total, 15000)
-		self.assertEqual(dict((r["mode_of_payment"], r["amount"]) for r in mix), {"Bank": 5000, "Cash": 10000})
+		self.assertEqual({r["mode_of_payment"]: r["amount"] for r in mix}, {"Bank": 5000, "Cash": 10000})
 		self.assertEqual([r["paid_amount"] for r in activity], [10000, 5000])
 		self.assertEqual(summary["outstanding_total"], 5000)
 		self.assertEqual(summary["outstanding_count"], 1)
@@ -149,6 +149,46 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertEqual(total, 100)
 		self.assertEqual(by_invoice["SI-1"], 100)
 		self.assertEqual(mix, [{"mode_of_payment": "Cash", "amount": 100}])
+
+
+	@patch("retailedge.cashier_self_service.frappe.get_all")
+	def test_payment_allocations_ignore_unrelated_and_non_submitted_vouchers(self, get_all):
+		invoices = [{
+			"name": "SI-1", "company": "Co", "customer": "C", "debit_to": "Debtors",
+			"currency": "NGN", "grand_total": 10000, "outstanding_amount": 5000,
+		}]
+		base = {
+			"against_voucher_no": "SI-1", "company": "Co", "party": "C", "account": "Debtors",
+			"amount": -5000, "account_currency": "NGN", "amount_in_account_currency": -5000,
+		}
+		get_all.side_effect = [
+			[],
+			[
+				{**base, "voucher_no": "PE-cancelled"},
+				{**base, "voucher_no": "PE-other-party", "party": "Other"},
+				{**base, "voucher_no": "PE-other-account", "account": "Other Debtors"},
+				{**base, "voucher_no": "PE-other-invoice", "against_voucher_no": "SI-2"},
+			],
+			[
+				{"name": name, "company": "Co", "party": "C", "mode_of_payment": "Cash"}
+				for name in ("PE-other-party", "PE-other-account", "PE-other-invoice")
+			],
+		]
+		self.assertEqual(_payment_breakdown(invoices), (0.0, [], {"SI-1": 0.0}))
+
+	def test_outstanding_and_paid_display_use_company_currency(self):
+		invoices = [{
+			"name": "SI-1", "currency": "USD", "party_account_currency": "USD",
+			"conversion_rate": 1500, "grand_total": 100, "paid_amount": 40,
+			"outstanding_amount": 60,
+		}]
+		summary, activity = _normalize_activity(invoices)
+		self.assertEqual(summary["gross_sales"], 150000)
+		self.assertEqual(summary["outstanding_total"], 90000)
+		self.assertEqual(activity[0]["paid_amount"], 60000)
+		invoices[0]["party_account_currency"] = "NGN"
+		invoices[0]["outstanding_amount"] = 90000
+		self.assertEqual(_normalize_activity(invoices)[0]["outstanding_total"], 90000)
 
 	@patch("retailedge.cashier_self_service._has_field", return_value=True)
 	@patch("retailedge.cashier_self_service.frappe.get_all")
@@ -247,6 +287,9 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertIn('EdgeInput', component)
 		self.assertIn('label="Work date"', component)
 		self.assertIn('shift.cash_deposits', component)
+		self.assertIn("summary.outstanding_total", component)
+		self.assertIn("shift.outstanding_total", component)
+		self.assertIn("row.outstanding_amount", component)
 		self.assertIn('work_date: this.selectedDate', component)
 		self.assertIn('No activity for this day.', component)
 		self.assertIn('window.open(item.target, "_blank", "noopener,noreferrer")', component)
