@@ -1083,7 +1083,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["ledger_status"], "Not Applicable")
 
 	@patch("retailedge.cashier_expense.get_branch_query_filters", return_value={"filters": {}})
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_summary_groups_by_status(self, mock_get_all, _mock_branch_filters):
 		mock_get_all.return_value = [
 			SimpleNamespace(expense_status="Submitted", amount=100),
@@ -1096,7 +1096,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["Rejected"]["count"], 1)
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_excludes_cancelled_by_default(
 		self, mock_get_all, _mock_settings
 	):
@@ -1107,7 +1107,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["docstatus"], ["!=", 2])
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(
 		self, mock_get_all, _mock_settings
 	):
@@ -1117,7 +1117,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["expense_status"], ["!=", "Cancelled"])
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_can_exclude_rejected(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance(include_rejected=False)
@@ -1125,7 +1125,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["expense_status"], ["not in", ["Cancelled", "Rejected"]])
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_supports_shift_filters(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance(
@@ -1144,7 +1144,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		"retailedge.cashier_expense.get_retailedge_settings",
 		return_value=_Settings(include_draft_cashier_expenses_in_cash_check=0),
 	)
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_respects_draft_setting(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance()
@@ -1155,7 +1155,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		"retailedge.cashier_expense.get_retailedge_settings",
 		return_value=_Settings(include_cashier_expenses_in_variance_report=0),
 	)
-	@patch("retailedge.cashier_expense.frappe.get_all")
+	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expenses_for_variance_respects_variance_toggle(self, mock_get_all, _mock_settings):
 		result = get_cashier_expenses_for_variance()
 		self.assertEqual(result, [])
@@ -1420,7 +1420,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 			mark_cashier_expense_needs_clarification("RE-CE-0306", note="x")
 
 	@patch("retailedge.cashier_expense_audit.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense_audit.frappe.get_all")
+	@patch("retailedge.cashier_expense_audit.frappe.get_list")
 	def test_daily_audit_helpers_do_not_mutate_other_docs(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = [
 			{
@@ -1439,7 +1439,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(totals["included_count"], 1)
 
 	@patch("retailedge.cashier_expense_audit.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.cashier_expense_audit.frappe.get_all")
+	@patch("retailedge.cashier_expense_audit.frappe.get_list")
 	def test_get_cashier_expenses_for_daily_audit_supports_filters(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_daily_audit(
