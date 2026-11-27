@@ -204,7 +204,9 @@ def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any
 		).strip()
 	if not bank_account:
 		frappe.throw(_("Bank Account is required."))
-	bank_details = resolve_retailedge_bank_account(company=company, branch=branch, bank_account=bank_account)
+	bank_details = resolve_retailedge_bank_account(
+		company=company, branch=branch, bank_account=bank_account, allow_account_select=True
+	)
 	to_account = bank_details["account"]
 	to_details = _get_account(company, to_account, expected_type="Bank")
 	company_currency = frappe.db.get_value("Company", company, "default_currency")
