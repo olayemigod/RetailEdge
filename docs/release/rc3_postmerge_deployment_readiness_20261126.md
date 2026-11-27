@@ -18,6 +18,16 @@ The verified *seven-app QA environment* used Frappe 16.52.0, ERPNext 16.51.1, Ed
 
 **Important legacy manifest distinction:** `platform-baseline.json` is an older local six-app candidate and contains POSNext `0b8b6f3b...` and Extension `61a5fb9b...`. It is read by `scripts/verify-platform-baseline.py`, and the standalone CI intentionally uses its Frappe/ERPNext/EdgeSuite/Payments subset. The integrated seven-app CI independently pins the newer POSNext SHA and exact tested RetailEdge/Extension heads. The legacy JSON has **not** been changed by this documentation-only handoff, because replacing its values without checking every use of `--include-pos` could change or break its contract. The new JSON is a **human-reviewed evidence inventory, not a runtime resolver, installer or automatic deployment trigger**.
 
+## 1A. CI baseline repair and evidence reconciliation — 27 November 2026
+
+The original approved RC3 merge remains an immutable historical checkpoint at RetailEdge `b636632fd12bc01a9f1abee08bbf65922e8c245f`. Subsequent CI reruns identified failures on this **unchanged** baseline; they were documented in [Issue #253](https://github.com/olayemigod/RetailEdge/issues/253) and corrected through test-only [PR #254](https://github.com/olayemigod/RetailEdge/pull/254).
+
+PR #254 passed **seven of seven exact-head CI jobs** at tested commit `3b6751329d59c85cf39710eb1912f39fc101a7d1`, including standalone Frappe v16, two EdgeSuite integration variants, frozen candidate upgrade, browser persona smoke, lint and dependency audit. It was merged on 27 November 2026. The verified current RetailEdge `version-16` head after this correction is `f46040f7d3822d306576a31a68bfe267b7a101f1`.
+
+**Distinguish sources carefully:** the original RC3 seven-app release candidate and its source-equivalent merge still use the original RetailEdge source/merge SHAs in Section 1; the newer branch head contains **five test-fixture file changes only**, not business logic, permission bypasses, build rules or schema changes. The updated evidence inventory records both checkpoints rather than replacing the originally tested source identity. These CI results do **not** establish hosted site deployment or staging acceptance. The historical post-merge CI URL in the inventory was green on its original run; later reruns exhibited CI fixture failures, subsequently resolved by PR #254. Avoid calling it unconditionally green without this qualification.
+
+**Release hold remains:** no staging or Production site updates, automatic deployment changes, schema migration, financial record repairs, new release tag or published GitHub Release have been authorized here.
+
 ## 2. Read-only deployment reconnaissance — no site operations
 
 Record these facts **separately for local QA, staging, Neotex and every actual Production site**, without changing configuration:
