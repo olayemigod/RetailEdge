@@ -1,5 +1,19 @@
 # RetailEdge 1.0.0 — Release Notes
 
+## Release status update — 26 November 2026
+
+The consolidated RetailEdge RC3 candidate was merged to `version-16` through [PR #250](https://github.com/olayemigod/RetailEdge/pull/250) at `b636632fd12bc01a9f1abee08bbf65922e8c245f`. Its coordinated POSNext Extension [PR #26](https://github.com/olayemigod/Processedge-POSNext-Extension/pull/26) was merged to `main` at `374f517064755cfa56f20e8740a00721210d1f96`. Both post-merge CI runs passed; the five exact-head RetailEdge gates and the separate Extension standalone/seven-app gates also passed.
+
+**Merged source is not the same as deployed software.** Site state, staging restoration/acceptance, Frappe Cloud app release availability, controlled Production rollout and formal tagging/release publication have **not** been verified or approved by this documentation update. Preserve the historical PR #58 release acceptance evidence below as the *earlier RC5 record*, not the current commit or deployment status.
+
+The pinned source/dependency inventory, release hold and rollback/staging gates are documented in [RC3 Post-Merge Deployment Readiness](release/rc3_postmerge_deployment_readiness_20261126.md) and [RC3 Merge Inventory](release/rc3_repo_merge_inventory_20261126.json); progress is tracked in [Issue #251](https://github.com/olayemigod/RetailEdge/issues/251).
+
+## CI reconciliation — 27 November 2026
+
+After the original RetailEdge RC3 merge at `b636632fd12bc01a9f1abee08bbf65922e8c245f`, an unchanged-baseline CI rerun exposed test-fixture failures. Test-only [PR #254](https://github.com/olayemigod/RetailEdge/pull/254) resolved them and passed **7/7 exact-head checks** on `3b6751329d59c85cf39710eb1912f39fc101a7d1`. PR #254 was merged and the verified RetailEdge `version-16` branch head became `f46040f7d3822d306576a31a68bfe267b7a101f1`. [Issue #253](https://github.com/olayemigod/RetailEdge/issues/253) is closed. This correction touches **five test files only** and does not alter the original release candidate's runtime behavior. Keep original PR #250 and POSNext Extension #26 merge SHAs as historical checkpoints, not as the latest RetailEdge branch head.
+
+**No site deployment, staging restore, Production acceptance, tag or GitHub Release is implied or authorized.** Track those separately under [Issue #251](https://github.com/olayemigod/RetailEdge/issues/251).
+
 ## Release purpose
 
 RetailEdge 1.0.0 is the first governed MVP release for day-to-day retail operations on Frappe / ERPNext v16. It is designed for Nigerian and African SME retail operations while retaining ERPNext accounting, stock and document lifecycle authority.
@@ -80,7 +94,7 @@ These are intentional 1.0 boundaries, not release defects:
 - System Manager-only Branch Assignment/setup governance;
 - advanced ERPNext detail/form access for explicitly authorised Native Desk users.
 
-## QA and promotion status
+## Historical PR #58 QA and promotion status (superseded)
 
 RetailEdge 1.0.0 is **not yet tagged or published**, but the governed MVP candidate has completed its audit and acceptance sequence.
 
