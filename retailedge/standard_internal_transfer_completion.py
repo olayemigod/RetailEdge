@@ -139,9 +139,11 @@ def _standard_transfer_blockers(doc) -> list[str]:
 	return list(dict.fromkeys(blockers))
 
 
-def _account_details(*, company: str, account: str) -> dict[str, Any]:
+def _account_details(*, company: str, account: str, allow_account_select: bool = False) -> dict[str, Any]:
 	account = _clean(account)
-	_assert_read("Account", account)
+	if not (allow_account_select and account and frappe.db.exists("Account", account)
+			and frappe.has_permission("Account", "select", doc=account)):
+		_assert_read("Account", account)
 	fields = ["company", "is_group", "account_type", "account_currency"]
 	if has_field("Account", "disabled"):
 		fields.append("disabled")
@@ -169,8 +171,9 @@ def _validate_accounts(doc, *, company: str) -> dict[str, Any]:
 	if from_account == to_account:
 		blockers.append(_("From Account and To Account must be different."))
 
-	from_details = _account_details(company=company, account=from_account)
-	to_details = _account_details(company=company, account=to_account)
+	allow_account_select = _clean(doc.get("retailedge_cash_custody_type")) == CASH_DEPOSIT_TYPE
+	from_details = _account_details(company=company, account=from_account, allow_account_select=allow_account_select)
+	to_details = _account_details(company=company, account=to_account, allow_account_select=allow_account_select)
 	for details in (from_details, to_details):
 		if details["account_type"] not in {"Bank", "Cash"}:
 			blockers.append(
