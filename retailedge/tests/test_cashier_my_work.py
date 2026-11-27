@@ -10,6 +10,8 @@ from retailedge.cashier_self_service import (
 	_current_shift_payload,
 	_invoices_for_date,
 	_normalize_activity,
+	_payment_breakdown,
+	_shift_outstanding,
 	_resolve_work_date,
 )
 from retailedge.navigation_consolidation import (
@@ -99,6 +101,71 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertEqual(summary["returns_total"], 250)
 		self.assertEqual(summary["net_sales"], 950)
 		self.assertEqual([row["type"] for row in activity], ["Sale", "Return"])
+
+
+	@patch("retailedge.cashier_self_service.frappe.get_all")
+	@patch("retailedge.cashier_self_service.frappe.db.exists", return_value=True)
+	def test_subsequent_payment_allocations_update_paid_and_payment_mix(self, _exists, get_all):
+		invoices = [
+			{"name": "SI-1", "company": "Co", "customer": "C", "debit_to": "Debtors",
+			 "grand_total": 10000, "paid_amount": 5000, "outstanding_amount": 0,
+			 "currency": "NGN", "party_account_currency": "NGN"},
+			{"name": "SI-2", "company": "Co", "customer": "C", "debit_to": "Debtors",
+			 "grand_total": 10000, "paid_amount": 5000, "outstanding_amount": 5000,
+			 "currency": "NGN", "party_account_currency": "NGN"},
+		]
+		get_all.side_effect = [
+			[{"parent": "SI-1", "mode_of_payment": "Cash", "amount": 5000, "account": "Till"},
+			 {"parent": "SI-2", "mode_of_payment": "Cash", "amount": 5000, "account": "Till"}],
+			[{"voucher_no": "PE-1", "against_voucher_no": "SI-1", "company": "Co",
+			  "party": "C", "account": "Debtors", "amount": -5000,
+			  "account_currency": "NGN", "amount_in_account_currency": -5000}],
+			[{"name": "PE-1", "company": "Co", "party": "C", "mode_of_payment": "Bank"}],
+		]
+		total, mix, by_invoice = _payment_breakdown(invoices)
+		summary, activity = _normalize_activity(invoices, by_invoice)
+		self.assertEqual(total, 15000)
+		self.assertEqual(dict((r["mode_of_payment"], r["amount"]) for r in mix), {"Bank": 5000, "Cash": 10000})
+		self.assertEqual([r["paid_amount"] for r in activity], [10000, 5000])
+		self.assertEqual(summary["outstanding_total"], 5000)
+		self.assertEqual(summary["outstanding_count"], 1)
+		ledger_filters = get_all.call_args_list[1].kwargs["filters"]
+		self.assertEqual(ledger_filters["against_voucher_no"], ["in", ["SI-1", "SI-2"]])
+		self.assertEqual(ledger_filters["voucher_type"], "Payment Entry")
+		self.assertEqual(ledger_filters["delinked"], 0)
+		self.assertEqual(get_all.call_args_list[2].kwargs["filters"]["docstatus"], 1)
+
+	@patch("retailedge.cashier_self_service.frappe.get_all")
+	@patch("retailedge.cashier_self_service.frappe.db.exists", return_value=True)
+	def test_payment_aggregation_nets_change_without_counting_credit_notes_as_cash(self, _exists, get_all):
+		invoices = [{"name": "SI-1", "company": "Co", "customer": "C", "debit_to": "Debtors",
+			"grand_total": 100, "paid_amount": 120, "outstanding_amount": 0,
+			"change_amount": 20, "account_for_change_amount": "Till", "currency": "NGN"}]
+		get_all.side_effect = [
+			[{"parent": "SI-1", "mode_of_payment": "Cash", "amount": 120, "account": "Till"}],
+			[],
+		]
+		total, mix, by_invoice = _payment_breakdown(invoices)
+		self.assertEqual(total, 100)
+		self.assertEqual(by_invoice["SI-1"], 100)
+		self.assertEqual(mix, [{"mode_of_payment": "Cash", "amount": 100}])
+
+	@patch("retailedge.cashier_self_service._has_field", return_value=True)
+	@patch("retailedge.cashier_self_service.frappe.get_all")
+	def test_shift_outstanding_has_exact_shift_owner_company_branch_and_no_date_cap(self, get_all, _has_field):
+		get_all.return_value = [
+			{"name": "SI-1", "outstanding_amount": 5000},
+			{"name": "SI-2", "outstanding_amount": -1000, "is_return": 1},
+		]
+		self.assertEqual(_shift_outstanding(user="cashier", company="Co", branch="Main", opening_shift="SHIFT-1"),
+			{"outstanding_total": 5000, "outstanding_count": 1})
+		filters = get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["posa_pos_opening_shift"], "SHIFT-1")
+		self.assertEqual(filters["owner"], "cashier")
+		self.assertEqual(filters["company"], "Co")
+		self.assertEqual(filters["retailedge_branch"], "Main")
+		self.assertNotIn("posting_date", filters)
+		self.assertEqual(get_all.call_args.kwargs["limit_page_length"], 0)
 
 	@patch("retailedge.navigation_consolidation.user_has_retailedge_role", return_value=True)
 	def test_ready_cashier_gets_my_work_as_first_home_navigation(self, _cashier_role):
