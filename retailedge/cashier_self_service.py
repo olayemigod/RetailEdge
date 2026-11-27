@@ -9,7 +9,7 @@ from frappe.utils import flt, getdate, nowdate
 
 from retailedge.cash_custody import get_cash_custody_snapshot
 from retailedge.cashier_context import get_current_cashier_context
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import get_operating_context, resolve_operational_branch
 from retailedge.setup_roles import user_has_retailedge_role
 
 
@@ -72,13 +72,15 @@ def _invoices_for_date(
 		"owner": user,
 		"posting_date": work_date,
 	}
-	if company and _has_field("Sales Invoice", "company"):
-		filters["company"] = company
+	if not company or not branch or not _has_field("Sales Invoice", "company"):
+		frappe.throw(_("Your work requires a valid company and branch."), frappe.PermissionError)
+	filters["company"] = company
 	branch_field = "retailedge_branch" if _has_field("Sales Invoice", "retailedge_branch") else ""
 	if not branch_field and _has_field("Sales Invoice", "branch"):
 		branch_field = "branch"
-	if branch and branch_field:
-		filters[branch_field] = branch
+	if not branch_field:
+		frappe.throw(_("Sales branch information is unavailable. Contact your administrator."), frappe.PermissionError)
+	filters[branch_field] = branch
 
 	fields = ["name", "posting_date", "creation", "owner", "docstatus"]
 	for fieldname in (
@@ -380,6 +382,8 @@ def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
 
 	if not company or not branch:
 		frappe.throw(_("Choose your working company and branch before viewing your activity."), frappe.PermissionError)
+	branch = resolve_operational_branch(company, branch, user=user)["branch"]
+	currency = frappe.get_cached_value("Company", company, "default_currency") or ""
 
 	rows = _invoices_for_date(
 		user=user,
@@ -390,6 +394,8 @@ def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
 	payments_total, payment_breakdown, payments_by_invoice = _payment_breakdown(rows)
 	summary, all_activity = _normalize_activity(rows, payments_by_invoice)
 	summary["payments_total"] = payments_total
+	for item in all_activity:
+		item["currency"] = currency
 
 	if is_today:
 		shift = _current_shift_payload(cashier_context=cashier_context, company=company, user=user)
@@ -420,7 +426,7 @@ def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
 		"user": user,
 		"company": company,
 		"branch": branch,
-		"currency": frappe.get_cached_value("Company", company, "default_currency") or "",
+		"currency": currency,
 		"summary": summary,
 		"shift": shift,
 		"payment_breakdown": payment_breakdown,
