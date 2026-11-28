@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.cash_deposit_register import _build_register_filters, list_cash_deposits, search_cash_deposit_options
+from retailedge.cash_deposit_register import _build_register_filters, _register_reader, list_cash_deposits, search_cash_deposit_options
 from retailedge.edgesuite_ui import _can_open_target
 
 
@@ -145,3 +145,7 @@ class TestCashDepositRegister(unittest.TestCase):
 		self.assertEqual(result["rows"], [])
 		get_all.assert_not_called()
 
+
+	def test_own_reader_rejects_unscoped_query(self):
+		with self.assertRaises(frappe.PermissionError):
+			_register_reader("own", {"company": "Concepts"})
