@@ -149,3 +149,13 @@ class TestCashDepositRegister(unittest.TestCase):
 	def test_own_reader_rejects_unscoped_query(self):
 		with self.assertRaises(frappe.PermissionError):
 			_register_reader("own", {"company": "Concepts"})
+
+	def test_register_table_keeps_business_values_readable(self):
+		panel = (Path(__file__).resolve().parents[1] / "public/js/cash_deposit_register/CashDepositRegisterPanel.vue").read_text(encoding="utf-8")
+		self.assertIn("EdgeStatusBadge", panel)
+		self.assertIn("deposit-nowrap", panel)
+		self.assertRegex(panel, r"\.deposit-nowrap[^\{]*\{[^}]*white-space:\s*nowrap")
+		self.assertRegex(panel, r"\.deposit-amount\s*\{[^}]*text-align:\s*right")
+		self.assertRegex(panel, r"\.deposit-table\s*\{[^}]*min-width:")
+		self.assertIn("group.count === 1", panel)
+		self.assertIn("v-if=\"nativeReview\" class=\"deposit-account\"", panel)
