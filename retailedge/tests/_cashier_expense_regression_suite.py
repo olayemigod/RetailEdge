@@ -2250,7 +2250,9 @@ class DailySalesAuditTests(unittest.TestCase):
 		}
 		doc = self._make_audit_doc(name="RE-DSA-2026-0001")
 		mock_new_doc.return_value = doc
-		name = create_daily_sales_audit_draft({"company": "Demo Company", "audit_date": "2026-05-14"})
+		# The fixture stubs native metadata and has no Payment Entry source rows.
+		with patch("retailedge.cash_deposit_audit.get_submitted_deposit_total", return_value=0):
+			name = create_daily_sales_audit_draft({"company": "Demo Company", "audit_date": "2026-05-14"})
 		self.assertEqual(name, "RE-DSA-2026-0001")
 		self.assertEqual(doc.company, "Demo Company")
 		self.assertEqual(doc.expected_cash_amount, 1100)
