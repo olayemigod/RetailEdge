@@ -112,6 +112,35 @@ def _build_register_filters(
 
 
 @frappe.whitelist(methods=["GET"])
+def search_cash_deposit_options(
+	company: str, branch: str = "", kind: str = "", txt: str = "",
+	cashier: str = "", opening_shift: str = "", bank_account: str = "",
+) -> list[dict[str, str]]:
+	"""Return selectable values from the same permission-visible deposit population."""
+	fields = {"cashier": "retailedge_cashier", "shift": "retailedge_pos_opening_shift", "bank": "bank_account"}
+	field = fields.get(kind)
+	if not field:
+		frappe.throw(_("Choose a supported cash deposit filter."))
+	filters = _build_register_filters(
+		company=company, branch=branch,
+		cashier=cashier if kind != "cashier" else "",
+		opening_shift=opening_shift if kind != "shift" else "",
+		bank_account=bank_account if kind != "bank" else "",
+	)
+	# AND the search with (rather than overwrite) mandatory ownership scope.
+	rows = frappe.get_list(
+		PAYMENT_ENTRY_DOCTYPE,
+		filters=filters,
+		or_filters=[[field, "like", f"%{_clean(txt)}%"]],
+		fields=[field], group_by=field, order_by=f"{field} asc", page_length=25,
+	)
+	return [
+		{"value": str(row[field]), "label": str(row[field])}
+		for row in rows if row.get(field)
+	]
+
+
+@frappe.whitelist(methods=["GET"])
 def list_cash_deposits(
 	company: str,
 	branch: str = "",
