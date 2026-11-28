@@ -62,12 +62,16 @@ class TestCashierMyWork(unittest.TestCase):
 			_resolve_work_date("2026-10-31")
 
 
+	@patch("retailedge.cashier_self_service._build_pos_closing_cashier_expense_summary", return_value={"total": 1000})
 	@patch("retailedge.cashier_self_service.get_cash_custody_snapshot")
-	def test_current_shift_uses_submitted_deposits_once(self, custody):
+	def test_current_shift_uses_submitted_deposits_once(self, custody, _disbursed):
 		custody.return_value = {
 			"opening_cash": 10000,
 			"cash_sales": 3000,
 			"cashier_expenses": 1000,
+			"reserved_expenses": 0,
+			"cash_sales_verified": True,
+			"source": "opening_shift.balance_details + sales_invoice.payments",
 			"submitted_deposits": 2000,
 			"available_cash": 10000,
 			"available_before_deposits": 12000,
@@ -80,12 +84,40 @@ class TestCashierMyWork(unittest.TestCase):
 			self.assertEqual(row["cash_deposits"], 2000)
 			self.assertEqual(row["available_cash"], 10000)
 			self.assertEqual(row["prior_expenses"], 1000)
+			self.assertEqual(row["expected_physical_cash"], 10000)
+			self.assertEqual(row["reserved_expenses"], 0)
 		custody.assert_called_with(
 			opening_shift="POSA-OS-26-0000009",
 			company="Test",
 			pos_profile="POS-1",
 			cashier="cashier@example.com",
 		)
+
+	@patch("retailedge.cashier_self_service._build_pos_closing_cashier_expense_summary", return_value={"total": 10000})
+	@patch("retailedge.cashier_self_service.get_cash_custody_snapshot")
+	def test_shift_distinguishes_physical_cash_from_draft_reservations(self, custody, disbursed):
+		custody.return_value = {
+			"opening_cash": 0, "cash_sales": 63000, "cash_sales_verified": True,
+			"cashier_expenses": 35000, "reserved_expenses": 25000,
+			"submitted_deposits": 2000, "available_cash": 26000,
+			"source": "opening_shift.balance_details + sales_invoice.payments",
+		}
+		context = {"linked_pos_opening_shift": "OPEN-1", "pos_profile": "POS-1"}
+		row = _current_shift_payload(cashier_context=context, company="Test", user="cashier@example.com")
+		self.assertEqual(row["disbursed_expenses"], 10000)
+		self.assertEqual(row["reserved_expenses"], 25000)
+		self.assertEqual(row["expected_physical_cash"], 51000)
+		self.assertEqual(row["available_cash"], 26000)
+		disbursed.assert_called_once_with("OPEN-1")
+		# A rejected but still disbursed expense may be excluded by the current spending policy.
+		disbursed.return_value = {"total": 15000}
+		row = _current_shift_payload(cashier_context=context, company="Test", user="cashier@example.com")
+		self.assertEqual(row["expected_physical_cash"], 46000)
+		self.assertEqual(row["reserved_expenses"], 25000)
+		self.assertTrue(row["cash_policy_difference"])
+		custody.return_value["cash_sales_verified"] = False
+		row = _current_shift_payload(cashier_context=context, company="Test", user="cashier@example.com")
+		self.assertIsNone(row["expected_physical_cash"])
 
 	def test_activity_summary_separates_sales_and_returns(self):
 		summary, activity = _normalize_activity(
@@ -287,6 +319,8 @@ class TestCashierMyWork(unittest.TestCase):
 		self.assertIn('EdgeInput', component)
 		self.assertIn('label="Work date"', component)
 		self.assertIn('shift.cash_deposits', component)
+		for field in ('disbursed_expenses', 'reserved_expenses', 'expected_physical_cash', 'cash_policy_difference'):
+			self.assertIn(f'shift.{field}', component)
 		self.assertIn("summary.outstanding_total", component)
 		self.assertIn("shift.outstanding_total", component)
 		self.assertIn("row.outstanding_amount", component)
