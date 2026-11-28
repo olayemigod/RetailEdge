@@ -336,6 +336,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "wallet",
 		"items": (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
+			{"label": "Cash Deposit Register", "target_type": "Page", "target": "cash-deposit-register", "icon": "report"},
 			{
 				"label": "Cash Flow Outlook",
 				"target_type": "Page",
@@ -1047,6 +1048,11 @@ def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cach
 			target, permission_cache
 		)
 	if target_type == "Page":
+		if target == "cash-deposit-register":
+			from retailedge.cash_deposit_register import _register_access_mode
+
+			if not _register_access_mode():
+				return False
 		return _target_exists_cached(target_type, target, target_cache) and _can_open_page_cached(
 			target, permission_cache
 		)

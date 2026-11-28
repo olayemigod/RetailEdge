@@ -38,6 +38,7 @@
 					<span v-if="isToday" class="cashier-work-shift-pill" :class="{ 'is-open': shift.open }">
 						{{ shift.open ? "Shift open" : "No open shift" }}
 					</span>
+					<button v-if="cashDepositItem" class="edge-button edge-button--secondary" type="button" @click="openCashDeposits">Cash Deposits</button>
 					<button v-if="startPosItem" class="edge-button edge-button--primary" type="button" @click="openItem(startPosItem)">
 						Start POS
 					</button>
@@ -235,6 +236,9 @@ export default {
 				return this.date;
 			}
 		},
+		cashDepositItem() {
+			return this.menuItems.flatMap(group => group.items || []).find(item => item.target === "cash-deposit-register") || null;
+		},
 		startPosItem() {
 			return this.menuItems.flatMap((group) => group.items || []).find((item) => item.label === "Start POS" || item.target === "/pos/") || null;
 		},
@@ -316,6 +320,11 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (item) this.openItem(item);
+		},
+		openCashDeposits() {
+			if (!this.cashDepositItem) return;
+			frappe.route_options = { cash_deposit_register: 1, company: this.company, branch: this.branch, opening_shift: this.isToday ? this.shift.opening_shift : "" };
+			frappe.set_route("cash-deposit-register");
 		},
 		openItem(item) {
 			if (!item) return;

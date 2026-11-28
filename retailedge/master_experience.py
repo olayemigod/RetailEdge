@@ -1102,7 +1102,7 @@ def _navigation_bucket_for_item(group_key: str, item: dict[str, Any]) -> str | N
 		return "purchases"
 	if target in STOCK_OPERATION_TARGETS:
 		return "stock"
-	if target in MONEY_OPERATION_TARGETS:
+	if target == "cash-deposit-register" or target in MONEY_OPERATION_TARGETS:
 		return "money-banking"
 	if target in {"business-expenses", "cashier-expenses", "expense-register"}:
 		return "expenses"

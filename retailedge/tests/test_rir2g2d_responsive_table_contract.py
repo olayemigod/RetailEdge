@@ -16,6 +16,7 @@ LOCAL_OVERFLOW_WRAPPERS = {
 	"business_expenses/BusinessExpenses.vue": "table-wrap",
 	"bank_statement_imports/BankStatementImports.vue": "statement-table-wrap",
 	"cashier_my_work/CashierMyWork.vue": "cashier-work-table-wrap",
+	"cash_deposit_register/CashDepositRegisterPanel.vue": "deposit-table-wrap",
 	"customer_360/Customer360.vue": "customer-360-table-wrap",
 	"forecasting_planning/ForecastingPlanning.vue": "table-wrap",
 	"make_sale/SalesInvoiceSubmissionReview.vue": "sale-review__table-wrap",

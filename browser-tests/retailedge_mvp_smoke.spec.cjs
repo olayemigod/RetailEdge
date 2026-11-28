@@ -445,6 +445,25 @@ test("canonical RetailEdge cashier reaches My Work but not banking control pages
       "Home"
     );
 
+    // The role-exact cashier has no generic Payment Entry read authority.
+    // Verify the intended operational register, not merely its Page header.
+    const depositShortcut = page.getByRole("button", { name: "Cash Deposits", exact: true });
+    await expect(depositShortcut).toBeVisible({ timeout: 20_000 });
+    const depositResponse = page.waitForResponse(
+      response => response.url().includes("retailedge.cash_deposit_register.list_cash_deposits"),
+      { timeout: 30_000 }
+    );
+    await depositShortcut.click();
+    const depositResult = await depositResponse;
+    expect(depositResult.ok()).toBeTruthy();
+    const depositPayload = (await depositResult.json()).message;
+    expect(depositPayload.native_review).toBe(false);
+    expect(Array.isArray(depositPayload.rows)).toBeTruthy();
+    await expect(page.getByRole("heading", { name: "Cash Deposit Register", exact: true })).toBeVisible();
+    await expect(page.getByText("Submitted deposits", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Advanced", exact: true })).toHaveCount(0);
+
     await page.goto(`${BASE_URL}/app/banking-readiness`, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
