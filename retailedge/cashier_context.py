@@ -1003,6 +1003,7 @@ def get_shift_cash_snapshot(
 		"opening_cash": 0.0,
 		"cash_sales": 0.0,
 		"prior_expenses": 0.0,
+		"reserved_expenses": 0.0,
 		"available_before": 0.0,
 		"source": "unresolved",
 		"message": None,
@@ -1085,6 +1086,16 @@ def get_shift_cash_snapshot(
 				(getattr(row, "expense_status", None) == "Draft")
 				or (getattr(row, "cash_movement_status", None) or "Disbursed") == "Disbursed"
 			)
+		)
+
+		# Expose the non-disbursed portion of the existing draft reservation policy.
+		# Do not change the spending gate or the locking read used by that gate.
+		result["reserved_expenses"] = sum(
+			flt(row.amount)
+			for row in expenses
+			if (getattr(row, "cash_source", None) or "POS Till") == "POS Till"
+			and getattr(row, "expense_status", None) == "Draft"
+			and getattr(row, "cash_movement_status", None) != "Disbursed"
 		)
 
 	result["available_before"] = flt(result["opening_cash"]) + flt(result["cash_sales"]) - flt(result["prior_expenses"])
