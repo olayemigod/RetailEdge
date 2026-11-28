@@ -10,6 +10,7 @@ from frappe.utils import flt, getdate, nowdate
 from retailedge.cash_custody import get_cash_custody_snapshot
 from retailedge.cashier_context import get_current_cashier_context
 from retailedge.operating_context import get_operating_context, resolve_operational_branch
+from retailedge.pos_cashier_expense import _build_pos_closing_cashier_expense_summary
 from retailedge.setup_roles import user_has_retailedge_role
 
 
@@ -332,6 +333,10 @@ def _current_shift_payload(*, cashier_context: dict[str, Any], company: str, use
 		"opening_cash": 0.0,
 		"cash_sales": 0.0,
 		"prior_expenses": 0.0,
+		"disbursed_expenses": 0.0,
+		"reserved_expenses": 0.0,
+		"expected_physical_cash": None,
+		"cash_policy_difference": False,
 		"cash_deposits": 0.0,
 		"available_cash": 0.0,
 		"message": cashier_context.get("message"),
@@ -345,12 +350,27 @@ def _current_shift_payload(*, cashier_context: dict[str, Any], company: str, use
 		pos_profile=cashier_context.get("pos_profile"),
 		cashier=user,
 	)
+	# Reuse the physical disbursement definition used at POS closing, independently
+	# of the draft/rejected expense spending settings. Only expose shift totals.
+	disbursed = flt(_build_pos_closing_cashier_expense_summary(shift["opening_shift"])["total"])
+	reserved = flt(snapshot.get("reserved_expenses"))
+	available = flt(snapshot.get("available_cash"))
+	physical = None
+	if snapshot.get("cash_sales_verified") and str(snapshot.get("source") or "").startswith("opening_shift."):
+		physical = (
+			flt(snapshot.get("opening_cash")) + flt(snapshot.get("cash_sales"))
+			- disbursed - flt(snapshot.get("submitted_deposits"))
+		)
 	shift.update(
 		{
 			"open": True,
 			"opening_cash": flt(snapshot.get("opening_cash")),
 			"cash_sales": flt(snapshot.get("cash_sales")),
 			"prior_expenses": flt(snapshot.get("cashier_expenses")),
+			"disbursed_expenses": disbursed,
+			"reserved_expenses": reserved,
+			"expected_physical_cash": physical,
+			"cash_policy_difference": physical is not None and abs(available - (physical - reserved)) > 0.005,
 			"cash_deposits": flt(snapshot.get("submitted_deposits")),
 			"available_cash": flt(snapshot.get("available_cash")),
 			"message": snapshot.get("message") or shift.get("message"),
@@ -413,6 +433,10 @@ def get_my_cashier_activity(work_date: str = "") -> dict[str, Any]:
 			"opening_cash": 0.0,
 			"cash_sales": 0.0,
 			"prior_expenses": 0.0,
+			"disbursed_expenses": 0.0,
+			"reserved_expenses": 0.0,
+			"expected_physical_cash": None,
+			"cash_policy_difference": False,
 			"cash_deposits": 0.0,
 			"available_cash": 0.0,
 			"message": _("Shift position is available for today only."),
