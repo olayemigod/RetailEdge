@@ -30,8 +30,9 @@ class TestCashDepositRegister(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			_build_register_filters(company="Concepts", branch="Abuja", cashier="other@example.com")
 
+	@patch("retailedge.cash_deposit_register.frappe.get_roles", return_value=["RetailEdgeBranchManager"])
 	@patch("retailedge.cash_deposit_register.frappe.has_permission", return_value=False)
-	def test_native_payment_entry_read_is_required(self, _permission):
+	def test_native_payment_entry_read_is_required_for_reviewers(self, _permission, _roles):
 		with self.assertRaises(frappe.PermissionError):
 			_build_register_filters(company="Concepts")
 
@@ -53,8 +54,9 @@ class TestCashDepositRegister(unittest.TestCase):
 		self.assertEqual(filters["retailedge_branch"], "__never__")
 
 	@patch("retailedge.cash_deposit_register._build_register_filters", return_value={"company": "Concepts", "payment_type": "Internal Transfer", "retailedge_cash_custody_type": "Cash Deposit"})
+	@patch("retailedge.cash_deposit_register._register_access_mode", return_value="native")
 	@patch("retailedge.cash_deposit_register.frappe.get_list")
-	def test_pagination_does_not_cap_state_totals(self, get_list, _scope):
+	def test_pagination_does_not_cap_state_totals(self, get_list, _access, _scope):
 		get_list.side_effect = [
 			[frappe._dict(name="DEP-1", docstatus=1), frappe._dict(name="DEP-2", docstatus=0)],
 			[
@@ -70,8 +72,9 @@ class TestCashDepositRegister(unittest.TestCase):
 		self.assertEqual(get_list.call_args_list[0].kwargs["filters"], get_list.call_args_list[1].kwargs["filters"])
 
 	@patch("retailedge.cash_deposit_register._build_register_filters", return_value={"company": "Concepts", "retailedge_cashier": "cashier@example.com"})
+	@patch("retailedge.cash_deposit_register._register_access_mode", return_value="native")
 	@patch("retailedge.cash_deposit_register.frappe.get_list")
-	def test_filter_choices_cannot_overwrite_cashier_scope(self, get_list, _scope):
+	def test_filter_choices_cannot_overwrite_cashier_scope(self, get_list, _access, _scope):
 		get_list.return_value = [frappe._dict(retailedge_cashier="cashier@example.com")]
 		self.assertEqual(
 			search_cash_deposit_options(company="Concepts", kind="cashier", txt="other"),
@@ -80,9 +83,15 @@ class TestCashDepositRegister(unittest.TestCase):
 		self.assertEqual(get_list.call_args.kwargs["filters"]["retailedge_cashier"], "cashier@example.com")
 		self.assertEqual(get_list.call_args.kwargs["or_filters"], [["retailedge_cashier", "like", "%other%"]])
 
-	@patch("retailedge.edgesuite_ui._has_permission_cached", return_value=False)
-	def test_register_navigation_hidden_without_native_read(self, _read):
+	@patch("retailedge.cash_deposit_register._register_access_mode", return_value="")
+	def test_register_navigation_hidden_without_authority(self, _access):
 		self.assertFalse(_can_open_target({"target_type": "Page", "target": "cash-deposit-register"}))
+
+	@patch("retailedge.cash_deposit_register._register_access_mode", return_value="own")
+	@patch("retailedge.edgesuite_ui._target_exists_cached", return_value=True)
+	@patch("retailedge.edgesuite_ui._can_open_page_cached", return_value=True)
+	def test_role_exact_cashier_navigation_does_not_require_payment_entry_read(self, _page, _exists, _access):
+		self.assertTrue(_can_open_target({"target_type": "Page", "target": "cash-deposit-register"}))
 
 	def test_page_reuses_shared_controls_and_existing_review_workflow(self):
 		root = Path(__file__).resolve().parents[1]
@@ -96,3 +105,42 @@ class TestCashDepositRegister(unittest.TestCase):
 		self.assertIn("version !== this.requestVersion", panel)
 		self.assertIn('v-if="cashDepositItem"', my_work)
 		self.assertIn('frappe.set_route("cash-deposit-register")', my_work)
+
+
+	@patch("retailedge.cash_deposit_register.frappe.session")
+	@patch("retailedge.cash_deposit_register.frappe.get_roles", return_value=["RetailEdgeCashier"])
+	@patch("retailedge.cash_deposit_register.frappe.has_permission", side_effect=lambda doctype, *a, **kw: doctype != "Payment Entry")
+	@patch("retailedge.cash_deposit_register.require_cash_custody_fields_installed")
+	@patch("retailedge.cash_deposit_register._assert_read_permission")
+	@patch("retailedge.cash_deposit_register._resolve_branch_condition", return_value=("retailedge_branch", "Abuja", {"restricted": True}))
+	@patch("retailedge.cash_deposit_register.frappe.get_list", return_value=[frappe._dict(name="OPEN-1")])
+	@patch("retailedge.cash_deposit_register.frappe.get_all")
+	def test_role_exact_cashier_read_projection_is_shift_bound(self, get_all, get_list, branch, _company, _fields, _perm, _roles, session):
+		session.user = "cashier@example.com"
+		get_all.side_effect = [
+			[frappe._dict(name="DEP-1", docstatus=0)],
+			[frappe._dict(docstatus=0, currency="NGN", count=3, amount=6000)],
+		]
+		result = list_cash_deposits(company="Concepts", branch="Abuja", opening_shift="OPEN-1")
+		self.assertFalse(result["native_review"])
+		self.assertEqual(result["rows"][0]["name"], "DEP-1")
+		self.assertEqual(result["totals"]["draft"][0]["amount"], 6000)
+		self.assertEqual(get_list.call_args.args[0], "POS Opening Shift")
+		self.assertEqual(get_list.call_args.kwargs["filters"]["user"], session.user)
+		self.assertEqual(get_list.call_args.kwargs["filters"]["company"], "Concepts")
+		for call in get_all.call_args_list:
+			filters = call.kwargs["filters"]
+			self.assertEqual(filters["retailedge_cashier"], session.user)
+			self.assertEqual(filters["retailedge_branch"], "Abuja")
+			self.assertEqual(filters["retailedge_pos_opening_shift"], ["in", ["OPEN-1"]])
+			self.assertEqual(filters["payment_type"], "Internal Transfer")
+			self.assertEqual(filters["retailedge_cash_custody_type"], "Cash Deposit")
+		self.assertNotIn("modified", get_all.call_args_list[0].kwargs["fields"])
+		with self.assertRaises(frappe.PermissionError):
+			list_cash_deposits(company="Concepts", branch="Abuja", cashier="other@example.com")
+		get_list.return_value = []
+		get_all.reset_mock()
+		result = list_cash_deposits(company="Concepts", branch="Abuja", opening_shift="OTHER")
+		self.assertEqual(result["rows"], [])
+		get_all.assert_not_called()
+
