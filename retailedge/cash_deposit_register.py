@@ -19,7 +19,7 @@ from retailedge.payment_history import (
 	_resolve_branch_condition,
 	_validate_dates,
 )
-from retailedge.setup_roles import user_has_retailedge_role
+from retailedge.operating_context import validate_operating_branch
 
 REVIEW_ROLES = ("RetailEdgeManager", "RetailEdgeBranchManager", "RetailEdgeAuditor")
 ACCOUNTING_ROLES = {"System Manager", "Accounts Manager", "Accounts User"}
@@ -44,6 +44,72 @@ REGISTER_FIELDS = [
 ]
 
 
+# Own-deposit history is an operational projection, not general accounting read.
+# Exclude internal timestamps and ledger-account links from this exception.
+OWN_REGISTER_FIELDS = [
+	field for field in REGISTER_FIELDS
+	if field not in {"creation", "modified", "paid_from", "paid_to"}
+]
+
+
+def _register_access_mode() -> str:
+	user = frappe.session.user
+	if not user or user == "Guest":
+		return ""
+	roles = set(frappe.get_roles(user))
+	cashier = "RetailEdgeCashier" in roles
+	reviewer = user == "Administrator" or bool(roles & ACCOUNTING_ROLES) or bool(roles.intersection(REVIEW_ROLES))
+	if not (cashier or reviewer):
+		return ""
+	if frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "read"):
+		return "native"
+	# The canonical cashier intentionally lacks generic Payment Entry authority.
+	# Allow only the source-bound read projection below, never native CRUD.
+	return "own" if cashier else ""
+
+
+def _own_shift_names(company: str, opening_shift: str) -> list[str]:
+	if not frappe.db.exists("DocType", "POS Opening Shift"):
+		return []
+	if not frappe.has_permission("POS Opening Shift", "read"):
+		return []
+	filters: dict[str, Any] = {
+		"company": company, "user": frappe.session.user, "docstatus": ["in", [1, 2]],
+	}
+	if opening_shift:
+		filters["name"] = opening_shift
+	# Use native shift permissions; a deposit marker alone is not proof of identity.
+	rows = frappe.get_list("POS Opening Shift", filters=filters, fields=["name"], page_length=0)
+	return [row.name for row in rows]
+
+
+def _own_branch_condition(company: str, condition: Any) -> Any:
+	if condition is not None:
+		return condition
+	# An unrestricted legacy operating scope is not itself a grant to all
+	# accounting branches. Validate every permission-visible Branch instead.
+	rows = frappe.get_list("Branch", fields=["name"], page_length=0)
+	allowed = [
+		row.name for row in rows
+		if validate_operating_branch(company=company, branch=row.name, user=frappe.session.user, throw=False).get("allowed")
+	]
+	return ["in", allowed]
+
+
+def _empty_own_scope(filters: dict[str, Any]) -> bool:
+	return any(filters.get(field) == ["in", []] for field in ("retailedge_pos_opening_shift", "retailedge_branch"))
+
+
+def _register_reader(mode: str):
+	# Private dispatch only: both public callers construct and validate the
+	# complete fixed deposit scope before any query. No client-selected fields.
+	if mode == "native":
+		return frappe.get_list
+	if mode == "own":
+		return frappe.get_all
+	frappe.throw(_("You do not have permission to view cash deposits."), frappe.PermissionError)
+
+
 def _build_register_filters(
 	*,
 	company: str,
@@ -55,18 +121,16 @@ def _build_register_filters(
 	from_date: str = "",
 	to_date: str = "",
 ) -> dict[str, Any]:
-	"""Intersect native read authority with deposit identity and operational scope."""
-	if not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "read"):
+	"""Intersect native read or own-deposit operational authority with verified scope."""
+	mode = _register_access_mode()
+	if not mode:
 		frappe.throw(_("You do not have permission to view cash deposits."), frappe.PermissionError)
 
 	user = frappe.session.user
 	roles = set(frappe.get_roles(user))
-	reviewer = user == "Administrator" or bool(roles & ACCOUNTING_ROLES) or any(
-		user_has_retailedge_role(role, user=user) for role in REVIEW_ROLES
+	reviewer = mode == "native" and (
+		user == "Administrator" or bool(roles & ACCOUNTING_ROLES) or bool(roles.intersection(REVIEW_ROLES))
 	)
-	is_cashier = user_has_retailedge_role("RetailEdgeCashier", user=user)
-	if user == "Guest" or not (reviewer or is_cashier):
-		frappe.throw(_("You do not have permission to view cash deposits."), frappe.PermissionError)
 
 	company = _clean(company)
 	if not company:
@@ -84,6 +148,8 @@ def _build_register_filters(
 		"payment_type": "Internal Transfer",
 		"retailedge_cash_custody_type": CASH_DEPOSIT_TYPE,
 	}
+	if mode == "own":
+		condition = _own_branch_condition(company, condition)
 	if condition is not None:
 		filters[branch_field] = condition
 
@@ -94,7 +160,9 @@ def _build_register_filters(
 		cashier = user
 	if cashier:
 		filters["retailedge_cashier"] = cashier
-	if _clean(opening_shift):
+	if mode == "own":
+		filters["retailedge_pos_opening_shift"] = ["in", _own_shift_names(company, _clean(opening_shift))]
+	elif _clean(opening_shift):
 		filters["retailedge_pos_opening_shift"] = _clean(opening_shift)
 	if _clean(bank_account):
 		filters["bank_account"] = _clean(bank_account)
@@ -128,7 +196,9 @@ def search_cash_deposit_options(
 		bank_account=bank_account if kind != "bank" else "",
 	)
 	# AND the search with (rather than overwrite) mandatory ownership scope.
-	rows = frappe.get_list(
+	if _empty_own_scope(filters):
+		return []
+	rows = _register_reader(_register_access_mode())(
 		PAYMENT_ENTRY_DOCTYPE,
 		filters=filters,
 		or_filters=[[field, "like", f"%{_clean(txt)}%"]],
@@ -154,7 +224,7 @@ def list_cash_deposits(
 	page: int | str = 1,
 	page_size: int | str = 25,
 ) -> dict[str, Any]:
-	"""Read existing Payment Entries only; no posting or privilege elevation."""
+	"""Read existing deposits only; no accounting permission grant or posting."""
 	filters = _build_register_filters(
 		company=company, branch=branch, cashier=cashier, opening_shift=opening_shift,
 		bank_account=bank_account, docstatus=docstatus, from_date=from_date, to_date=to_date,
@@ -168,11 +238,19 @@ def list_cash_deposits(
 		]
 	page = max(1, cint(page) or 1)
 	page_size = _page_size(page_size)
-	rows = frappe.get_list(
+	mode = _register_access_mode()
+	if _empty_own_scope(filters):
+		return {
+			"rows": [], "totals": {state: [] for state in STATE_NAMES.values()},
+			"native_review": mode == "native",
+			"pagination": {"page": page, "page_size": page_size, "has_previous": page > 1, "has_next": False},
+		}
+	reader = _register_reader(mode)
+	rows = reader(
 		PAYMENT_ENTRY_DOCTYPE,
 		filters=filters,
 		or_filters=or_filters,
-		fields=REGISTER_FIELDS,
+		fields=REGISTER_FIELDS if mode == "native" else OWN_REGISTER_FIELDS,
 		order_by="posting_date desc, creation desc, name desc",
 		start=(page - 1) * page_size,
 		page_length=page_size + 1,
@@ -180,7 +258,7 @@ def list_cash_deposits(
 	# The aggregate uses exactly the same native and product scope as the page.
 	# Never present current-page amounts as complete register totals. Keep
 	# currencies separate even if a historical entry violates the deposit policy.
-	groups = frappe.get_list(
+	groups = reader(
 		PAYMENT_ENTRY_DOCTYPE,
 		filters=filters,
 		or_filters=or_filters,
@@ -206,6 +284,7 @@ def list_cash_deposits(
 	return {
 		"rows": rows[:page_size],
 		"totals": totals,
+		"native_review": mode == "native",
 		"pagination": {
 			"page": page,
 			"page_size": page_size,
