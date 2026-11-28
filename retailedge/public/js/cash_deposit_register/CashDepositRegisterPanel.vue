@@ -1,7 +1,7 @@
 <template>
 	<section class="deposit-register">
 		<div class="deposit-filters">
-			<EdgeLinkField v-model="filters.company" label="Company" required :selectedLabel="filters.company" :searcher="companySearch" @select="selectCompany" />
+			<EdgeLinkField v-model="filters.company" label="Company" required :selectedLabel="filters.company" :searcher="companySearch" @select="selectCompany" @clear="clearCompany" />
 			<EdgeLinkField v-model="filters.branch" label="Branch" :selectedLabel="filters.branch" :searcher="branchSearch" @select="selectBranch" @clear="clearBranch" />
 			<EdgeLinkField v-model="filters.cashier" label="Cashier" :selectedLabel="filters.cashier" :searcher="txt => searchOptions('cashier', txt)" @select="option => selectFilter('cashier', option)" @clear="clearFilter('cashier')" />
 			<EdgeLinkField v-model="filters.bank_account" label="Destination bank" :selectedLabel="filters.bank_account" :searcher="txt => searchOptions('bank', txt)" @select="option => selectFilter('bank_account', option)" @clear="clearFilter('bank_account')" />
@@ -10,7 +10,7 @@
 			<EdgeSmartDateRange v-model="period" label="Period" @resolved="setPeriod" />
 			<EdgeInput v-model="filters.search" type="search" label="Search deposits" placeholder="Payment or teller reference" @update:modelValue="invalidateResults" />
 			<div class="deposit-actions">
-				<button class="edge-button edge-button--primary" type="button" :disabled="!filters.company || loading" @click="load(1)">Apply filters</button>
+				<button class="edge-button edge-button--primary" type="button" :disabled="!filters.company || loading || filtersPending" @click="load(1)">Apply filters</button>
 				<button class="edge-button edge-button--secondary" type="button" :disabled="loading" @click="resetPeriod">All dates</button>
 			</div>
 		</div>
@@ -52,7 +52,7 @@
 			</div>
 		</template>
 		<p v-else class="deposit-note">Apply filters to view cash deposits.</p>
-		<StandardInternalTransferCompletionDialog v-if="selected" :key="selected.name" :open="true" :document="selected" :canUseNativeDesk="canUseNativeDesk" @close="selected = null" @changed="refreshAfterReview" @completed="refreshAfterReview" />
+		<StandardInternalTransferCompletionDialog v-if="selected" :key="selected.name" :open="true" :document="selected" :canUseNativeDesk="canUseNativeDesk" @close="selected = null" @changed="refreshAfterReview" />
 	</section>
 </template>
 
@@ -74,7 +74,7 @@ export default {
 	data() {
 		return {
 			filters: initialFilters(), period: {}, companies: [], branches: [], rows: [], totals: {}, pagination: {},
-			loading: false, loaded: false, error: "", selected: null, requestVersion: 0, contextVersion: 0,
+			loading: false, loaded: false, error: "", selected: null, requestVersion: 0, contextVersion: 0, filtersPending: false,
 			statusOptions: [{ value: "all", label: "All statuses" }, { value: "draft", label: "Draft" }, { value: "submitted", label: "Submitted" }, { value: "cancelled", label: "Cancelled" }],
 		};
 	},
@@ -92,6 +92,7 @@ export default {
 		async initialize() {
 			const version = ++this.contextVersion;
 			this.invalidateResults();
+			this.filtersPending = false;
 			this.filters = initialFilters();
 			this.period = {};
 			try {
@@ -125,21 +126,46 @@ export default {
 		async selectCompany(option) {
 			const company = option?.value || "";
 			const version = ++this.contextVersion;
+			const previous = { ...this.filters };
 			this.filters.company = company;
 			this.filters.branch = "";
 			this.branches = [];
 			this.clearDependent();
+			this.filtersPending = Boolean(company);
 			if (!company) return;
 			try {
 				const context = await api("retailedge.operating_context.get_allowed_operating_contexts", { company });
 				if (version !== this.contextVersion) return;
 				this.branches = context.branches || [];
+				if (this.branches.includes(previous.branch)) this.filters.branch = previous.branch;
+				await this.restoreValidChildren(previous, version);
 			} catch (error) {
 				if (version === this.contextVersion) this.error = window.retailedge?.userErrorMessage?.(error, "Unable to load branches.") || "Unable to load branches.";
+			} finally {
+				if (version === this.contextVersion) this.filtersPending = false;
 			}
 		},
-		selectBranch(option) { this.filters.branch = option?.value || ""; this.clearDependent(); },
-		clearBranch() { this.filters.branch = ""; this.clearDependent(); },
+		clearCompany() { return this.selectCompany({ value: "" }); },
+		async selectBranch(option) {
+			const previous = { ...this.filters };
+			const version = ++this.contextVersion;
+			this.filters.branch = option?.value || "";
+			this.clearDependent();
+			this.filtersPending = true;
+			try { await this.restoreValidChildren(previous, version); }
+			catch (error) {
+				if (version === this.contextVersion) this.error = window.retailedge?.userErrorMessage?.(error, "Unable to validate deposit filters.") || "Unable to validate deposit filters.";
+			} finally { if (version === this.contextVersion) this.filtersPending = false; }
+		},
+		clearBranch() { return this.selectBranch({ value: "" }); },
+		async restoreValidChildren(previous, version) {
+			for (const [field, kind] of [["cashier", "cashier"], ["bank_account", "bank"], ["opening_shift", "shift"]]) {
+				if (!previous[field] || version !== this.contextVersion) continue;
+				const rows = await this.searchOptions(kind, previous[field]);
+				if (version !== this.contextVersion) return;
+				if (!this.filters[field] && rows.some(row => row.value === previous[field])) this.filters[field] = previous[field];
+			}
+		},
 		clearDependent() {
 			for (const key of ["cashier", "bank_account", "opening_shift"]) this.filters[key] = "";
 			this.invalidateResults();
@@ -167,7 +193,7 @@ export default {
 		},
 		async load(page) {
 			const version = ++this.requestVersion;
-			if (!this.filters.company) return;
+			if (!this.filters.company || this.filtersPending) return;
 			this.loading = true;
 			this.error = "";
 			this.loaded = false;
@@ -190,7 +216,7 @@ export default {
 		},
 		review(row) { if (Number(row.docstatus) === 0) this.selected = { name: row.name }; },
 		advanced(row) { if (this.canUseNativeDesk) frappe.set_route("Form", "Payment Entry", row.name); },
-		refreshAfterReview() { this.selected = null; this.load(this.pagination.page || 1); },
+		refreshAfterReview() { this.selected = null; this.load(1); },
 		documentState(state) { return ["Draft", "Submitted", "Cancelled"][Number(state)] || "Unknown"; },
 		stateLabel(state) { return { submitted: "Submitted deposits", draft: "Pending deposits", cancelled: "Cancelled deposits" }[state]; },
 		money(amount, currency) { return [currency, Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })].filter(Boolean).join(" "); },
