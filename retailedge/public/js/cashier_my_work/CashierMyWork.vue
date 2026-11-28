@@ -108,15 +108,18 @@
 						<div v-if="shift.open" class="cashier-work-metrics">
 							<div><span>Opening cash</span><strong>{{ money(shift.opening_cash) }}</strong></div>
 							<div><span>Cash receipts</span><strong>{{ money(shift.cash_sales) }}</strong></div>
-							<div><span>Expenses</span><strong>{{ money(shift.prior_expenses) }}</strong></div>
+							<div><span>Disbursed expenses</span><strong>{{ money(shift.disbursed_expenses) }}</strong></div>
 							<div><span>Cash deposits</span><strong>{{ money(shift.cash_deposits) }}</strong></div>
-							<div><span>Available cash</span><strong>{{ money(shift.available_cash) }}</strong></div>
+							<div><span>Expected cash in till</span><strong>{{ shift.expected_physical_cash == null ? "Unavailable" : money(shift.expected_physical_cash) }}</strong></div>
+							<div><span>Reserved for pending expenses</span><strong>{{ money(shift.reserved_expenses) }}</strong></div>
+							<div><span>Available under expense policy</span><strong>{{ money(shift.available_cash) }}</strong></div>
 							<div><span>Outstanding on shift sales</span><strong>{{ shift.outstanding_total == null ? "Unavailable" : money(shift.outstanding_total) }}</strong></div>
 						</div>
 						<div v-else class="cashier-work-empty compact">
 							<p>Open your POS shift to start selling and see live shift totals here.</p>
 							<button v-if="startPosItem" class="edge-button edge-button--primary" type="button" @click="openItem(startPosItem)">Start POS</button>
 						</div>
+						<p v-if="shift.open &amp;&amp; shift.cash_policy_difference" class="cashier-work-note">Expense policy availability differs from expected till cash less reservations. Ask a manager to reconcile before spending or closing.</p>
 						<p v-if="shift.message" class="cashier-work-note">{{ shift.message }}</p>
 					</article>
 
