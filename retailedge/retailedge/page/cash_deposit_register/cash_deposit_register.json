@@ -1,0 +1,32 @@
+{
+  "doctype": "Page",
+  "name": "cash-deposit-register",
+  "page_name": "cash-deposit-register",
+  "title": "Cash Deposit Register",
+  "module": "RetailEdge",
+  "standard": "Yes",
+  "system_page": 0,
+  "roles": [
+    {
+      "role": "RetailEdgeCashier"
+    },
+    {
+      "role": "RetailEdgeManager"
+    },
+    {
+      "role": "RetailEdgeBranchManager"
+    },
+    {
+      "role": "RetailEdgeAuditor"
+    },
+    {
+      "role": "System Manager"
+    },
+    {
+      "role": "Accounts Manager"
+    },
+    {
+      "role": "Accounts User"
+    }
+  ]
+}
