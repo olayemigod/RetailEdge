@@ -1976,8 +1976,10 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot")
 	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.daily_sales_audit._has_doctype")
+	@patch("retailedge.daily_sales_audit.get_submitted_deposit_total", return_value=100)
 	def test_daily_sales_audit_context_executes_without_mutating_source_docs(
 		self,
+		mock_deposit_total,
 		mock_has_doctype,
 		_mock_settings,
 		mock_shift_snapshot,
@@ -2025,7 +2027,9 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(context["opening_cash_amount"], 1000)
 		self.assertEqual(context["cash_sales_amount"], 300)
 		self.assertEqual(context["cashier_expense_amount"], 200)
-		self.assertEqual(context["expected_cash_amount"], 1100)
+		self.assertEqual(context["expected_cash_amount"], 1000)
+		self.assertEqual(context["cash_deposit_amount"], 100)
+		mock_deposit_total.assert_called_once_with("OPEN-1", company="Demo Company")
 		self.assertEqual(len(context["invoice_lines"]), 1)
 		self.assertEqual(len(context["payment_lines"]), 1)
 		self.assertEqual(len(context["cashier_expense_lines"]), 1)
