@@ -368,10 +368,32 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			opening_shift=opening_shift, expense_name="EXP-SELF", for_cash_validation=True,
 		)
 		self.assertEqual(position["prior_expenses"], 300)
+		self.assertEqual(position["reserved_expenses"], 100)
 		self.assertEqual(position["available_before"], 1200)
 		self.assertTrue(position["cash_sales_verified"])
 		self.assertIn("FOR UPDATE", mock_sql.call_args.args[0])
 		mock_get_all.assert_not_called()
+
+	@patch("retailedge.cashier_context.get_shift_cash_sales", return_value={"cash_sales": 63000, "source": "sales_invoice.payments", "message": None})
+	@patch("retailedge.cashier_context._safe_settings")
+	@patch("retailedge.cashier_context.frappe.get_all")
+	def test_draft_reservation_follows_policy_without_changing_disbursed_spending(self, get_all, settings, _sales):
+		opening_shift = SimpleNamespace(doctype="POS Opening Shift", name="OPEN-1", payments=[_Row(mode_of_payment="Cash", amount=0)])
+		paid = SimpleNamespace(amount=10000, expense_status="Submitted", cash_source="POS Till", cash_movement_status="Disbursed")
+		draft = SimpleNamespace(amount=25000, expense_status="Draft", cash_source="POS Till", cash_movement_status="Not Disbursed")
+		non_till = SimpleNamespace(amount=900, expense_status="Draft", cash_source="Other", cash_movement_status="Not Disbursed")
+		settings.return_value = _Settings(include_draft_cashier_expenses_in_cash_check=1)
+		get_all.return_value = [paid, draft, non_till]
+		position = get_shift_cash_snapshot(opening_shift=opening_shift)
+		self.assertEqual(position["prior_expenses"], 35000)
+		self.assertEqual(position["reserved_expenses"], 25000)
+		self.assertEqual(position["available_before"], 28000)
+		settings.return_value = _Settings(include_draft_cashier_expenses_in_cash_check=0)
+		get_all.return_value = [paid]
+		position = get_shift_cash_snapshot(opening_shift=opening_shift)
+		self.assertNotIn("Draft", get_all.call_args.kwargs["filters"]["expense_status"][1])
+		self.assertEqual(position["reserved_expenses"], 0)
+		self.assertEqual(position["available_before"], 53000)
 
 	def test_unverified_sales_cannot_be_used_to_authorise_till_spending(self):
 		doc = self._make_doc(
