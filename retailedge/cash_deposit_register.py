@@ -100,13 +100,26 @@ def _empty_own_scope(filters: dict[str, Any]) -> bool:
 	return any(filters.get(field) == ["in", []] for field in ("retailedge_pos_opening_shift", "retailedge_branch"))
 
 
-def _register_reader(mode: str):
+def _register_reader(mode: str, filters: dict[str, Any]):
 	# Private dispatch only: both public callers construct and validate the
 	# complete fixed deposit scope before any query. No client-selected fields.
 	if mode == "native":
 		return frappe.get_list
 	if mode == "own":
-		return frappe.get_all
+		shift_scope = filters.get("retailedge_pos_opening_shift")
+		if (
+			filters.get("retailedge_cashier") == frappe.session.user
+			and filters.get("company")
+			and filters.get("retailedge_branch")
+			and filters.get("payment_type") == "Internal Transfer"
+			and filters.get("retailedge_cash_custody_type") == CASH_DEPOSIT_TYPE
+			and isinstance(shift_scope, list)
+			and len(shift_scope) == 2
+			and shift_scope[0] == "in"
+			and isinstance(shift_scope[1], list)
+			and shift_scope[1]
+		):
+			return frappe.get_all
 	frappe.throw(_("You do not have permission to view cash deposits."), frappe.PermissionError)
 
 
@@ -198,7 +211,7 @@ def search_cash_deposit_options(
 	# AND the search with (rather than overwrite) mandatory ownership scope.
 	if _empty_own_scope(filters):
 		return []
-	rows = _register_reader(_register_access_mode())(
+	rows = _register_reader(_register_access_mode(), filters)(
 		PAYMENT_ENTRY_DOCTYPE,
 		filters=filters,
 		or_filters=[[field, "like", f"%{_clean(txt)}%"]],
@@ -245,7 +258,7 @@ def list_cash_deposits(
 			"native_review": mode == "native",
 			"pagination": {"page": page, "page_size": page_size, "has_previous": page > 1, "has_next": False},
 		}
-	reader = _register_reader(mode)
+	reader = _register_reader(mode, filters)
 	rows = reader(
 		PAYMENT_ENTRY_DOCTYPE,
 		filters=filters,
