@@ -34,12 +34,13 @@
 					<tbody>
 						<tr v-for="row in rows" :key="row.name">
 							<td>{{ row.name }}</td><td>{{ row.posting_date }}</td><td>{{ row.retailedge_branch }}</td><td>{{ row.retailedge_cashier }}</td>
-							<td>{{ row.retailedge_pos_opening_shift }}</td><td>{{ row.paid_from }}</td><td>{{ row.bank_account || row.paid_to }}</td>
+							<td>{{ row.retailedge_pos_opening_shift }}</td><td>{{ row.paid_from || "—" }}</td><td>{{ row.bank_account || row.paid_to || "—" }}</td>
 							<td>{{ row.reference_no || "—" }}</td><td>{{ money(row.paid_amount, row.paid_from_account_currency) }}</td>
 							<td>{{ documentState(row.docstatus) }}</td>
 							<td>
-								<button v-if="Number(row.docstatus) === 0" class="edge-button edge-button--secondary" type="button" @click="review(row)">Review</button>
-								<button v-else-if="canUseNativeDesk" class="edge-button edge-button--secondary" type="button" @click="advanced(row)">Advanced</button>
+								<button v-if="nativeReview && Number(row.docstatus) === 0" class="edge-button edge-button--secondary" type="button" @click="review(row)">Review</button>
+								<button v-else-if="nativeReview && canUseNativeDesk" class="edge-button edge-button--secondary" type="button" @click="advanced(row)">Advanced</button>
+								<span v-else-if="Number(row.docstatus) === 0">Awaiting authorized review</span>
 							</td>
 						</tr>
 					</tbody>
@@ -74,7 +75,7 @@ export default {
 	data() {
 		return {
 			filters: initialFilters(), period: {}, companies: [], branches: [], rows: [], totals: {}, pagination: {},
-			loading: false, loaded: false, error: "", selected: null, requestVersion: 0, contextVersion: 0, filtersPending: false,
+			loading: false, loaded: false, error: "", selected: null, nativeReview: false, requestVersion: 0, contextVersion: 0, filtersPending: false,
 			statusOptions: [{ value: "all", label: "All statuses" }, { value: "draft", label: "Draft" }, { value: "submitted", label: "Submitted" }, { value: "cancelled", label: "Cancelled" }],
 		};
 	},
@@ -185,6 +186,7 @@ export default {
 			this.requestVersion++;
 			this.rows = [];
 			this.totals = {};
+			this.nativeReview = false;
 			this.pagination = {};
 			this.loaded = false;
 			this.loading = false;
@@ -200,6 +202,7 @@ export default {
 			try {
 				const result = await api("retailedge.cash_deposit_register.list_cash_deposits", { ...this.filters, page });
 				if (version !== this.requestVersion) return;
+				this.nativeReview = result.native_review === true;
 				this.rows = result.rows || [];
 				this.totals = result.totals || {};
 				this.pagination = result.pagination || {};
@@ -214,8 +217,8 @@ export default {
 				if (version === this.requestVersion) this.loading = false;
 			}
 		},
-		review(row) { if (Number(row.docstatus) === 0) this.selected = { name: row.name }; },
-		advanced(row) { if (this.canUseNativeDesk) frappe.set_route("Form", "Payment Entry", row.name); },
+		review(row) { if (this.nativeReview && Number(row.docstatus) === 0) this.selected = { name: row.name }; },
+		advanced(row) { if (this.nativeReview && this.canUseNativeDesk) frappe.set_route("Form", "Payment Entry", row.name); },
 		refreshAfterReview() { this.selected = null; this.load(1); },
 		documentState(state) { return ["Draft", "Submitted", "Cancelled"][Number(state)] || "Unknown"; },
 		stateLabel(state) { return { submitted: "Submitted deposits", draft: "Pending deposits", cancelled: "Cancelled deposits" }[state]; },
