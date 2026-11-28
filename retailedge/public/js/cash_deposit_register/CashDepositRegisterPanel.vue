@@ -22,22 +22,22 @@
 					<h3>{{ stateLabel(state) }}</h3>
 					<p v-if="!totals[state]?.length">0 deposits</p>
 					<p v-for="group in totals[state] || []" :key="group.currency">
-						<strong>{{ money(group.amount, group.currency) }}</strong> · {{ group.count }} deposits
+						<strong>{{ money(group.amount, group.currency) }}</strong> · {{ group.count }} {{ group.count === 1 ? 'deposit' : 'deposits' }}
 					</p>
 				</article>
 			</div>
 			<p class="deposit-note">Only submitted deposits reduce till cash. Totals include all matching records, not just this page.</p>
 			<EdgeEmptyState v-if="!rows.length" title="No cash deposits found" description="Change your filters to find other deposits." />
-			<div v-else class="deposit-table-wrap">
+			<div v-else class="deposit-table-wrap" tabindex="0" role="region" aria-label="Cash deposit records">
 				<table class="deposit-table">
-					<thead><tr><th>Deposit</th><th>Date</th><th>Branch</th><th>Cashier</th><th>POS shift</th><th>Cash account</th><th>Destination bank</th><th>Teller reference</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+					<thead><tr><th class="deposit-nowrap">Deposit</th><th class="deposit-nowrap">Date</th><th class="deposit-nowrap">Branch</th><th>Cashier</th><th class="deposit-nowrap">POS shift</th><th v-if="nativeReview" class="deposit-account">Cash account</th><th>Destination bank</th><th>Teller reference</th><th class="deposit-amount deposit-nowrap">Amount</th><th class="deposit-nowrap">Status</th><th class="deposit-nowrap">Action</th></tr></thead>
 					<tbody>
 						<tr v-for="row in rows" :key="row.name">
-							<td>{{ row.name }}</td><td>{{ row.posting_date }}</td><td>{{ row.retailedge_branch }}</td><td>{{ row.retailedge_cashier }}</td>
-							<td>{{ row.retailedge_pos_opening_shift }}</td><td>{{ row.paid_from || "—" }}</td><td>{{ row.bank_account || row.paid_to || "—" }}</td>
-							<td>{{ row.reference_no || "—" }}</td><td>{{ money(row.paid_amount, row.paid_from_account_currency) }}</td>
-							<td>{{ documentState(row.docstatus) }}</td>
-							<td>
+							<td class="deposit-nowrap">{{ row.name }}</td><td class="deposit-nowrap">{{ row.posting_date }}</td><td class="deposit-nowrap">{{ row.retailedge_branch }}</td><td class="deposit-detail">{{ row.retailedge_cashier }}</td>
+							<td class="deposit-nowrap">{{ row.retailedge_pos_opening_shift }}</td><td v-if="nativeReview" class="deposit-account">{{ row.paid_from || "—" }}</td><td class="deposit-detail">{{ row.bank_account || row.paid_to || "—" }}</td>
+							<td class="deposit-detail">{{ row.reference_no || "—" }}</td><td class="deposit-amount deposit-nowrap">{{ money(row.paid_amount, row.paid_from_account_currency) }}</td>
+							<td class="deposit-nowrap"><EdgeStatusBadge :status="documentState(row.docstatus)" /></td>
+							<td class="deposit-nowrap">
 								<button v-if="nativeReview && Number(row.docstatus) === 0" class="edge-button edge-button--secondary" type="button" @click="review(row)">Review</button>
 								<button v-else-if="nativeReview && canUseNativeDesk" class="edge-button edge-button--secondary" type="button" @click="advanced(row)">Advanced</button>
 								<span v-else-if="Number(row.docstatus) === 0">Awaiting authorized review</span>
@@ -60,7 +60,7 @@
 <script>
 import StandardInternalTransferCompletionDialog from "../retailedge_business_hub/StandardInternalTransferCompletionDialog.vue";
 
-const COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange", "EdgeInput", "EdgeErrorState", "EdgeLoadingState", "EdgeEmptyState"];
+const COMPONENTS = ["EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange", "EdgeInput", "EdgeErrorState", "EdgeLoadingState", "EdgeEmptyState", "EdgeStatusBadge"];
 const api = (method, args = {}) => new Promise((resolve, reject) => frappe.call({
 	method, args, type: "GET", callback: response => resolve(response.message), error: reject,
 }));
@@ -228,15 +228,19 @@ export default {
 </script>
 
 <style scoped>
-.deposit-register { display:grid; gap:16px; color:var(--edge-text); }
-.deposit-filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; align-items:end; }
+.deposit-register { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:16px; color:var(--edge-text); }
+.deposit-filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr)); gap:12px; align-items:end; }
 .deposit-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-.deposit-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+.deposit-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr)); gap:12px; }
 .deposit-totals article { padding:16px; border:1px solid var(--edge-border); border-radius:var(--edge-radius-lg); background:var(--edge-surface); }
 .deposit-totals h3 { font-size:1rem; margin:0 0 8px; }
 .deposit-note { color:var(--edge-text-muted); }
-.deposit-table-wrap { overflow:auto; border:1px solid var(--edge-border); border-radius:var(--edge-radius-lg); }
-.deposit-table { width:100%; border-collapse:collapse; text-align:left; }
-.deposit-table th,.deposit-table td { padding:12px; border-bottom:1px solid var(--edge-border); overflow-wrap:anywhere; }
+.deposit-table-wrap { overflow:auto; min-width:0; max-width:100%; border:1px solid var(--edge-border); border-radius:var(--edge-radius-lg); }
+.deposit-table { width:100%; min-width:1180px; border-collapse:collapse; text-align:left; table-layout:auto; }
+.deposit-table th,.deposit-table td { padding:12px; border-bottom:1px solid var(--edge-border); vertical-align:middle; overflow-wrap:normal; }
+.deposit-nowrap, .deposit-nowrap button { white-space:nowrap; overflow-wrap:normal; word-break:normal; }
+.deposit-amount { text-align:right; font-variant-numeric:tabular-nums; }
+.deposit-detail,.deposit-account { min-width:150px; overflow-wrap:anywhere; }
+.deposit-account { min-width:180px; }
 .deposit-table th { background:var(--edge-surface); }
 </style>
