@@ -7,6 +7,10 @@ import frappe
 from frappe.utils import flt, getdate, now_datetime
 
 from retailedge.branch_context import has_field, resolve_retailedge_branch_context
+from retailedge.cash_deposit_audit import (
+	apply_submitted_deposits_to_daily_sales_audit,
+	get_submitted_deposit_total,
+)
 from retailedge.cashier_context import (
 	_coerce_doc,
 	_get_doc_value,
@@ -406,10 +410,14 @@ def get_daily_sales_audit_context(filters=None):
 		if cint_int(row.get("include_in_expected_cash"))
 	)
 
+	context["cash_deposit_amount"] = get_submitted_deposit_total(
+		context.get("pos_opening_shift"), company=context.get("company"),
+	)
 	context["expected_cash_amount"] = (
 		flt(context["opening_cash_amount"])
 		+ flt(context["cash_sales_amount"])
 		- flt(context["cashier_expense_amount"])
+		- flt(context["cash_deposit_amount"])
 	)
 	context["cash_variance_amount"] = flt(context["actual_closing_cash_amount"]) - flt(
 		context["expected_cash_amount"]
@@ -536,17 +544,10 @@ def calculate_daily_sales_audit_variance(doc):
 	doc.cashier_expense_amount = (
 		flt(included_expenses) if has_expense_basis else flt(getattr(doc, "cashier_expense_amount", 0))
 	)
-	doc.expected_cash_amount = (
-		flt(doc.opening_cash_amount) + flt(doc.cash_sales_amount) - flt(doc.cashier_expense_amount)
-	)
-	doc.cash_variance_amount = flt(doc.actual_closing_cash_amount) - flt(doc.expected_cash_amount)
-	doc.net_variance_amount = flt(doc.cash_variance_amount)
-	doc.shortage_amount = abs(flt(doc.cash_variance_amount)) if flt(doc.cash_variance_amount) < 0 else 0.0
-	doc.overage_amount = flt(doc.cash_variance_amount) if flt(doc.cash_variance_amount) > 0 else 0.0
 	doc.variance_tolerance_used = flt(settings.get("variance_tolerance"))
-	doc.variance_within_tolerance = (
-		1 if abs(flt(doc.cash_variance_amount)) <= flt(doc.variance_tolerance_used) else 0
-	)
+	# Apply submitted deposits before classification on every calculation, including
+	# review refresh and submit. The adapter recomputes from the original inputs.
+	apply_submitted_deposits_to_daily_sales_audit(doc)
 	doc.clarification_required = (
 		1
 		if "Requires Clarification" in line_statuses

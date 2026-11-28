@@ -32,19 +32,36 @@ class TestCashDepositAudit(unittest.TestCase):
 		self.assertEqual(doc.overage_amount, 0)
 		self.assertEqual(doc.variance_within_tolerance, 1)
 
-	def test_daily_sales_audit_controller_applies_deposits_after_existing_variance_engine(self):
-		source = (
-			APP_ROOT
-			/ "retailedge"
-			/ "doctype"
-			/ "retailedge_daily_sales_audit"
-			/ "retailedge_daily_sales_audit.py"
-		).read_text(encoding="utf-8")
-		calculate_position = source.index("calculate_daily_sales_audit_variance(self)")
-		deposit_position = source.index("apply_submitted_deposits_to_daily_sales_audit(self)")
-		refresh_position = source.index("refresh_daily_sales_audit_review_summary(self)")
-		self.assertLess(calculate_position, deposit_position)
-		self.assertLess(deposit_position, refresh_position)
+	@patch("retailedge.daily_sales_audit.get_daily_sales_audit_settings", return_value={"variance_tolerance": 0})
+	@patch("retailedge.cash_deposit_audit.get_submitted_deposit_total", return_value=2000)
+	def test_review_recalculation_keeps_submitted_deposit_and_balanced_classification(self, deposit, _settings):
+		from retailedge.daily_sales_audit import (
+			calculate_daily_sales_audit_variance,
+			refresh_daily_sales_audit_review_summary,
+		)
+
+		doc = SimpleNamespace(
+			pos_opening_shift="OPEN-1", company="Retail Company", audit_status="Draft",
+			opening_cash_amount=0, cash_sales_amount=63000, cashier_expense_amount=10000,
+			actual_closing_cash_amount=51000, clarification_required=0,
+			cashier_expense_lines=[], invoice_lines=[], payment_lines=[],
+		)
+		for _ in range(2):
+			result = calculate_daily_sales_audit_variance(doc)
+			self.assertEqual(result["expected_cash_amount"], 51000)
+			self.assertEqual(result["net_variance_amount"], 0)
+			self.assertEqual(result["audit_result"], "Balanced")
+			summary = refresh_daily_sales_audit_review_summary(doc)
+			self.assertEqual(doc.expected_cash_amount, 51000)
+			self.assertEqual(doc.variance_classification, "Balanced")
+			self.assertEqual(summary["variance_status"], "Balanced")
+			self.assertEqual(summary["exception_count"], 0)
+		deposit.assert_called_with("OPEN-1", company="Retail Company")
+		deposit.return_value = 0
+		result = calculate_daily_sales_audit_variance(doc)
+		self.assertEqual(result["expected_cash_amount"], 53000)
+		self.assertEqual(result["net_variance_amount"], -2000)
+		self.assertEqual(result["audit_result"], "Shortage")
 
 	def test_reports_show_cash_deposits_and_batch_totals(self):
 		register = (
