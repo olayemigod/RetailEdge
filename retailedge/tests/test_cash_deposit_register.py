@@ -114,8 +114,9 @@ class TestCashDepositRegister(unittest.TestCase):
 	@patch("retailedge.cash_deposit_register._assert_read_permission")
 	@patch("retailedge.cash_deposit_register._resolve_branch_condition", return_value=("retailedge_branch", "Abuja", {"restricted": True}))
 	@patch("retailedge.cash_deposit_register.frappe.get_list", return_value=[frappe._dict(name="OPEN-1")])
+	@patch("retailedge.cash_deposit_register.frappe.db.exists", return_value=True)
 	@patch("retailedge.cash_deposit_register.frappe.get_all")
-	def test_role_exact_cashier_read_projection_is_shift_bound(self, get_all, get_list, branch, _company, _fields, _perm, _roles, session):
+	def test_role_exact_cashier_read_projection_is_shift_bound(self, get_all, _doctype, get_list, branch, _company, _fields, _perm, _roles, session):
 		session.user = "cashier@example.com"
 		get_all.side_effect = [
 			[frappe._dict(name="DEP-1", docstatus=0)],
